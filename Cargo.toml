@@ -1,0 +1,14 @@
+[package]
+name = "wflow"
+version = "0.0.1"
+edition = "2021"
+description = "Command line tool to automate work flow"
+repository = "https://github.com/lacodda/wflow.git"
+authors = ["Kirill Lakhtachev <lahtachev@gmail.com> (https://lacodda.com)"]
+readme = "README.md"
+license = "MIT"
+keywords = ["cli", "tool", "work", "time", "flow"]
+categories = ["cli"]
+
+[dependencies]
+clap = { version = "4.4.8", features = ["derive"] }
