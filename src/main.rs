@@ -1,7 +1,8 @@
 mod commands;
 use clap::{Parser, Subcommand};
-use commands::{init, login, logout, report, sum, sync, task, time};
+use commands::{event, init, login, logout, report, sum, sync, task};
 use std::error::Error;
+mod libs;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -22,7 +23,7 @@ enum Commands {
     #[command(about = "Create task", arg_required_else_help = true)]
     Task(task::TaskArgs),
     #[command(about = "Write timestamp and event type to database", arg_required_else_help = true)]
-    Time(time::TimeArgs),
+    Event(event::EventArgs),
     #[command(about = "Synchronizing local storage with the server", arg_required_else_help = true)]
     Sync(sync::SyncArgs),
     #[command(about = "Get summary", arg_required_else_help = true)]
@@ -39,7 +40,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Login(args) => login::cmd(args),
         Commands::Logout(args) => logout::cmd(args),
         Commands::Task(args) => task::cmd(args),
-        Commands::Time(args) => time::cmd(args),
+        Commands::Event(args) => event::cmd(args),
         Commands::Sync(args) => sync::cmd(args),
         Commands::Sum(args) => sum::cmd(args),
         Commands::Report(args) => report::cmd(args),
