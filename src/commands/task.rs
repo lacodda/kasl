@@ -29,7 +29,7 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
 
         return Ok(());
     }
-    let task = Task::new(&task_args.name, "", &10);
+    let task = Task::new(&task_args.name, "", None);
     let _ = Tasks::new()?.insert(&task);
 
     println!("Task name: {}", &task_args.name);

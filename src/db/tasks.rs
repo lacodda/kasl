@@ -5,12 +5,15 @@ use std::error::Error;
 
 const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER NOT NULL PRIMARY KEY,
+    task_id INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     name TEXT NOT NULL,
     comment TEXT,
-    completeness INT
+    completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
+    excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE
 );";
-const INSERT_TASK: &str = "INSERT INTO tasks (timestamp, name, comment, completeness) VALUES (datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?)";
+const INSERT_TASK: &str =
+    "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search) VALUES (?, datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?, ?)";
 const SELECT_TASKS: &str = "SELECT * FROM tasks";
 const WHERE_DATE: &str = "WHERE DATE(timestamp) = DATE('now')";
 const WHERE_ID: &str = "WHERE id IN";
@@ -28,7 +31,8 @@ impl Tasks {
     }
 
     pub fn insert(&mut self, task: &Task) -> Result<()> {
-        self.conn.execute(INSERT_TASK, params![task.name, task.comment, task.completeness])?;
+        self.conn
+            .execute(INSERT_TASK, params![task.task_id, task.name, task.comment, task.completeness, task.excluded_from_search])?;
 
         Ok(())
     }
@@ -43,10 +47,12 @@ impl Tasks {
         let task_iter = stmt.query_map(params_from_iter(params.iter()), |row| {
             Ok(Task {
                 id: row.get(0)?,
-                timestamp: row.get(1)?,
-                name: row.get(2)?,
-                comment: row.get(3)?,
-                completeness: row.get(4)?,
+                task_id: row.get(1)?,
+                timestamp: row.get(2)?,
+                name: row.get(3)?,
+                comment: row.get(4)?,
+                completeness: row.get(5)?,
+                excluded_from_search: row.get(6)?,
             })
         })?;
         let mut tasks = Vec::new();
