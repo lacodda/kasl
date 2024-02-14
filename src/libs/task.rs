@@ -18,3 +18,10 @@ impl Task {
         }
     }
 }
+
+#[derive(Debug, Clone)]
+pub enum TaskFilter {
+    All,
+    Today,
+    ByIds(Vec<i32>),
+}
