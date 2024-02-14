@@ -3,11 +3,17 @@ use crate::{
     libs::task::{Task, TaskFilter},
 };
 use clap::Args;
+use dialoguer::{theme::ColorfulTheme, Input};
 use std::error::Error;
 
 #[derive(Debug, Args)]
 pub struct TaskArgs {
-    name: String,
+    #[arg(short, long)]
+    name: Option<String>,
+    #[arg(short, long)]
+    comment: Option<String>,
+    #[arg(short, long)]
+    completeness: Option<i32>,
     #[arg(short, long)]
     show: bool,
     #[arg(short, long)]
@@ -29,10 +35,30 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
 
         return Ok(());
     }
-    let task = Task::new(&task_args.name, "", None);
+
+    let name = task_args
+        .name
+        .unwrap_or_else(|| Input::with_theme(&ColorfulTheme::default()).with_prompt("Enter task name").interact_text().unwrap());
+    let comment = task_args.comment.unwrap_or_else(|| {
+        Input::with_theme(&ColorfulTheme::default())
+            .allow_empty(true)
+            .with_prompt("Enter comment")
+            .interact_text()
+            .unwrap()
+    });
+    let completeness = task_args.completeness.unwrap_or_else(|| {
+        Input::with_theme(&ColorfulTheme::default())
+            .allow_empty(true)
+            .with_prompt("Enter completeness")
+            .default(100)
+            .interact_text()
+            .unwrap()
+    });
+
+    let task = Task::new(&name, &comment, Some(completeness));
     let _ = Tasks::new()?.insert(&task);
 
-    println!("Task name: {}", &task_args.name);
+    println!("Task name: {}", &name);
 
     Ok(())
 }

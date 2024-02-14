@@ -21,7 +21,7 @@ enum Commands {
     Login(login::LoginArgs),
     #[command(about = "Logs out the user by removing the user's session from local state", arg_required_else_help = true)]
     Logout(logout::LogoutArgs),
-    #[command(about = "Create task", arg_required_else_help = true)]
+    #[command(about = "Create task")]
     Task(task::TaskArgs),
     #[command(about = "Write timestamp and event type to database", arg_required_else_help = true)]
     Event(event::EventArgs),
