@@ -1,7 +1,7 @@
 use super::db::Db;
 use crate::libs::task::{Task, TaskFilter};
 use rusqlite::{params, params_from_iter, Connection, Result};
-use std::error::Error;
+use std::{error::Error, vec};
 
 const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER NOT NULL PRIMARY KEY,
@@ -50,10 +50,17 @@ impl Tasks {
         Ok(self)
     }
 
-    pub fn update_id(&mut self) -> Result<()> {
+    pub fn update_id(&mut self) -> Result<&mut Self, Box<dyn Error>> {
         self.conn.execute(UPDATE_TASK_ID, params![self.id, self.id])?;
 
-        Ok(())
+        Ok(self)
+    }
+
+    pub fn get(&mut self) -> Result<Vec<Task>, Box<dyn Error>> {
+        if self.id.is_none() {
+            return Err("No ID".into());
+        }
+        self.fetch(TaskFilter::ByIds(vec![self.id.unwrap()]))
     }
 
     pub fn fetch(&mut self, filter: TaskFilter) -> Result<Vec<Task>, Box<dyn Error>> {
@@ -61,7 +68,7 @@ impl Tasks {
             TaskFilter::All => (self.conn.prepare(SELECT_TASKS)?, vec![]),
             TaskFilter::Today => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_CURRENT_DATE))?, vec![]),
             TaskFilter::Incomplete => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_INCOMPLETE))?, vec![]),
-            TaskFilter::ByIds(ids) => (self.conn.prepare(&format!("{} {} ({})", SELECT_TASKS, WHERE_ID_IN, vec!["?"; ids.len()].join(", ")))?, ids),
+            TaskFilter::ByIds(ids) => (self.conn.prepare(&Self::query_by_ids(&ids))?, ids),
         };
 
         let task_iter = stmt.query_map(params_from_iter(params.iter()), |row| {
@@ -81,5 +88,9 @@ impl Tasks {
         }
 
         Ok(tasks)
+    }
+
+    fn query_by_ids(ids: &Vec<i32>) -> String {
+        format!("{} {} ({})", SELECT_TASKS, WHERE_ID_IN, vec!["?"; ids.len()].join(", "))
     }
 }

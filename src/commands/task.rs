@@ -1,6 +1,9 @@
 use crate::{
     db::tasks::Tasks,
-    libs::task::{Task, TaskFilter},
+    libs::{
+        task::{Task, TaskFilter},
+        view::View,
+    },
 };
 use clap::Args;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
@@ -33,7 +36,11 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
             filter = TaskFilter::ByIds(task_args.id.unwrap());
         }
         let tasks = Tasks::new()?.fetch(filter)?;
-        println!("Tasks:\n {:?}", &tasks);
+        if tasks.is_empty() {
+            println!("Tasks not found((");
+            return Ok(());
+        }
+        View::tasks(&tasks)?;
 
         return Ok(());
     } else if task_args.find {
@@ -89,9 +96,8 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
     });
 
     let task = Task::new(&name, &comment, Some(completeness));
-    let _ = Tasks::new()?.insert(&task)?.update_id();
-
-    println!("Task name: {}", &name);
+    let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
+    View::tasks(&new_task)?;
 
     Ok(())
 }
