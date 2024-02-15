@@ -12,27 +12,46 @@ const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
     excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE
 );";
-const INSERT_TASK: &str =
-    "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search) VALUES (?, datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?, ?)";
+const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search) VALUES 
+    (?, datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?, ?) RETURNING id";
+const UPDATE_TASK_ID: &str = "UPDATE tasks SET task_id = ? WHERE id = ?";
 const SELECT_TASKS: &str = "SELECT * FROM tasks";
-const WHERE_DATE: &str = "WHERE DATE(timestamp) = DATE('now')";
-const WHERE_ID: &str = "WHERE id IN";
+const WHERE_CURRENT_DATE: &str = "WHERE DATE(timestamp) = DATE('now')";
+const WHERE_ID_IN: &str = "WHERE id IN";
+const WHERE_INCOMPLETE: &str = "WHERE
+  completeness < 100 AND
+  task_id NOT IN (SELECT task_id FROM tasks WHERE DATE(timestamp) = DATE('now')) AND
+  (task_id, completeness) IN (SELECT task_id, MAX(completeness) FROM tasks
+  WHERE DATE(timestamp) BETWEEN datetime(CURRENT_TIMESTAMP, 'localtime', '-15 day') AND datetime(CURRENT_TIMESTAMP, 'localtime', '-1 day')
+  GROUP BY task_id)
+  GROUP BY task_id";
 
+#[derive(Debug)]
 pub struct Tasks {
     pub conn: Connection,
+    pub id: Option<i32>,
 }
 
 impl Tasks {
-    pub fn new() -> Result<Tasks, Box<dyn Error>> {
+    pub fn new() -> Result<Self, Box<dyn Error>> {
         let db = Db::new()?;
         db.conn.execute(&SCHEMA_TASKS, [])?;
 
-        Ok(Tasks { conn: db.conn })
+        Ok(Self { conn: db.conn, id: None })
     }
 
-    pub fn insert(&mut self, task: &Task) -> Result<()> {
-        self.conn
-            .execute(INSERT_TASK, params![task.task_id, task.name, task.comment, task.completeness, task.excluded_from_search])?;
+    pub fn insert(&mut self, task: &Task) -> Result<&mut Self, Box<dyn Error>> {
+        self.id = self.conn.query_row(
+            INSERT_TASK,
+            params![task.task_id, task.name, task.comment, task.completeness, task.excluded_from_search],
+            |row| row.get(0),
+        )?;
+
+        Ok(self)
+    }
+
+    pub fn update_id(&mut self) -> Result<()> {
+        self.conn.execute(UPDATE_TASK_ID, params![self.id, self.id])?;
 
         Ok(())
     }
@@ -40,8 +59,9 @@ impl Tasks {
     pub fn fetch(&mut self, filter: TaskFilter) -> Result<Vec<Task>, Box<dyn Error>> {
         let (mut stmt, params) = match filter {
             TaskFilter::All => (self.conn.prepare(SELECT_TASKS)?, vec![]),
-            TaskFilter::Today => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_DATE))?, vec![]),
-            TaskFilter::ByIds(ids) => (self.conn.prepare(&format!("{} {} ({})", SELECT_TASKS, WHERE_ID, vec!["?"; ids.len()].join(", ")))?, ids),
+            TaskFilter::Today => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_CURRENT_DATE))?, vec![]),
+            TaskFilter::Incomplete => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_INCOMPLETE))?, vec![]),
+            TaskFilter::ByIds(ids) => (self.conn.prepare(&format!("{} {} ({})", SELECT_TASKS, WHERE_ID_IN, vec!["?"; ids.len()].join(", ")))?, ids),
         };
 
         let task_iter = stmt.query_map(params_from_iter(params.iter()), |row| {

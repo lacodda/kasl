@@ -3,7 +3,7 @@ use crate::{
     libs::task::{Task, TaskFilter},
 };
 use clap::Args;
-use dialoguer::{theme::ColorfulTheme, Input};
+use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use std::error::Error;
 
 #[derive(Debug, Args)]
@@ -20,6 +20,8 @@ pub struct TaskArgs {
     all: bool,
     #[arg(short, long)]
     id: Option<Vec<i32>>,
+    #[arg(short, long, help = "Find incomplete tasks")]
+    find: bool,
 }
 
 pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
@@ -32,6 +34,37 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
         }
         let tasks = Tasks::new()?.fetch(filter)?;
         println!("Tasks:\n {:?}", &tasks);
+
+        return Ok(());
+    } else if task_args.find {
+        let tasks = Tasks::new()?.fetch(TaskFilter::Incomplete)?;
+        if tasks.is_empty() {
+            println!("Tasks not found((");
+            return Ok(());
+        }
+        let task_names: Vec<&str> = tasks.iter().map(|task| task.name.as_str()).collect();
+        let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select options")
+            .items(&task_names)
+            .interact()
+            .unwrap();
+
+        for index in selections {
+            let mut task: Task = tasks.get(index).unwrap().clone();
+            println!("Selected task: {}", &task.name);
+            if task.task_id.is_none() || task.task_id.is_some_and(|id| id == 0) {
+                task.task_id = task.id;
+            }
+            task.completeness = Some(
+                Input::with_theme(&ColorfulTheme::default())
+                    .allow_empty(true)
+                    .with_prompt("Enter completeness")
+                    .default(task.completeness.unwrap() + 1)
+                    .interact_text()
+                    .unwrap(),
+            );
+            let _ = Tasks::new()?.insert(&task);
+        }
 
         return Ok(());
     }
@@ -56,7 +89,7 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
     });
 
     let task = Task::new(&name, &comment, Some(completeness));
-    let _ = Tasks::new()?.insert(&task);
+    let _ = Tasks::new()?.insert(&task)?.update_id();
 
     println!("Task name: {}", &name);
 

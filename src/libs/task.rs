@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Task {
     pub id: Option<i32>,
     pub task_id: Option<i32>,
@@ -27,5 +27,6 @@ impl Task {
 pub enum TaskFilter {
     All,
     Today,
+    Incomplete,
     ByIds(Vec<i32>),
 }
