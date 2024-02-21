@@ -1,3 +1,4 @@
+use crate::libs::scheduler::Scheduler;
 use clap::Args;
 use std::error::Error;
 
@@ -9,6 +10,7 @@ pub struct InitArgs {
 
 pub fn cmd(init_args: InitArgs) -> Result<(), Box<dyn Error>> {
     println!("Init {}", &init_args.name);
+    Scheduler::new()?;
 
     Ok(())
 }
