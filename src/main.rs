@@ -15,7 +15,7 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    #[command(about = "Configuration initialization", arg_required_else_help = true)]
+    #[command(about = "Configuration initialization")]
     Init(init::InitArgs),
     #[command(about = "Authenticate to the finlab server", arg_required_else_help = true)]
     Login(login::LoginArgs),

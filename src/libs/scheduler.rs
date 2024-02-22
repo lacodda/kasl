@@ -24,6 +24,12 @@ impl Scheduler {
 
         Ok(())
     }
+
+    pub fn delete() -> Result<()> {
+        Task::delete_task(r"\", "logon_trigger")?;
+
+        Ok(())
+    }
 }
 
 pub struct TaskLogonTrigger {
@@ -159,5 +165,14 @@ impl Task {
             exec_action.SetArguments(&task_action.args)?;
         }
         Ok(self)
+    }
+
+    pub fn delete_task(path: &str, name: &str) -> Result<()> {
+        unsafe {
+            let task_service = Self::get_task_service()?;
+            let folder = task_service.GetFolder(&BSTR::from(path))?;
+            folder.DeleteTask(&BSTR::from(name), 0)?;
+        }
+        Ok(())
     }
 }
