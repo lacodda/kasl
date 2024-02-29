@@ -6,8 +6,6 @@ pub enum EventType {
     #[default]
     Start,
     End,
-    StartBreak,
-    EndBreak,
 }
 
 impl fmt::Display for EventType {
@@ -19,16 +17,12 @@ impl fmt::Display for EventType {
 #[derive(Debug)]
 pub struct Event {
     pub id: Option<i32>,
-    pub timestamp: Option<String>,
-    pub event_type: EventType,
+    pub start: Option<String>,
+    pub end: Option<String>,
 }
 
 impl Event {
-    pub fn new(event_type: &EventType) -> Self {
-        Event {
-            id: None,
-            timestamp: None,
-            event_type: *event_type,
-        }
+    pub fn new() -> Self {
+        Event { id: None, start: None, end: None }
     }
 }

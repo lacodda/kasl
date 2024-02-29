@@ -15,8 +15,9 @@ pub struct EventArgs {
 }
 
 pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {
-    let event = Event::new(&event_args.event_type);
-    let _ = Events::new()?.insert(&event);
+    let _event = Event::new();
+
+    let _ = Events::new()?.insert(&event_args.event_type);
 
     println!("Time {}", &event_args.event_type);
 
