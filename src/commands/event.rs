@@ -1,11 +1,11 @@
 use crate::{
     db::events::Events,
     libs::{
-        event::{Event, EventType, MergeEvents},
+        event::{EventType, FormatEvents, MergeEvents},
         view::View,
     },
 };
-use chrono::{Duration, Local};
+use chrono::Local;
 use clap::Args;
 use std::error::Error;
 
@@ -25,7 +25,7 @@ pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {
         let now = Local::now();
         println!("\nWorking hours for {}", now.format("%B %-d, %Y"));
 
-        let events: (Vec<Event>, Duration) = Events::new()?.fetch()?.merge().update_duration().total_duration();
+        let events = Events::new()?.fetch()?.merge().update_duration().total_duration().format();
         View::events(&events)?;
 
         return Ok(());

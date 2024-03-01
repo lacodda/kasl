@@ -82,3 +82,43 @@ impl MergeEvents for Vec<Event> {
         (self.clone(), total_duration)
     }
 }
+
+pub struct FormatEvent {
+    pub id: i32,
+    pub start: String,
+    pub end: String,
+    pub duration: String,
+}
+
+impl FormatEvent {
+    pub fn format_duration(duration_opt: Option<Duration>) -> String {
+        duration_opt.map_or_else(
+            || "--:--".to_string(),
+            |duration| {
+                let hours = duration.num_hours();
+                let mins = duration.num_minutes() % 60;
+                format!("{:02}:{:02}", hours, mins)
+            },
+        )
+    }
+}
+
+pub trait FormatEvents {
+    fn format(&mut self) -> (Vec<FormatEvent>, String);
+}
+
+impl FormatEvents for (Vec<Event>, Duration) {
+    fn format(&mut self) -> (Vec<FormatEvent>, String) {
+        let mut events = vec![];
+        for (index, event) in self.0.iter().enumerate() {
+            events.push(FormatEvent {
+                id: (index + 1) as i32,
+                start: event.start.format("%H:%M").to_string(),
+                end: event.end.unwrap().format("%H:%M").to_string(),
+                duration: FormatEvent::format_duration(event.duration),
+            })
+        }
+
+        (events, FormatEvent::format_duration(Some(self.1)))
+    }
+}

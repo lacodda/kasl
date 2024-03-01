@@ -1,5 +1,4 @@
-use super::{event::Event, task::Task};
-use chrono::Duration;
+use super::{event::FormatEvent, task::Task};
 use prettytable::{format, row, Table};
 use std::error::Error;
 
@@ -19,34 +18,18 @@ impl View {
         Ok(())
     }
 
-    pub fn events((events, total_duration): &(Vec<Event>, Duration)) -> Result<(), Box<dyn Error>> {
-        let mut table = Table::new();
+    pub fn events((events, total_duration): &(Vec<FormatEvent>, String)) -> Result<(), Box<dyn Error>> {
+        let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
 
-        for (index, event) in events.iter().enumerate() {
-            table.add_row(row![
-                index + 1,
-                event.start.format("%H:%M"),
-                event.end.unwrap().format("%H:%M"),
-                Self::format_duration(event.duration)
-            ]);
+        for event in events.iter() {
+            table.add_row(row![event.id, event.start, event.end, event.duration]);
         }
         table.add_empty_row();
-        table.add_row(row!["TOTAL", "", "", Self::format_duration(Some(*total_duration))]);
+        table.add_row(row!["TOTAL", "", "", total_duration]);
         table.printstd();
 
         Ok(())
-    }
-
-    fn format_duration(duration_opt: Option<Duration>) -> String {
-        duration_opt.map_or_else(
-            || "--:--".to_string(),
-            |duration| {
-                let hours = duration.num_hours();
-                let mins = duration.num_minutes() % 60;
-                format!("{:02}:{:02}", hours, mins)
-            },
-        )
     }
 }
