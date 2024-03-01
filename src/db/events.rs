@@ -36,6 +36,7 @@ impl Events {
                 id: row.get(0)?,
                 start: row.get(1)?,
                 end: Some(end.unwrap_or(now.naive_local().with_nanosecond(0).unwrap())),
+                duration: None,
             })
         })?;
 

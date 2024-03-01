@@ -1,4 +1,7 @@
-use chrono::prelude::*;
+use chrono::{
+    prelude::{Local, NaiveDateTime},
+    Duration,
+};
 use clap::ValueEnum;
 use std::fmt;
 
@@ -22,10 +25,25 @@ pub struct Event {
     pub id: i32,
     pub start: NaiveDateTime,
     pub end: Option<NaiveDateTime>,
+    pub duration: Option<Duration>,
+}
+
+impl Event {
+    fn with_calculated_duration(&self) -> Self {
+        match self.end {
+            Some(end) => Self {
+                duration: Some(end.signed_duration_since(self.start)),
+                ..*self
+            },
+            None => Self { ..*self },
+        }
+    }
 }
 
 pub trait MergeEvents {
     fn merge(self) -> Vec<Event>;
+    fn update_duration(&self) -> Vec<Event>;
+    fn total_duration(&mut self) -> (Vec<Event>, Duration);
 }
 
 impl MergeEvents for Vec<Event> {
@@ -35,9 +53,10 @@ impl MergeEvents for Vec<Event> {
 
         if let Some(mut current) = iter.next() {
             for next in iter {
-                let now = Utc::now();
-                let duration = next.start.signed_duration_since(current.end.unwrap_or(now.naive_utc())).num_seconds().abs();
-                if duration <= DURATION {
+                let now = Local::now();
+                let duration = next.start.signed_duration_since(current.end.unwrap_or(now.naive_local())).num_seconds().abs();
+
+                if duration < DURATION {
                     current.end = next.end;
                 } else {
                     merged.push(current);
@@ -47,5 +66,19 @@ impl MergeEvents for Vec<Event> {
             merged.push(current);
         }
         merged
+    }
+
+    fn update_duration(&self) -> Vec<Event> {
+        self.iter().map(|event| event.with_calculated_duration()).collect()
+    }
+
+    fn total_duration(&mut self) -> (Vec<Event>, Duration) {
+        let mut total_duration = Duration::zero();
+        for event in self.iter() {
+            if let Some(duration) = event.duration {
+                total_duration = total_duration + duration;
+            }
+        }
+        (self.clone(), total_duration)
     }
 }
