@@ -30,3 +30,16 @@ pub enum TaskFilter {
     Incomplete,
     ByIds(Vec<i32>),
 }
+
+pub trait FormatTasks {
+    fn format(&mut self) -> String;
+}
+
+impl FormatTasks for Vec<Task> {
+    fn format(&mut self) -> String {
+        self.iter()
+            .map(|task| format!("{} ({}%)", task.name, task.completeness.map_or(String::from("?"), |c| c.to_string())))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+}
