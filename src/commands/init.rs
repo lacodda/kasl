@@ -1,4 +1,4 @@
-use crate::libs::scheduler::Scheduler;
+use crate::libs::{scheduler::Scheduler, config::Config};
 use clap::Args;
 use std::error::Error;
 
@@ -9,7 +9,7 @@ pub struct InitArgs {
 }
 
 pub fn cmd(init_args: InitArgs) -> Result<(), Box<dyn Error>> {
-    println!("Init");
+    let _ = Config::set_app_global();
     if init_args.delete {
         Scheduler::delete()?;
 
