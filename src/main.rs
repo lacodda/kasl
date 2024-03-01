@@ -29,7 +29,7 @@ enum Commands {
     Sync(sync::SyncArgs),
     #[command(about = "Get summary", arg_required_else_help = true)]
     Sum(sum::SumArgs),
-    #[command(about = "Prepare a report", arg_required_else_help = true)]
+    #[command(about = "Prepare a report")]
     Report(report::ReportArgs),
 }
 
