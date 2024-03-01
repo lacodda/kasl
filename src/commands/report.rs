@@ -52,11 +52,17 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
         let events_json = serde_json::to_string(&events_json)?;
 
         match Config::read() {
-            Ok(config) => {
-                if let Err(e) = Http::new().send(&config.url, &config.session_id, events_json).await {
-                    eprintln!("Error sending events: {}", e);
+            Ok(config) => match Http::new().send(&config.url, &config.session_id, events_json).await {
+                Ok(status) => {
+                    if status == 200 {
+                        let date = Local::now().format("%B %-d, %Y").to_string();
+                        println!("Your report dated {} has been successfully submitted\nWait for a message to your email address", date);
+                    } else {
+                        println!("Status: {}", status);
+                    }
                 }
-            }
+                Err(e) => eprintln!("Error sending events: {}", e),
+            },
             Err(e) => eprintln!("Failed to read config: {}", e),
         }
 

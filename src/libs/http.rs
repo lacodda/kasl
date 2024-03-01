@@ -1,7 +1,7 @@
 use chrono::prelude::Local;
 use reqwest::{
     header::{HeaderMap, HeaderValue, COOKIE},
-    multipart, Client,
+    multipart, Client, StatusCode,
 };
 use std::error::Error;
 
@@ -14,9 +14,8 @@ impl Http {
         Self { client: Client::new() }
     }
 
-    pub async fn send(&self, url: &str, session_id: &str, data: String) -> Result<(), Box<dyn Error>> {
+    pub async fn send(&self, url: &str, session_id: &str, data: String) -> Result<StatusCode, Box<dyn Error>> {
         let date = Local::now().format("%Y-%m-%d").to_string();
-
         let form = multipart::Form::new()
             .text("date", date)
             .text("tasks", data)
@@ -30,11 +29,10 @@ impl Http {
 
         let res = self.client.post(url).headers(headers).multipart(form).send().await?;
 
-        println!("Status: {}", res.status());
-        println!("Headers:\n{:#?}", res.headers());
-
-        let body = res.text().await?;
-        println!("Body:\n{:#?}", body);
-        Ok(())
+        // println!("Status: {}", res.status());
+        // println!("Headers:\n{:#?}", res.headers());
+        // let body = res.text().await?;
+        // println!("Body:\n{:#?}", body);
+        Ok(res.status())
     }
 }
