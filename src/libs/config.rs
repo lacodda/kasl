@@ -6,10 +6,16 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
+pub struct SiConfig {
+    pub login: String,
+    pub auth_url: String,
+    pub api_url: String,
+}
+
+#[derive(Deserialize, Clone)]
 pub struct Config {
-    pub url: String,
-    pub session_id: String,
+    pub si: SiConfig,
 }
 
 impl Config {

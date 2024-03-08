@@ -1,9 +1,9 @@
 use crate::{
+    api::si::Si,
     db::{events::Events, tasks::Tasks},
     libs::{
         config::Config,
         event::{FormatEvents, MergeEvents},
-        http::Http,
         task::{FormatTasks, TaskFilter},
         view::View,
     },
@@ -52,7 +52,7 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
         let events_json = serde_json::to_string(&events_json)?;
 
         match Config::read() {
-            Ok(config) => match Http::new().send(&config.url, &config.session_id, events_json).await {
+            Ok(config) => match Si::new(&config).send(events_json).await {
                 Ok(status) => {
                     if status == 200 {
                         let date = Local::now().format("%B %-d, %Y").to_string();

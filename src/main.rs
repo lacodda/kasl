@@ -2,6 +2,7 @@ mod commands;
 use clap::{Parser, Subcommand};
 use commands::{event, init, login, logout, report, sum, sync, task};
 use std::error::Error;
+mod api;
 mod db;
 mod libs;
 
