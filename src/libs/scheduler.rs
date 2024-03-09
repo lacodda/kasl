@@ -17,7 +17,7 @@ pub enum EventCode {
 pub struct Scheduler {}
 impl Scheduler {
     pub fn new() -> Result<()> {
-        let command = "wflow";
+        let command = "kasl";
         let current_exe_path = env::current_exe().unwrap();
         let current_dir_path = current_exe_path.parent().unwrap().to_str().unwrap();
         let start_action = TaskAction::new("action", &command, &current_dir_path, "event start");
@@ -28,29 +28,29 @@ impl Scheduler {
             .exec_action(&start_action)?
             .principal("", "")?
             .set_hidden(true)?
-            .register("wflow boot")?;
+            .register("kasl boot")?;
 
         Task::new(r"\")?
             .event_trigger(EventCode::Unlock)?
             .exec_action(&start_action)?
             .principal("", "")?
             .set_hidden(true)?
-            .register("wflow start")?;
+            .register("kasl start")?;
 
         Task::new(r"\")?
             .event_trigger(EventCode::Lock)?
             .exec_action(&end_action)?
             .principal("", "")?
             .set_hidden(true)?
-            .register("wflow end")?;
+            .register("kasl end")?;
 
         Ok(())
     }
 
     pub fn delete() -> Result<()> {
-        Task::delete_task(r"\", "wflow boot")?;
-        Task::delete_task(r"\", "wflow start")?;
-        Task::delete_task(r"\", "wflow end")?;
+        Task::delete_task(r"\", "kasl boot")?;
+        Task::delete_task(r"\", "kasl start")?;
+        Task::delete_task(r"\", "kasl end")?;
 
         Ok(())
     }

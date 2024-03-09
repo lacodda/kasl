@@ -1,9 +1,9 @@
 [package]
-name = "wflow"
+name = "kasl"
 version = "0.0.1"
 edition = "2021"
-description = "Command line tool to automate work flow"
-repository = "https://github.com/lacodda/wflow.git"
+description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, breaks ☕, and task completion"
+repository = "https://github.com/lacodda/kasl.git"
 authors = ["Kirill Lakhtachev <lahtachev@gmail.com> (https://lacodda.com)"]
 readme = "README.md"
 license = "MIT"

@@ -57,4 +57,4 @@ Contributions are welcome! If you have ideas for new features or improvements, f
 
 ## License 📄
 
-kasl is open-source software licensed under the MIT license. See the LICENSE file for more details.
+kasl is open-source software licensed under the MIT license. See the [LICENSE](LICENSE) file for more details.

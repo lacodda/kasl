@@ -652,6 +652,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "kasl"
+version = "0.0.1"
+dependencies = [
+ "base64 0.22.0",
+ "chrono",
+ "clap",
+ "dialoguer",
+ "prettytable-rs",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tokio",
+ "windows",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1502,23 +1519,6 @@ checksum = "96565907687f7aceb35bc5fc03770a8a0471d82e479f25832f54a0e3f4b28446"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "wflow"
-version = "0.0.1"
-dependencies = [
- "base64 0.22.0",
- "chrono",
- "clap",
- "dialoguer",
- "prettytable-rs",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "tokio",
- "windows",
 ]
 
 [[package]]
