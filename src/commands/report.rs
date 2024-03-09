@@ -54,7 +54,7 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
         match Config::read() {
             Ok(config) => match Si::new(&config).send(events_json).await {
                 Ok(status) => {
-                    if status == 200 {
+                    if status.is_success() {
                         let date = Local::now().format("%B %-d, %Y").to_string();
                         println!("Your report dated {} has been successfully submitted\nWait for a message to your email address", date);
                     } else {

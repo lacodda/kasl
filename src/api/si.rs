@@ -14,6 +14,7 @@ use std::{
     time::Duration,
 };
 
+const MAX_RETRY_COUNT: i32 = 3;
 const COOKIE_KEY: &str = "PORTALSESSID=";
 const SESSION_ID_FILE: &str = ".session_id";
 const AUTH_URL: &str = "auth/ldap";
@@ -51,29 +52,43 @@ impl Si {
     }
 
     pub async fn send(&self, data: String) -> Result<StatusCode, Box<dyn Error>> {
-        let session_id = self.get_session_id().await?;
-        let url = format!("{}/{}", self.config.si.api_url, REPORT_URL);
-        let date = Local::now().format("%Y-%m-%d").to_string();
-        let form = multipart::Form::new()
-            .text("date", date)
-            .text("tasks", data.clone())
-            .text("comment", "")
-            .text("day_type", "1")
-            .text("duty", "0")
-            .text("only_save", "0");
+        let mut retries = 0;
+        loop {
+            let session_id = self.get_session_id().await?;
+            let url = format!("{}/{}", self.config.si.api_url, REPORT_URL);
+            let date = Local::now().format("%Y-%m-%d").to_string();
+            let form = multipart::Form::new()
+                .text("date", date)
+                .text("tasks", data.clone())
+                .text("comment", "")
+                .text("day_type", "1")
+                .text("duty", "0")
+                .text("only_save", "0");
 
-        let mut headers = HeaderMap::new();
-        headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                COOKIE,
+                HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?,
+            );
 
-        let res = self.client.post(url).headers(headers).multipart(form).send().await?;
+            let res = self
+                .client
+                .post(url)
+                .headers(headers)
+                .multipart(form)
+                .send()
+                .await?;
 
-        if res.status() == 401 {
-            Self::delete_session_id(SESSION_ID_FILE)?;
-            tokio::time::sleep(Duration::from_secs(1)).await;
-            return Box::pin(async move { self.send(data).await }).await;
+            match res.status() {
+                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                    Self::delete_session_id(SESSION_ID_FILE)?;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    retries += 1;
+                    continue;
+                }
+                _ => return Ok(res.status()),
+            }
         }
-
-        Ok(res.status())
     }
 
     pub async fn login(&self, credentials: &LoginCredentials) -> Result<String, Box<dyn Error>> {
@@ -86,20 +101,24 @@ impl Si {
         let login_res = self
             .client
             .post(login_url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", auth_session.payload.token))
+            .header(
+                header::AUTHORIZATION,
+                format!("Bearer {}", auth_session.payload.token),
+            )
             .send()
             .await?;
 
         if let Some(cookie) = login_res.headers().get("Set-Cookie") {
             if let Ok(cookie_val) = cookie.to_str() {
-                if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
+                if let Some(portalsessid) =
+                    cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY))
+                {
                     let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
                     return Ok(session_id.to_string());
                 }
             }
         }
 
-        println!("Token:\n{:#?}", auth_session.payload.token);
         Err("Login failed".into())
     }
 
@@ -107,9 +126,11 @@ impl Si {
         if let Ok(session_id) = Self::read_session_id(SESSION_ID_FILE) {
             Ok(session_id)
         } else {
-            let password: String = Input::with_theme(&ColorfulTheme::default()).with_prompt("Enter your password").interact_text().unwrap();
+            let password: String = Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter your password")
+                .interact_text()
+                .unwrap();
             let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
-            println!("{}", &encoded_password);
             let login_credentials = LoginCredentials {
                 login: self.config.si.login.to_string(),
                 password: encoded_password,
@@ -125,7 +146,11 @@ impl Si {
     }
 
     fn write_session_id(file_name: &str, session_id: &str) -> io::Result<()> {
-        let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).open(file_name)?;
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(file_name)?;
         file.write_all(session_id.as_bytes())
     }
 
