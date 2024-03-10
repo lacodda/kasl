@@ -1,5 +1,8 @@
-
-# kasl: Key Activity Synchronization and Logging 🕒
+<p align="center">
+  <img src="https://raw.githubusercontent.com/lacodda/kasl/main/kasl.webp" width="320" alt="kasl">
+</p>
+<h1 align="center">kasl: Key Activity Synchronization and Logging 🕒</h1>
+<br>
 
 ## Overview 📖
 
