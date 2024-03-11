@@ -1,7 +1,7 @@
 use crate::libs::config::Config;
 use base64::prelude::*;
 use chrono::prelude::Local;
-use dialoguer::{theme::ColorfulTheme, Input};
+use dialoguer::{theme::ColorfulTheme, Password};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, COOKIE},
     multipart, Client, StatusCode,
@@ -126,9 +126,9 @@ impl Si {
         if let Ok(session_id) = Self::read_session_id(SESSION_ID_FILE) {
             Ok(session_id)
         } else {
-            let password: String = Input::with_theme(&ColorfulTheme::default())
+            let password: String = Password::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your password")
-                .interact_text()
+                .interact()
                 .unwrap();
             let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
             let login_credentials = LoginCredentials {
