@@ -33,16 +33,12 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
             .0
             .iter()
             .map(|event| {
-                let mut task = "".to_string();
-                if event.id == 1 {
-                    task = tasks.format();
-                }
                 serde_json::json!({
                     "index": event.id,
                     "from": event.start,
                     "to": event.end,
                     "total_ts": event.duration,
-                    "task": task,
+                    "task": tasks.format(),
                     "data": [],
                     "time": "",
                     "result": ""
