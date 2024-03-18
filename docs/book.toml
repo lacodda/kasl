@@ -1,0 +1,6 @@
+[book]
+authors = ["Kirill Lakhtachev"]
+language = "en"
+multilingual = false
+src = "src"
+title = "kasl documentation"
