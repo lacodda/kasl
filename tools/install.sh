@@ -9,7 +9,7 @@ case "$OS" in
 esac
 
 REPO_USER="lacodda"
-REPO_NAME="lyrn"
+REPO_NAME="kasl"
 LATEST_VERSION=$(curl -s https://api.github.com/repos/$REPO_USER/$REPO_NAME/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 
 if [ -z "$LATEST_VERSION" ]; then
@@ -17,7 +17,7 @@ if [ -z "$LATEST_VERSION" ]; then
     exit 1
 fi
 
-RELEASE_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/lyrn-$LATEST_VERSION-x86_64-$OS.tar.gz"
+RELEASE_URL="https://github.com/$REPO_USER/$REPO_NAME/releases/latest/download/$REPO_NAME-$LATEST_VERSION-x86_64-$OS.tar.gz"
 
 if [ "$OS" = "linux" ] || [ "$OS" = "darwin" ]; then
   DESTINATION="$HOME/.local/bin"
