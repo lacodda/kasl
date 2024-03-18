@@ -1,3 +1,4 @@
+use super::data_storage::DataStorage;
 use serde::Deserialize;
 use std::env;
 use std::error::Error;
@@ -5,6 +6,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str;
+
+pub const CONFIG_FILE_NAME: &str = "config.json";
 
 #[derive(Deserialize, Clone)]
 pub struct SiConfig {
@@ -20,7 +23,8 @@ pub struct Config {
 
 impl Config {
     pub fn read() -> Result<Config, Box<dyn Error>> {
-        let config_str = fs::read_to_string("config.json")?;
+        let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
+        let config_str = fs::read_to_string(config_file_path)?;
         let config: Config = serde_json::from_str(&config_str)?;
 
         Ok(config)
