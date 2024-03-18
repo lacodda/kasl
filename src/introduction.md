@@ -23,25 +23,29 @@ kasl is a comprehensive command-line utility 🛠️ designed to streamline the 
 - Ensure you have a compatible operating system (Windows, macOS, or Linux) 💻.
 - Requires Node.js and npm (or an equivalent package manager) for running the utility 📦.
 
-### Installation 🔧
+## Installation 🛠️
 
-You can run the application using the `npx` utility:
+Install kasl now. kasl is installed by running one of the following commands in your terminal. 
+You can install this via the command-line with either curl or wget. 
 
-```bash
-npx kasl@latest
-```
-
-Or install the package from npm globally
+### Install kasl via curl
 
 ```bash
-npm i -g kasl
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"
 ```
 
-This will make the `kasl` application globally available in your system
+### Install kasl via wget
+
+```bash
+sh -c "$(wget https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh -O -)"
+```
+
+This will make the `kasl` application globally available in your system.
 
 ### Usage 📚
 
 To start kasl and begin tracking:
+
 ```bash
 kasl --help
 ```
