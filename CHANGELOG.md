@@ -1,5 +1,15 @@
 # Changelog
 
+## 🎉 [0.0.2] - 2024-03-19
+
+### ✨ Features
+
+- Bash installation script has been slightly modified
+
+### 🛠️ Bug Fixes
+
+- The path to the .session_id file has been replaced with the path in DataStorage
+
 ## 🎉 [0.0.1] - 2024-03-18
 
 ### ✨ Features
