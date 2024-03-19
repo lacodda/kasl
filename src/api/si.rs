@@ -1,4 +1,4 @@
-use crate::libs::config::Config;
+use crate::libs::{config::Config, data_storage::DataStorage};
 use base64::prelude::*;
 use chrono::prelude::Local;
 use dialoguer::{theme::ColorfulTheme, Password};
@@ -19,7 +19,6 @@ const COOKIE_KEY: &str = "PORTALSESSID=";
 const SESSION_ID_FILE: &str = ".session_id";
 const AUTH_URL: &str = "auth/ldap";
 const LOGIN_URL: &str = "auth/login-by-token";
-// const REPORT_URL: &str = "report-card/get-rest-dates";
 const REPORT_URL: &str = "report-card/send-daily-report";
 
 #[derive(Serialize)]
@@ -66,18 +65,9 @@ impl Si {
                 .text("only_save", "0");
 
             let mut headers = HeaderMap::new();
-            headers.insert(
-                COOKIE,
-                HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?,
-            );
+            headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
 
-            let res = self
-                .client
-                .post(url)
-                .headers(headers)
-                .multipart(form)
-                .send()
-                .await?;
+            let res = self.client.post(url).headers(headers).multipart(form).send().await?;
 
             match res.status() {
                 StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
@@ -101,18 +91,13 @@ impl Si {
         let login_res = self
             .client
             .post(login_url)
-            .header(
-                header::AUTHORIZATION,
-                format!("Bearer {}", auth_session.payload.token),
-            )
+            .header(header::AUTHORIZATION, format!("Bearer {}", auth_session.payload.token))
             .send()
             .await?;
 
         if let Some(cookie) = login_res.headers().get("Set-Cookie") {
             if let Ok(cookie_val) = cookie.to_str() {
-                if let Some(portalsessid) =
-                    cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY))
-                {
+                if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
                     let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
                     return Ok(session_id.to_string());
                 }
@@ -123,20 +108,19 @@ impl Si {
     }
 
     async fn get_session_id(&self) -> Result<String, Box<dyn Error>> {
-        if let Ok(session_id) = Self::read_session_id(SESSION_ID_FILE) {
+        let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
+        let session_id_file_path_str = session_id_file_path.to_str().unwrap();
+        if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
             Ok(session_id)
         } else {
-            let password: String = Password::with_theme(&ColorfulTheme::default())
-                .with_prompt("Enter your password")
-                .interact()
-                .unwrap();
+            let password: String = Password::with_theme(&ColorfulTheme::default()).with_prompt("Enter your password").interact().unwrap();
             let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
             let login_credentials = LoginCredentials {
                 login: self.config.si.login.to_string(),
                 password: encoded_password,
             };
             let session_id = self.login(&login_credentials).await?;
-            let _ = Self::write_session_id(SESSION_ID_FILE, &session_id);
+            let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
             Ok(session_id)
         }
     }
@@ -146,11 +130,7 @@ impl Si {
     }
 
     fn write_session_id(file_name: &str, session_id: &str) -> io::Result<()> {
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(file_name)?;
+        let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).open(file_name)?;
         file.write_all(session_id.as_bytes())
     }
 
