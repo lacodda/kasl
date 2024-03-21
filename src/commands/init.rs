@@ -1,4 +1,4 @@
-use crate::libs::{scheduler::Scheduler, config::Config};
+use crate::libs::{config::Config, scheduler::Scheduler};
 use clap::Args;
 use std::error::Error;
 
@@ -16,6 +16,7 @@ pub fn cmd(init_args: InitArgs) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
     Scheduler::new()?;
+    Config::init()?.save()?;
 
     Ok(())
 }

@@ -1,4 +1,4 @@
-use crate::libs::{config::Config, data_storage::DataStorage};
+use crate::libs::{config::SiConfig, data_storage::DataStorage};
 use base64::prelude::*;
 use chrono::prelude::Local;
 use dialoguer::{theme::ColorfulTheme, Password};
@@ -39,11 +39,11 @@ pub struct AuthPayload {
 
 pub struct Si {
     client: Client,
-    config: Config,
+    config: SiConfig,
 }
 
 impl Si {
-    pub fn new(config: &Config) -> Self {
+    pub fn new(config: &SiConfig) -> Self {
         Self {
             client: Client::new(),
             config: config.clone(),
@@ -54,7 +54,7 @@ impl Si {
         let mut retries = 0;
         loop {
             let session_id = self.get_session_id().await?;
-            let url = format!("{}/{}", self.config.si.api_url, REPORT_URL);
+            let url = format!("{}/{}", self.config.api_url, REPORT_URL);
             let date = Local::now().format("%Y-%m-%d").to_string();
             let form = multipart::Form::new()
                 .text("date", date)
@@ -82,12 +82,12 @@ impl Si {
     }
 
     pub async fn login(&self, credentials: &LoginCredentials) -> Result<String, Box<dyn Error>> {
-        let auth_url = format!("{}/{}", self.config.si.auth_url, AUTH_URL);
+        let auth_url = format!("{}/{}", self.config.auth_url, AUTH_URL);
         let auth_res = self.client.post(auth_url).json(credentials).send().await?;
         let auth_body = auth_res.text().await?;
         let auth_session: AuthSession = serde_json::from_str(&auth_body)?;
 
-        let login_url = format!("{}/{}", self.config.si.api_url, LOGIN_URL);
+        let login_url = format!("{}/{}", self.config.api_url, LOGIN_URL);
         let login_res = self
             .client
             .post(login_url)
@@ -116,7 +116,7 @@ impl Si {
             let password: String = Password::with_theme(&ColorfulTheme::default()).with_prompt("Enter your password").interact().unwrap();
             let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
             let login_credentials = LoginCredentials {
-                login: self.config.si.login.to_string(),
+                login: self.config.login.to_string(),
                 password: encoded_password,
             };
             let session_id = self.login(&login_credentials).await?;

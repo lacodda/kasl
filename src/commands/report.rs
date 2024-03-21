@@ -48,16 +48,19 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
         let events_json = serde_json::to_string(&events_json)?;
 
         match Config::read() {
-            Ok(config) => match Si::new(&config).send(events_json).await {
-                Ok(status) => {
-                    if status.is_success() {
-                        let date = Local::now().format("%B %-d, %Y").to_string();
-                        println!("Your report dated {} has been successfully submitted\nWait for a message to your email address", date);
-                    } else {
-                        println!("Status: {}", status);
+            Ok(config) => match config.si {
+                Some(si_config) => match Si::new(&si_config).send(events_json).await {
+                    Ok(status) => {
+                        if status.is_success() {
+                            let date = Local::now().format("%B %-d, %Y").to_string();
+                            println!("Your report dated {} has been successfully submitted\nWait for a message to your email address", date);
+                        } else {
+                            println!("Status: {}", status);
+                        }
                     }
-                }
-                Err(e) => eprintln!("Error sending events: {}", e),
+                    Err(e) => eprintln!("Error sending events: {}", e),
+                },
+                None => eprintln!("Failed to read SiServer config"),
             },
             Err(e) => eprintln!("Failed to read config: {}", e),
         }
