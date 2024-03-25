@@ -1,9 +1,9 @@
 use chrono::{
     prelude::{Local, NaiveDateTime},
-    Duration,
+    Duration, NaiveDate,
 };
 use clap::ValueEnum;
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 const DURATION: i64 = 20 * 60; // 20 mins
 
@@ -83,6 +83,24 @@ impl MergeEvents for Vec<Event> {
     }
 }
 
+pub trait MergeEventGroup {
+    fn calc(self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
+}
+
+impl MergeEventGroup for HashMap<NaiveDate, Vec<Event>> {
+    fn calc(self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
+        let mut event_group: HashMap<NaiveDate, (Vec<Event>, Duration)> = HashMap::new();
+        let mut total_duration = Duration::zero();
+        for (date, events) in self.iter() {
+            let day_events = events.clone().merge().update_duration().total_duration();
+            total_duration = total_duration + day_events.1;
+            event_group.insert(*date, day_events);
+        }
+        (event_group, total_duration)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct FormatEvent {
     pub id: i32,
     pub start: String,
@@ -120,5 +138,20 @@ impl FormatEvents for (Vec<Event>, Duration) {
         }
 
         (events, FormatEvent::format_duration(Some(self.1)))
+    }
+}
+
+pub trait FormatEventGroup {
+    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String);
+}
+
+impl FormatEventGroup for (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
+    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String) {
+        let mut event_group: HashMap<NaiveDate, (Vec<FormatEvent>, String)> = HashMap::new();
+        for (date, events) in self.0.iter() {
+            event_group.insert(*date, events.clone().format());
+        }
+
+        (event_group, FormatEvent::format_duration(Some(self.1)))
     }
 }
