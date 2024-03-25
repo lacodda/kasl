@@ -1,5 +1,17 @@
 # Changelog
 
+## 🎉 [0.1.0] - 2024-03-25
+
+### ✨ Features
+
+- A simple wizard has been added to set configuration settings
+- Summary command has been added
+
+### 🛠️ Bug Fixes
+
+- Unused commands have been removed
+- The final daily event has been added after submitting report
+
 ## 🎉 [0.0.2] - 2024-03-19
 
 ### ✨ Features
