@@ -3,7 +3,7 @@ use crate::{
     db::{events::Events, tasks::Tasks},
     libs::{
         config::Config,
-        event::{FormatEvents, MergeEvents},
+        event::{EventType, FormatEvents, MergeEvents},
         task::{FormatTasks, TaskFilter},
         view::View,
     },
@@ -52,6 +52,7 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
                 Some(si_config) => match Si::new(&si_config).send(events_json).await {
                     Ok(status) => {
                         if status.is_success() {
+                            let _ = Events::new()?.insert(&EventType::End);
                             let date = Local::now().format("%B %-d, %Y").to_string();
                             println!("Your report dated {} has been successfully submitted\nWait for a message to your email address", date);
                         } else {
