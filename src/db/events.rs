@@ -137,7 +137,6 @@ impl Events {
             .optional()?;
 
         if let Some((id, end)) = maybe_row {
-            println!("{}   {:?}", id, end);
             if end.is_none() {
                 transaction.execute(UPDATE_EVENT, params![id])?;
                 transaction.commit()?;
