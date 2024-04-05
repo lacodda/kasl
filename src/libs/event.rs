@@ -53,15 +53,19 @@ impl MergeEvents for Vec<Event> {
 
         if let Some(mut current) = iter.next() {
             for next in iter {
-                let now = Local::now();
-                let duration = next.start.signed_duration_since(current.end.unwrap_or(now.naive_local())).num_seconds().abs();
-
+                if current.end.is_none() {
+                    current.end = Some(next.start);
+                }
+                let duration = next.start.signed_duration_since(current.end.unwrap()).num_seconds().abs();
                 if duration < DURATION {
                     current.end = next.end;
                 } else {
                     merged.push(current);
                     current = next;
                 }
+            }
+            if current.end.is_none() {
+                current.end = Some(Local::now().naive_local());
             }
             merged.push(current);
         }
