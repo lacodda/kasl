@@ -1,6 +1,6 @@
 mod commands;
 use clap::{Parser, Subcommand};
-use commands::{event, init, report, sum, task};
+use commands::{event, init, report, sum, task, watch};
 use std::error::Error;
 mod api;
 mod db;
@@ -26,6 +26,8 @@ enum Commands {
     Sum(sum::SumArgs),
     #[command(about = "Prepare a report")]
     Report(report::ReportArgs),
+    #[command(about = "Watch")]
+    Watch,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -37,5 +39,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Event(args) => event::cmd(args),
         Commands::Sum(args) => sum::cmd(args),
         Commands::Report(args) => report::cmd(args),
+        Commands::Watch => Ok(watch::cmd()),
     }
 }
