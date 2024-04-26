@@ -15,9 +15,9 @@ pub struct EventArgs {
         default_value_t = EventType::Start,
         value_enum
     )]
-    event_type: EventType,
+    pub(crate) event_type: EventType,
     #[arg(short, long)]
-    show: bool,
+    pub(crate) show: bool,
 }
 
 pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {

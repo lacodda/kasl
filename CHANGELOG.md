@@ -1,5 +1,17 @@
 # Changelog
 
+## 🎉 [0.1.1] - 2024-04-08
+
+### ✨ Features
+
+- Added aliases for event command
+
+### 🛠️ Bug Fixes
+
+- The path to SESSION_ID_FILE has been corrected in the delete_session_id method
+- The service println has been removed
+- Fixed an error in calculating time if the interval end timestamp is missed
+
 ## 🎉 [0.1.0] - 2024-03-25
 
 ### ✨ Features

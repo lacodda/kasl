@@ -71,7 +71,7 @@ impl Si {
 
             match res.status() {
                 StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
-                    Self::delete_session_id(SESSION_ID_FILE)?;
+                    self.delete_session_id()?;
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     retries += 1;
                     continue;
@@ -134,7 +134,9 @@ impl Si {
         file.write_all(session_id.as_bytes())
     }
 
-    fn delete_session_id(file_name: &str) -> io::Result<()> {
-        fs::remove_file(file_name)
+    fn delete_session_id(&self) -> Result<(), Box<dyn Error>> {
+        let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
+        fs::remove_file(session_id_file_path)?;
+        Ok(())
     }
 }
