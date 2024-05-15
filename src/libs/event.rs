@@ -44,6 +44,7 @@ pub trait MergeEvents {
     fn merge(self) -> Vec<Event>;
     fn update_duration(&self) -> Vec<Event>;
     fn total_duration(&mut self) -> (Vec<Event>, Duration);
+    fn format(&mut self) -> Vec<FormatEvent>;
 }
 
 impl MergeEvents for Vec<Event> {
@@ -84,6 +85,25 @@ impl MergeEvents for Vec<Event> {
             }
         }
         (self.clone(), total_duration)
+    }
+
+    fn format(&mut self) -> Vec<FormatEvent> {
+        let mut events = vec![];
+        for (index, event) in self.iter().enumerate() {
+            let mut end = "-".to_string();
+            let duration = "".to_string();
+            if event.end.is_some() {
+                end = event.end.unwrap().format("%H:%M").to_string();
+            }
+            events.push(FormatEvent {
+                id: (index + 1) as i32,
+                start: event.start.format("%H:%M").to_string(),
+                end,
+                duration,
+            })
+        }
+
+        events
     }
 }
 

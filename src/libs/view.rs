@@ -34,6 +34,19 @@ impl View {
         Ok(())
     }
 
+    pub fn events_raw(events: &Vec<FormatEvent>) -> Result<(), Box<dyn Error>> {
+        let mut table: Table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["ID", "START", "END"]);
+
+        for event in events.iter() {
+            table.add_row(row![event.id, event.start, event.end]);
+        }
+        table.printstd();
+
+        Ok(())
+    }
+
     pub fn sum((events, total_duration): &(HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String)) -> Result<(), Box<dyn Error>> {
         let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);

@@ -18,11 +18,20 @@ pub struct EventArgs {
     pub(crate) event_type: EventType,
     #[arg(short, long)]
     pub(crate) show: bool,
+    #[arg(short, long)]
+    pub(crate) raw: bool,
 }
 
 pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {
-    if event_args.show {
-        let now = Local::now();
+    let now = Local::now();
+    if event_args.raw {
+        println!("\nRaw events for {}", now.format("%B %-d, %Y"));
+
+        let events = Events::new()?.fetch()?.format();
+        View::events_raw(&events)?;
+
+        return Ok(());
+    } else if event_args.show {
         println!("\nWorking hours for {}", now.format("%B %-d, %Y"));
 
         let events = Events::new()?.fetch()?.merge().update_duration().total_duration().format();

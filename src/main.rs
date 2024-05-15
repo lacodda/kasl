@@ -48,10 +48,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Start => event::cmd(EventArgs {
             event_type: EventType::Start,
             show: false,
+            raw: false,
         }),
         Commands::End => event::cmd(EventArgs {
             event_type: EventType::End,
             show: false,
+            raw: false,
         }),
         Commands::Sum(args) => sum::cmd(args),
         Commands::Report(args) => report::cmd(args),
