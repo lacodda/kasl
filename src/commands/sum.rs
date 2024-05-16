@@ -1,7 +1,7 @@
 use crate::{
-    db::events::Events,
+    db::events::{Events, SelectRequest},
     libs::{
-        event::{FormatEventGroup, MergeEventGroup},
+        event::{FormatEventGroup, MergeEventGroup, MergeEvents},
         view::View,
     },
 };
@@ -18,7 +18,7 @@ pub struct SumArgs {
 pub fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
     let now = Local::now();
     println!("\nWorking hours for {}", now.format("%B, %Y"));
-    let event_summary = Events::new()?.event_summary()?.calc().format();
+    let event_summary = Events::new()?.fetch(SelectRequest::Monthly)?.summary().calc().format();
 
     View::sum(&event_summary)?;
 

@@ -42,6 +42,7 @@ impl Event {
 
 pub trait MergeEvents {
     fn merge(self) -> Vec<Event>;
+    fn summary(self) -> HashMap<NaiveDate, Vec<Event>>;
     fn update_duration(&self) -> Vec<Event>;
     fn total_duration(&mut self) -> (Vec<Event>, Duration);
     fn format(&mut self) -> Vec<FormatEvent>;
@@ -71,6 +72,16 @@ impl MergeEvents for Vec<Event> {
             merged.push(current);
         }
         merged
+    }
+
+    fn summary(self) -> HashMap<NaiveDate, Vec<Event>> {
+        let mut events: HashMap<NaiveDate, Vec<Event>> = HashMap::new();
+        for event in self.into_iter() {
+            let event_date = event.start.date();
+            events.entry(event_date).or_insert_with(Vec::new).push(event);
+        }
+
+        events
     }
 
     fn update_duration(&self) -> Vec<Event> {

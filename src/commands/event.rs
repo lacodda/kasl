@@ -1,5 +1,5 @@
 use crate::{
-    db::events::Events,
+    db::events::{Events, SelectRequest},
     libs::{
         event::{EventType, FormatEvents, MergeEvents},
         view::View,
@@ -27,14 +27,14 @@ pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {
     if event_args.raw {
         println!("\nRaw events for {}", now.format("%B %-d, %Y"));
 
-        let events = Events::new()?.fetch()?.format();
+        let events = Events::new()?.fetch(SelectRequest::Daily)?.format();
         View::events_raw(&events)?;
 
         return Ok(());
     } else if event_args.show {
         println!("\nWorking hours for {}", now.format("%B %-d, %Y"));
 
-        let events = Events::new()?.fetch()?.merge().update_duration().total_duration().format();
+        let events = Events::new()?.fetch(SelectRequest::Daily)?.merge().update_duration().total_duration().format();
         View::events(&events)?;
 
         return Ok(());

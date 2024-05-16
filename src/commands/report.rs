@@ -1,6 +1,9 @@
 use crate::{
     api::si::Si,
-    db::{events::Events, tasks::Tasks},
+    db::{
+        events::{Events, SelectRequest},
+        tasks::Tasks,
+    },
     libs::{
         config::Config,
         event::{EventType, FormatEvents, MergeEvents},
@@ -20,7 +23,7 @@ pub struct ReportArgs {
 
 #[tokio::main]
 pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
-    let events = Events::new()?.fetch()?.merge().update_duration().total_duration().format();
+    let events = Events::new()?.fetch(SelectRequest::Daily)?.merge().update_duration().total_duration().format();
     let mut tasks = Tasks::new()?.fetch(TaskFilter::Today)?;
 
     if report_args.send {
@@ -54,7 +57,10 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
                         if status.is_success() {
                             let _ = Events::new()?.insert(&EventType::End);
                             let date = Local::now().format("%B %-d, %Y").to_string();
-                            println!("Your report dated {} has been successfully submitted\nWait for a message to your email address", date);
+                            println!(
+                                "Your report dated {} has been successfully submitted\nWait for a message to your email address",
+                                date
+                            );
                         } else {
                             println!("Status: {}", status);
                         }

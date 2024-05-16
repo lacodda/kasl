@@ -12,7 +12,13 @@ impl View {
         table.set_titles(row!["ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS"]);
 
         for (index, task) in tasks.iter().enumerate() {
-            table.add_row(row![index + 1, task.task_id.unwrap_or(0), task.name, task.comment, task.completeness.unwrap_or(100)]);
+            table.add_row(row![
+                index + 1,
+                task.task_id.unwrap_or(0),
+                task.name,
+                task.comment,
+                task.completeness.unwrap_or(100)
+            ]);
         }
         table.printstd();
 
