@@ -6,7 +6,7 @@ use crate::{
     },
     libs::{
         config::Config,
-        event::{EventType, FormatEvents, MergeEvents},
+        event::{EventType, FormatEvents, EventGroup},
         task::{FormatTasks, TaskFilter},
         view::View,
     },

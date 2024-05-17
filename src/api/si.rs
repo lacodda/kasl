@@ -1,6 +1,6 @@
 use crate::libs::{config::SiConfig, data_storage::DataStorage};
 use base64::prelude::*;
-use chrono::prelude::Local;
+use chrono::{prelude::Local, NaiveDate};
 use dialoguer::{theme::ColorfulTheme, Password};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, COOKIE},
@@ -8,6 +8,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashSet,
     error::Error,
     fs,
     io::{self, Write},
@@ -20,6 +21,7 @@ const SESSION_ID_FILE: &str = ".session_id";
 const AUTH_URL: &str = "auth/ldap";
 const LOGIN_URL: &str = "auth/login-by-token";
 const REPORT_URL: &str = "report-card/send-daily-report";
+const REST_DATES_URL: &str = "report-card/get-rest-dates";
 
 #[derive(Serialize)]
 pub struct LoginCredentials {
@@ -35,6 +37,35 @@ pub struct AuthSession {
 #[derive(Deserialize)]
 pub struct AuthPayload {
     token: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RestDatesResponse {
+    dates: Vec<String>,
+    v_dates: Vec<String>,
+    w_dates: Vec<String>,
+}
+
+impl RestDatesResponse {
+    pub fn unique_dates(&self) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
+        let mut date_set = HashSet::new();
+
+        self.process_dates(&self.dates, &mut date_set)?;
+        self.process_dates(&self.v_dates, &mut date_set)?;
+        self.process_dates(&self.w_dates, &mut date_set)?;
+
+        Ok(date_set)
+    }
+
+    fn process_dates(&self, dates: &Vec<String>, date_set: &mut HashSet<NaiveDate>) -> Result<(), Box<dyn Error>> {
+        dates
+            .iter()
+            .filter_map(|date_str| NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok())
+            .for_each(|date| {
+                date_set.insert(date);
+            });
+        Ok(())
+    }
 }
 
 pub struct Si {
@@ -113,7 +144,10 @@ impl Si {
         if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
             Ok(session_id)
         } else {
-            let password: String = Password::with_theme(&ColorfulTheme::default()).with_prompt("Enter your password").interact().unwrap();
+            let password: String = Password::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter your password")
+                .interact()
+                .unwrap();
             let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
             let login_credentials = LoginCredentials {
                 login: self.config.login.to_string(),
@@ -138,5 +172,31 @@ impl Si {
         let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
         fs::remove_file(session_id_file_path)?;
         Ok(())
+    }
+
+    pub async fn rest_dates(&self, year: NaiveDate) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
+        let mut retries = 0;
+        loop {
+            let session_id = self.get_session_id().await?;
+            let url = format!("{}/{}", self.config.api_url, REST_DATES_URL);
+            let form = multipart::Form::new().text("year", year.format("%Y").to_string());
+            let mut headers = HeaderMap::new();
+            headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
+
+            let res = self.client.post(url).headers(headers).multipart(form).send().await?;
+
+            match res.status() {
+                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                    self.delete_session_id()?;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    retries += 1;
+                    continue;
+                }
+                _ => {
+                    let rest_dates_response = res.json::<RestDatesResponse>().await?;
+                    return Ok(rest_dates_response.unique_dates()?);
+                }
+            }
+        }
     }
 }

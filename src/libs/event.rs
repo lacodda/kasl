@@ -1,9 +1,12 @@
 use chrono::{
     prelude::{Local, NaiveDateTime},
-    Duration, NaiveDate,
+    Datelike, Duration, NaiveDate,
 };
 use clap::ValueEnum;
-use std::{collections::HashMap, fmt};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+};
 
 const DURATION: i64 = 20 * 60; // 20 mins
 
@@ -40,15 +43,15 @@ impl Event {
     }
 }
 
-pub trait MergeEvents {
+pub trait EventGroup {
     fn merge(self) -> Vec<Event>;
-    fn summary(self) -> HashMap<NaiveDate, Vec<Event>>;
+    fn group_events(self) -> HashMap<NaiveDate, Vec<Event>>;
     fn update_duration(&self) -> Vec<Event>;
     fn total_duration(&mut self) -> (Vec<Event>, Duration);
     fn format(&mut self) -> Vec<FormatEvent>;
 }
 
-impl MergeEvents for Vec<Event> {
+impl EventGroup for Vec<Event> {
     fn merge(self) -> Vec<Event> {
         let mut merged = vec![];
         let mut iter = self.into_iter();
@@ -74,7 +77,7 @@ impl MergeEvents for Vec<Event> {
         merged
     }
 
-    fn summary(self) -> HashMap<NaiveDate, Vec<Event>> {
+    fn group_events(self) -> HashMap<NaiveDate, Vec<Event>> {
         let mut events: HashMap<NaiveDate, Vec<Event>> = HashMap::new();
         for event in self.into_iter() {
             let event_date = event.start.date();
@@ -118,20 +121,61 @@ impl MergeEvents for Vec<Event> {
     }
 }
 
-pub trait MergeEventGroup {
+pub trait EventGroupDuration {
     fn calc(self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
 }
 
-impl MergeEventGroup for HashMap<NaiveDate, Vec<Event>> {
+impl EventGroupDuration for HashMap<NaiveDate, Vec<Event>> {
     fn calc(self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
         let mut event_group: HashMap<NaiveDate, (Vec<Event>, Duration)> = HashMap::new();
-        let mut total_duration = Duration::zero();
         for (date, events) in self.iter() {
             let day_events = events.clone().merge().update_duration().total_duration();
-            total_duration = total_duration + day_events.1;
             event_group.insert(*date, day_events);
         }
-        (event_group, total_duration)
+        (event_group, Duration::zero())
+    }
+}
+
+pub trait EventGroupTotalDuration {
+    fn add_rest_dates(&mut self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
+    fn total_duration(&mut self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
+    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String);
+}
+
+impl EventGroupTotalDuration for (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
+    fn add_rest_dates(&mut self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
+        let mut current_month_rest_dates: HashMap<NaiveDate, (Vec<Event>, Duration)> = rest_dates
+            .iter()
+            .filter(|&&date| date.month() == Local::now().naive_local().month())
+            .map(|&date| (date, (vec![], duration)))
+            .collect();
+
+        for (date, events) in self.0.iter() {
+            let mut event_group_duration = events.clone();
+            if rest_dates.contains(date) {
+                event_group_duration.1 += duration;
+            }
+            current_month_rest_dates.insert(*date, event_group_duration);
+        }
+
+        (current_month_rest_dates, self.1)
+    }
+
+    fn total_duration(&mut self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
+        let mut total_duration = self.1;
+        for (_, (_, duration)) in self.0.iter() {
+            total_duration += *duration;
+        }
+        (self.0.clone(), total_duration)
+    }
+
+    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String) {
+        let mut event_group: HashMap<NaiveDate, (Vec<FormatEvent>, String)> = HashMap::new();
+        for (date, events) in self.0.iter() {
+            event_group.insert(*date, events.clone().format());
+        }
+
+        (event_group, FormatEvent::format_duration(Some(self.1)))
     }
 }
 
@@ -173,20 +217,5 @@ impl FormatEvents for (Vec<Event>, Duration) {
         }
 
         (events, FormatEvent::format_duration(Some(self.1)))
-    }
-}
-
-pub trait FormatEventGroup {
-    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String);
-}
-
-impl FormatEventGroup for (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
-    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String) {
-        let mut event_group: HashMap<NaiveDate, (Vec<FormatEvent>, String)> = HashMap::new();
-        for (date, events) in self.0.iter() {
-            event_group.insert(*date, events.clone().format());
-        }
-
-        (event_group, FormatEvent::format_duration(Some(self.1)))
     }
 }

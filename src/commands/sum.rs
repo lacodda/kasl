@@ -1,13 +1,15 @@
 use crate::{
+    api::si::Si,
     db::events::{Events, SelectRequest},
     libs::{
-        event::{FormatEventGroup, MergeEventGroup, MergeEvents},
+        config::Config,
+        event::{EventGroup, EventGroupDuration, EventGroupTotalDuration},
         view::View,
     },
 };
-use chrono::Local;
+use chrono::{Duration, Local, NaiveDate};
 use clap::Args;
-use std::error::Error;
+use std::{collections::HashSet, error::Error};
 
 #[derive(Debug, Args)]
 pub struct SumArgs {
@@ -15,10 +17,32 @@ pub struct SumArgs {
     send: bool,
 }
 
-pub fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+pub async fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
     let now = Local::now();
     println!("\nWorking hours for {}", now.format("%B, %Y"));
-    let event_summary = Events::new()?.fetch(SelectRequest::Monthly)?.summary().calc().format();
+    let mut rest_dates: HashSet<NaiveDate> = HashSet::new();
+    let duration: Duration = Duration::hours(8);
+    match Config::read() {
+        Ok(config) => match config.si {
+            Some(si_config) => match Si::new(&si_config).rest_dates(now.date_naive()).await {
+                Ok(dates) => {
+                    rest_dates = dates;
+                }
+                Err(e) => eprintln!("Error requesting rest dates: {}", e),
+            },
+            None => eprintln!("Failed to read SiServer config"),
+        },
+        Err(e) => eprintln!("Failed to read config: {}", e),
+    }
+
+    let event_summary = Events::new()?
+        .fetch(SelectRequest::Monthly)?
+        .group_events()
+        .calc()
+        .add_rest_dates(rest_dates, duration)
+        .total_duration()
+        .format();
 
     View::sum(&event_summary)?;
 

@@ -1,7 +1,7 @@
 use crate::{
     db::events::{Events, SelectRequest},
     libs::{
-        event::{EventType, FormatEvents, MergeEvents},
+        event::{EventType, FormatEvents, EventGroup},
         view::View,
     },
 };
