@@ -1,5 +1,16 @@
 # Changelog
 
+## 🎉 [0.2.0] - 2024-05-16
+
+### ✨ Features
+
+- Watch command has been added
+- Added "raw" flag to the "event" command
+
+### 🛠️ Bug Fixes
+
+- Fixed a bug in calculating time using the "sum" command. Optimization of the events db module.
+
 ## 🎉 [0.1.1] - 2024-04-08
 
 ### ✨ Features
