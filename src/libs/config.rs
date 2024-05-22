@@ -18,11 +18,17 @@ pub struct SiConfig {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GitLabConfig {
+    pub access_token: String,
+    pub api_url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub si: Option<SiConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub gitlab: Option<SiConfig>,
+    pub gitlab: Option<GitLabConfig>,
 }
 
 impl Config {
@@ -79,20 +85,15 @@ impl Config {
                     });
                 }
                 "gitlab" => {
-                    let gitlab_config_default = SiConfig {
-                        login: "".to_string(),
-                        auth_url: "".to_string(),
+                    let gitlab_config_default = GitLabConfig {
+                        access_token: "".to_string(),
                         api_url: "".to_string(),
                     };
                     println!("GitLab settings");
-                    config.gitlab = Some(SiConfig {
-                        login: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter your GitLab login")
-                            .default(config.clone().gitlab.or(Some(gitlab_config_default.clone())).unwrap().login)
-                            .interact_text()?,
-                        auth_url: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter your GitLab login URL")
-                            .default(config.clone().gitlab.or(Some(gitlab_config_default.clone())).unwrap().auth_url)
+                    config.gitlab = Some(GitLabConfig {
+                        access_token: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter your GitLab private token")
+                            .default(config.clone().gitlab.or(Some(gitlab_config_default.clone())).unwrap().access_token)
                             .interact_text()?,
                         api_url: Input::with_theme(&ColorfulTheme::default())
                             .with_prompt("Enter the GitLab API URL")
