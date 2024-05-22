@@ -139,7 +139,7 @@ impl EventGroupDuration for HashMap<NaiveDate, Vec<Event>> {
 pub trait EventGroupTotalDuration {
     fn add_rest_dates(&mut self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
     fn total_duration(&mut self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
-    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String);
+    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String, String);
 }
 
 impl EventGroupTotalDuration for (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
@@ -169,13 +169,20 @@ impl EventGroupTotalDuration for (HashMap<NaiveDate, (Vec<Event>, Duration)>, Du
         (self.0.clone(), total_duration)
     }
 
-    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String) {
+    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String, String) {
         let mut event_group: HashMap<NaiveDate, (Vec<FormatEvent>, String)> = HashMap::new();
         for (date, events) in self.0.iter() {
             event_group.insert(*date, events.clone().format());
         }
 
-        (event_group, FormatEvent::format_duration(Some(self.1)))
+        let count = self.0.len() as i64;
+        let mut average = Duration::seconds(0);
+        if count > 0 {
+            let average_sec = self.1.num_seconds() / count;
+            average = Duration::seconds(average_sec);
+        }
+
+        (event_group, FormatEvent::format_duration(Some(self.1)), FormatEvent::format_duration(Some(average)))
     }
 }
 

@@ -53,7 +53,7 @@ impl View {
         Ok(())
     }
 
-    pub fn sum((events, total_duration): &(HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String)) -> Result<(), Box<dyn Error>> {
+    pub fn sum((events, total_duration, average_duration): &(HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String, String)) -> Result<(), Box<dyn Error>> {
         let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["DATE", "DURATION"]);
@@ -66,6 +66,7 @@ impl View {
             }
         }
         table.add_empty_row();
+        table.add_row(row!["AVERAGE", average_duration]);
         table.add_row(row!["TOTAL", total_duration]);
         table.printstd();
 
