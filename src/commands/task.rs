@@ -1,6 +1,8 @@
 use crate::{
+    api::gitlab::GitLab,
     db::tasks::Tasks,
     libs::{
+        config::Config,
         task::{Task, TaskFilter},
         view::View,
     },
@@ -27,7 +29,8 @@ pub struct TaskArgs {
     find: bool,
 }
 
-pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
     if task_args.show {
         let mut filter: TaskFilter = TaskFilter::Today;
         if task_args.all {
@@ -44,7 +47,20 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
 
         return Ok(());
     } else if task_args.find {
-        let tasks = Tasks::new()?.fetch(TaskFilter::Incomplete)?;
+        // Incomplete tasks
+        let mut tasks = Tasks::new()?.fetch(TaskFilter::Incomplete)?;
+        // Gitlab commits
+        let gitlab_config = Config::read()?.gitlab;
+        if gitlab_config.is_some() {
+            let today_tasks = Tasks::new()?.fetch(TaskFilter::Today)?;
+            let commits = GitLab::new(&gitlab_config.unwrap()).get_today_commits().await?;
+            commits.iter().for_each(|commit| {
+                let name = format!("{} (Gitlab commit: {})", &commit.message, &commit.sha);
+                if today_tasks.iter().all(|task| task.name != name) {
+                    tasks.push(Task::new(&name, "", Some(100)));
+                }
+            });
+        }
         if tasks.is_empty() {
             println!("Tasks not found((");
             return Ok(());
@@ -62,11 +78,12 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
             if task.task_id.is_none() || task.task_id.is_some_and(|id| id == 0) {
                 task.task_id = task.id;
             }
+            let default_completeness = (task.completeness.unwrap() + 1).min(100);
             task.completeness = Some(
                 Input::with_theme(&ColorfulTheme::default())
                     .allow_empty(true)
                     .with_prompt("Enter completeness")
-                    .default(task.completeness.unwrap() + 1)
+                    .default(default_completeness)
                     .interact_text()
                     .unwrap(),
             );
@@ -76,9 +93,12 @@ pub fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
         return Ok(());
     }
 
-    let name = task_args
-        .name
-        .unwrap_or_else(|| Input::with_theme(&ColorfulTheme::default()).with_prompt("Enter task name").interact_text().unwrap());
+    let name = task_args.name.unwrap_or_else(|| {
+        Input::with_theme(&ColorfulTheme::default())
+            .with_prompt("Enter task name")
+            .interact_text()
+            .unwrap()
+    });
     let comment = task_args.comment.unwrap_or_else(|| {
         Input::with_theme(&ColorfulTheme::default())
             .allow_empty(true)

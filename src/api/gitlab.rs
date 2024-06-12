@@ -71,7 +71,12 @@ impl GitLab {
                     let commit_detail = self.get_commit_detail(event.project_id, &push_data.commit_to).await?;
                     commits_info.push(CommitInfo {
                         sha: commit_detail.id,
-                        message: commit_detail.message,
+                        message: commit_detail
+                            .message
+                            .split_once("\n")
+                            .map(|(part, _)| part)
+                            .unwrap_or(&commit_detail.message)
+                            .to_string(),
                     });
                 }
             }
