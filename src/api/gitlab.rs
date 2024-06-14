@@ -18,7 +18,7 @@ struct Event {
 
 #[derive(Debug, Deserialize)]
 struct PushData {
-    commit_to: String,
+    commit_to: Option<String>,
 }
 
 #[derive(Debug)]
@@ -68,7 +68,7 @@ impl GitLab {
         for event in response.json::<Vec<Event>>().await? {
             if event.action_name == "pushed to" {
                 if let Some(push_data) = event.push_data {
-                    let commit_detail = self.get_commit_detail(event.project_id, &push_data.commit_to).await?;
+                    let commit_detail = self.get_commit_detail(event.project_id, &push_data.commit_to.unwrap()).await?;
                     commits_info.push(CommitInfo {
                         sha: commit_detail.id,
                         message: commit_detail
