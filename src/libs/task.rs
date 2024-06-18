@@ -1,3 +1,5 @@
+use chrono::NaiveDate;
+
 #[derive(Debug, Clone)]
 pub struct Task {
     pub id: Option<i32>,
@@ -26,7 +28,7 @@ impl Task {
 #[derive(Debug, Clone)]
 pub enum TaskFilter {
     All,
-    Today,
+    Date(NaiveDate),
     Incomplete,
     ByIds(Vec<i32>),
 }

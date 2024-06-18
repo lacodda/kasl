@@ -37,7 +37,7 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
     }
 
     let event_summary = Events::new()?
-        .fetch(SelectRequest::Monthly)?
+        .fetch(SelectRequest::Monthly, now.date_naive())?
         .group_events()
         .calc()
         .add_rest_dates(rest_dates, duration)

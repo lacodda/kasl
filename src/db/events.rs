@@ -12,8 +12,8 @@ const SCHEMA_EVENTS: &str = "CREATE TABLE IF NOT EXISTS events (
 const INSERT_EVENT: &str = "INSERT INTO events (start) VALUES (datetime(CURRENT_TIMESTAMP, 'localtime'))";
 const SELECT_LAST_EVENT: &str = "SELECT id, end FROM events ORDER BY id DESC LIMIT 1";
 const UPDATE_EVENT: &str = "UPDATE events SET end = datetime(CURRENT_TIMESTAMP, 'localtime') WHERE id = ?1";
-const SELECT_DAILY_EVENTS: &str = "SELECT id, start, end FROM events WHERE date(start) = date('now', 'localtime') ORDER BY start";
-const SELECT_MONTHLY_EVENTS: &str = "SELECT id, start, end FROM events WHERE strftime('%Y-%m', start) = strftime('%Y-%m', 'now')";
+const SELECT_DAILY_EVENTS: &str = "SELECT id, start, end FROM events WHERE date(start) = date(?1, 'localtime') ORDER BY start";
+const SELECT_MONTHLY_EVENTS: &str = "SELECT id, start, end FROM events WHERE strftime('%Y-%m', start) = strftime('%Y-%m', ?1)";
 
 pub enum SelectRequest {
     Daily,
@@ -48,9 +48,9 @@ impl Events {
         Ok(Events { conn: db.conn })
     }
 
-    pub fn fetch(&mut self, select_request: SelectRequest) -> Result<Vec<Event>, Box<dyn Error>> {
+    pub fn fetch(&mut self, select_request: SelectRequest, date: NaiveDate) -> Result<Vec<Event>, Box<dyn Error>> {
         let mut stmt = self.conn.prepare(select_request.value())?;
-        let event_iter = stmt.query_map([], |row| {
+        let event_iter = stmt.query_map(params![date.format("%Y-%m-%d").to_string()], |row| {
             Ok(Event {
                 id: row.get(0)?,
                 start: row.get(1)?,

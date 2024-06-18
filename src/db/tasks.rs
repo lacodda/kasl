@@ -1,6 +1,6 @@
 use super::db::Db;
 use crate::libs::task::{Task, TaskFilter};
-use rusqlite::{params, params_from_iter, Connection, Result};
+use rusqlite::{params, Connection, Result, Statement, ToSql};
 use std::{error::Error, vec};
 
 const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
@@ -16,7 +16,7 @@ const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment,
     (?, datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?, ?) RETURNING id";
 const UPDATE_TASK_ID: &str = "UPDATE tasks SET task_id = ? WHERE id = ?";
 const SELECT_TASKS: &str = "SELECT * FROM tasks";
-const WHERE_CURRENT_DATE: &str = "WHERE DATE(timestamp) = DATE('now')";
+const WHERE_DATE: &str = "WHERE date(timestamp) = date(?1, 'localtime')";
 const WHERE_ID_IN: &str = "WHERE id IN";
 const WHERE_INCOMPLETE: &str = "WHERE
   completeness < 100 AND
@@ -64,14 +64,18 @@ impl Tasks {
     }
 
     pub fn fetch(&mut self, filter: TaskFilter) -> Result<Vec<Task>, Box<dyn Error>> {
-        let (mut stmt, params) = match filter {
+        let (mut stmt, params): (Statement, Vec<Box<dyn ToSql>>) = match filter {
             TaskFilter::All => (self.conn.prepare(SELECT_TASKS)?, vec![]),
-            TaskFilter::Today => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_CURRENT_DATE))?, vec![]),
+            TaskFilter::Date(date) => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_DATE))?, vec![Box::new(date)]),
             TaskFilter::Incomplete => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_INCOMPLETE))?, vec![]),
-            TaskFilter::ByIds(ids) => (self.conn.prepare(&Self::query_by_ids(&ids))?, ids),
+            TaskFilter::ByIds(ids) => {
+                let ids_params: Vec<Box<dyn ToSql>> = ids.clone().into_iter().map(|id| Box::new(id) as Box<dyn ToSql>).collect();
+                (self.conn.prepare(&Self::query_by_ids(&ids))?, ids_params)
+            }
         };
 
-        let task_iter = stmt.query_map(params_from_iter(params.iter()), |row| {
+        let params_refs: Vec<&dyn ToSql> = params.iter().map(|p| &**p).collect();
+        let task_iter = stmt.query_map(&params_refs[..], |row| {
             Ok(Task {
                 id: row.get(0)?,
                 task_id: row.get(1)?,

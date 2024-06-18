@@ -6,12 +6,12 @@ use crate::{
     },
     libs::{
         config::Config,
-        event::{EventType, FormatEvents, EventGroup},
+        event::{EventGroup, EventType, FormatEvents},
         task::{FormatTasks, TaskFilter},
         view::View,
     },
 };
-use chrono::Local;
+use chrono::{Duration, Local};
 use clap::Args;
 use std::error::Error;
 
@@ -19,12 +19,24 @@ use std::error::Error;
 pub struct ReportArgs {
     #[arg(long, help = "Send report")]
     send: bool,
+    #[arg(long, short, help = "Last day report")]
+    last: bool,
 }
 
 #[tokio::main]
 pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
-    let events = Events::new()?.fetch(SelectRequest::Daily)?.merge().update_duration().total_duration().format();
-    let mut tasks = Tasks::new()?.fetch(TaskFilter::Today)?;
+    let mut date = Local::now();
+    if report_args.last {
+        date = date - Duration::days(1);
+    }
+
+    let events = Events::new()?
+        .fetch(SelectRequest::Daily, date.date_naive())?
+        .merge()
+        .update_duration()
+        .total_duration()
+        .format();
+    let mut tasks = Tasks::new()?.fetch(TaskFilter::Date(date.date_naive()))?;
 
     if report_args.send {
         if tasks.is_empty() {
@@ -52,14 +64,13 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
 
         match Config::read() {
             Ok(config) => match config.si {
-                Some(si_config) => match Si::new(&si_config).send(events_json).await {
+                Some(si_config) => match Si::new(&si_config).send(events_json, date.date_naive()).await {
                     Ok(status) => {
                         if status.is_success() {
                             let _ = Events::new()?.insert(&EventType::End);
-                            let date = Local::now().format("%B %-d, %Y").to_string();
                             println!(
                                 "Your report dated {} has been successfully submitted\nWait for a message to your email address",
-                                date
+                                date.format("%B %-d, %Y")
                             );
                         } else {
                             println!("Status: {}", status);
@@ -74,8 +85,7 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
 
         return Ok(());
     } else {
-        let now = Local::now();
-        println!("\nReport for {}", now.format("%B %-d, %Y"));
+        println!("\nReport for {}", date.format("%B %-d, %Y"));
         View::events(&events)?;
         if !tasks.is_empty() {
             println!("\nTasks:");

@@ -1,6 +1,6 @@
 use crate::libs::{config::SiConfig, data_storage::DataStorage};
 use base64::prelude::*;
-use chrono::{prelude::Local, NaiveDate};
+use chrono::NaiveDate;
 use dialoguer::{theme::ColorfulTheme, Password};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, COOKIE},
@@ -81,12 +81,12 @@ impl Si {
         }
     }
 
-    pub async fn send(&self, data: String) -> Result<StatusCode, Box<dyn Error>> {
+    pub async fn send(&self, data: String, date: NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
         let mut retries = 0;
         loop {
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, REPORT_URL);
-            let date = Local::now().format("%Y-%m-%d").to_string();
+            let date = date.format("%Y-%m-%d").to_string();
             let form = multipart::Form::new()
                 .text("date", date)
                 .text("tasks", data.clone())

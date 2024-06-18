@@ -7,6 +7,7 @@ use crate::{
         view::View,
     },
 };
+use chrono::Local;
 use clap::Args;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use std::error::Error;
@@ -31,8 +32,9 @@ pub struct TaskArgs {
 
 #[tokio::main]
 pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
+    let date = Local::now();
     if task_args.show {
-        let mut filter: TaskFilter = TaskFilter::Today;
+        let mut filter: TaskFilter = TaskFilter::Date(date.date_naive());
         if task_args.all {
             filter = TaskFilter::All;
         } else if task_args.id.is_some() {
@@ -52,7 +54,7 @@ pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
         // Gitlab commits
         let gitlab_config = Config::read()?.gitlab;
         if gitlab_config.is_some() {
-            let today_tasks = Tasks::new()?.fetch(TaskFilter::Today)?;
+            let today_tasks = Tasks::new()?.fetch(TaskFilter::Date(date.date_naive()))?;
             let commits = GitLab::new(&gitlab_config.unwrap()).get_today_commits().await?;
             commits.iter().for_each(|commit| {
                 let name = format!("{} (Gitlab commit: {})", &commit.message, &commit.sha);

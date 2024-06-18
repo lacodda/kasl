@@ -27,14 +27,14 @@ pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {
     if event_args.raw {
         println!("\nRaw events for {}", now.format("%B %-d, %Y"));
 
-        let events = Events::new()?.fetch(SelectRequest::Daily)?.format();
+        let events = Events::new()?.fetch(SelectRequest::Daily, now.date_naive())?.format();
         View::events_raw(&events)?;
 
         return Ok(());
     } else if event_args.show {
         println!("\nWorking hours for {}", now.format("%B %-d, %Y"));
 
-        let events = Events::new()?.fetch(SelectRequest::Daily)?.merge().update_duration().total_duration().format();
+        let events = Events::new()?.fetch(SelectRequest::Daily, now.date_naive())?.merge().update_duration().total_duration().format();
         View::events(&events)?;
 
         return Ok(());
