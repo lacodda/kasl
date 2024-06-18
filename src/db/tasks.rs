@@ -17,7 +17,7 @@ const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment,
 const UPDATE_TASK_ID: &str = "UPDATE tasks SET task_id = ? WHERE id = ?";
 const SELECT_TASKS: &str = "SELECT * FROM tasks";
 const WHERE_DATE: &str = "WHERE date(timestamp) = date(?1, 'localtime')";
-const WHERE_ID_IN: &str = "WHERE id IN";
+const WHERE_ID_IN: &str = "WHERE task_id IN";
 const WHERE_INCOMPLETE: &str = "WHERE
   completeness < 100 AND
   task_id NOT IN (SELECT task_id FROM tasks WHERE DATE(timestamp) = DATE('now')) AND

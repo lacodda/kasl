@@ -16,7 +16,7 @@ use std::error::Error;
 pub struct TaskArgs {
     #[arg(short, long)]
     name: Option<String>,
-    #[arg(short, long)]
+    #[arg(long)]
     comment: Option<String>,
     #[arg(short, long)]
     completeness: Option<i32>,
