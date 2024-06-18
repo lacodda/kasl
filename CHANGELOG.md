@@ -1,6 +1,19 @@
 # Changelog
 
-## 🎉 [0.2.0] - 2024-05-16
+## 🎉 [0.3.0] - 2024-06-14
+
+### ✨ Features
+
+- Added loading of rest days for the correct operation of the sum command
+- Added average operating time to the sum command report
+- Added gitlab api module
+- Added commits from gitlab to create a list of tasks
+
+### 🛠️ Bug Fixes
+
+- Fixed a bug with receiving commits from Gitlab
+
+## 🎉 [0.2.0] - 2024-05-17
 
 ### ✨ Features
 
