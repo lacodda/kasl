@@ -47,7 +47,7 @@ The `event` command operates in two modes: insert and display.
 
 - The command uses the local system time (`chrono::Local`) to display the current date when showing events.
 
-- It leverages the application's `Events`, `EventType`, `FormatEvents`, `MergeEvents`, and `View` modules for database operations, event handling, and output formatting.
+- It leverages the application's `Events`, `EventType`, `FormatEvents`, `EventGroup`, and `View` modules for database operations, event handling, and output formatting.
 
 - The command is designed to be robust, with error handling that ensures graceful failure in case of issues accessing the database or processing events.
 
