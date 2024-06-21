@@ -1,7 +1,9 @@
-use crate::libs::config::GitLabConfig;
+use crate::libs::config::ConfigModule;
 use chrono::{Duration, Local};
+use dialoguer::{theme::ColorfulTheme, Input};
 use reqwest::Client;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use std::error::Error;
 
 #[derive(Debug)]
 pub struct GitLab {
@@ -90,5 +92,40 @@ impl GitLab {
         let response = self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await?;
 
         Ok(response.json::<Commit>().await?)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct GitLabConfig {
+    pub access_token: String,
+    pub api_url: String,
+}
+
+impl GitLabConfig {
+    pub fn module() -> ConfigModule {
+        ConfigModule {
+            key: "gitlab".to_string(),
+            name: "GitLab".to_string(),
+        }
+    }
+    pub fn init(config: &Option<GitLabConfig>) -> Result<Self, Box<dyn Error>> {
+        let config = config
+            .clone()
+            .or(Some(Self {
+                access_token: "".to_string(),
+                api_url: "".to_string(),
+            }))
+            .unwrap();
+        println!("GitLab settings");
+        Ok(Self {
+            access_token: Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter your GitLab private token")
+                .default(config.access_token)
+                .interact_text()?,
+            api_url: Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter the GitLab API URL")
+                .default(config.api_url)
+                .interact_text()?,
+        })
     }
 }

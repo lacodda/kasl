@@ -1,5 +1,7 @@
 use super::data_storage::DataStorage;
-use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
+use crate::api::gitlab::GitLabConfig;
+use crate::api::si::SiConfig;
+use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
@@ -10,17 +12,9 @@ use std::str;
 
 pub const CONFIG_FILE_NAME: &str = "config.json";
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct SiConfig {
-    pub login: String,
-    pub auth_url: String,
-    pub api_url: String,
-}
-
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct GitLabConfig {
-    pub access_token: String,
-    pub api_url: String,
+pub struct ConfigModule {
+    pub key: String,
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -53,55 +47,19 @@ impl Config {
             Ok(config) => config,
             Err(_) => Config { si: None, gitlab: None },
         };
-        let node_descriptions = vec![("si", "SiServer"), ("gitlab", "GitLab")];
 
+        let node_descriptions = vec![SiConfig::module(), GitLabConfig::module()];
         let selected_nodes = MultiSelect::with_theme(&ColorfulTheme::default())
             .with_prompt("Select nodes to configure")
-            .items(&node_descriptions.iter().map(|(_, desc)| *desc).collect::<Vec<_>>())
+            .items(&node_descriptions.iter().map(|module| &module.name).collect::<Vec<_>>())
             .interact()?;
 
         for &selection in &selected_nodes {
-            match node_descriptions[selection].0 {
-                "si" => {
-                    let si_config_default = SiConfig {
-                        login: "".to_string(),
-                        auth_url: "".to_string(),
-                        api_url: "".to_string(),
-                    };
-                    println!("SiServer settings");
-                    config.si = Some(SiConfig {
-                        login: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter your SiServer login")
-                            .default(config.clone().si.or(Some(si_config_default.clone())).unwrap().login)
-                            .interact_text()?,
-                        auth_url: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter your SiServer login URL")
-                            .default(config.clone().si.or(Some(si_config_default.clone())).unwrap().auth_url)
-                            .interact_text()?,
-                        api_url: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter the SiServer API URL")
-                            .default(config.clone().si.or(Some(si_config_default.clone())).unwrap().api_url)
-                            .interact_text()?,
-                    });
-                }
-                "gitlab" => {
-                    let gitlab_config_default = GitLabConfig {
-                        access_token: "".to_string(),
-                        api_url: "".to_string(),
-                    };
-                    println!("GitLab settings");
-                    config.gitlab = Some(GitLabConfig {
-                        access_token: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter your GitLab private token")
-                            .default(config.clone().gitlab.or(Some(gitlab_config_default.clone())).unwrap().access_token)
-                            .interact_text()?,
-                        api_url: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter the GitLab API URL")
-                            .default(config.clone().gitlab.or(Some(gitlab_config_default.clone())).unwrap().api_url)
-                            .interact_text()?,
-                    });
-                }
-                _ => {}
+            if SiConfig::module().key == node_descriptions[selection].key {
+                config.si = Some(SiConfig::init(&config.si)?);
+            }
+            if GitLabConfig::module().key == node_descriptions[selection].key {
+                config.gitlab = Some(GitLabConfig::init(&config.gitlab)?);
             }
         }
 

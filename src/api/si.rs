@@ -1,7 +1,7 @@
-use crate::libs::{config::SiConfig, data_storage::DataStorage};
+use crate::libs::{config::ConfigModule, data_storage::DataStorage};
 use base64::prelude::*;
 use chrono::NaiveDate;
-use dialoguer::{theme::ColorfulTheme, Password};
+use dialoguer::{theme::ColorfulTheme, Input, Password};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, COOKIE},
     multipart, Client, StatusCode,
@@ -198,5 +198,46 @@ impl Si {
                 }
             }
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct SiConfig {
+    pub login: String,
+    pub auth_url: String,
+    pub api_url: String,
+}
+
+impl SiConfig {
+    pub fn module() -> ConfigModule {
+        ConfigModule {
+            key: "si".to_string(),
+            name: "SiServer".to_string(),
+        }
+    }
+    pub fn init(config: &Option<SiConfig>) -> Result<Self, Box<dyn Error>> {
+        let config = config
+            .clone()
+            .or(Some(Self {
+                login: "".to_string(),
+                auth_url: "".to_string(),
+                api_url: "".to_string(),
+            }))
+            .unwrap();
+        println!("SiServer settings");
+        Ok(Self {
+            login: Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter your SiServer login")
+                .default(config.login)
+                .interact_text()?,
+            auth_url: Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter your SiServer login URL")
+                .default(config.auth_url)
+                .interact_text()?,
+            api_url: Input::with_theme(&ColorfulTheme::default())
+                .with_prompt("Enter the SiServer API URL")
+                .default(config.api_url)
+                .interact_text()?,
+        })
     }
 }
