@@ -1,5 +1,6 @@
 use super::data_storage::DataStorage;
 use crate::api::gitlab::GitLabConfig;
+use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
 use dialoguer::{theme::ColorfulTheme, MultiSelect};
 use serde::{Deserialize, Serialize};
@@ -23,6 +24,8 @@ pub struct Config {
     pub si: Option<SiConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gitlab: Option<GitLabConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jira: Option<JiraConfig>,
 }
 
 impl Config {
@@ -45,9 +48,12 @@ impl Config {
     pub fn init() -> Result<Self, Box<dyn Error>> {
         let mut config = match Self::read() {
             Ok(config) => config,
-            Err(_) => Config { si: None, gitlab: None },
+            Err(_) => Config {
+                si: None,
+                gitlab: None,
+                jira: None,
+            },
         };
-
         let node_descriptions = vec![SiConfig::module(), GitLabConfig::module()];
         let selected_nodes = MultiSelect::with_theme(&ColorfulTheme::default())
             .with_prompt("Select nodes to configure")
@@ -60,6 +66,9 @@ impl Config {
             }
             if GitLabConfig::module().key == node_descriptions[selection].key {
                 config.gitlab = Some(GitLabConfig::init(&config.gitlab)?);
+            }
+            if JiraConfig::module().key == node_descriptions[selection].key {
+                config.jira = Some(JiraConfig::init(&config.jira)?);
             }
         }
 
