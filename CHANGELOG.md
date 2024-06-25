@@ -1,6 +1,27 @@
 # Changelog
 
-## 🎉 [0.3.0] - 2024-06-14
+## 🎉 [0.4.0] - 2024-06-25
+
+### ✨ Features
+
+- Added functionality to create a report for a specific date
+- Added Jira API module
+- Added tasks from Jira to fill the list of daily tasks
+
+### 🎛️ Refactor
+
+- API module configs have been moved from the libs/config.rs file to the corresponding module files
+
+### 🎲 Miscellaneous tasks
+
+- Reqwest library updated
+- The .session_id file has been renamed to .si_session_id
+
+### 🛠️ Bug Fixes
+
+- Fixed a bug in searching tasks by ID
+
+## 🎉 [0.3.0] - 2024-06-18
 
 ### ✨ Features
 
