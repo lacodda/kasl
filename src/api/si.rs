@@ -17,7 +17,7 @@ use std::{
 
 const MAX_RETRY_COUNT: i32 = 3;
 const COOKIE_KEY: &str = "PORTALSESSID=";
-const SESSION_ID_FILE: &str = ".session_id";
+const SESSION_ID_FILE: &str = ".si_session_id";
 const AUTH_URL: &str = "auth/ldap";
 const LOGIN_URL: &str = "auth/login-by-token";
 const REPORT_URL: &str = "report-card/send-daily-report";
