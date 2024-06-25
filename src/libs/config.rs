@@ -54,7 +54,7 @@ impl Config {
                 jira: None,
             },
         };
-        let node_descriptions = vec![SiConfig::module(), GitLabConfig::module()];
+        let node_descriptions = vec![SiConfig::module(), GitLabConfig::module(), JiraConfig::module()];
         let selected_nodes = MultiSelect::with_theme(&ColorfulTheme::default())
             .with_prompt("Select nodes to configure")
             .items(&node_descriptions.iter().map(|module| &module.name).collect::<Vec<_>>())

@@ -1,5 +1,5 @@
 use crate::{
-    api::gitlab::GitLab,
+    api::{gitlab::GitLab, jira::Jira},
     db::tasks::Tasks,
     libs::{
         config::Config,
@@ -51,16 +51,24 @@ pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
     } else if task_args.find {
         // Incomplete tasks
         let mut tasks = Tasks::new()?.fetch(TaskFilter::Incomplete)?;
+        let config = Config::read()?;
         // Gitlab commits
-        let gitlab_config = Config::read()?.gitlab;
-        if gitlab_config.is_some() {
+        if config.gitlab.is_some() {
             let today_tasks = Tasks::new()?.fetch(TaskFilter::Date(date.date_naive()))?;
-            let commits = GitLab::new(&gitlab_config.unwrap()).get_today_commits().await?;
+            let commits = GitLab::new(&config.gitlab.unwrap()).get_today_commits().await?;
             commits.iter().for_each(|commit| {
                 let name = format!("{} (Gitlab commit: {})", &commit.message, &commit.sha);
                 if today_tasks.iter().all(|task| task.name != name) {
                     tasks.push(Task::new(&name, "", Some(100)));
                 }
+            });
+        }
+        // Jira issues
+        if config.jira.is_some() {
+            let jira_issues = Jira::new(&config.jira.unwrap()).get_completed_issues(&date.date_naive()).await?;
+            jira_issues.iter().for_each(|issue| {
+                let name = format!("{} {}", &issue.key, &issue.fields.summary);
+                tasks.push(Task::new(&name, "", Some(100)));
             });
         }
         if tasks.is_empty() {
