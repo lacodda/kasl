@@ -57,9 +57,8 @@ pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
             let today_tasks = Tasks::new()?.fetch(TaskFilter::Date(date.date_naive()))?;
             let commits = GitLab::new(&config.gitlab.unwrap()).get_today_commits().await?;
             commits.iter().for_each(|commit| {
-                let name = format!("{} (Gitlab commit: {})", &commit.message, &commit.sha);
-                if today_tasks.iter().all(|task| task.name != name) {
-                    tasks.push(Task::new(&name, "", Some(100)));
+                if today_tasks.iter().all(|task| task.name != commit.message) {
+                    tasks.push(Task::new(&commit.message, "", Some(100)));
                 }
             });
         }
