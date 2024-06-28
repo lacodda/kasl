@@ -64,19 +64,31 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
 
         match Config::read() {
             Ok(config) => match config.si {
-                Some(si_config) => match Si::new(&si_config).send(events_json, date.date_naive()).await {
-                    Ok(status) => {
-                        if status.is_success() {
-                            let _ = Events::new()?.insert(&EventType::End);
-                            println!(
-                                "Your report dated {} has been successfully submitted\nWait for a message to your email address",
-                                date.format("%B %-d, %Y")
-                            );
-                        } else {
-                            println!("Status: {}", status);
+                Some(si_config) => {
+                    let si = Si::new(&si_config);
+                    match si.send(&events_json, &date.date_naive()).await {
+                        Ok(status) => {
+                            if status.is_success() {
+                                let _ = Events::new()?.insert(&EventType::End);
+                                println!(
+                                    "Your report dated {} has been successfully submitted\nWait for a message to your email address",
+                                    date.format("%B %-d, %Y")
+                                );
+                                if si.is_last_working_day_of_month(&date.date_naive())? {
+                                    let monthly_status = si.send_monthly(&date.date_naive()).await?;
+                                    if monthly_status.is_success() {
+                                        println!(
+                                            "Your monthly report dated {} has been successfully submitted\nWait for a message to your email address",
+                                            date.format("%B %-d, %Y")
+                                        );
+                                    }
+                                }
+                            } else {
+                                println!("Status: {}", status);
+                            }
                         }
+                        Err(e) => eprintln!("Error sending events: {}", e),
                     }
-                    Err(e) => eprintln!("Error sending events: {}", e),
                 },
                 None => eprintln!("Failed to read SiServer config"),
             },

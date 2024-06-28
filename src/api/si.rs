@@ -1,6 +1,6 @@
 use crate::libs::{config::ConfigModule, data_storage::DataStorage};
 use base64::prelude::*;
-use chrono::NaiveDate;
+use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use dialoguer::{theme::ColorfulTheme, Input, Password};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, COOKIE},
@@ -12,7 +12,6 @@ use std::{
     error::Error,
     fs,
     io::{self, Write},
-    time::Duration,
 };
 
 const MAX_RETRY_COUNT: i32 = 3;
@@ -21,6 +20,7 @@ const SESSION_ID_FILE: &str = ".si_session_id";
 const AUTH_URL: &str = "auth/ldap";
 const LOGIN_URL: &str = "auth/login-by-token";
 const REPORT_URL: &str = "report-card/send-daily-report";
+const MONTHLY_REPORT_URL: &str = "report-card/send-monthly-report";
 const REST_DATES_URL: &str = "report-card/get-rest-dates";
 
 #[derive(Serialize)]
@@ -81,7 +81,7 @@ impl Si {
         }
     }
 
-    pub async fn send(&self, data: String, date: NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
+    pub async fn send(&self, data: &String, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
         let mut retries = 0;
         loop {
             let session_id = self.get_session_id().await?;
@@ -103,7 +103,32 @@ impl Si {
             match res.status() {
                 StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::seconds(1).to_std()?).await;
+                    retries += 1;
+                    continue;
+                }
+                _ => return Ok(res.status()),
+            }
+        }
+    }
+
+    pub async fn send_monthly(&self, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
+        let mut retries = 0;
+        loop {
+            let session_id = self.get_session_id().await?;
+            let url = format!("{}/{}", self.config.api_url, MONTHLY_REPORT_URL);
+            let (year, month) = (date.year(), date.month());
+            let form = multipart::Form::new().text("month", month.to_string()).text("year", year.to_string());
+
+            let mut headers = HeaderMap::new();
+            headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
+
+            let res = self.client.post(url).headers(headers).multipart(form).send().await?;
+
+            match res.status() {
+                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                    self.delete_session_id()?;
+                    tokio::time::sleep(Duration::seconds(1).to_std()?).await;
                     retries += 1;
                     continue;
                 }
@@ -188,7 +213,7 @@ impl Si {
             match res.status() {
                 StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    tokio::time::sleep(Duration::seconds(1).to_std()?).await;
                     retries += 1;
                     continue;
                 }
@@ -198,6 +223,19 @@ impl Si {
                 }
             }
         }
+    }
+
+    pub fn is_last_working_day_of_month(&self, date: &NaiveDate) -> Result<bool, Box<dyn Error>> {
+        let (year, month) = (date.year(), date.month());
+        let mut last_day_of_month = NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap().pred_opt().unwrap();
+        while matches!(last_day_of_month.weekday(), Weekday::Sat | Weekday::Sun) {
+            last_day_of_month = last_day_of_month - Duration::days(1);
+        }
+
+        if date == &last_day_of_month {
+            return Ok(true);
+        }
+        Ok(false)
     }
 }
 
