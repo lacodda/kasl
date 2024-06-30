@@ -1,5 +1,15 @@
 # Changelog
 
+## 🎉 [0.4.1] - 2024-06-28
+
+### ✨ Features
+
+- Added a function for sending a monthly summary report in the Si module
+
+### 🛠️ Bug Fixes
+
+- Removed information about commit ID from Gitlab
+
 ## 🎉 [0.4.0] - 2024-06-25
 
 ### ✨ Features
