@@ -13,7 +13,10 @@ const INSERT_EVENT: &str = "INSERT INTO events (start) VALUES (datetime(CURRENT_
 const SELECT_LAST_EVENT: &str = "SELECT id, end FROM events ORDER BY id DESC LIMIT 1";
 const UPDATE_EVENT: &str = "UPDATE events SET end = datetime(CURRENT_TIMESTAMP, 'localtime') WHERE id = ?1";
 const SELECT_DAILY_EVENTS: &str = "SELECT id, start, end FROM events WHERE date(start) = date(?1, 'localtime') ORDER BY start";
-const SELECT_MONTHLY_EVENTS: &str = "SELECT id, start, end FROM events WHERE strftime('%Y-%m', start) = strftime('%Y-%m', ?1)";
+const SELECT_MONTHLY_EVENTS: &str = "SELECT id, start, end FROM events
+    WHERE strftime('%Y-%m', start) = strftime('%Y-%m', ?1) 
+    AND date(start) >= date(?1, 'start of month')
+    AND date(start) < date(?1, 'start of day', '+1 day', '-1 day');";
 
 pub enum SelectRequest {
     Daily,
