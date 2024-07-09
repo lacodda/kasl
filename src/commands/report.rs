@@ -7,7 +7,7 @@ use crate::{
     libs::{
         config::Config,
         event::{EventGroup, EventType, FormatEvents},
-        task::{FormatTasks, TaskFilter},
+        task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
 };
@@ -44,16 +44,19 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
             return Ok(());
         }
 
+        let task_chunks: Vec<Vec<Task>> = tasks.divide(events.0.len());
+
         let events_json = events
             .0
             .iter()
-            .map(|event| {
+            .enumerate()
+            .map(|(index, event)| {
                 serde_json::json!({
                     "index": event.id,
                     "from": event.start,
                     "to": event.end,
                     "total_ts": event.duration,
-                    "task": tasks.format(),
+                    "task": task_chunks.get(index).unwrap().to_owned().format(),
                     "data": [],
                     "time": "",
                     "result": ""
@@ -89,7 +92,7 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
                         }
                         Err(e) => eprintln!("Error sending events: {}", e),
                     }
-                },
+                }
                 None => eprintln!("Failed to read SiServer config"),
             },
             Err(e) => eprintln!("Failed to read config: {}", e),

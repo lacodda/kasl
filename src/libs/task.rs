@@ -35,9 +35,47 @@ pub enum TaskFilter {
 
 pub trait FormatTasks {
     fn format(&mut self) -> String;
+    fn divide(&mut self, parts: usize) -> Vec<Vec<Task>>;
 }
 
 impl FormatTasks for Vec<Task> {
+    fn divide(&mut self, parts: usize) -> Vec<Vec<Task>> {
+        let mut result: Vec<Vec<Task>> = Vec::with_capacity(parts);
+        let len = self.len();
+
+        if len == 0 || parts == 0 {
+            return result;
+        }
+
+        if len == 1 {
+            for _ in 0..parts {
+                result.push(self.to_vec());
+            }
+            return result;
+        }
+
+        if len < parts {
+            for i in 0..parts {
+                let mut part: Vec<Task> = Vec::with_capacity((len + parts - 1) / parts);
+                for j in 0..(len + parts - 1) / parts {
+                    part.push(self[(i + j * len / parts) % len].clone());
+                }
+                result.push(part);
+            }
+            return result;
+        }
+
+        let mut start = 0;
+        let mut end;
+        for i in 0..parts {
+            end = start + len / parts + if i < len % parts { 1 } else { 0 };
+            result.push(self[start..end].to_vec());
+            start = end;
+        }
+
+        result
+    }
+
     fn format(&mut self) -> String {
         self.iter()
             .map(|task| format!("{} ({}%)", task.name, task.completeness.map_or(String::from("?"), |c| c.to_string())))
