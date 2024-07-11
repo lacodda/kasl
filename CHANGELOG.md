@@ -1,6 +1,17 @@
 # Changelog
 
-## 🎉 [0.4.1] - 2024-06-28
+## 🎉 [0.5.0] - 2024-07-09
+
+### ✨ Features
+
+- Improved view of the list of issues proposed for adding (divided into groups: Incomplete, Gitlab, Jira, etc.)
+- Tasks are divided into groups for even distribution in the report
+
+### 🛠️ Bug Fixes
+
+- The current day is excluded from the sum command's calculation of monthly statistics
+
+## 🎉 [0.4.1] - 2024-06-30
 
 ### ✨ Features
 
