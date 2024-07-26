@@ -1,6 +1,6 @@
-use crate::libs::{config::ConfigModule, data_storage::DataStorage};
+use crate::libs::{config::ConfigModule, data_storage::DataStorage, secret::Secret};
 use chrono::NaiveDate;
-use dialoguer::{theme::ColorfulTheme, Input, Password};
+use dialoguer::{theme::ColorfulTheme, Input};
 use reqwest::{
     header::{HeaderMap, HeaderValue, COOKIE},
     Client, StatusCode,
@@ -15,6 +15,7 @@ use std::{
 
 const MAX_RETRY_COUNT: i32 = 3;
 const SESSION_ID_FILE: &str = ".jira_session_id";
+const SECRET_FILE: &str = ".jira_secret";
 const AUTH_URL: &str = "rest/auth/1/session";
 const SEARCH_URL: &str = "rest/api/2/search";
 
@@ -64,6 +65,8 @@ pub struct JiraSearchResults {
 pub struct Jira {
     client: Client,
     config: JiraConfig,
+    secret: Secret,
+    retries: i32,
 }
 
 impl Jira {
@@ -71,11 +74,12 @@ impl Jira {
         Self {
             client: Client::new(),
             config: config.clone(),
+            secret: Secret::new(SECRET_FILE, "Enter your Jira password"),
+            retries: 0,
         }
     }
 
-    pub async fn get_completed_issues(&self, date: &NaiveDate) -> Result<Vec<JiraIssue>, Box<dyn Error>> {
-        let mut retries = 0;
+    pub async fn get_completed_issues(&mut self, date: &NaiveDate) -> Result<Vec<JiraIssue>, Box<dyn Error>> {
         loop {
             let session_id = self.get_session_id().await?;
             let date = date.format("%Y-%m-%d").to_string();
@@ -91,10 +95,10 @@ impl Jira {
             let res = self.client.get(&url).headers(headers).send().await?;
 
             match res.status() {
-                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    retries += 1;
+                    self.retries += 1;
                     continue;
                 }
                 _ => {
@@ -118,23 +122,36 @@ impl Jira {
         Ok(session_id)
     }
 
-    async fn get_session_id(&self) -> Result<String, Box<dyn Error>> {
+    async fn get_session_id(&mut self) -> Result<String, Box<dyn Error>> {
         let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
         let session_id_file_path_str = session_id_file_path.to_str().unwrap();
         if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
-            Ok(session_id)
+            return Ok(session_id);
         } else {
-            let password: String = Password::with_theme(&ColorfulTheme::default())
-                .with_prompt("Enter your Jira password")
-                .interact()
-                .unwrap();
-            let login_credentials = LoginCredentials {
-                username: self.config.login.to_string(),
-                password: password,
-            };
-            let session_id = self.login(&login_credentials).await?;
-            let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
-            Ok(session_id)
+            loop {
+                let password: String = match self.retries > 0 {
+                    true => self.secret.prompt()?,
+                    false => self.secret.get_or_prompt()?,
+                };
+                let login_credentials = LoginCredentials {
+                    username: self.config.login.to_string(),
+                    password: password,
+                };
+                let session_id = self.login(&login_credentials).await;
+                match session_id {
+                    Ok(session_id) => {
+                        let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
+                        return Ok(session_id);
+                    }
+                    Err(_) => {
+                        if self.retries < MAX_RETRY_COUNT {
+                            self.retries += 1;
+                            continue;
+                        }
+                        break Err(format!("You entered the wrong password {} times!", MAX_RETRY_COUNT).into());
+                    }
+                }
+            }
         }
     }
 
