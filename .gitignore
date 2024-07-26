@@ -63,3 +63,4 @@ docs/book
 
 # DBs
 *.db
+.env
