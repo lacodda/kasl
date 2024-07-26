@@ -1,7 +1,7 @@
-use crate::libs::{config::ConfigModule, data_storage::DataStorage};
+use crate::libs::{config::ConfigModule, data_storage::DataStorage, secret::Secret};
 use base64::prelude::*;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
-use dialoguer::{theme::ColorfulTheme, Input, Password};
+use dialoguer::{theme::ColorfulTheme, Input};
 use reqwest::{
     header::{self, HeaderMap, HeaderValue, COOKIE},
     multipart, Client, StatusCode,
@@ -17,6 +17,7 @@ use std::{
 const MAX_RETRY_COUNT: i32 = 3;
 const COOKIE_KEY: &str = "PORTALSESSID=";
 const SESSION_ID_FILE: &str = ".si_session_id";
+const SECRET_FILE: &str = ".si_secret";
 const AUTH_URL: &str = "auth/ldap";
 const LOGIN_URL: &str = "auth/login-by-token";
 const REPORT_URL: &str = "report-card/send-daily-report";
@@ -71,6 +72,8 @@ impl RestDatesResponse {
 pub struct Si {
     client: Client,
     config: SiConfig,
+    secret: Secret,
+    retries: i32,
 }
 
 impl Si {
@@ -78,11 +81,12 @@ impl Si {
         Self {
             client: Client::new(),
             config: config.clone(),
+            secret: Secret::new(SECRET_FILE, "Enter your SiServer password"),
+            retries: 0,
         }
     }
 
-    pub async fn send(&self, data: &String, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
-        let mut retries = 0;
+    pub async fn send(&mut self, data: &String, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
         loop {
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, REPORT_URL);
@@ -101,10 +105,10 @@ impl Si {
             let res = self.client.post(url).headers(headers).multipart(form).send().await?;
 
             match res.status() {
-                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::seconds(1).to_std()?).await;
-                    retries += 1;
+                    self.retries += 1;
                     continue;
                 }
                 _ => return Ok(res.status()),
@@ -112,8 +116,7 @@ impl Si {
         }
     }
 
-    pub async fn send_monthly(&self, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
-        let mut retries = 0;
+    pub async fn send_monthly(&mut self, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
         loop {
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, MONTHLY_REPORT_URL);
@@ -126,10 +129,10 @@ impl Si {
             let res = self.client.post(url).headers(headers).multipart(form).send().await?;
 
             match res.status() {
-                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::seconds(1).to_std()?).await;
-                    retries += 1;
+                    self.retries += 1;
                     continue;
                 }
                 _ => return Ok(res.status()),
@@ -163,24 +166,37 @@ impl Si {
         Err("Login failed".into())
     }
 
-    async fn get_session_id(&self) -> Result<String, Box<dyn Error>> {
+    async fn get_session_id(&mut self) -> Result<String, Box<dyn Error>> {
         let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
         let session_id_file_path_str = session_id_file_path.to_str().unwrap();
         if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
-            Ok(session_id)
+            return Ok(session_id);
         } else {
-            let password: String = Password::with_theme(&ColorfulTheme::default())
-                .with_prompt("Enter your password")
-                .interact()
-                .unwrap();
-            let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
-            let login_credentials = LoginCredentials {
-                login: self.config.login.to_string(),
-                password: encoded_password,
-            };
-            let session_id = self.login(&login_credentials).await?;
-            let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
-            Ok(session_id)
+            loop {
+                let password: String = match self.retries > 0 {
+                    true => self.secret.prompt()?,
+                    false => self.secret.get_or_prompt()?,
+                };
+                let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
+                let login_credentials = LoginCredentials {
+                    login: self.config.login.to_string(),
+                    password: encoded_password,
+                };
+                let session_id = self.login(&login_credentials).await;
+                match session_id {
+                    Ok(session_id) => {
+                        let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
+                        return Ok(session_id);
+                    }
+                    Err(_) => {
+                        if self.retries < MAX_RETRY_COUNT {
+                            self.retries += 1;
+                            continue;
+                        }
+                        break Err(format!("You entered the wrong password {} times!", MAX_RETRY_COUNT).into());
+                    }
+                }
+            }
         }
     }
 
@@ -199,8 +215,7 @@ impl Si {
         Ok(())
     }
 
-    pub async fn rest_dates(&self, year: NaiveDate) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
-        let mut retries = 0;
+    pub async fn rest_dates(&mut self, year: NaiveDate) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
         loop {
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, REST_DATES_URL);
@@ -211,10 +226,10 @@ impl Si {
             let res = self.client.post(url).headers(headers).multipart(form).send().await?;
 
             match res.status() {
-                StatusCode::UNAUTHORIZED if retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::seconds(1).to_std()?).await;
-                    retries += 1;
+                    self.retries += 1;
                     continue;
                 }
                 _ => {

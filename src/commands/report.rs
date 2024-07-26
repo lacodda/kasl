@@ -68,7 +68,7 @@ pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
         match Config::read() {
             Ok(config) => match config.si {
                 Some(si_config) => {
-                    let si = Si::new(&si_config);
+                    let mut si = Si::new(&si_config);
                     match si.send(&events_json, &date.date_naive()).await {
                         Ok(status) => {
                             if status.is_success() {
