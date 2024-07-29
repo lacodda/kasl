@@ -1,4 +1,7 @@
-use crate::libs::{config::ConfigModule, data_storage::DataStorage, secret::Secret};
+use crate::{
+    api::Session,
+    libs::{config::ConfigModule, secret::Secret},
+};
 use base64::prelude::*;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use dialoguer::{theme::ColorfulTheme, Input};
@@ -7,12 +10,7 @@ use reqwest::{
     multipart, Client, StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashSet,
-    error::Error,
-    fs,
-    io::{self, Write},
-};
+use std::{collections::HashSet, error::Error};
 
 const MAX_RETRY_COUNT: i32 = 3;
 const COOKIE_KEY: &str = "PORTALSESSID=";
@@ -24,7 +22,7 @@ const REPORT_URL: &str = "report-card/send-daily-report";
 const MONTHLY_REPORT_URL: &str = "report-card/send-monthly-report";
 const REST_DATES_URL: &str = "report-card/get-rest-dates";
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone)]
 pub struct LoginCredentials {
     login: String,
     password: String,
@@ -72,8 +70,62 @@ impl RestDatesResponse {
 pub struct Si {
     client: Client,
     config: SiConfig,
-    secret: Secret,
+    credentials: Option<LoginCredentials>,
     retries: i32,
+}
+
+impl Session for Si {
+    async fn login(&self) -> Result<String, Box<dyn Error>> {
+        let credentials = self.credentials.clone().expect("Credentials not set!");
+        let auth_url = format!("{}/{}", self.config.auth_url, AUTH_URL);
+        let auth_res = self.client.post(auth_url).json(&credentials).send().await?;
+        let auth_body = auth_res.text().await?;
+        let auth_session: AuthSession = serde_json::from_str(&auth_body)?;
+
+        let login_url = format!("{}/{}", self.config.api_url, LOGIN_URL);
+        let login_res = self
+            .client
+            .post(login_url)
+            .header(header::AUTHORIZATION, format!("Bearer {}", auth_session.payload.token))
+            .send()
+            .await?;
+
+        if let Some(cookie) = login_res.headers().get("Set-Cookie") {
+            if let Ok(cookie_val) = cookie.to_str() {
+                if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
+                    let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
+                    return Ok(session_id.to_string());
+                }
+            }
+        }
+
+        Err("Login failed".into())
+    }
+
+    fn set_credentials(&mut self, password: &str) -> Result<(), Box<dyn Error>> {
+        let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
+        self.credentials = Some(LoginCredentials {
+            login: self.config.login.to_string(),
+            password: encoded_password,
+        });
+        Ok(())
+    }
+
+    fn session_id_file(&self) -> &str {
+        SESSION_ID_FILE
+    }
+
+    fn secret(&self) -> Secret {
+        Secret::new(SECRET_FILE, "Enter your SiServer password")
+    }
+
+    fn retry(&self) -> i32 {
+        self.retries
+    }
+
+    fn inc_retry(&mut self) {
+        self.retries += 1;
+    }
 }
 
 impl Si {
@@ -81,7 +133,7 @@ impl Si {
         Self {
             client: Client::new(),
             config: config.clone(),
-            secret: Secret::new(SECRET_FILE, "Enter your SiServer password"),
+            credentials: None,
             retries: 0,
         }
     }
@@ -138,81 +190,6 @@ impl Si {
                 _ => return Ok(res.status()),
             }
         }
-    }
-
-    pub async fn login(&self, credentials: &LoginCredentials) -> Result<String, Box<dyn Error>> {
-        let auth_url = format!("{}/{}", self.config.auth_url, AUTH_URL);
-        let auth_res = self.client.post(auth_url).json(credentials).send().await?;
-        let auth_body = auth_res.text().await?;
-        let auth_session: AuthSession = serde_json::from_str(&auth_body)?;
-
-        let login_url = format!("{}/{}", self.config.api_url, LOGIN_URL);
-        let login_res = self
-            .client
-            .post(login_url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", auth_session.payload.token))
-            .send()
-            .await?;
-
-        if let Some(cookie) = login_res.headers().get("Set-Cookie") {
-            if let Ok(cookie_val) = cookie.to_str() {
-                if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
-                    let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
-                    return Ok(session_id.to_string());
-                }
-            }
-        }
-
-        Err("Login failed".into())
-    }
-
-    async fn get_session_id(&mut self) -> Result<String, Box<dyn Error>> {
-        let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
-        let session_id_file_path_str = session_id_file_path.to_str().unwrap();
-        if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
-            return Ok(session_id);
-        } else {
-            loop {
-                let password: String = match self.retries > 0 {
-                    true => self.secret.prompt()?,
-                    false => self.secret.get_or_prompt()?,
-                };
-                let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
-                let login_credentials = LoginCredentials {
-                    login: self.config.login.to_string(),
-                    password: encoded_password,
-                };
-                let session_id = self.login(&login_credentials).await;
-                match session_id {
-                    Ok(session_id) => {
-                        let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
-                        return Ok(session_id);
-                    }
-                    Err(_) => {
-                        if self.retries < MAX_RETRY_COUNT {
-                            self.retries += 1;
-                            continue;
-                        }
-                        break Err(format!("You entered the wrong password {} times!", MAX_RETRY_COUNT).into());
-                    }
-                }
-            }
-        }
-    }
-
-    fn read_session_id(file_name: &str) -> io::Result<String> {
-        fs::read_to_string(file_name)
-    }
-
-    fn write_session_id(file_name: &str, session_id: &str) -> io::Result<()> {
-        let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).open(file_name)?;
-        file.write_all(session_id.as_bytes())
-    }
-
-    fn delete_session_id(&self) -> Result<(), Box<dyn Error>> {
-        let session_id_file_path = DataStorage::new().get_path(SESSION_ID_FILE)?;
-        fs::remove_file(session_id_file_path)?;
-        Ok(())
     }
 
     pub async fn rest_dates(&mut self, year: NaiveDate) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
