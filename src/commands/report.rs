@@ -23,7 +23,6 @@ pub struct ReportArgs {
     last: bool,
 }
 
-#[tokio::main]
 pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
     let mut date = Local::now();
     if report_args.last {

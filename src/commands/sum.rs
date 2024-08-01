@@ -17,7 +17,6 @@ pub struct SumArgs {
     send: bool,
 }
 
-#[tokio::main]
 pub async fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
     let now = Local::now();
     println!("\nWorking hours for {}", now.format("%B, %Y"));

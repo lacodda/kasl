@@ -9,10 +9,14 @@ readme = "README.md"
 license = "MIT"
 keywords = ["cli", "tool", "work", "time", "flow"]
 categories = ["cli"]
+build = "build.rs"
+
+[package.metadata]
+owner = "lacodda"
 
 [dependencies]
 base64 = "0.22.0"
-chrono = "0.4.34"
+chrono = "0.4"
 clap = { version = "4.4.8", features = ["derive"] }
 device_query = "2.0.0"
 dialoguer = "0.11.0"
@@ -26,6 +30,11 @@ dotenv = "0.15.0"
 aes = "0.7.5"
 block-modes = "0.8.1"
 block-padding = "0.2.1"
+tar = "0.4"
+flate2 = "1.0"
+
+[build-dependencies]
+toml = "0.8"
 
 [dependencies.windows]
 version = "0.52"

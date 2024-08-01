@@ -37,7 +37,6 @@ pub struct TaskArgs {
     find: bool,
 }
 
-#[tokio::main]
 pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
     let date = Local::now();
     if task_args.show {
