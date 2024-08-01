@@ -4,9 +4,7 @@ use std::env::var;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::{fs, str};
-
-pub const VENDOR_NAME: &str = "lacodda";
-pub const APP_NAME: &str = "kasl";
+include!(concat!(env!("OUT_DIR"), "/app_metadata.rs"));
 
 #[derive(Deserialize, Clone)]
 pub struct DataStorage {
@@ -20,7 +18,7 @@ impl DataStorage {
             "macos" => var("HOME").unwrap_or_else(|_| ".".into()) + "/Library/Application Support",
             _ => var("HOME").unwrap_or_else(|_| ".".into()) + "/.local/share",
         };
-        let base_path = Path::new(&base_path).join(VENDOR_NAME).join(APP_NAME);
+        let base_path = Path::new(&base_path).join(APP_METADATA_OWNER).join(APP_METADATA_NAME);
 
         Self { base_path }
     }

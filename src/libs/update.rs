@@ -8,7 +8,7 @@ use std::fs::{self, File};
 use std::io::copy;
 use std::path::PathBuf;
 use tar::Archive;
-include!(concat!(env!("OUT_DIR"), "/package.rs"));
+include!(concat!(env!("OUT_DIR"), "/app_metadata.rs"));
 
 const LAST_CHECK_FILE: &str = ".last_update_check";
 
@@ -40,13 +40,13 @@ impl Update {
     pub fn new() -> Self {
         Self {
             client: Client::new(),
-            owner: PKG_OWNER.to_owned(),
-            name: PKG_NAME.to_owned(),
-            version: PKG_VERSION.to_owned(),
+            owner: APP_METADATA_OWNER.to_owned(),
+            name: APP_METADATA_NAME.to_owned(),
+            version: APP_METADATA_VERSION.to_owned(),
             latest_version: None,
             download_url: None,
             last_check_file: DataStorage::new().get_path(LAST_CHECK_FILE).expect("DataStorage get_path error"),
-            releases_url: format!("https://api.github.com/repos/{}/{}/releases/latest", PKG_OWNER, PKG_NAME),
+            releases_url: format!("https://api.github.com/repos/{}/{}/releases/latest", APP_METADATA_OWNER, APP_METADATA_NAME),
         }
     }
 
