@@ -71,6 +71,10 @@ impl Update {
     }
 
     pub async fn update(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        if self.latest_version.is_none() {
+            println!("No update required, you are using the latest version!");
+            return Ok(());
+        }
         let resp = self.client.get(&self.download_url.clone().unwrap()).send().await?;
         let tar_gz_path = format!("{}.tar.gz", &self.name);
         let mut out = File::create(&tar_gz_path)?;
