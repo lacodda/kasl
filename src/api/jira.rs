@@ -134,7 +134,6 @@ impl Jira {
                 StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    self.retries += 1;
                     continue;
                 }
                 _ => {
