@@ -117,7 +117,11 @@ impl Jira {
 
     pub async fn get_completed_issues(&mut self, date: &NaiveDate) -> Result<Vec<JiraIssue>, Box<dyn Error>> {
         loop {
-            let session_id = self.get_session_id().await?;
+            let session_id = match self.get_session_id().await {
+                Ok(id) => id,
+                Err(_) => return Ok(Vec::new()),
+            };
+
             let date = date.format("%Y-%m-%d").to_string();
             let jql = format!(
                 "status in (Done, Решена) AND resolved >= \"{}\" AND resolved <= \"{} 23:59\" AND assignee in (currentUser())",
@@ -128,7 +132,10 @@ impl Jira {
             headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
             let url = format!("{}/{}?jql={}", &self.config.api_url, SEARCH_URL, &jql);
 
-            let res = self.client.get(&url).headers(headers).send().await?;
+            let res = match self.client.get(&url).headers(headers).send().await {
+                Ok(response) => response,
+                Err(_) => return Ok(Vec::new()),
+            };
 
             match res.status() {
                 StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
