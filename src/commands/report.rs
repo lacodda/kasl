@@ -17,16 +17,37 @@ use std::error::Error;
 
 #[derive(Debug, Args)]
 pub struct ReportArgs {
-    #[arg(long, help = "Send report")]
+    #[arg(long, help = "Submit report")]
     send: bool,
     #[arg(long, short, help = "Last day report")]
     last: bool,
+    #[arg(long, help = "Submit monthly report")]
+    month: bool,
 }
 
 pub async fn cmd(report_args: ReportArgs) -> Result<(), Box<dyn Error>> {
     let mut date = Local::now();
     if report_args.last {
         date = date - Duration::days(1);
+    }
+    if report_args.month {
+        match Config::read() {
+            Ok(config) => match config.si {
+                Some(si_config) => {
+                    let mut si = Si::new(&si_config);
+                    let monthly_status = si.send_monthly(&date.date_naive()).await?;
+                    if monthly_status.is_success() {
+                        println!(
+                            "Your monthly report dated {} has been successfully submitted\nWait for a message to your email address",
+                            date.format("%B %-d, %Y")
+                        );
+                    }
+                }
+                None => eprintln!("Failed to read SiServer config"),
+            },
+            Err(e) => eprintln!("Failed to read config: {}", e),
+        }
+        return Ok(());
     }
 
     let events = Events::new()?
