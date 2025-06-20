@@ -18,13 +18,12 @@ owner = "lacodda"
 base64 = "0.22.0"
 chrono = "0.4"
 clap = { version = "4.4.8", features = ["derive"] }
-device_query = "2.0.0"
 dialoguer = "0.11.0"
 prettytable-rs = "0.10.0"
-reqwest = { version = "0.12.5", features = ["json", "multipart", "cookies"] }
+reqwest = { version = "0.12.20", features = ["json", "multipart", "cookies"] }
 rusqlite = { version = "0.30.0", features = ["bundled", "chrono"] }
 serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.114"
+serde_json = "1.0.140"
 tokio = { version = "1.36.0", features = ["full"] }
 dotenv = "0.15.0"
 aes = "0.7.5"
@@ -32,7 +31,7 @@ block-modes = "0.8.1"
 block-padding = "0.2.1"
 tar = "0.4"
 flate2 = "1.0"
-enigo = "0.5.0"
+rdev = "0.5.3"
 parking_lot = "0.12.4"
 
 [build-dependencies]
