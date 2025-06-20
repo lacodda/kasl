@@ -1,11 +1,9 @@
+use crate::db::breaks::Breaks;
 use enigo::{Enigo, Settings};
-use parking_lot::Mutex;
-use rusqlite::{Connection, Result};
 use std::error::Error;
-use std::sync::Arc;
 use tokio::time::{self, Duration, Instant};
 
-/// Defines the configuration for the activity monitor.
+// Defines the configuration for the activity monitor.
 #[derive(Debug)]
 pub struct MonitorConfig {
     pub breaks_enabled: bool,
@@ -13,39 +11,28 @@ pub struct MonitorConfig {
     pub poll_interval: u64,   // Interval in milliseconds to check for activity.
 }
 
-/// Represents the activity monitor.
+// Represents the activity monitor.
 pub struct Monitor {
     config: MonitorConfig,
-    db: Arc<Mutex<Connection>>, // Thread-safe SQLite database connection.
+    breaks: Breaks, // Manages break database operations.
 }
 
 impl Monitor {
-    /// Creates a new `Monitor` instance.
-    ///
-    /// Initializes the SQLite database connection and creates the 'breaks' table if it doesn't exist.
-    ///
-    /// # Arguments
-    /// * `config` - The `MonitorConfig` for the monitor.
-    /// * `db_path` - The path to the SQLite database file.
-    pub fn new(config: MonitorConfig, db_path: &str) -> Result<Self> {
-        let db_conn = Connection::open(db_path)?;
-        db_conn.execute(
-            "CREATE TABLE IF NOT EXISTS breaks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                start TEXT NOT NULL,
-                end TEXT,
-                duration INTEGER
-            )",
-            [],
-        )?;
-        let db = Arc::new(Mutex::new(db_conn));
-        Ok(Monitor { config, db })
+    // Creates a new Monitor instance.
+    //
+    // Initializes the Breaks module for database operations.
+    //
+    // # Arguments
+    // * `config` - The MonitorConfig for the monitor.
+    pub fn new(config: MonitorConfig) -> Result<Self, Box<dyn Error>> {
+        let breaks = Breaks::new()?; // Breaks::new() handles the connection now
+        Ok(Monitor { config, breaks })
     }
 
-    /// Runs the main activity monitoring loop.
-    ///
-    /// This asynchronous function continuously checks for user activity and records breaks
-    /// based on the configured `break_threshold` and `poll_interval`.
+    // Runs the main activity monitoring loop.
+    //
+    // This asynchronous function continuously checks for user activity and records breaks
+    // based on the configured break_threshold and poll_interval.
     pub async fn run(&self) -> Result<(), Box<dyn Error>> {
         println!("Monitor is running");
         if !self.config.breaks_enabled {
@@ -75,45 +62,24 @@ impl Monitor {
         }
     }
 
-    /// Placeholder function to detect user activity.
-    ///
-    /// **Note:** This implementation currently always returns `false`.
-    /// A real-world application would use `enigo` or other OS-specific APIs
-    /// to monitor actual keyboard, mouse, or scroll events.
+    // Placeholder function to detect user activity.
+    //
+    // Note: This implementation currently always returns false.
+    // A real-world application would use enigo or other OS-specific APIs
+    // to monitor actual keyboard, mouse, or scroll events.
     fn detect_activity(&self, _enigo: &Enigo) -> bool {
         false
     }
 
-    /// Inserts a new break start record into the database.
-    ///
-    /// Records the current local timestamp when a period of inactivity begins.
-    fn insert_break_start(&self) -> Result<()> {
-        let start = chrono::Local::now().to_rfc3339();
-        let db = self.db.lock();
-        db.execute("INSERT INTO breaks (start) VALUES (?1)", [&start])?;
+    // Inserts a new break start record into the database.
+    fn insert_break_start(&self) -> Result<(), Box<dyn Error>> {
+        self.breaks.insert_start()?;
         Ok(())
     }
 
-    /// Updates the most recently started break record with an end timestamp and its duration.
-    ///
-    /// Finds the last break where the `end` time is `NULL`, updates it with the current time,
-    /// and calculates the duration in seconds.
+    // Updates the most recently started break record with an end timestamp and duration.
     fn insert_break_end(&self) -> Result<(), Box<dyn Error>> {
-        let end = chrono::Local::now();
-        let end_str = end.to_rfc3339();
-        let db = self.db.lock();
-
-        let mut stmt = db.prepare("SELECT id, start FROM breaks WHERE end IS NULL ORDER BY id DESC LIMIT 1")?;
-        let break_row = stmt.query_row([], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)));
-
-        if let Ok((id, start_str)) = break_row {
-            let start = chrono::DateTime::parse_from_rfc3339(&start_str)?.with_timezone(&chrono::Local);
-            let duration = (end - start).num_seconds();
-            db.execute(
-                "UPDATE breaks SET end = ?1, duration = ?2 WHERE id = ?3",
-                [&end_str, &duration.to_string(), &id.to_string()],
-            )?;
-        }
+        self.breaks.insert_end()?;
         Ok(())
     }
 }

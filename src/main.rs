@@ -17,9 +17,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         poll_interval: 500,   // Sets the activity poll interval to 500 milliseconds.
     };
 
-    // Initializes the Monitor with the given configuration and database path.
-    let monitor = Monitor::new(config, "kasl.db")?;
-
+    // Initializes the Monitor with the given configuration
+    let monitor = Monitor::new(config)?;
     tokio::spawn(async move {
         monitor.run().await.unwrap();
     });
