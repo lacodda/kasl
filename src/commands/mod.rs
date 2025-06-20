@@ -61,7 +61,7 @@ impl Cli {
             Commands::Sum(args) => sum::cmd(args).await,
             Commands::Report(args) => report::cmd(args).await,
             Commands::Update => update::cmd().await,
-            Commands::Watch => Ok(watch::cmd()),
+            Commands::Watch => watch::cmd().await,
         }
     }
 }
