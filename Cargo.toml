@@ -32,6 +32,8 @@ block-modes = "0.8.1"
 block-padding = "0.2.1"
 tar = "0.4"
 flate2 = "1.0"
+enigo = "0.5.0"
+parking_lot = "0.12.4"
 
 [build-dependencies]
 toml = "0.8"
