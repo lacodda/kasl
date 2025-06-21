@@ -1,6 +1,6 @@
 [package]
 name = "kasl"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2021"
 description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, breaks ☕, and task completion"
 repository = "https://github.com/lacodda/kasl.git"
@@ -15,35 +15,24 @@ build = "build.rs"
 owner = "lacodda"
 
 [dependencies]
-base64 = "0.22.0"
-chrono = "0.4"
-clap = { version = "4.4.8", features = ["derive"] }
+base64 = "0.22.1"
+chrono = "0.4.41"
+clap = { version = "4.5.40", features = ["derive"] }
 dialoguer = "0.11.0"
 prettytable-rs = "0.10.0"
 reqwest = { version = "0.12.20", features = ["json", "multipart", "cookies"] }
-rusqlite = { version = "0.30.0", features = ["bundled", "chrono"] }
-serde = { version = "1.0.197", features = ["derive"] }
+rusqlite = { version = "0.36.0", features = ["bundled", "chrono"] }
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.36.0", features = ["full"] }
+tokio = { version = "1.45.1", features = ["full"] }
 dotenv = "0.15.0"
 aes = "0.7.5"
 block-modes = "0.8.1"
-block-padding = "0.2.1"
-tar = "0.4"
-flate2 = "1.0"
+block-padding = "0.3.3"
+tar = "0.4.44"
+flate2 = "1.1.2"
 rdev = "0.5.3"
 parking_lot = "0.12.4"
 
 [build-dependencies]
-toml = "0.8"
-
-[dependencies.windows]
-version = "0.52"
-features = [
-    "Win32_System_Com",
-    "Win32_System_TaskScheduler",
-    "Win32_System_Ole",
-    "Win32_System_Environment",
-    "Win32_System_Variant",
-    "Win32_Foundation",
-]
+toml = "0.8.23"
