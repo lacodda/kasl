@@ -1,6 +1,5 @@
 use super::{event::FormatEvent, task::Task};
-use crate::db::breaks::Break;
-use chrono::{NaiveDate, TimeDelta};
+use chrono::NaiveDate;
 use prettytable::{format, row, Table};
 use std::{collections::HashMap, error::Error};
 
@@ -74,17 +73,12 @@ impl View {
         Ok(())
     }
 
-    pub fn breaks(breaks: &Vec<Break>) -> Result<(), Box<dyn Error>> {
+    pub fn breaks(breaks: &Vec<FormatEvent>) -> Result<(), Box<dyn Error>> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
-
-        for (index, b) in breaks.iter().enumerate() {
-            let end = b.end.as_deref().unwrap_or("");
-            let duration = b.duration.unwrap_or(0);
-            let td_duration = TimeDelta::seconds(duration);
-
-            table.add_row(row![index + 1, b.start, end, FormatEvent::format_duration(Some(td_duration))]);
+        for b in breaks.iter() {
+            table.add_row(row![b.id, b.start, b.end, b.duration]);
         }
         table.printstd();
 

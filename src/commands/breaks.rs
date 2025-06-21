@@ -1,5 +1,5 @@
-use crate::db::breaks::Breaks;
 use crate::libs::view::View;
+use crate::{db::breaks::Breaks, libs::r#break::BreakGroup};
 use chrono::{Local, NaiveDate};
 use clap::Args;
 use std::error::Error;
@@ -16,7 +16,8 @@ pub struct BreaksArgs {
 // Runs the breaks command to display breaks for a given date.
 pub async fn cmd(args: BreaksArgs) -> Result<(), Box<dyn Error>> {
     let date = parse_date(&args.date)?;
-    let breaks = Breaks::new()?.fetch(date, args.min_duration)?;
+    let breaks = Breaks::new()?.fetch(date, args.min_duration)?.format();
+    println!("\nBrakes for {}", date.format("%B %-d, %Y"));
     View::breaks(&breaks)?;
     Ok(())
 }
