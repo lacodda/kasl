@@ -18,14 +18,14 @@ pub struct ConfigModule {
     pub name: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MonitorConfig {
     pub min_break_duration: u64, // Minimum break duration in minutes
     pub break_threshold: u64,    // Inactivity threshold in seconds
     pub poll_interval: u64,      // Poll interval in milliseconds
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ServerConfig {
     pub api_url: String,
     pub auth_token: String,

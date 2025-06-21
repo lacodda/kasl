@@ -1,11 +1,6 @@
-use crate::commands::Cli;
-use libs::update::Update;
+use kasl::commands::Cli;
+use kasl::libs::update::Update;
 use std::error::Error;
-
-mod api;
-mod commands;
-mod db;
-mod libs;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
