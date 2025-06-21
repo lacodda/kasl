@@ -2,7 +2,7 @@ use super::data_storage::DataStorage;
 use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
-use dialoguer::{theme::ColorfulTheme, MultiSelect};
+use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::error::Error;
@@ -19,6 +19,19 @@ pub struct ConfigModule {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MonitorConfig {
+    pub min_break_duration: u64, // Minimum break duration in minutes
+    pub break_threshold: u64,    // Inactivity threshold in seconds
+    pub poll_interval: u64,      // Poll interval in milliseconds
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ServerConfig {
+    pub api_url: String,
+    pub auth_token: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub si: Option<SiConfig>,
@@ -26,14 +39,30 @@ pub struct Config {
     pub gitlab: Option<GitLabConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jira: Option<JiraConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub monitor: Option<MonitorConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<ServerConfig>,
+}
+
+impl Default for MonitorConfig {
+    fn default() -> Self {
+        MonitorConfig {
+            min_break_duration: 20, // 20 minutes
+            break_threshold: 60,    // 60 seconds
+            poll_interval: 500,     // 500 milliseconds
+        }
+    }
 }
 
 impl Config {
     pub fn read() -> Result<Config, Box<dyn Error>> {
         let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
+        if !config_file_path.exists() {
+            return Ok(Config::default());
+        }
         let config_str = fs::read_to_string(config_file_path)?;
         let config: Config = serde_json::from_str(&config_str)?;
-
         Ok(config)
     }
 
@@ -41,34 +70,73 @@ impl Config {
         let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
         let config_file = File::create(config_file_path)?;
         serde_json::to_writer_pretty(&config_file, &self)?;
-
         Ok(())
     }
 
     pub fn init() -> Result<Self, Box<dyn Error>> {
         let mut config = match Self::read() {
             Ok(config) => config,
-            Err(_) => Config {
-                si: None,
-                gitlab: None,
-                jira: None,
-            },
+            Err(_) => Config::default(),
         };
-        let node_descriptions = vec![SiConfig::module(), GitLabConfig::module(), JiraConfig::module()];
+        let node_descriptions = vec![
+            SiConfig::module(),
+            GitLabConfig::module(),
+            JiraConfig::module(),
+            ConfigModule {
+                key: "monitor".to_string(),
+                name: "Monitor".to_string(),
+            },
+            ConfigModule {
+                key: "server".to_string(),
+                name: "Server".to_string(),
+            },
+        ];
         let selected_nodes = MultiSelect::with_theme(&ColorfulTheme::default())
             .with_prompt("Select nodes to configure")
             .items(&node_descriptions.iter().map(|module| &module.name).collect::<Vec<_>>())
             .interact()?;
 
         for &selection in &selected_nodes {
-            if SiConfig::module().key == node_descriptions[selection].key {
-                config.si = Some(SiConfig::init(&config.si)?);
-            }
-            if GitLabConfig::module().key == node_descriptions[selection].key {
-                config.gitlab = Some(GitLabConfig::init(&config.gitlab)?);
-            }
-            if JiraConfig::module().key == node_descriptions[selection].key {
-                config.jira = Some(JiraConfig::init(&config.jira)?);
+            match node_descriptions[selection].key.as_str() {
+                "si" => config.si = Some(SiConfig::init(&config.si)?),
+                "gitlab" => config.gitlab = Some(GitLabConfig::init(&config.gitlab)?),
+                "jira" => config.jira = Some(JiraConfig::init(&config.jira)?),
+                "monitor" => {
+                    let default = config.monitor.clone().unwrap_or_default();
+                    println!("Monitor settings");
+                    config.monitor = Some(MonitorConfig {
+                        min_break_duration: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter minimum break duration (minutes)")
+                            .default(default.min_break_duration)
+                            .interact_text()?,
+                        break_threshold: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter break threshold (seconds)")
+                            .default(default.break_threshold)
+                            .interact_text()?,
+                        poll_interval: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter poll interval (milliseconds)")
+                            .default(default.poll_interval)
+                            .interact_text()?,
+                    });
+                }
+                "server" => {
+                    let default = config.server.clone().unwrap_or(ServerConfig {
+                        api_url: "".to_string(),
+                        auth_token: "".to_string(),
+                    });
+                    println!("Server settings");
+                    config.server = Some(ServerConfig {
+                        api_url: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter server API URL")
+                            .default(default.api_url)
+                            .interact_text()?,
+                        auth_token: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter server auth token")
+                            .default(default.auth_token)
+                            .interact_text()?,
+                    });
+                }
+                _ => {}
             }
         }
 
@@ -132,5 +200,17 @@ impl Config {
         }
 
         Ok(())
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            si: None,
+            gitlab: None,
+            jira: None,
+            monitor: None,
+            server: None,
+        }
     }
 }

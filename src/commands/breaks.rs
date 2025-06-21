@@ -1,3 +1,4 @@
+use crate::libs::config::Config;
 use crate::libs::view::View;
 use crate::{db::breaks::Breaks, libs::r#break::BreakGroup};
 use chrono::{Local, NaiveDate};
@@ -9,15 +10,17 @@ use std::error::Error;
 pub struct BreaksArgs {
     #[arg(long, short, default_value = "today", help = "Date to fetch breaks for (YYYY-MM-DD or 'today')")]
     date: String,
-    #[arg(long, short, default_value_t = 20, help = "Minimum break duration in minutes")]
-    min_duration: u64,
+    #[arg(long, short, help = "Minimum break duration in minutes")]
+    min_duration: Option<u64>,
 }
 
 // Runs the breaks command to display breaks for a given date.
 pub async fn cmd(args: BreaksArgs) -> Result<(), Box<dyn Error>> {
     let date = parse_date(&args.date)?;
-    let breaks = Breaks::new()?.fetch(date, args.min_duration)?.format();
-    println!("\nBrakes for {}", date.format("%B %-d, %Y"));
+    let config = Config::read()?;
+    let min_duration = args.min_duration.unwrap_or(config.monitor.unwrap_or_default().min_break_duration);
+    let breaks = Breaks::new()?.fetch(date, min_duration)?.format();
+    println!("\nBreaks for {}", date.format("%B %-d, %Y"));
     View::breaks(&breaks)?;
     Ok(())
 }

@@ -1,15 +1,12 @@
-use crate::libs::monitor::{Monitor, MonitorConfig};
+use crate::libs::config::Config;
+use crate::libs::monitor::Monitor;
 use std::error::Error;
 
 // Runs the watch command to monitor user activity and record breaks asynchronously.
 pub async fn cmd() -> Result<(), Box<dyn Error>> {
-    let config = MonitorConfig {
-        breaks_enabled: true,
-        break_threshold: 60, // 60 seconds
-        poll_interval: 500,  // 500 milliseconds
-    };
-
-    let monitor = Monitor::new(config)?;
+    let config = Config::read()?;
+    let monitor_config = config.monitor.unwrap_or_default();
+    let monitor = Monitor::new(monitor_config)?;
     monitor.run().await?;
     Ok(())
 }

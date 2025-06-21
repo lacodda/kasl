@@ -1,16 +1,9 @@
 use crate::db::breaks::Breaks;
+use crate::libs::config::MonitorConfig;
 use rdev::{listen, EventType};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tokio::time::{self, Duration, Instant};
-
-// Defines the configuration for the activity monitor.
-#[derive(Debug)]
-pub struct MonitorConfig {
-    pub breaks_enabled: bool,
-    pub break_threshold: u64, // Inactivity duration in seconds to trigger a break.
-    pub poll_interval: u64,   // Interval in milliseconds to check for activity.
-}
 
 // Represents the activity monitor.
 pub struct Monitor {
@@ -56,8 +49,11 @@ impl Monitor {
     // Continuously checks for user activity and records breaks based on the configured
     // break_threshold and poll_interval.
     pub async fn run(&self) -> Result<(), Box<dyn Error>> {
-        println!("Monitor is running");
-        if !self.config.breaks_enabled {
+        println!(
+            "Monitor is running with threshold {}s, poll interval {}ms",
+            self.config.break_threshold, self.config.poll_interval
+        );
+        if self.config.break_threshold == 0 {
             return Ok(());
         }
 
