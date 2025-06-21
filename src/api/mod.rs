@@ -11,6 +11,7 @@ pub mod si;
 
 const MAX_RETRY_COUNT: i32 = 3;
 
+#[allow(async_fn_in_trait)]
 pub trait Session {
     async fn login(&self) -> Result<String, Box<dyn Error>>;
     fn set_credentials(&mut self, password: &str) -> Result<(), Box<dyn Error>>;

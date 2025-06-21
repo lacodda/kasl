@@ -35,7 +35,6 @@ impl Monitor {
                 | EventType::Wheel { .. } => {
                     *last_activity_clone.lock().unwrap() = Instant::now();
                 }
-                _ => {}
             }) {
                 eprintln!("Error in rdev listener: {:?}", e);
             }
