@@ -23,6 +23,7 @@ pub struct MonitorConfig {
     pub min_break_duration: u64, // Minimum break duration in minutes
     pub break_threshold: u64,    // Inactivity threshold in seconds
     pub poll_interval: u64,      // Poll interval in milliseconds
+    pub activity_threshold: u64, // Activity duration threshold in seconds
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -51,6 +52,7 @@ impl Default for MonitorConfig {
             min_break_duration: 20, // 20 minutes
             break_threshold: 60,    // 60 seconds
             poll_interval: 500,     // 500 milliseconds
+            activity_threshold: 30, // 30 seconds
         }
     }
 }
@@ -116,6 +118,10 @@ impl Config {
                         poll_interval: Input::with_theme(&ColorfulTheme::default())
                             .with_prompt("Enter poll interval (milliseconds)")
                             .default(default.poll_interval)
+                            .interact_text()?,
+                        activity_threshold: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter activity threshold (seconds)")
+                            .default(default.activity_threshold)
                             .interact_text()?,
                     });
                 }

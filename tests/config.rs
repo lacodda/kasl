@@ -9,6 +9,7 @@ mod tests {
         min_break_duration: u64,
         break_threshold: u64,
         poll_interval: u64,
+        activity_threshold: u64,
         api_url: String,
         auth_token: String,
     }
@@ -23,6 +24,7 @@ mod tests {
                 min_break_duration: 20,
                 break_threshold: 60,
                 poll_interval: 500,
+                activity_threshold: 30,
                 api_url: "https://api.example.com".to_string(),
                 auth_token: "token123".to_string(),
             }
@@ -53,6 +55,7 @@ mod tests {
                 min_break_duration: ctx.min_break_duration,
                 break_threshold: ctx.break_threshold,
                 poll_interval: ctx.poll_interval,
+                activity_threshold: ctx.activity_threshold,
             }),
             server: Some(ServerConfig {
                 api_url: ctx.api_url.clone(),
@@ -71,6 +74,7 @@ mod tests {
         assert_eq!(monitor_config.min_break_duration, ctx.min_break_duration);
         assert_eq!(monitor_config.break_threshold, ctx.break_threshold);
         assert_eq!(monitor_config.poll_interval, ctx.poll_interval);
+        assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
         assert_eq!(server_config.api_url, ctx.api_url.clone());
         assert_eq!(server_config.auth_token, ctx.auth_token.clone());
     }
@@ -82,5 +86,6 @@ mod tests {
         assert_eq!(monitor_config.min_break_duration, ctx.min_break_duration);
         assert_eq!(monitor_config.break_threshold, ctx.break_threshold);
         assert_eq!(monitor_config.poll_interval, ctx.poll_interval);
+        assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
     }
 }

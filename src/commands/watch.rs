@@ -6,7 +6,7 @@ use std::error::Error;
 pub async fn cmd() -> Result<(), Box<dyn Error>> {
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let monitor = Monitor::new(monitor_config)?;
+    let mut monitor = Monitor::new(monitor_config)?;
     monitor.run().await?;
     Ok(())
 }
