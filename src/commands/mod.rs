@@ -1,5 +1,4 @@
 pub mod breaks;
-pub mod event;
 pub mod init;
 pub mod report;
 pub mod sum;
@@ -7,8 +6,7 @@ pub mod task;
 pub mod update;
 pub mod watch;
 
-use crate::{commands::event::EventArgs, db::workdays::Workdays};
-use crate::libs::event::EventType;
+use crate::db::workdays::Workdays;
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use std::error::Error;
@@ -19,10 +17,6 @@ enum Commands {
     Init(init::InitArgs),
     #[command(about = "Create task")]
     Task(task::TaskArgs),
-    #[command(about = "Write timestamp and event type to database", arg_required_else_help = true)]
-    Event(event::EventArgs),
-    #[command(about = "Write start timestamp to database")]
-    Start,
     #[command(about = "Write end timestamp to database")]
     End,
     #[command(about = "Get summary")]
@@ -51,12 +45,6 @@ impl Cli {
         match cli.command {
             Commands::Init(args) => init::cmd(args),
             Commands::Task(args) => task::cmd(args).await,
-            Commands::Event(args) => event::cmd(args),
-            Commands::Start => event::cmd(EventArgs {
-                event_type: EventType::Start,
-                show: false,
-                raw: false,
-            }),
             Commands::End => {
                 Workdays::new()?.insert_end(Local::now().date_naive())?;
                 println!("Workday ended for today.");
