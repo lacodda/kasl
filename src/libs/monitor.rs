@@ -1,37 +1,64 @@
 use crate::db::breaks::Breaks;
 use crate::db::workdays::Workdays;
 use crate::libs::config::MonitorConfig;
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use rdev::{listen, EventType};
 use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tokio::time::{self, Duration, Instant};
 
-// Represents the activity monitor.
+/// Represents the current state of the user's activity.
+/// Using an enum provides a more explicit and robust way to manage state
+/// compared to a simple boolean flag.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum State {
+    /// The user is currently active and not on a break.
+    Active,
+    /// The user is currently on a break due to inactivity.
+    InBreak,
+}
+
+/// The core activity monitor responsible for tracking user presence
+/// and managing workday and break records.
 pub struct Monitor {
+    /// Configuration settings for the monitor, such as thresholds.
     pub config: MonitorConfig,
+    /// Database interface for managing break records.
     pub breaks: Breaks,
+    /// Database interface for managing workday records.
     pub workdays: Workdays,
+    /// Timestamp of the last detected user activity (keyboard, mouse).
     pub last_activity: Arc<Mutex<Instant>>,
+    /// Optional timestamp marking the beginning of a period of sustained activity.
+    /// This is used to determine if a workday has truly started.
     pub activity_start: Arc<Mutex<Option<Instant>>>,
+    /// The current operational state of the monitor (Active or InBreak).
+    state: State,
 }
 
 impl Monitor {
-    // Creates a new Monitor instance.
-    //
-    // Initializes the Breaks module and starts the activity listener thread.
-    //
-    // # Arguments
-    // * `config` - The MonitorConfig for the monitor.
+    /// Creates a new `Monitor` instance.
+    ///
+    /// Initializes database connections and spawns a background thread
+    /// to listen for input device events (keyboard, mouse) to track activity.
+    ///
+    /// # Arguments
+    /// * `config` - The configuration for the monitor.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or an error if initialization fails.
     pub fn new(config: MonitorConfig) -> Result<Self, Box<dyn Error>> {
         let breaks = Breaks::new()?;
         let workdays = Workdays::new()?;
         let last_activity = Arc::new(Mutex::new(Instant::now()));
         let activity_start = Arc::new(Mutex::new(None));
+
+        // Clone Arc for the separate thread to avoid ownership issues.
         let last_activity_clone = Arc::clone(&last_activity);
         let activity_start_clone = Arc::clone(&activity_start);
 
-        // Start a thread to listen for input events using rdev
+        // Spawn a new thread to listen for device events.
+        // This ensures the main monitor loop is not blocked by event listening.
         std::thread::spawn(move || {
             if let Err(e) = listen(move |event| match event.event_type {
                 EventType::KeyPress(_)
@@ -40,14 +67,20 @@ impl Monitor {
                 | EventType::ButtonRelease(_)
                 | EventType::MouseMove { .. }
                 | EventType::Wheel { .. } => {
+                    // Update `last_activity` with the current time on any detected input.
                     let mut last_activity = last_activity_clone.lock().unwrap();
                     let mut activity_start = activity_start_clone.lock().unwrap();
                     *last_activity = Instant::now();
+
+                    // If `activity_start` is not set, set it to the current time.
+                    // This marks the beginning of a continuous activity period.
                     if activity_start.is_none() {
                         *activity_start = Some(Instant::now());
                     }
                 }
             }) {
+                // In a production application, consider using a proper logging framework
+                // like `tracing::error!` for better error handling and visibility.
                 eprintln!("Error in rdev listener: {:?}", e);
             }
         });
@@ -58,74 +91,120 @@ impl Monitor {
             workdays,
             last_activity,
             activity_start,
+            state: State::Active, // Initialize the monitor in the Active state.
         })
     }
 
-    // Runs the main activity monitoring loop.
-    //
-    // Continuously checks for user activity and records breaks based on the configured
-    // break_threshold and poll_interval.
+    /// Runs the main monitoring loop.
+    ///
+    /// This asynchronous function continuously checks for user activity
+    /// and transitions between `Active` and `InBreak` states, recording
+    /// break times and ensuring workday start times are captured.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or an error if a database operation fails.
     pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
         println!(
             "Monitor is running with break threshold {}s, poll interval {}ms, activity threshold {}s",
             self.config.break_threshold, self.config.poll_interval, self.config.activity_threshold
         );
+
+        // If break threshold is 0, breaks are disabled, so the monitor can exit.
         if self.config.break_threshold == 0 {
             return Ok(());
         }
 
-        let mut in_break = false;
-
+        // The main loop that periodically checks for activity and updates state.
         loop {
             let activity_detected = self.detect_activity();
             let today = Local::now().date_naive();
 
-            if activity_detected {
-                if in_break {
-                    self.insert_break_end()?;
-                    in_break = false;
-                }
-
-                // Check activity duration for workday start
-                let activity_duration = self.activity_start.lock().unwrap();
-                if let Some(start) = *activity_duration {
-                    if start.elapsed() >= Duration::from_secs(self.config.activity_threshold) {
-                        if self.workdays.fetch(today)?.is_none() {
-                            println!("Starting workday for {}", today);
-                            self.workdays.insert_start(today)?;
-                        }
-                        *self.activity_start.lock().unwrap() = None; // Reset after recording
-                    }
-                }
-            } else if !in_break && self.last_activity.lock().unwrap().elapsed() >= Duration::from_secs(self.config.break_threshold) {
-                self.insert_break_start()?;
-                in_break = true;
-                *self.activity_start.lock().unwrap() = None; // Reset activity start on break
+            match self.state {
+                State::Active if !activity_detected => self.handle_inactivity()?,
+                State::InBreak if activity_detected => self.handle_return_from_break()?,
+                State::Active if activity_detected => self.ensure_workday_started(today)?,
+                // No action needed if in break and no activity, or other combinations.
+                _ => {}
             }
 
+            // Pause for the configured poll interval before the next check.
             time::sleep(Duration::from_millis(self.config.poll_interval)).await;
         }
     }
 
-    // Checks if user activity has occurred since the last poll.
-    //
-    // Returns true if activity was detected within the poll_interval.
-    pub fn detect_activity(&self) -> bool {
+    /// Checks if any user activity has been detected within the last poll interval.
+    ///
+    /// # Returns
+    /// `true` if activity was detected, `false` otherwise.
+    fn detect_activity(&self) -> bool {
         let elapsed = self.last_activity.lock().unwrap().elapsed();
+        // Activity is considered detected if the time since `last_activity`
+        // is less than the `poll_interval`.
         elapsed < Duration::from_millis(self.config.poll_interval)
     }
 
-    // Inserts a new break start record into the database.
-    fn insert_break_start(&self) -> Result<(), Box<dyn Error>> {
-        println!("Break Start");
-        self.breaks.insert_start()?;
+    /// Handles the scenario when user inactivity is detected.
+    ///
+    /// If the idle time exceeds the `break_threshold`, a new break is recorded,
+    /// and the monitor transitions to the `InBreak` state. The `activity_start`
+    /// timer is also reset.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or an error if a database operation fails.
+    fn handle_inactivity(&mut self) -> Result<(), Box<dyn Error>> {
+        let idle_time = self.last_activity.lock().unwrap().elapsed();
+        if idle_time >= Duration::from_secs(self.config.break_threshold) {
+            println!("Break Start");
+            self.breaks.insert_start()?;
+            self.state = State::InBreak;
+            // Crucially, reset the `activity_start` timer when a break begins.
+            // This prevents incorrect workday start detection after a break ends.
+            *self.activity_start.lock().unwrap() = None;
+        }
         Ok(())
     }
 
-    // Updates the most recently started break record with an end timestamp and duration.
-    fn insert_break_end(&self) -> Result<(), Box<dyn Error>> {
+    /// Handles the scenario when user activity resumes after a break.
+    ///
+    /// Records the end of the break and transitions the monitor back to the
+    /// `Active` state.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or an error if a database operation fails.
+    fn handle_return_from_break(&mut self) -> Result<(), Box<dyn Error>> {
         println!("Break End");
         self.breaks.insert_end()?;
+        self.state = State::Active;
+        Ok(())
+    }
+
+    /// Ensures that a workday record has been started for the current day
+    /// if sustained activity is detected.
+    ///
+    /// If `activity_start` is set and the duration of continuous activity
+    /// exceeds `activity_threshold`, and no workday record exists for `today`,
+    /// a new workday record is inserted. The `activity_start` timer is then
+    /// reset to `None` to prevent re-triggering this logic for the same workday.
+    ///
+    /// # Arguments
+    /// * `today` - The current date.
+    ///
+    /// # Returns
+    /// A `Result` indicating success or an error if a database operation fails.
+    fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<(), Box<dyn Error>> {
+        let mut activity_start_lock = self.activity_start.lock().unwrap();
+        if let Some(start_time) = *activity_start_lock {
+            if start_time.elapsed() >= Duration::from_secs(self.config.activity_threshold) {
+                // Only insert a new workday if one doesn't already exist for today.
+                if self.workdays.fetch(today)?.is_none() {
+                    println!("Starting workday for {}", today);
+                    self.workdays.insert_start(today)?;
+                }
+                // Reset `activity_start` after a workday is confirmed.
+                // This ensures this logic doesn't repeatedly try to start the workday.
+                *activity_start_lock = None;
+            }
+        }
         Ok(())
     }
 }
