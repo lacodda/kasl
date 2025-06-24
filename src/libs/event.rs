@@ -1,12 +1,9 @@
 use chrono::{
     prelude::{Local, NaiveDateTime},
-    Datelike, Duration, NaiveDate,
+    Duration,
 };
 use clap::ValueEnum;
-use std::{
-    collections::{HashMap, HashSet},
-    fmt,
-};
+use std::fmt;
 
 const DURATION: i64 = 20 * 60; // 20 mins
 
@@ -45,7 +42,6 @@ impl Event {
 
 pub trait EventGroup {
     fn merge(self) -> Vec<Event>;
-    fn group_events(self) -> HashMap<NaiveDate, Vec<Event>>;
     fn update_duration(&self) -> Vec<Event>;
     fn total_duration(&mut self) -> (Vec<Event>, Duration);
     fn format(&mut self) -> Vec<FormatEvent>;
@@ -75,16 +71,6 @@ impl EventGroup for Vec<Event> {
             merged.push(current);
         }
         merged
-    }
-
-    fn group_events(self) -> HashMap<NaiveDate, Vec<Event>> {
-        let mut events: HashMap<NaiveDate, Vec<Event>> = HashMap::new();
-        for event in self.into_iter() {
-            let event_date = event.start.date();
-            events.entry(event_date).or_insert_with(Vec::new).push(event);
-        }
-
-        events
     }
 
     fn update_duration(&self) -> Vec<Event> {
@@ -121,70 +107,7 @@ impl EventGroup for Vec<Event> {
     }
 }
 
-pub trait EventGroupDuration {
-    fn calc(self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
-}
-
-impl EventGroupDuration for HashMap<NaiveDate, Vec<Event>> {
-    fn calc(self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
-        let mut event_group: HashMap<NaiveDate, (Vec<Event>, Duration)> = HashMap::new();
-        for (date, events) in self.iter() {
-            let day_events = events.clone().merge().update_duration().total_duration();
-            event_group.insert(*date, day_events);
-        }
-        (event_group, Duration::zero())
-    }
-}
-
-pub trait EventGroupTotalDuration {
-    fn add_rest_dates(&mut self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
-    fn total_duration(&mut self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration);
-    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String, String);
-}
-
-impl EventGroupTotalDuration for (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
-    fn add_rest_dates(&mut self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
-        let mut current_month_rest_dates: HashMap<NaiveDate, (Vec<Event>, Duration)> = rest_dates
-            .iter()
-            .filter(|&&date| date.month() == Local::now().naive_local().month())
-            .map(|&date| (date, (vec![], duration)))
-            .collect();
-
-        for (date, events) in self.0.iter() {
-            let mut event_group_duration = events.clone();
-            if rest_dates.contains(date) {
-                event_group_duration.1 += duration;
-            }
-            current_month_rest_dates.insert(*date, event_group_duration);
-        }
-
-        (current_month_rest_dates, self.1)
-    }
-
-    fn total_duration(&mut self) -> (HashMap<NaiveDate, (Vec<Event>, Duration)>, Duration) {
-        let mut total_duration = self.1;
-        for (_, (_, duration)) in self.0.iter() {
-            total_duration += *duration;
-        }
-        (self.0.clone(), total_duration)
-    }
-
-    fn format(&mut self) -> (HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String, String) {
-        let mut event_group: HashMap<NaiveDate, (Vec<FormatEvent>, String)> = HashMap::new();
-        for (date, events) in self.0.iter() {
-            event_group.insert(*date, events.clone().format());
-        }
-
-        let count = self.0.len() as i64;
-        let mut average = Duration::seconds(0);
-        if count > 0 {
-            let average_sec = self.1.num_seconds() / count;
-            average = Duration::seconds(average_sec);
-        }
-
-        (event_group, FormatEvent::format_duration(Some(self.1)), FormatEvent::format_duration(Some(average)))
-    }
-}
+// Removed EventGroupDuration and EventGroupTotalDuration traits as they are no longer used by `sum`
 
 #[derive(Debug, Clone)]
 pub struct FormatEvent {

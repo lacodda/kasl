@@ -1,13 +1,13 @@
 use crate::{
     api::si::Si,
-    db::events::{Events, SelectRequest},
+    db::{breaks::Breaks, workdays::Workdays},
     libs::{
         config::Config,
-        event::{EventGroup, EventGroupDuration, EventGroupTotalDuration},
+        summary::{DailySummary, SummaryCalculator, SummaryFormatter},
         view::View,
     },
 };
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Datelike, Duration, Local, NaiveDate};
 use clap::Args;
 use std::{collections::HashSet, error::Error};
 
@@ -19,29 +19,50 @@ pub struct SumArgs {
 
 pub async fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
     let now = Local::now();
+    let config = Config::read()?;
+    let monitor_config = config.monitor.clone().unwrap_or_default();
+
     println!("\nWorking hours for {}", now.format("%B, %Y"));
+
+    // 1. Fetch rest dates from API
     let mut rest_dates: HashSet<NaiveDate> = HashSet::new();
-    let duration: Duration = Duration::hours(8);
-    match Config::read() {
-        Ok(config) => match config.si {
-            Some(si_config) => match Si::new(&si_config).rest_dates(now.date_naive()).await {
-                Ok(dates) => {
-                    rest_dates = dates;
-                }
-                Err(e) => eprintln!("Error requesting rest dates: {}", e),
-            },
-            None => eprintln!("Failed to read SiServer config"),
-        },
-        Err(e) => eprintln!("Failed to read config: {}", e),
+    if let Some(si_config) = config.si {
+        match Si::new(&si_config).rest_dates(now.date_naive()).await {
+            Ok(dates) => {
+                // Filter for dates in the current month
+                rest_dates = dates.into_iter().filter(|d| d.month() == now.month()).collect();
+            }
+            Err(e) => eprintln!("Error requesting rest dates: {}", e),
+        }
     }
 
-    let event_summary = Events::new()?
-        .fetch(SelectRequest::Monthly, now.date_naive())?
-        .group_events()
-        .calc()
-        .add_rest_dates(rest_dates, duration)
-        .total_duration()
-        .format();
+    // 2. Fetch all workdays for the current month
+    let workdays = Workdays::new()?.fetch_month(now.date_naive())?;
+    let mut daily_summaries = Vec::new();
+
+    // 3. Calculate net time for each workday
+    for workday in workdays {
+        let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
+        let gross_duration = end_time.signed_duration_since(workday.start);
+
+        let breaks = Breaks::new()?
+            .fetch(workday.date, monitor_config.min_break_duration)?
+            .iter()
+            .filter_map(|b| b.duration)
+            .fold(Duration::zero(), |acc, d| acc + d);
+
+        let net_duration = gross_duration - breaks;
+        daily_summaries.push(DailySummary {
+            date: workday.date,
+            duration: net_duration,
+        });
+    }
+
+    // 4. Combine with rest dates, calculate totals, and format for view
+    let event_summary = daily_summaries
+        .add_rest_dates(rest_dates, Duration::hours(8))
+        .calculate_totals()
+        .format_summary();
 
     View::sum(&event_summary)?;
 

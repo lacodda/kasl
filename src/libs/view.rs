@@ -53,16 +53,17 @@ impl View {
         Ok(())
     }
 
-    pub fn sum((events, total_duration, average_duration): &(HashMap<NaiveDate, (Vec<FormatEvent>, String)>, String, String)) -> Result<(), Box<dyn Error>> {
+    pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, String>, String, String)) -> Result<(), Box<dyn Error>> {
         let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["DATE", "DURATION"]);
-        let mut dates: Vec<&NaiveDate> = events.keys().collect();
+
+        let mut dates: Vec<&NaiveDate> = daily_durations.keys().collect();
         dates.sort();
 
         for date in dates {
-            if let Some(day_events) = events.get(date) {
-                table.add_row(row![date.format("%-d"), day_events.1]);
+            if let Some(duration_str) = daily_durations.get(date) {
+                table.add_row(row![date.format("%d.%m.%Y"), duration_str]);
             }
         }
         table.add_empty_row();

@@ -1,9 +1,10 @@
+pub mod r#break;
 pub mod config;
 pub mod data_storage;
 pub mod event;
 pub mod monitor;
 pub mod secret;
+pub mod summary;
 pub mod task;
 pub mod update;
 pub mod view;
-pub mod r#break;

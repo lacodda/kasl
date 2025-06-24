@@ -44,6 +44,13 @@ pub fn cmd(event_args: EventArgs) -> Result<(), Box<dyn Error>> {
 
         return Ok(());
     }
+
+    // End event type is now handled by `workdays` logic.
+    if event_args.event_type == EventType::End {
+        eprintln!("'kasl event End' is deprecated. Use 'kasl end' to mark the end of a workday.");
+        return Ok(());
+    }
+
     let _ = Events::new()?.insert(&event_args.event_type);
 
     println!("Time {}", &event_args.event_type);

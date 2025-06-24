@@ -7,9 +7,10 @@ pub mod task;
 pub mod update;
 pub mod watch;
 
+use crate::{commands::event::EventArgs, db::workdays::Workdays};
 use crate::libs::event::EventType;
+use chrono::Local;
 use clap::{Parser, Subcommand};
-use event::EventArgs;
 use std::error::Error;
 
 #[derive(Debug, Subcommand)]
@@ -56,11 +57,11 @@ impl Cli {
                 show: false,
                 raw: false,
             }),
-            Commands::End => event::cmd(EventArgs {
-                event_type: EventType::End,
-                show: false,
-                raw: false,
-            }),
+            Commands::End => {
+                Workdays::new()?.insert_end(Local::now().date_naive())?;
+                println!("Workday ended for today.");
+                Ok(())
+            }
             Commands::Sum(args) => sum::cmd(args).await,
             Commands::Report(args) => report::cmd(args).await,
             Commands::Update => update::cmd().await,
