@@ -6,7 +6,7 @@
 use super::task::Task;
 use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
-use crate::libs::r#break::Break;
+use crate::libs::pause::Pause;
 use chrono::{Duration, NaiveDate, TimeDelta};
 use prettytable::{format, row, Table};
 use std::collections::HashMap;
@@ -42,27 +42,27 @@ impl View {
         Ok(())
     }
 
-    /// Displays a daily work report, including work intervals, breaks, and tasks.
+    /// Displays a daily work report, including work intervals, pauses, and tasks.
     ///
     /// # Arguments
     /// * `workday` - The `Workday` record for the report.
-    /// * `breaks` - A slice of `Break` records for the day.
+    /// * `pauses` - A slice of `Pause` records for the day.
     /// * `tasks` - A slice of `Task` records for the day.
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn report(workday: &Workday, breaks: &[Break], tasks: &[Task]) -> Result<(), Box<dyn Error>> {
+    pub fn report(workday: &Workday, pauses: &[Pause], tasks: &[Task]) -> Result<(), Box<dyn Error>> {
         println!("\nReport for {}", workday.date.format("%B %-d, %Y"));
         let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
-        let total_break_duration = breaks.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
-        let net_duration = (end_time - workday.start) - total_break_duration;
+        let total_pause_duration = pauses.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
+        let net_duration = (end_time - workday.start) - total_pause_duration;
 
-        // Calculate work intervals based on breaks.
+        // Calculate work intervals based on pauses.
         let mut intervals = vec![];
         let mut current_time = workday.start;
-        let mut breaks_iter = breaks.iter().filter(|b| b.end.is_some()).collect::<Vec<_>>();
-        breaks_iter.sort_by_key(|b| b.start);
-        for b in breaks_iter {
+        let mut pauses_iter = pauses.iter().filter(|b| b.end.is_some()).collect::<Vec<_>>();
+        pauses_iter.sort_by_key(|b| b.start);
+        for b in pauses_iter {
             if current_time < b.start {
                 intervals.push((current_time, b.start, b.start - current_time));
             }
@@ -120,18 +120,18 @@ impl View {
         Ok(())
     }
 
-    /// Displays a table of breaks for a given day.
+    /// Displays a table of pauses for a given day.
     ///
     /// # Arguments
-    /// * `breaks` - A slice of `Break` records to display.
+    /// * `pauses` - A slice of `Pause` records to display.
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn breaks(breaks: &[Break]) -> Result<(), Box<dyn Error>> {
+    pub fn pauses(pauses: &[Pause]) -> Result<(), Box<dyn Error>> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
-        for (i, b) in breaks.iter().enumerate() {
+        for (i, b) in pauses.iter().enumerate() {
             table.add_row(row![
                 i + 1,
                 b.start.format("%H:%M"),

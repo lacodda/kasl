@@ -1,4 +1,4 @@
-pub mod breaks;
+pub mod pauses;
 pub mod init;
 pub mod report;
 pub mod sum;
@@ -25,10 +25,10 @@ enum Commands {
     Update,
     #[command(about = "Prepare a report")]
     Report(report::ReportArgs),
-    #[command(about = "Watch user activity and record breaks")]
+    #[command(about = "Watch user activity and record pauses")]
     Watch,
-    #[command(about = "Display breaks for a given date")]
-    Breaks(breaks::BreaksArgs),
+    #[command(about = "Display pauses for a given date")]
+    Pauses(pauses::PausesArgs),
 }
 
 #[derive(Debug, Parser)]
@@ -54,7 +54,7 @@ impl Cli {
             Commands::Report(args) => report::cmd(args).await,
             Commands::Update => update::cmd().await,
             Commands::Watch => watch::cmd().await,
-            Commands::Breaks(args) => breaks::cmd(args).await,
+            Commands::Pauses(args) => pauses::cmd(args).await,
         }
     }
 }

@@ -6,8 +6,8 @@ mod tests {
 
     struct ConfigTestContext {
         _temp_dir: TempDir,
-        min_break_duration: u64,
-        break_threshold: u64,
+        min_pause_duration: u64,
+        pause_threshold: u64,
         poll_interval: u64,
         activity_threshold: u64,
         api_url: String,
@@ -21,8 +21,8 @@ mod tests {
             std::env::set_var("LOCALAPPDATA", temp_dir.path());
             ConfigTestContext {
                 _temp_dir: temp_dir,
-                min_break_duration: 20,
-                break_threshold: 60,
+                min_pause_duration: 20,
+                pause_threshold: 60,
                 poll_interval: 500,
                 activity_threshold: 30,
                 api_url: "https://api.example.com".to_string(),
@@ -52,8 +52,8 @@ mod tests {
     fn test_save_and_read_config(ctx: &mut ConfigTestContext) {
         let config = Config {
             monitor: Some(MonitorConfig {
-                min_break_duration: ctx.min_break_duration,
-                break_threshold: ctx.break_threshold,
+                min_pause_duration: ctx.min_pause_duration,
+                pause_threshold: ctx.pause_threshold,
                 poll_interval: ctx.poll_interval,
                 activity_threshold: ctx.activity_threshold,
             }),
@@ -71,8 +71,8 @@ mod tests {
         let monitor_config = read_config.monitor.unwrap();
         let server_config = read_config.server.unwrap();
 
-        assert_eq!(monitor_config.min_break_duration, ctx.min_break_duration);
-        assert_eq!(monitor_config.break_threshold, ctx.break_threshold);
+        assert_eq!(monitor_config.min_pause_duration, ctx.min_pause_duration);
+        assert_eq!(monitor_config.pause_threshold, ctx.pause_threshold);
         assert_eq!(monitor_config.poll_interval, ctx.poll_interval);
         assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
         assert_eq!(server_config.api_url, ctx.api_url.clone());
@@ -83,8 +83,8 @@ mod tests {
     #[test]
     fn test_default_monitor_config(ctx: &mut ConfigTestContext) {
         let monitor_config = MonitorConfig::default();
-        assert_eq!(monitor_config.min_break_duration, ctx.min_break_duration);
-        assert_eq!(monitor_config.break_threshold, ctx.break_threshold);
+        assert_eq!(monitor_config.min_pause_duration, ctx.min_pause_duration);
+        assert_eq!(monitor_config.pause_threshold, ctx.pause_threshold);
         assert_eq!(monitor_config.poll_interval, ctx.poll_interval);
         assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
     }

@@ -1,6 +1,6 @@
 use crate::{
     api::si::Si,
-    db::{breaks::Breaks, tasks::Tasks, workdays::Workday, workdays::Workdays},
+    db::{pauses::Pauses, tasks::Tasks, workdays::Workday, workdays::Workdays},
     libs::{
         config::Config,
         task::{FormatTasks, Task, TaskFilter},
@@ -78,7 +78,7 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
-/// Fetches all necessary data (workday, tasks, breaks) for a given date
+/// Fetches all necessary data (workday, tasks, pauses) for a given date
 /// and displays a formatted report in the terminal.
 async fn display_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> {
     let naive_date = date.date_naive();
@@ -94,9 +94,9 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error
     let tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let breaks = Breaks::new()?.fetch(naive_date, monitor_config.min_break_duration)?;
+    let pauses = Pauses::new()?.fetch(naive_date, monitor_config.min_pause_duration)?;
 
-    View::report(&workday, &breaks, &tasks)?;
+    View::report(&workday, &pauses, &tasks)?;
     Ok(())
 }
 

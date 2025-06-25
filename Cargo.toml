@@ -2,7 +2,7 @@
 name = "kasl"
 version = "0.6.0"
 edition = "2021"
-description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, breaks ☕, and task completion"
+description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ☕, and task completion"
 repository = "https://github.com/lacodda/kasl.git"
 authors = ["Kirill Lakhtachev <lahtachev@gmail.com> (https://lacodda.com)"]
 readme = "README.md"

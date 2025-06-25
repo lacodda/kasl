@@ -6,11 +6,11 @@
 
 ## Overview 📖
 
-kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, breaks ☕, and task completion ✅. It automates the collection of work data 📈, facilitates task management 📋, and generates daily reports 📝, simplifying workflow and productivity tracking 🚀.
+kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ☕, and task completion ✅. It automates the collection of work data 📈, facilitates task management 📋, and generates daily reports 📝, simplifying workflow and productivity tracking 🚀.
 
 ## Features 🌟
 
-- **Automatic Data Collection** 📊: Tracks the start of work sessions and breaks without manual input.
+- **Automatic Data Collection** 📊: Tracks the start of work sessions and pauses without manual input.
 - **Task Management** 📋: Easily add tasks and update completion percentages.
 - **Daily Reports** 📝: Auto-generates daily reports summarizing work activities.
 - **API Integration** 🌐: Sends daily reports to a specified API for easy access and storage.

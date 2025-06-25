@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use kasl::db::{breaks::Breaks, workdays::Workdays};
+    use kasl::db::{pauses::Pauses, workdays::Workdays};
     use kasl::libs::view::View;
     use chrono::{NaiveDate, NaiveDateTime};
     use tempfile::TempDir;
@@ -21,12 +21,12 @@ mod tests {
         }
     }
 
-    /// Tests report generation with breaks.
+    /// Tests report generation with pauses.
     ///
-    /// Simulates a workday with two breaks and verifies that the report is generated correctly.
+    /// Simulates a workday with two pauses and verifies that the report is generated correctly.
     #[test_context(ReportTestContext)]
     #[test]
-    fn test_report_with_breaks(_ctx: &mut ReportTestContext) {
+    fn test_report_with_pauses(_ctx: &mut ReportTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 6, 24).unwrap();
         let start_time = NaiveDateTime::parse_from_str("2025-06-24 09:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let end_time = NaiveDateTime::parse_from_str("2025-06-24 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
@@ -35,39 +35,39 @@ mod tests {
         workdays.insert_start(date).unwrap();
         workdays.insert_end(date).unwrap();
 
-        // Insert two breaks: 10:00-10:30 and 12:00-13:00.
-        let mut breaks = Breaks::new().unwrap();
-        breaks
+        // Insert two pauses: 10:00-10:30 and 12:00-13:00.
+        let mut pauses = Pauses::new().unwrap();
+        pauses
             .conn
             .lock()
             .execute(
-                "INSERT INTO breaks (start, end, duration) VALUES (?, ?, ?)",
+                "INSERT INTO pauses (start, end, duration) VALUES (?, ?, ?)",
                 ["2025-06-24 10:00:00", "2025-06-24 10:30:00", &(30 * 60).to_string()],
             )
             .unwrap();
-        breaks
+        pauses
             .conn
             .lock()
             .execute(
-                "INSERT INTO breaks (start, end, duration) VALUES (?, ?, ?)",
+                "INSERT INTO pauses (start, end, duration) VALUES (?, ?, ?)",
                 ["2025-06-24 12:00:00", "2025-06-24 13:00:00", &(60 * 60).to_string()],
             )
             .unwrap();
 
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let breaks_vec = breaks.fetch(date, 20).unwrap();
+        let pauses_vec = pauses.fetch(date, 20).unwrap();
         let tasks = vec![];
 
-        let output = View::report(&workday, &breaks_vec, &tasks);
+        let output = View::report(&workday, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
 
-    /// Tests report generation without breaks.
+    /// Tests report generation without pauses.
     ///
-    /// Simulates a workday without breaks and verifies that the report is generated correctly.
+    /// Simulates a workday without pauses and verifies that the report is generated correctly.
     #[test_context(ReportTestContext)]
     #[test]
-    fn test_report_no_breaks(_ctx: &mut ReportTestContext) {
+    fn test_report_no_pauses(_ctx: &mut ReportTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 6, 24).unwrap();
         let start_time = NaiveDateTime::parse_from_str("2025-06-24 09:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let end_time = NaiveDateTime::parse_from_str("2025-06-24 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
@@ -76,12 +76,12 @@ mod tests {
         workdays.insert_start(date).unwrap();
         workdays.insert_end(date).unwrap();
 
-        let breaks = Breaks::new().unwrap();
+        let pauses = Pauses::new().unwrap();
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let breaks_vec = breaks.fetch(date, 20).unwrap();
+        let pauses_vec = pauses.fetch(date, 20).unwrap();
         let tasks = vec![];
 
-        let output = View::report(&workday, &breaks_vec, &tasks);
+        let output = View::report(&workday, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
 }

@@ -20,8 +20,8 @@ pub struct ConfigModule {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MonitorConfig {
-    pub min_break_duration: u64, // Minimum break duration in minutes
-    pub break_threshold: u64,    // Inactivity threshold in seconds
+    pub min_pause_duration: u64, // Minimum pause duration in minutes
+    pub pause_threshold: u64,    // Inactivity threshold in seconds
     pub poll_interval: u64,      // Poll interval in milliseconds
     pub activity_threshold: u64, // Activity duration threshold in seconds
 }
@@ -49,8 +49,8 @@ pub struct Config {
 impl Default for MonitorConfig {
     fn default() -> Self {
         MonitorConfig {
-            min_break_duration: 20, // 20 minutes
-            break_threshold: 60,    // 60 seconds
+            min_pause_duration: 20, // 20 minutes
+            pause_threshold: 60,    // 60 seconds
             poll_interval: 500,     // 500 milliseconds
             activity_threshold: 30, // 30 seconds
         }
@@ -107,13 +107,13 @@ impl Config {
                     let default = config.monitor.clone().unwrap_or_default();
                     println!("Monitor settings");
                     config.monitor = Some(MonitorConfig {
-                        min_break_duration: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter minimum break duration (minutes)")
-                            .default(default.min_break_duration)
+                        min_pause_duration: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter minimum pause duration (minutes)")
+                            .default(default.min_pause_duration)
                             .interact_text()?,
-                        break_threshold: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter break threshold (seconds)")
-                            .default(default.break_threshold)
+                        pause_threshold: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt("Enter pause threshold (seconds)")
+                            .default(default.pause_threshold)
                             .interact_text()?,
                         poll_interval: Input::with_theme(&ColorfulTheme::default())
                             .with_prompt("Enter poll interval (milliseconds)")

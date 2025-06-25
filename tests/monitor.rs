@@ -44,8 +44,8 @@ mod tests {
     #[tokio::test]
     async fn test_workday_start_detection(_ctx: &mut MonitorTestContext) {
         let config = MonitorConfig {
-            min_break_duration: 20,
-            break_threshold: 60,
+            min_pause_duration: 20,
+            pause_threshold: 60,
             poll_interval: 500,
             activity_threshold: 1, // Reduced for testing
         };
@@ -76,8 +76,8 @@ mod tests {
     #[tokio::test]
     async fn test_no_workday_on_short_activity(_ctx: &mut MonitorTestContext) {
         let config = MonitorConfig {
-            min_break_duration: 20,
-            break_threshold: 60,
+            min_pause_duration: 20,
+            pause_threshold: 60,
             poll_interval: 500,
             activity_threshold: 30,
         };

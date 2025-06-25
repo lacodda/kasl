@@ -1,6 +1,6 @@
 use crate::{
     api::si::Si,
-    db::{breaks::Breaks, workdays::Workdays},
+    db::{pauses::Pauses, workdays::Workdays},
     libs::{
         config::Config,
         summary::{DailySummary, SummaryCalculator, SummaryFormatter},
@@ -45,13 +45,13 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
         let gross_duration = end_time.signed_duration_since(workday.start);
 
-        let breaks = Breaks::new()?
-            .fetch(workday.date, monitor_config.min_break_duration)?
+        let pauses = Pauses::new()?
+            .fetch(workday.date, monitor_config.min_pause_duration)?
             .iter()
             .filter_map(|b| b.duration)
             .fold(Duration::zero(), |acc, d| acc + d);
 
-        let net_duration = gross_duration - breaks;
+        let net_duration = gross_duration - pauses;
         daily_summaries.push(DailySummary {
             date: workday.date,
             duration: net_duration,
