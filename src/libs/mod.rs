@@ -1,7 +1,7 @@
 pub mod r#break;
 pub mod config;
 pub mod data_storage;
-pub mod event;
+pub mod formatter;
 pub mod monitor;
 pub mod secret;
 pub mod summary;

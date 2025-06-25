@@ -1,16 +1,27 @@
-use crate::libs::event::FormatEvent;
+//! Provides structs and traits for calculating and formatting monthly summaries.
+
+use crate::libs::formatter::format_duration;
 use chrono::{Duration, NaiveDate};
 use std::collections::{HashMap, HashSet};
 
+/// Represents a summary of work duration for a single day.
 #[derive(Debug, Clone)]
 pub struct DailySummary {
+    /// The specific date of the summary.
     pub date: NaiveDate,
+    /// The total net work duration for that day.
     pub duration: Duration,
 }
 
+/// A trait for calculators that process collections of `DailySummary`.
 pub trait SummaryCalculator {
+    /// Adds rest days to the summary collection.
+    ///
+    /// If a rest date is not already present in the summaries, it's added
+    /// with a default work duration (e.g., 8 hours).
     fn add_rest_dates(self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> Self;
-    // The return type is corrected from (Vec<Self>, ...) to (Self, ...)
+
+    /// Calculates the total and average work durations for the summary collection.
     fn calculate_totals(self) -> (Self, Duration, Duration)
     where
         Self: Sized;
@@ -28,7 +39,6 @@ impl SummaryCalculator for Vec<DailySummary> {
 
     fn calculate_totals(mut self) -> (Self, Duration, Duration) {
         self.sort_by_key(|ds| ds.date);
-
         let total_duration = self.iter().fold(Duration::zero(), |acc, ds| acc + ds.duration);
 
         let count = self.len() as i64;
@@ -37,21 +47,21 @@ impl SummaryCalculator for Vec<DailySummary> {
         } else {
             Duration::zero()
         };
-
         (self, total_duration, average_duration)
     }
 }
 
+/// A trait for formatting calculated summaries into displayable strings.
 pub trait SummaryFormatter {
+    /// Formats the summary data into a map of daily durations and total/average strings.
     fn format_summary(&self) -> (HashMap<NaiveDate, String>, String, String);
 }
 
 impl SummaryFormatter for (Vec<DailySummary>, Duration, Duration) {
     fn format_summary(&self) -> (HashMap<NaiveDate, String>, String, String) {
-        let daily_durations = self.0.iter().map(|ds| (ds.date, FormatEvent::format_duration(Some(ds.duration)))).collect();
-
-        let total_duration_str = FormatEvent::format_duration(Some(self.1));
-        let average_duration_str = FormatEvent::format_duration(Some(self.2));
+        let daily_durations = self.0.iter().map(|ds| (ds.date, format_duration(&ds.duration))).collect();
+        let total_duration_str = format_duration(&self.1);
+        let average_duration_str = format_duration(&self.2);
 
         (daily_durations, total_duration_str, average_duration_str)
     }

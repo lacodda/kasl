@@ -1,25 +1,29 @@
+//! Manages the display of data in formatted console tables.
+//!
+//! This module uses `prettytable-rs` to render various data structures,
+//! such as tasks, work reports, and summaries, in a human-readable format.
+
 use super::task::Task;
 use crate::db::workdays::Workday;
+use crate::libs::formatter::format_duration;
 use crate::libs::r#break::Break;
 use chrono::{Duration, NaiveDate, TimeDelta};
 use prettytable::{format, row, Table};
 use std::collections::HashMap;
 use std::error::Error;
 
-/// Manages the display of data in a formatted console output.
+/// A utility struct for rendering data to the console.
 pub struct View {}
 
 impl View {
-    /// Displays a table of tasks with their details.
-    ///
-    /// Formats tasks into a table with columns for ID, Task ID, Name, Comment, and Completeness.
+    /// Displays a table of tasks.
     ///
     /// # Arguments
-    /// * `tasks` - A vector of tasks to display.
+    /// * `tasks` - A slice of `Task` structs to display.
     ///
     /// # Returns
-    /// A `Result` indicating success or an error if table rendering fails.
-    pub fn tasks(tasks: &Vec<Task>) -> Result<(), Box<dyn Error>> {
+    /// A `Result` indicating success.
+    pub fn tasks(tasks: &[Task]) -> Result<(), Box<dyn Error>> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS"]);
@@ -38,21 +42,17 @@ impl View {
         Ok(())
     }
 
-    /// Displays a work report with intervals and tasks for a given day.
-    ///
-    /// Generates a table of work intervals (ID, START, END, DURATION) based on workday start/end times
-    /// and breaks, followed by a total net work time. If tasks exist, they are displayed in a separate table.
+    /// Displays a daily work report, including work intervals, breaks, and tasks.
     ///
     /// # Arguments
-    /// * `workday` - The workday record containing start and optional end times.
-    /// * `breaks` - A vector of breaks for the day.
-    /// * `tasks` - A vector of tasks for the day.
+    /// * `workday` - The `Workday` record for the report.
+    /// * `breaks` - A slice of `Break` records for the day.
+    /// * `tasks` - A slice of `Task` records for the day.
     ///
     /// # Returns
-    /// A `Result` indicating success or an error if table rendering fails.
-    pub fn report(workday: &Workday, breaks: &Vec<Break>, tasks: &Vec<Task>) -> Result<(), Box<dyn Error>> {
+    /// A `Result` indicating success.
+    pub fn report(workday: &Workday, breaks: &[Break], tasks: &[Task]) -> Result<(), Box<dyn Error>> {
         println!("\nReport for {}", workday.date.format("%B %-d, %Y"));
-
         let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
         let total_break_duration = breaks.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
         let net_duration = (end_time - workday.start) - total_break_duration;
@@ -62,7 +62,6 @@ impl View {
         let mut current_time = workday.start;
         let mut breaks_iter = breaks.iter().filter(|b| b.end.is_some()).collect::<Vec<_>>();
         breaks_iter.sort_by_key(|b| b.start);
-
         for b in breaks_iter {
             if current_time < b.start {
                 intervals.push((current_time, b.start, b.start - current_time));
@@ -96,15 +95,11 @@ impl View {
 
     /// Displays a summary of working hours for a month.
     ///
-    /// Formats a table with daily durations, total duration, and average duration.
-    ///
     /// # Arguments
-    /// * `daily_durations` - A map of dates to formatted duration strings.
-    /// * `total_duration` - The total duration as a formatted string.
-    /// * `average_duration` - The average duration as a formatted string.
+    /// * `summary_data` - A tuple containing daily durations, total duration, and average duration.
     ///
     /// # Returns
-    /// A `Result` indicating success or an error if table rendering fails.
+    /// A `Result` indicating success.
     pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, String>, String, String)) -> Result<(), Box<dyn Error>> {
         let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -112,7 +107,6 @@ impl View {
 
         let mut dates: Vec<&NaiveDate> = daily_durations.keys().collect();
         dates.sort();
-
         for date in dates {
             if let Some(duration_str) = daily_durations.get(date) {
                 table.add_row(row![date.format("%d.%m.%Y"), duration_str]);
@@ -128,14 +122,12 @@ impl View {
 
     /// Displays a table of breaks for a given day.
     ///
-    /// Formats breaks with their ID, start time, end time, and duration.
-    ///
     /// # Arguments
-    /// * `breaks` - A vector of breaks to display.
+    /// * `breaks` - A slice of `Break` records to display.
     ///
     /// # Returns
-    /// A `Result` indicating success or an error if table rendering fails.
-    pub fn breaks(breaks: &Vec<Break>) -> Result<(), Box<dyn Error>> {
+    /// A `Result` indicating success.
+    pub fn breaks(breaks: &[Break]) -> Result<(), Box<dyn Error>> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
@@ -150,17 +142,4 @@ impl View {
         table.printstd();
         Ok(())
     }
-}
-
-/// Formats a duration into a "HH:MM" string.
-///
-/// # Arguments
-/// * `duration` - The duration to format.
-///
-/// # Returns
-/// A string in the format "HH:MM" representing hours and minutes.
-fn format_duration(duration: &Duration) -> String {
-    let hours = duration.num_hours();
-    let mins = duration.num_minutes() % 60;
-    format!("{:02}:{:02}", hours, mins)
 }
