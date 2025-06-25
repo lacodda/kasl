@@ -1,7 +1,7 @@
 use super::task::Task;
 use crate::db::workdays::Workday;
 use crate::libs::r#break::Break;
-use chrono::{Duration, NaiveDate};
+use chrono::{Duration, NaiveDate, TimeDelta};
 use prettytable::{format, row, Table};
 use std::collections::HashMap;
 use std::error::Error;
@@ -40,7 +40,7 @@ impl View {
 
     /// Displays a work report with intervals and tasks for a given day.
     ///
-    /// Generates a table of work intervals (START, END, DURATION) based on workday start/end times
+    /// Generates a table of work intervals (ID, START, END, DURATION) based on workday start/end times
     /// and breaks, followed by a total net work time. If tasks exist, they are displayed in a separate table.
     ///
     /// # Arguments
@@ -76,13 +76,13 @@ impl View {
         // Create and populate the intervals table.
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["START", "END", "DURATION"]);
+        table.set_titles(row!["ID", "START", "END", "DURATION"]);
 
-        for (start, end, duration) in intervals {
-            table.add_row(row![start.format("%H:%M"), end.format("%H:%M"), format_duration(duration)]);
+        for (index, (start, end, duration)) in intervals.iter().enumerate() {
+            table.add_row(row![index + 1, start.format("%H:%M"), end.format("%H:%M"), format_duration(duration)]);
         }
         table.add_empty_row();
-        table.add_row(row!["TOTAL", "", format_duration(net_duration)]);
+        table.add_row(row!["TOTAL", "", "", format_duration(&net_duration)]);
         table.printstd();
 
         // Display tasks if any exist.
@@ -144,7 +144,7 @@ impl View {
                 i + 1,
                 b.start.format("%H:%M"),
                 b.end.map(|t| t.format("%H:%M").to_string()).unwrap_or_default(),
-                b.duration.map(format_duration).unwrap_or_default()
+                b.duration.map(|duration: TimeDelta| format_duration(&duration)).unwrap_or_default()
             ]);
         }
         table.printstd();
@@ -159,7 +159,7 @@ impl View {
 ///
 /// # Returns
 /// A string in the format "HH:MM" representing hours and minutes.
-fn format_duration(duration: Duration) -> String {
+fn format_duration(duration: &Duration) -> String {
     let hours = duration.num_hours();
     let mins = duration.num_minutes() % 60;
     format!("{:02}:{:02}", hours, mins)
