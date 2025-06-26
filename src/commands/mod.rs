@@ -39,8 +39,8 @@ enum Commands {
     Report(report::ReportArgs),
 
     /// Watches for user activity to automatically record pauses.
-    #[command(about = "Watch user activity and record pauses")]
-    Watch,
+    #[command(about = "Watch user activity in the background to record pauses")]
+    Watch(watch::WatchArgs),
 
     /// Displays recorded pauses for a given date.
     #[command(about = "Display pauses for a given date")]
@@ -76,7 +76,7 @@ impl Cli {
             Commands::Sum(args) => sum::cmd(args).await,
             Commands::Report(args) => report::cmd(args).await,
             Commands::Update => update::cmd().await,
-            Commands::Watch => watch::cmd().await,
+            Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
         }
     }
