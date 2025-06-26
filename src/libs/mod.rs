@@ -3,6 +3,7 @@ pub mod data_storage;
 pub mod formatter;
 pub mod monitor;
 pub mod pause;
+pub mod report;
 pub mod secret;
 pub mod summary;
 pub mod task;

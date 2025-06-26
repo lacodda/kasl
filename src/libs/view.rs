@@ -7,6 +7,7 @@ use super::task::Task;
 use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
 use crate::libs::pause::Pause;
+use crate::libs::report;
 use chrono::{Duration, NaiveDate, TimeDelta};
 use prettytable::{format, row, Table};
 use std::collections::HashMap;
@@ -57,34 +58,25 @@ impl View {
         let total_pause_duration = pauses.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
         let net_duration = (end_time - workday.start) - total_pause_duration;
 
-        // Calculate work intervals based on pauses.
-        let mut intervals = vec![];
-        let mut current_time = workday.start;
-        let mut pauses_iter = pauses.iter().filter(|b| b.end.is_some()).collect::<Vec<_>>();
-        pauses_iter.sort_by_key(|b| b.start);
-        for b in pauses_iter {
-            if current_time < b.start {
-                intervals.push((current_time, b.start, b.start - current_time));
-            }
-            current_time = b.end.unwrap();
-        }
-        if current_time < end_time {
-            intervals.push((current_time, end_time, end_time - current_time));
-        }
+        let intervals = report::calculate_work_intervals(workday, pauses);
 
         // Create and populate the intervals table.
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
 
-        for (index, (start, end, duration)) in intervals.iter().enumerate() {
-            table.add_row(row![index + 1, start.format("%H:%M"), end.format("%H:%M"), format_duration(duration)]);
+        for (index, interval) in intervals.iter().enumerate() {
+            table.add_row(row![
+                index + 1,
+                interval.start.format("%H:%M"),
+                interval.end.format("%H:%M"),
+                format_duration(&interval.duration)
+            ]);
         }
         table.add_empty_row();
         table.add_row(row!["TOTAL", "", "", format_duration(&net_duration)]);
         table.printstd();
 
-        // Display tasks if any exist.
         if !tasks.is_empty() {
             println!("\nTasks:");
             Self::tasks(tasks)?;

@@ -5,9 +5,16 @@
 
 use crate::{
     api::si::Si,
-    db::{pauses::Pauses, tasks::Tasks, workdays::Workday, workdays::Workdays},
+    db::{
+        pauses::Pauses,
+        tasks::Tasks,
+        workdays::{Workday, Workdays},
+    },
     libs::{
         config::Config,
+        formatter::format_duration,
+        pause::Pause,
+        report,
         task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
@@ -130,7 +137,11 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> 
         return Ok(());
     }
 
-    let report_json = build_report_payload(&workday, &mut tasks);
+    let config = Config::read()?;
+    let monitor_config = config.monitor.unwrap_or_default();
+    let pauses = Pauses::new()?.fetch(naive_date, monitor_config.min_pause_duration)?;
+
+    let report_json = build_report_payload(&workday, &mut tasks, &pauses);
     let events_json = serde_json::to_string(&report_json)?;
     let mut si = get_si_service()?;
 
@@ -156,18 +167,75 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> 
     Ok(())
 }
 
-/// Builds the JSON payload for the API submission.
-fn build_report_payload(workday: &Workday, tasks: &mut Vec<Task>) -> serde_json::Value {
-    let workday_end = workday.end.unwrap_or_else(|| Local::now().naive_local());
-    json!([{
-        "from": workday.start.format("%H:%M").to_string(),
-        "to": workday_end.format("%H:%M").to_string(),
-        "total_ts": (workday_end - workday.start).num_seconds(),
-        "task": tasks.format(),
-        "data": [],
-        "time": "",
-        "result": ""
-    }])
+/// Builds the JSON payload for the API submission based on work intervals.
+fn build_report_payload(workday: &Workday, tasks: &mut Vec<Task>, pauses: &[Pause]) -> serde_json::Value {
+    // General logic to calculate intervals
+    let intervals = report::calculate_work_intervals(workday, pauses);
+
+    let num_tasks = tasks.len();
+    let num_intervals = intervals.len();
+
+    if num_intervals == 0 {
+        return json!([]);
+    }
+
+    let mut report_items = Vec::new();
+
+    // Logic of task distribution by intervals
+    if num_tasks >= num_intervals {
+        // If tasks are greater than or equal to Intervals
+        let mut task_iter = tasks.iter();
+        let base_tasks_per_interval = num_tasks / num_intervals;
+        let mut extra_tasks = num_tasks % num_intervals;
+
+        for (i, interval) in intervals.iter().enumerate() {
+            let count = base_tasks_per_interval + if extra_tasks > 0 { 1 } else { 0 };
+            if extra_tasks > 0 {
+                extra_tasks -= 1;
+            }
+
+            let mut assigned_tasks: Vec<Task> = task_iter.by_ref().take(count).cloned().collect();
+
+            report_items.push(json!({
+                "from": interval.start.format("%H:%M").to_string(),
+                "index": i + 1,
+                "result": "",
+                "task": assigned_tasks.format(),
+                "time": "",
+                "to": interval.end.format("%H:%M").to_string(),
+                "total_ts": format_duration(&interval.duration)
+            }));
+        }
+    } else {
+        // If there are more intervals than tasks
+        let mut interval_iter = intervals.iter();
+        let base_intervals_per_task = num_intervals / num_tasks;
+        let mut extra_intervals = num_intervals % num_tasks;
+
+        for task in tasks.iter() {
+            let count = base_intervals_per_task + if extra_intervals > 0 { 1 } else { 0 };
+            if extra_intervals > 0 {
+                extra_intervals -= 1;
+            }
+
+            for _ in 0..count {
+                if let Some(interval) = interval_iter.next() {
+                    let index = report_items.len() + 1;
+                    report_items.push(json!({
+                        "from": interval.start.format("%H:%M").to_string(),
+                        "index": index,
+                        "result": "",
+                        "task": vec![task.clone()].format(),
+                        "time": "",
+                        "to": interval.end.format("%H:%M").to_string(),
+                        "total_ts": format_duration(&interval.duration)
+                    }));
+                }
+            }
+        }
+    }
+
+    json!(report_items)
 }
 
 /// Reads the application configuration and returns an initialized `Si` service instance.
