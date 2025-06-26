@@ -9,6 +9,11 @@ pub mod gitlab;
 pub mod jira;
 pub mod si;
 
+// Re-exporting configs to make them accessible from other modules
+pub use gitlab::GitLabConfig;
+pub use jira::JiraConfig;
+pub use si::SiConfig;
+
 const MAX_RETRY_COUNT: i32 = 3;
 
 #[allow(async_fn_in_trait)]

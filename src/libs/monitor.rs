@@ -136,7 +136,7 @@ impl Monitor {
     ///
     /// # Returns
     /// `true` if activity was detected, `false` otherwise.
-    fn detect_activity(&self) -> bool {
+    pub fn detect_activity(&self) -> bool {
         let elapsed = self.last_activity.lock().unwrap().elapsed();
         // Activity is considered detected if the time since `last_activity`
         // is less than the `poll_interval`.
@@ -191,7 +191,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
-    fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<(), Box<dyn Error>> {
+    pub fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<(), Box<dyn Error>> {
         let mut activity_start_lock = self.activity_start.lock().unwrap();
         if let Some(start_time) = *activity_start_lock {
             if start_time.elapsed() >= Duration::from_secs(self.config.activity_threshold) {

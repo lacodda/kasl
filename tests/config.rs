@@ -4,6 +4,8 @@ mod tests {
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
 
+    /// Test context to ensure a clean environment for each config test.
+    /// It sets up a temporary directory to act as the user's home/appdata directory.
     struct ConfigTestContext {
         _temp_dir: TempDir,
         min_pause_duration: u64,
@@ -17,6 +19,7 @@ mod tests {
     impl TestContext for ConfigTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
+            // Mock the home/appdata directory for cross-platform compatibility.
             std::env::set_var("HOME", temp_dir.path());
             std::env::set_var("LOCALAPPDATA", temp_dir.path());
             ConfigTestContext {
@@ -37,11 +40,15 @@ mod tests {
         let config = Config::default();
         assert!(config.monitor.is_none());
         assert!(config.server.is_none());
+        assert!(config.si.is_none());
+        assert!(config.gitlab.is_none());
+        assert!(config.jira.is_none());
     }
 
     #[test_context(ConfigTestContext)]
     #[test]
     fn test_read_nonexistent_config(_ctx: &mut ConfigTestContext) {
+        // When no config file exists, read() should return the default config.
         let config = Config::read().unwrap();
         assert_eq!(config.monitor, None);
         assert_eq!(config.server, None);
@@ -65,7 +72,6 @@ mod tests {
             gitlab: None,
             jira: None,
         };
-
         config.save().unwrap();
         let read_config = Config::read().unwrap();
         let monitor_config = read_config.monitor.unwrap();

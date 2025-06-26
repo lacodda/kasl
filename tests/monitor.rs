@@ -9,6 +9,7 @@ mod tests {
     use test_context::{test_context, AsyncTestContext};
     use tokio::time::{self, Duration, Instant};
 
+    /// Test context for monitor tests. Creates a temporary directory for the database.
     struct MonitorTestContext {
         _temp_dir: TempDir,
     }
@@ -22,84 +23,76 @@ mod tests {
         }
     }
 
-    async fn run_monitor_test(monitor: &mut Monitor) -> Result<(), Box<dyn Error>> {
-        let activity_detected = monitor.detect_activity();
-        let today = Local::now().date_naive();
-
-        if activity_detected {
-            let activity_duration = monitor.activity_start.lock().unwrap();
-            if let Some(start) = *activity_duration {
-                if start.elapsed() >= Duration::from_secs(monitor.config.activity_threshold as u64) {
-                    if monitor.workdays.fetch(today)?.is_none() {
-                        monitor.workdays.insert_start(today)?;
-                    }
-                    *monitor.activity_start.lock().unwrap() = None;
-                }
-            }
+    /// Helper to run the relevant part of the monitor's main loop for testing.
+    async fn simulate_monitor_cycle(monitor: &mut Monitor) -> Result<(), Box<dyn Error>> {
+        if monitor.detect_activity() {
+            monitor.ensure_workday_started(Local::now().date_naive())?;
         }
         Ok(())
     }
 
     #[test_context(MonitorTestContext)]
     #[tokio::test]
-    async fn test_workday_start_detection(_ctx: &mut MonitorTestContext) {
+    async fn test_workday_start_after_sustained_activity(_ctx: &mut MonitorTestContext) {
         let config = MonitorConfig {
-            min_pause_duration: 20,
-            pause_threshold: 60,
-            poll_interval: 500,
-            activity_threshold: 1, // Reduced for testing
+            activity_threshold: 1, // Start workday after 1 second of activity
+            poll_interval: 100,    // Poll every 100ms
+            ..Default::default()
         };
         let mut monitor = Monitor::new(config).unwrap();
         let today = Local::now().date_naive();
+        let mut workdays_db = Workdays::new().unwrap();
 
-        let mut workdays = Workdays::new().unwrap();
-        assert!(workdays.fetch(today).unwrap().is_none());
+        assert!(workdays_db.fetch(today).unwrap().is_none(), "Workday should not exist at the start of the test");
 
-        // Simulate 2 seconds of activity
-        {
-            let mut last_activity = monitor.last_activity.lock().unwrap();
-            let mut activity_start = monitor.activity_start.lock().unwrap();
-            *last_activity = Instant::now();
-            *activity_start = Some(Instant::now());
+        // Mark the beginning of a potential workday
+        *monitor.activity_start.lock().unwrap() = Some(Instant::now());
+
+        // Simulate sustained activity for 1.5 seconds
+        let simulation_duration = Duration::from_millis(1500);
+        let start_time = Instant::now();
+        while start_time.elapsed() < simulation_duration {
+            // Keep updating last_activity to simulate continuous presence
+            *monitor.last_activity.lock().unwrap() = Instant::now();
+
+            // Run the part of the monitor loop that checks for workday start
+            simulate_monitor_cycle(&mut monitor).await.unwrap();
+
+            // Wait for the next poll
+            time::sleep(Duration::from_millis(monitor.config.poll_interval)).await;
         }
-        time::sleep(tokio::time::Duration::from_secs(2)).await;
 
-        // Run monitor logic for one iteration
-        run_monitor_test(&mut monitor).await.unwrap();
-
-        let workday = workdays.fetch(today).unwrap();
-        assert!(workday.is_some());
+        // After the simulation, the workday should have been created.
+        let workday = workdays_db.fetch(today).unwrap();
+        assert!(workday.is_some(), "Workday should be created after sustained activity");
         assert_eq!(workday.unwrap().date, today);
     }
 
     #[test_context(MonitorTestContext)]
     #[tokio::test]
-    async fn test_no_workday_on_short_activity(_ctx: &mut MonitorTestContext) {
+    async fn test_no_workday_start_on_brief_activity(_ctx: &mut MonitorTestContext) {
         let config = MonitorConfig {
-            min_pause_duration: 20,
-            pause_threshold: 60,
-            poll_interval: 500,
-            activity_threshold: 30,
+            activity_threshold: 5, // 5-second threshold
+            ..Default::default()
         };
         let mut monitor = Monitor::new(config).unwrap();
         let today = Local::now().date_naive();
+        let mut workdays_db = Workdays::new().unwrap();
 
-        let mut workdays = Workdays::new().unwrap();
-        assert!(workdays.fetch(today).unwrap().is_none());
+        // Simulate the start of activity
+        *monitor.activity_start.lock().unwrap() = Some(Instant::now());
+        // Simulate one instance of activity
+        *monitor.last_activity.lock().unwrap() = Instant::now();
 
-        // Simulate short activity (less than threshold)
-        {
-            let mut last_activity = monitor.last_activity.lock().unwrap();
-            let mut activity_start = monitor.activity_start.lock().unwrap();
-            *last_activity = Instant::now();
-            *activity_start = Some(Instant::now());
-        }
-        time::sleep(tokio::time::Duration::from_secs(1)).await;
+        // Wait for less time than the activity_threshold
+        time::sleep(Duration::from_secs(1)).await;
 
-        // Run monitor logic for one iteration
-        run_monitor_test(&mut monitor).await.unwrap();
+        simulate_monitor_cycle(&mut monitor).await.unwrap();
 
-        let workday = workdays.fetch(today).unwrap();
-        assert!(workday.is_none());
+        // Workday should not have been created yet
+        assert!(
+            workdays_db.fetch(today).unwrap().is_none(),
+            "Workday should not be created after brief activity"
+        );
     }
 }

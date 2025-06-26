@@ -20,7 +20,7 @@ const SELECT_DAILY_PAUSES: &str =
 
 // Manages operations for the 'pauses' table.
 pub struct Pauses {
-    conn: Arc<Mutex<Connection>>,
+    pub conn: Arc<Mutex<Connection>>,
 }
 
 impl Pauses {

@@ -23,7 +23,7 @@ pub struct Workday {
 }
 
 pub struct Workdays {
-    conn: Connection,
+    pub conn: Connection,
 }
 
 impl Workdays {

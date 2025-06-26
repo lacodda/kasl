@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
+    use chrono::NaiveDate;
     use kasl::db::{pauses::Pauses, workdays::Workdays};
     use kasl::libs::view::View;
-    use chrono::{NaiveDate, NaiveDateTime};
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
 
@@ -28,34 +28,39 @@ mod tests {
     #[test]
     fn test_report_with_pauses(_ctx: &mut ReportTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 6, 24).unwrap();
-        let start_time = NaiveDateTime::parse_from_str("2025-06-24 09:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        let end_time = NaiveDateTime::parse_from_str("2025-06-24 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
 
+        // Setup workday
         let mut workdays = Workdays::new().unwrap();
         workdays.insert_start(date).unwrap();
-        workdays.insert_end(date).unwrap();
+
+        // Manually update start/end times for deterministic test
+        workdays
+            .conn
+            .execute(
+                "UPDATE workdays SET start = '2025-06-24 09:00:00', end = '2025-06-24 17:00:00' WHERE date = ?",
+                [&date.to_string()],
+            )
+            .unwrap();
 
         // Insert two pauses: 10:00-10:30 and 12:00-13:00.
-        let mut pauses = Pauses::new().unwrap();
-        pauses
-            .conn
-            .lock()
-            .execute(
-                "INSERT INTO pauses (start, end, duration) VALUES (?, ?, ?)",
-                ["2025-06-24 10:00:00", "2025-06-24 10:30:00", &(30 * 60).to_string()],
-            )
-            .unwrap();
-        pauses
-            .conn
-            .lock()
-            .execute(
-                "INSERT INTO pauses (start, end, duration) VALUES (?, ?, ?)",
-                ["2025-06-24 12:00:00", "2025-06-24 13:00:00", &(60 * 60).to_string()],
-            )
-            .unwrap();
+        let pauses_db = Pauses::new().unwrap();
+        let conn = pauses_db.conn.lock();
+        conn.execute(
+            "INSERT INTO pauses (start, end, duration) VALUES ('2025-06-24 10:00:00', '2025-06-24 10:30:00', ?)",
+            [(30 * 60).to_string()],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO pauses (start, end, duration) VALUES ('2025-06-24 12:00:00', '2025-06-24 13:00:00', ?)",
+            [(60 * 60).to_string()],
+        )
+        .unwrap();
+
+        // Drop lock explicitly
+        drop(conn);
 
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let pauses_vec = pauses.fetch(date, 20).unwrap();
+        let pauses_vec = pauses_db.fetch(date, 0).unwrap(); // min_duration = 0 to fetch all
         let tasks = vec![];
 
         let output = View::report(&workday, &pauses_vec, &tasks);
@@ -68,19 +73,25 @@ mod tests {
     #[test_context(ReportTestContext)]
     #[test]
     fn test_report_no_pauses(_ctx: &mut ReportTestContext) {
-        let date = NaiveDate::from_ymd_opt(2025, 6, 24).unwrap();
-        let start_time = NaiveDateTime::parse_from_str("2025-06-24 09:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
-        let end_time = NaiveDateTime::parse_from_str("2025-06-24 17:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let date = NaiveDate::from_ymd_opt(2025, 6, 25).unwrap();
 
         let mut workdays = Workdays::new().unwrap();
         workdays.insert_start(date).unwrap();
-        workdays.insert_end(date).unwrap();
+        workdays
+            .conn
+            .execute(
+                "UPDATE workdays SET start = '2025-06-25 09:00:00', end = '2025-06-25 17:00:00' WHERE date = ?",
+                [&date.to_string()],
+            )
+            .unwrap();
 
-        let pauses = Pauses::new().unwrap();
+        let pauses_db = Pauses::new().unwrap();
+
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let pauses_vec = pauses.fetch(date, 20).unwrap();
+        let pauses_vec = pauses_db.fetch(date, 0).unwrap();
         let tasks = vec![];
 
+        assert_eq!(pauses_vec.len(), 0);
         let output = View::report(&workday, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
