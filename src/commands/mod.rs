@@ -1,5 +1,5 @@
-pub mod pauses;
 pub mod init;
+pub mod pauses;
 pub mod report;
 pub mod sum;
 pub mod task;
@@ -11,26 +11,46 @@ use chrono::Local;
 use clap::{Parser, Subcommand};
 use std::error::Error;
 
+/// Defines the main subcommands that the application can execute.
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Initializes the application configuration.
     #[command(about = "Configuration initialization")]
     Init(init::InitArgs),
+
+    /// Creates a new task.
     #[command(about = "Create task")]
     Task(task::TaskArgs),
+
+    /// Write end timestamp to database.
     #[command(about = "Write end timestamp to database")]
     End,
+
+    /// Generates a summary of work activities.
     #[command(about = "Get summary")]
     Sum(sum::SumArgs),
+
+    /// Updates the application to the latest version from GitHub releases.
     #[command(about = "Update the application to the latest version")]
     Update,
+
+    /// Prepares and optionally sends a work report.
     #[command(about = "Prepare a report")]
     Report(report::ReportArgs),
+
+    /// Watches for user activity to automatically record pauses.
     #[command(about = "Watch user activity and record pauses")]
     Watch,
+
+    /// Displays recorded pauses for a given date.
     #[command(about = "Display pauses for a given date")]
     Pauses(pauses::PausesArgs),
 }
 
+/// The main CLI structure that parses command-line arguments.
+///
+/// It uses `clap` to define the application's interface and delegates
+/// command execution to the appropriate subcommand module.
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(arg_required_else_help(true))]
@@ -40,6 +60,9 @@ pub struct Cli {
 }
 
 impl Cli {
+    /// Parses the command-line arguments and executes the corresponding command.
+    ///
+    /// This is the main entry point for the CLI logic.
     pub async fn menu() -> Result<(), Box<dyn Error>> {
         let cli = Self::parse();
         match cli.command {
