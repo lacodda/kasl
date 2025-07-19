@@ -155,7 +155,11 @@ impl Monitor {
         let idle_time = self.last_activity.lock().unwrap().elapsed();
         if idle_time >= Duration::from_secs(self.config.pause_threshold) {
             println!("Pause Start");
-            self.pauses.insert_start()?;
+
+            // Calculate the actual pause start time by subtracting the threshold
+            let pause_start_time = Local::now().naive_local() - chrono::Duration::seconds(self.config.pause_threshold as i64);
+            self.pauses.insert_start_with_time(pause_start_time)?;
+
             self.state = State::InPause;
             // Crucially, reset the `activity_start` timer when a pause begins.
             // This prevents incorrect workday start detection after a pause ends.

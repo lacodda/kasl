@@ -13,6 +13,7 @@ const SCHEMA_PAUSES: &str = "CREATE TABLE IF NOT EXISTS pauses (
     duration INTEGER
 )";
 const INSERT_PAUSE: &str = "INSERT INTO pauses (start) VALUES (datetime(CURRENT_TIMESTAMP, 'localtime'))";
+const INSERT_PAUSE_WITH_TIME: &str = "INSERT INTO pauses (start) VALUES (?1)";
 const UPDATE_PAUSE: &str = "UPDATE pauses SET end = (datetime(CURRENT_TIMESTAMP, 'localtime')), duration = ?1 WHERE id = ?2";
 const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL ORDER BY id DESC LIMIT 1";
 const SELECT_DAILY_PAUSES: &str =
@@ -33,10 +34,18 @@ impl Pauses {
         })
     }
 
-    // Inserts a new pause start record with the given timestamp.
+    // Inserts a new pause start record with the current timestamp.
     pub fn insert_start(&self) -> Result<()> {
         let conn_guard = self.conn.lock();
         conn_guard.execute(INSERT_PAUSE, [])?;
+        Ok(())
+    }
+
+    // Inserts a new pause start record with a specific timestamp.
+    pub fn insert_start_with_time(&self, start_time: NaiveDateTime) -> Result<(), Box<dyn Error>> {
+        let conn_guard = self.conn.lock();
+        let start_str = start_time.format("%Y-%m-%d %H:%M:%S").to_string();
+        conn_guard.execute(INSERT_PAUSE_WITH_TIME, [&start_str])?;
         Ok(())
     }
 
