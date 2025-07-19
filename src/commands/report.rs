@@ -109,9 +109,13 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error
     let tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let pauses = Pauses::new()?.fetch(naive_date, monitor_config.min_pause_duration)?;
 
-    View::report(&workday, &pauses, &tasks)?;
+    // Fetch long breaks for display
+    let long_breaks = Pauses::new()?.fetch(naive_date, monitor_config.min_pause_duration)?;
+    // Fetch ALL pauses for productivity calculation
+    let all_pauses = Pauses::new()?.fetch(naive_date, 0)?;
+
+    View::report(&workday, &long_breaks, &all_pauses, &tasks)?;
     Ok(())
 }
 

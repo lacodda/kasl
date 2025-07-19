@@ -47,18 +47,29 @@ impl View {
     ///
     /// # Arguments
     /// * `workday` - The `Workday` record for the report.
-    /// * `pauses` - A slice of `Pause` records for the day.
+    /// * `long_breaks` - Filtered long breaks to show in the intervals table.
+    /// * `all_pauses` - All pauses for accurate productivity calculation.
     /// * `tasks` - A slice of `Task` records for the day.
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn report(workday: &Workday, pauses: &[Pause], tasks: &[Task]) -> Result<(), Box<dyn Error>> {
+    pub fn report(workday: &Workday, long_breaks: &[Pause], all_pauses: &[Pause], tasks: &[Task]) -> Result<(), Box<dyn Error>> {
         println!("\nReport for {}", workday.date.format("%B %-d, %Y"));
         let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
-        let total_pause_duration = pauses.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
-        let net_duration = (end_time - workday.start) - total_pause_duration;
+        let gross_duration = end_time - workday.start;
 
-        let intervals = report::calculate_work_intervals(workday, pauses);
+        // Calculate total pause duration from long breaks only
+        let daily_long_break_duration = long_breaks.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
+        let net_duration = gross_duration - daily_long_break_duration;
+
+        // Сalculate total pause duration, excluding long breaks for accurate productivity
+        let daily_short_pause_duration = all_pauses.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d) - daily_long_break_duration;
+
+        // Calculate work productivity using ALL pauses
+        let productivity = Self::calculate_productivity(&net_duration, &daily_short_pause_duration);
+
+        // Use filtered pauses for display
+        let intervals = report::calculate_work_intervals(workday, long_breaks);
 
         // Create and populate the intervals table.
         let mut table = Table::new();
@@ -75,6 +86,7 @@ impl View {
         }
         table.add_empty_row();
         table.add_row(row!["TOTAL", "", "", format_duration(&net_duration)]);
+        table.add_row(row!["PRODUCTIVITY", "", "", format!("{:.1}%", productivity)]);
         table.printstd();
 
         if !tasks.is_empty() {
@@ -92,16 +104,16 @@ impl View {
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, String>, String, String)) -> Result<(), Box<dyn Error>> {
+    pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, (String, String)>, String, String)) -> Result<(), Box<dyn Error>> {
         let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["DATE", "DURATION"]);
+        table.set_titles(row!["DATE", "DURATION", "PRODUCTIVITY"]);
 
         let mut dates: Vec<&NaiveDate> = daily_durations.keys().collect();
         dates.sort();
         for date in dates {
-            if let Some(duration_str) = daily_durations.get(date) {
-                table.add_row(row![date.format("%d.%m.%Y"), duration_str]);
+            if let Some((duration_str, productivity)) = daily_durations.get(date) {
+                table.add_row(row![date.format("%d.%m.%Y"), duration_str, productivity]);
             }
         }
         table.add_empty_row();
@@ -124,23 +136,63 @@ impl View {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
-       
+
         for (i, b) in pauses.iter().enumerate() {
             table.add_row(row![
                 i + 1,
                 b.start.format("%H:%M"),
                 b.end.map(|t| t.format("%H:%M").to_string()).unwrap_or_else(|| "-".to_string()),
-                b.duration.map(|duration: TimeDelta| format_duration(&duration)).unwrap_or_else(|| "--:--".to_string())
+                b.duration
+                    .map(|duration: TimeDelta| format_duration(&duration))
+                    .unwrap_or_else(|| "--:--".to_string())
             ]);
         }
-       
+
         // Add total row
         if !pauses.is_empty() {
             table.add_empty_row();
             table.add_row(row!["TOTAL", "", "", format_duration(&total_pause_time)]);
         }
-       
+
         table.printstd();
         Ok(())
+    }
+
+    /// Calculates the percentage of actual productive working time.
+    ///
+    /// This metric determines the proportion of time truly spent on active work
+    /// relative to the total time available for work, where only long breaks are excluded
+    /// from the overall presence time.
+    ///
+    /// # Arguments
+    /// * `gross_work_time_minus_long_breaks` - The total time spent at work, with only long breaks already excluded.
+    ///                                         This duration still includes short, minor pauses.
+    /// * `daily_short_pause_duration` - The total duration of short, minor pauses (e.g., quick coffee breaks, brief distractions).
+    ///
+    /// # Returns
+    /// The percentage of time spent in actual productive work (0.0 - 100.0).
+    fn calculate_productivity(gross_work_time_minus_long_breaks: &Duration, daily_short_pause_duration: &Duration) -> f64 {
+        // Calculate the truly "net" working time by subtracting short pauses from
+        // the time already adjusted for long breaks.
+        // This represents the time exclusively dedicated to productive tasks.
+        let net_working_duration = gross_work_time_minus_long_breaks.checked_sub(&daily_short_pause_duration).unwrap_or_else(|| {
+            // Handle cases where subtraction might result in a negative duration (e.g., if short pauses > gross_work_time_minus_long_breaks).
+            // Returning Duration::zero() is a safe fallback to prevent panics and ensure a 0% productivity in such edge cases.
+            Duration::zero()
+        });
+
+        // If the base time for calculation (gross_work_time_minus_long_breaks) is zero,
+        // productivity is 0% to avoid division by zero.
+        if gross_work_time_minus_long_breaks.num_seconds() == 0 {
+            return 0.0;
+        }
+
+        // Calculate productivity as (net working duration / gross work time minus long breaks) * 100.
+        // This gives the percentage of time truly spent productively out of the time "on duty"
+        // (excluding only major breaks).
+        let productivity = (net_working_duration.num_seconds() as f64 / gross_work_time_minus_long_breaks.num_seconds() as f64) * 100.0;
+
+        // Ensure the resulting percentage is within the valid range [0.0, 100.0]
+        productivity.max(0.0).min(100.0)
     }
 }

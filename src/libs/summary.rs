@@ -11,6 +11,8 @@ pub struct DailySummary {
     pub date: NaiveDate,
     /// The total net work duration for that day.
     pub duration: Duration,
+    /// Work productivity for that day.
+    pub productivity: f64,
 }
 
 /// A trait for calculators that process collections of `DailySummary`.
@@ -31,7 +33,11 @@ impl SummaryCalculator for Vec<DailySummary> {
     fn add_rest_dates(mut self, rest_dates: HashSet<NaiveDate>, duration: Duration) -> Self {
         for rest_date in rest_dates {
             if !self.iter().any(|ds| ds.date == rest_date) {
-                self.push(DailySummary { date: rest_date, duration });
+                self.push(DailySummary {
+                    date: rest_date,
+                    duration,
+                    productivity: 0.0,
+                });
             }
         }
         self
@@ -54,12 +60,16 @@ impl SummaryCalculator for Vec<DailySummary> {
 /// A trait for formatting calculated summaries into displayable strings.
 pub trait SummaryFormatter {
     /// Formats the summary data into a map of daily durations and total/average strings.
-    fn format_summary(&self) -> (HashMap<NaiveDate, String>, String, String);
+    fn format_summary(&self) -> (HashMap<NaiveDate, (String, String)>, String, String);
 }
 
 impl SummaryFormatter for (Vec<DailySummary>, Duration, Duration) {
-    fn format_summary(&self) -> (HashMap<NaiveDate, String>, String, String) {
-        let daily_durations = self.0.iter().map(|ds| (ds.date, format_duration(&ds.duration))).collect();
+    fn format_summary(&self) -> (HashMap<NaiveDate, (String, String)>, String, String) {
+        let daily_durations = self
+            .0
+            .iter()
+            .map(|ds| (ds.date, (format_duration(&ds.duration), format!("{:.1}%", &ds.productivity))))
+            .collect();
         let total_duration_str = format_duration(&self.1);
         let average_duration_str = format_duration(&self.2);
 
