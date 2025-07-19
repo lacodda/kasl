@@ -24,7 +24,7 @@ reqwest = { version = "0.12.20", features = ["json", "multipart", "cookies"] }
 rusqlite = { version = "0.36.0", features = ["bundled", "chrono"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-tokio = { version = "1.45.1", features = ["full"] }
+tokio = { version = "1.45.1", features = ["full", "signal"] }
 dotenv = "0.15.0"
 aes = "0.7.5"
 block-modes = "0.8.1"

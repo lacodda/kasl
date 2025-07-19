@@ -9,6 +9,7 @@ use crate::libs::data_storage::DataStorage;
 use crate::libs::monitor::Monitor;
 use clap::Args;
 use std::error::Error;
+use std::time::Duration;
 
 /// Command-line arguments for the `watch` command.
 #[derive(Debug, Args)]
@@ -53,14 +54,22 @@ pub async fn run_as_daemon() -> Result<(), Box<dyn Error>> {
 }
 
 /// Spawns the application as a detached background process.
+/// If a daemon is already running, it will be stopped first.
 fn spawn_daemon() -> Result<(), Box<dyn Error>> {
     let pid_path = DataStorage::new().get_path("kasl-watch.pid")?;
-    // Check if the PID file exists to prevent running multiple instances.
+
+    // Check if a daemon is already running and stop it
     if pid_path.exists() {
         if let Ok(pid_str) = std::fs::read_to_string(&pid_path) {
-            println!("Watcher appears to be running with PID {}. Use `kasl watch --stop` to stop it.", pid_str);
-            println!("If it's not running, please remove the file: {}", pid_path.display());
-            return Ok(());
+            println!("Stopping existing watcher (PID: {})...", pid_str.trim());
+            // Try to stop the existing daemon
+            if let Err(e) = stop_daemon_internal() {
+                eprintln!("Warning: Failed to stop existing daemon: {}", e);
+                // Remove the PID file anyway in case the process is already dead
+                let _ = std::fs::remove_file(&pid_path);
+            }
+            // Give the old process time to clean up
+            std::thread::sleep(Duration::from_millis(500));
         }
     }
 
@@ -77,7 +86,9 @@ fn spawn_daemon() -> Result<(), Box<dyn Error>> {
                 Ok(())
             })
             .spawn()?;
-        std::fs::write(pid_path, child.id().to_string())?;
+        let pid = child.id();
+        std::fs::write(pid_path, pid.to_string())?;
+        println!("Watcher started in the background (PID: {}).", pid);
     }
 
     #[cfg(windows)]
@@ -88,7 +99,9 @@ fn spawn_daemon() -> Result<(), Box<dyn Error>> {
             .arg("--daemon-run")
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()?;
-        std::fs::write(pid_path, child.id().to_string())?;
+        let pid = child.id();
+        std::fs::write(pid_path, pid.to_string())?;
+        println!("Watcher started in the background (PID: {}).", pid);
     }
 
     #[cfg(not(any(unix, windows)))]
@@ -96,16 +109,30 @@ fn spawn_daemon() -> Result<(), Box<dyn Error>> {
         return Err("Daemon mode is not supported on this platform.".into());
     }
 
-    println!("Watcher started in the background.");
     Ok(())
 }
 
 /// Finds and stops the running daemon process.
 fn stop_daemon() -> Result<(), Box<dyn Error>> {
+    match stop_daemon_internal() {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            // If the daemon wasn't running, that's okay
+            if e.to_string().contains("not found") || e.to_string().contains("not running") {
+                println!("Watcher is not running.");
+                Ok(())
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
+/// Internal function to stop the daemon, used by both stop_daemon and spawn_daemon.
+fn stop_daemon_internal() -> Result<(), Box<dyn Error>> {
     let pid_path = DataStorage::new().get_path("kasl-watch.pid")?;
     if !pid_path.exists() {
-        println!("Watcher does not appear to be running (PID file not found).");
-        return Ok(());
+        return Err("Watcher does not appear to be running (PID file not found).".into());
     }
 
     let pid_str = std::fs::read_to_string(&pid_path)?;
@@ -114,17 +141,36 @@ fn stop_daemon() -> Result<(), Box<dyn Error>> {
     use sysinfo::{Pid, System};
     let s = System::new_with_specifics(sysinfo::RefreshKind::new().with_processes(sysinfo::ProcessRefreshKind::new()));
 
+    let mut process_found = false;
+    let mut kill_successful = false;
+
     if let Some(process) = s.process(Pid::from(pid)) {
-        if process.kill() {
-            println!("Watcher process (PID: {}) stopped successfully.", pid);
-        } else {
-            eprintln!("Failed to stop watcher process (PID: {}).", pid);
+        process_found = true;
+        // Check if it's actually our kasl process
+        if let Some(exe) = process.exe() {
+            if exe.to_string_lossy().contains("kasl") {
+                if process.kill() {
+                    kill_successful = true;
+                    println!("Watcher process (PID: {}) stopped successfully.", pid);
+                } else {
+                    eprintln!("Failed to stop watcher process (PID: {}).", pid);
+                }
+            } else {
+                eprintln!("PID {} does not appear to be a kasl process.", pid);
+            }
         }
-    } else {
-        println!("Watcher process (PID: {}) not found. It may have already stopped.", pid);
     }
 
     // Clean up the PID file regardless of whether the process was found.
     std::fs::remove_file(pid_path)?;
+
+    if !process_found {
+        return Err(format!("Watcher process (PID: {}) not found. It may have already stopped.", pid).into());
+    }
+
+    if !kill_successful && process_found {
+        return Err(format!("Failed to stop watcher process (PID: {})", pid).into());
+    }
+
     Ok(())
 }
