@@ -112,25 +112,34 @@ impl View {
         Ok(())
     }
 
-    /// Displays a table of pauses for a given day.
+    /// Displays a table of pauses for a given day with total pause time.
     ///
     /// # Arguments
     /// * `pauses` - A slice of `Pause` records to display.
+    /// * `total_pause_time` - The total duration of all pauses.
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn pauses(pauses: &[Pause]) -> Result<(), Box<dyn Error>> {
+    pub fn pauses(pauses: &[Pause], total_pause_time: Duration) -> Result<(), Box<dyn Error>> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);
+       
         for (i, b) in pauses.iter().enumerate() {
             table.add_row(row![
                 i + 1,
                 b.start.format("%H:%M"),
-                b.end.map(|t| t.format("%H:%M").to_string()).unwrap_or_default(),
-                b.duration.map(|duration: TimeDelta| format_duration(&duration)).unwrap_or_default()
+                b.end.map(|t| t.format("%H:%M").to_string()).unwrap_or_else(|| "-".to_string()),
+                b.duration.map(|duration: TimeDelta| format_duration(&duration)).unwrap_or_else(|| "--:--".to_string())
             ]);
         }
+       
+        // Add total row
+        if !pauses.is_empty() {
+            table.add_empty_row();
+            table.add_row(row!["TOTAL", "", "", format_duration(&total_pause_time)]);
+        }
+       
         table.printstd();
         Ok(())
     }

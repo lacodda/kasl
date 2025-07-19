@@ -1,7 +1,7 @@
 use crate::db::pauses::Pauses;
 use crate::libs::config::Config;
 use crate::libs::view::View;
-use chrono::{Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate};
 use clap::Args;
 use std::error::Error;
 
@@ -36,9 +36,16 @@ pub async fn cmd(args: PausesArgs) -> Result<(), Box<dyn Error>> {
 
     // Fetch pauses for the specified date, filtered by minimum duration.
     let pauses = Pauses::new()?.fetch(date, min_duration)?;
+   
+    // Calculate total pause time
+    let total_pause_time = pauses
+        .iter()
+        .filter_map(|p| p.duration)
+        .fold(Duration::zero(), |acc, d| acc + d);
+   
     // Display the pauses in a formatted table.
     println!("\nPauses for {}", date.format("%B %-d, %Y"));
-    View::pauses(&pauses)?;
+    View::pauses(&pauses, total_pause_time)?;
     Ok(())
 }
 
