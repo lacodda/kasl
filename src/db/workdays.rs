@@ -1,7 +1,7 @@
 use crate::db::db::Db;
+use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
-use rusqlite::{Connection, OptionalExtension, Result};
-use std::error::Error;
+use rusqlite::{Connection, OptionalExtension};
 
 const SCHEMA_WORKDAYS: &str = "CREATE TABLE IF NOT EXISTS workdays (
     id INTEGER PRIMARY KEY,
@@ -27,13 +27,13 @@ pub struct Workdays {
 }
 
 impl Workdays {
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    pub fn new() -> Result<Self> {
         let db = Db::new()?;
         db.conn.execute(SCHEMA_WORKDAYS, [])?;
         Ok(Workdays { conn: db.conn })
     }
 
-    pub fn insert_start(&mut self, date: NaiveDate) -> Result<(), Box<dyn Error>> {
+    pub fn insert_start(&mut self, date: NaiveDate) -> Result<()> {
         let date_str = date.format("%Y-%m-%d").to_string();
         // Check if workday already exists for the date
         if self.fetch(date)?.is_none() {
@@ -42,13 +42,13 @@ impl Workdays {
         Ok(())
     }
 
-    pub fn insert_end(&mut self, date: NaiveDate) -> Result<(), Box<dyn Error>> {
+    pub fn insert_end(&mut self, date: NaiveDate) -> Result<()> {
         let date_str = date.format("%Y-%m-%d").to_string();
         self.conn.execute(UPDATE_END, [&date_str])?;
         Ok(())
     }
 
-    pub fn fetch(&mut self, date: NaiveDate) -> Result<Option<Workday>, Box<dyn Error>> {
+    pub fn fetch(&mut self, date: NaiveDate) -> Result<Option<Workday>> {
         let date_str = date.format("%Y-%m-%d").to_string();
         let workday = self
             .conn
@@ -66,7 +66,7 @@ impl Workdays {
         Ok(workday)
     }
 
-    pub fn fetch_month(&mut self, date: NaiveDate) -> Result<Vec<Workday>, Box<dyn Error>> {
+    pub fn fetch_month(&mut self, date: NaiveDate) -> Result<Vec<Workday>> {
         let date_str = date.format("%Y-%m-%d").to_string();
         let mut stmt = self.conn.prepare(SELECT_BY_MONTH)?;
         let workday_iter = stmt.query_map([&date_str], |row| {

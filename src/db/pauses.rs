@@ -1,9 +1,9 @@
 use crate::db::db::Db;
 use crate::libs::pause::Pause;
+use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeDelta};
 use parking_lot::Mutex;
-use rusqlite::{Connection, Result};
-use std::error::Error;
+use rusqlite::Connection;
 use std::sync::Arc;
 
 const SCHEMA_PAUSES: &str = "CREATE TABLE IF NOT EXISTS pauses (
@@ -26,7 +26,7 @@ pub struct Pauses {
 
 impl Pauses {
     // Creates a new Pauses instance and initializes the 'pauses' table.
-    pub fn new() -> Result<Pauses, Box<dyn Error>> {
+    pub fn new() -> Result<Pauses> {
         let db_conn = Db::new()?.conn;
         db_conn.execute(SCHEMA_PAUSES, [])?;
         Ok(Pauses {
@@ -35,14 +35,14 @@ impl Pauses {
     }
 
     // Inserts a new pause start record with the current timestamp.
-    pub fn insert_start(&self) -> Result<()> {
+    pub fn insert_start(&self) -> rusqlite::Result<()> {
         let conn_guard = self.conn.lock();
         conn_guard.execute(INSERT_PAUSE, [])?;
         Ok(())
     }
 
     // Inserts a new pause start record with a specific timestamp.
-    pub fn insert_start_with_time(&self, start_time: NaiveDateTime) -> Result<(), Box<dyn Error>> {
+    pub fn insert_start_with_time(&self, start_time: NaiveDateTime) -> Result<()> {
         let conn_guard = self.conn.lock();
         let start_str = start_time.format("%Y-%m-%d %H:%M:%S").to_string();
         conn_guard.execute(INSERT_PAUSE_WITH_TIME, [&start_str])?;
@@ -50,7 +50,7 @@ impl Pauses {
     }
 
     // Updates the most recent open pause (end IS NULL) with an end timestamp and duration.
-    pub fn insert_end(&self) -> Result<(), Box<dyn Error>> {
+    pub fn insert_end(&self) -> Result<()> {
         let end = Local::now().naive_local();
         let conn_guard = self.conn.lock();
 
@@ -65,7 +65,7 @@ impl Pauses {
     }
 
     // Fetches pauses for a given date, filtering by minimum duration (in minutes).
-    pub fn fetch(&self, date: NaiveDate, min_duration: u64) -> Result<Vec<Pause>, Box<dyn Error>> {
+    pub fn fetch(&self, date: NaiveDate, min_duration: u64) -> Result<Vec<Pause>> {
         let date_str = date.format("%Y-%m-%d").to_string();
         let min_duration_secs = (min_duration * 60) as i64; // Convert minutes to seconds
 

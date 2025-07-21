@@ -1,7 +1,8 @@
 use super::db::Db;
 use crate::libs::task::{Task, TaskFilter};
-use rusqlite::{params, Connection, Result, Statement, ToSql};
-use std::{error::Error, vec};
+use anyhow::Result;
+use rusqlite::{params, Connection, Statement, ToSql};
+use std::vec;
 
 const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER NOT NULL PRIMARY KEY,
@@ -12,7 +13,7 @@ const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
     excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE
 );";
-const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search) VALUES 
+const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search) VALUES
     (?, datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?, ?) RETURNING id";
 const UPDATE_TASK_ID: &str = "UPDATE tasks SET task_id = ? WHERE id = ?";
 const SELECT_TASKS: &str = "SELECT * FROM tasks";
@@ -33,37 +34,35 @@ pub struct Tasks {
 }
 
 impl Tasks {
-    pub fn new() -> Result<Self, Box<dyn Error>> {
+    pub fn new() -> Result<Self> {
         let db = Db::new()?;
         db.conn.execute(&SCHEMA_TASKS, [])?;
 
         Ok(Self { conn: db.conn, id: None })
     }
 
-    pub fn insert(&mut self, task: &Task) -> Result<&mut Self, Box<dyn Error>> {
-        self.id = self.conn.query_row(
+    pub fn insert(&mut self, task: &Task) -> Result<&mut Self> {
+        self.id = Some(self.conn.query_row(
             INSERT_TASK,
             params![task.task_id, task.name, task.comment, task.completeness, task.excluded_from_search],
             |row| row.get(0),
-        )?;
+        )?);
 
         Ok(self)
     }
 
-    pub fn update_id(&mut self) -> Result<&mut Self, Box<dyn Error>> {
+    pub fn update_id(&mut self) -> Result<&mut Self> {
         self.conn.execute(UPDATE_TASK_ID, params![self.id, self.id])?;
 
         Ok(self)
     }
 
-    pub fn get(&mut self) -> Result<Vec<Task>, Box<dyn Error>> {
-        if self.id.is_none() {
-            return Err("No ID".into());
-        }
-        self.fetch(TaskFilter::ByIds(vec![self.id.unwrap()]))
+    pub fn get(&mut self) -> Result<Vec<Task>> {
+        let id = self.id.ok_or_else(|| anyhow::anyhow!("No ID set"))?;
+        self.fetch(TaskFilter::ByIds(vec![id]))
     }
 
-    pub fn fetch(&mut self, filter: TaskFilter) -> Result<Vec<Task>, Box<dyn Error>> {
+    pub fn fetch(&mut self, filter: TaskFilter) -> Result<Vec<Task>> {
         let (mut stmt, params): (Statement, Vec<Box<dyn ToSql>>) = match filter {
             TaskFilter::All => (self.conn.prepare(SELECT_TASKS)?, vec![]),
             TaskFilter::Date(date) => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_DATE))?, vec![Box::new(date)]),
