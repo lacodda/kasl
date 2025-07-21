@@ -27,6 +27,12 @@ impl AppMetadata {
 }
 
 fn main() -> io::Result<()> {
+    #[cfg(windows)]
+    {
+        let mut res = winres::WindowsResource::new();
+        res.set_icon("icon.ico");
+        res.compile().unwrap();
+    }
     let cargo_toml = fs::read_to_string("Cargo.toml").expect("Failed to read Cargo.toml");
     let cargo_toml: Value = toml::from_str(&cargo_toml).expect("Failed to parse Cargo.toml");
 

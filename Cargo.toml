@@ -37,6 +37,7 @@ sysinfo = "0.30.12"
 
 [build-dependencies]
 toml = "0.8.23"
+winres = "0.1.12"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29.0", features = ["process"] }
