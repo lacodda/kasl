@@ -1,4 +1,5 @@
 pub mod config;
+pub mod daemon;
 pub mod data_storage;
 pub mod formatter;
 pub mod monitor;
