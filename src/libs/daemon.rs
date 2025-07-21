@@ -14,7 +14,7 @@ const PID_FILE: &str = "kasl-watch.pid";
 /// Runs the daemon with proper signal handling for graceful shutdown.
 pub async fn run_with_signal_handling() -> Result<(), Box<dyn Error>> {
     // Set up a channel to handle shutdown signals
-    let (shutdown_tx, mut shutdown_rx) = tokio::sync::oneshot::channel();
+    let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
     // Spawn the signal handler in a separate task
     #[cfg(unix)]
@@ -204,7 +204,6 @@ fn stop_internal() -> Result<(), Box<dyn Error>> {
 /// Cross-platform process termination
 #[cfg(windows)]
 fn kill_process(pid: u32) -> Result<bool, Box<dyn Error>> {
-    use std::ptr;
     use winapi::um::errhandlingapi::GetLastError;
     use winapi::um::handleapi::CloseHandle;
     use winapi::um::processthreadsapi::{OpenProcess, TerminateProcess};
