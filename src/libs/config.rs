@@ -2,10 +2,10 @@ use super::data_storage::DataStorage;
 use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
+use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::error::Error;
 use std::fs::{self, File};
 use std::path::PathBuf;
 use std::process::Command;
@@ -58,7 +58,7 @@ impl Default for MonitorConfig {
 }
 
 impl Config {
-    pub fn read() -> Result<Config, Box<dyn Error>> {
+    pub fn read() -> Result<Config> {
         let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
         if !config_file_path.exists() {
             return Ok(Config::default());
@@ -68,14 +68,14 @@ impl Config {
         Ok(config)
     }
 
-    pub fn save(&self) -> Result<(), Box<dyn Error>> {
+    pub fn save(&self) -> Result<()> {
         let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
         let config_file = File::create(config_file_path)?;
         serde_json::to_writer_pretty(&config_file, &self)?;
         Ok(())
     }
 
-    pub fn init() -> Result<Self, Box<dyn Error>> {
+    pub fn init() -> Result<Self> {
         let mut config = match Self::read() {
             Ok(config) => config,
             Err(_) => Config::default(),
@@ -149,7 +149,7 @@ impl Config {
         Ok(config)
     }
 
-    pub fn set_app_global() -> Result<(), Box<dyn Error>> {
+    pub fn set_app_global() -> Result<()> {
         let current_exe_path = env::current_exe()?;
         let exe_dir = current_exe_path.parent().unwrap();
         let mut paths: Vec<PathBuf> = env::split_paths(&env::var_os("PATH").unwrap()).collect();

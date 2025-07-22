@@ -2,6 +2,7 @@
 //! by checking for new releases on GitHub, downloading, and replacing the binary.
 
 use crate::libs::data_storage::DataStorage;
+use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use flate2::read::GzDecoder;
 use reqwest::Client;
@@ -59,7 +60,7 @@ impl Updater {
     /// # Errors
     ///
     /// Returns an error if the path to the data storage directory cannot be determined.
-    pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new() -> Result<Self> {
         let owner = APP_METADATA_OWNER.to_owned();
         let name = APP_METADATA_NAME.to_owned();
         let last_check_file = DataStorage::new().get_path(LAST_CHECK_FILE)?;
@@ -111,8 +112,8 @@ impl Updater {
     /// # Errors
     ///
     /// Returns an error if downloading, file I/O, or extraction fails.
-    pub async fn perform_update(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let download_url = self.download_url.as_ref().ok_or("Download URL not set")?;
+    pub async fn perform_update(&self) -> Result<()> {
+        let download_url = self.download_url.as_ref().ok_or(anyhow::anyhow!("Download URL not set"))?;
 
         // Download the release asset (tar.gz).
         let response = self.client.get(download_url).send().await?;
@@ -138,7 +139,7 @@ impl Updater {
     /// # Errors
     ///
     /// Returns an error if the API request or JSON deserialization fails.
-    pub async fn check_for_latest_release(&mut self) -> Result<bool, Box<dyn std::error::Error>> {
+    pub async fn check_for_latest_release(&mut self) -> Result<bool> {
         let release = self.fetch_latest_github_release().await?;
         self.update_last_check_time();
 
@@ -174,7 +175,7 @@ impl Updater {
     }
 
     // Extracts the new binary from the downloaded archive and replaces the current executable.
-    fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<()> {
         let tar_gz = File::open(tar_gz_path)?;
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
@@ -202,7 +203,7 @@ impl Updater {
         if is_updated {
             Ok(())
         } else {
-            Err("Binary not found in the release archive.".into())
+            anyhow::bail!("Binary not found in the release archive.")
         }
     }
 

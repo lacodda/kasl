@@ -5,11 +5,11 @@
 //! within the application.
 
 use crate::libs::config::ConfigModule;
+use anyhow::Result;
 use chrono::{Duration, Local};
 use dialoguer::{theme::ColorfulTheme, Input};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use std::error::Error;
 
 /// A client for the GitLab API.
 #[derive(Debug)]
@@ -70,7 +70,7 @@ impl GitLab {
     }
 
     /// Fetches the current user's ID from the GitLab API.
-    pub async fn get_user_id(&self) -> Result<u32, reqwest::Error> {
+    pub async fn get_user_id(&self) -> Result<u32> {
         let url = format!("{}/api/v4/user", self.config.api_url);
         let response = self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await?;
 
@@ -87,7 +87,7 @@ impl GitLab {
     ///
     /// A `Result` containing a `Vec<CommitInfo>` on success, or an empty `Vec` if
     /// an error occurs.
-    pub async fn get_today_commits(&self) -> Result<Vec<CommitInfo>, Box<dyn Error>> {
+    pub async fn get_today_commits(&self) -> Result<Vec<CommitInfo>> {
         let today = Local::now();
         let yesterday = (today - Duration::days(1)).format("%Y-%m-%d").to_string();
         let tomorrow = (today + Duration::days(1)).format("%Y-%m-%d").to_string();
@@ -148,7 +148,7 @@ impl GitLab {
     }
 
     /// Fetches the details of a single commit by its SHA.
-    async fn get_commit_detail(&self, project_id: u32, commit_sha: &str) -> Result<Commit, reqwest::Error> {
+    async fn get_commit_detail(&self, project_id: u32, commit_sha: &str) -> Result<Commit> {
         let url = format!("{}/api/v4/projects/{}/repository/commits/{}", self.config.api_url, project_id, commit_sha);
         let response = self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await?;
 
@@ -179,7 +179,7 @@ impl GitLabConfig {
     /// # Arguments
     ///
     /// * `config` - An `Option` containing the existing configuration, if any.
-    pub fn init(config: &Option<GitLabConfig>) -> Result<Self, Box<dyn Error>> {
+    pub fn init(config: &Option<GitLabConfig>) -> Result<Self> {
         let config = config.clone().unwrap_or(Self {
             access_token: "".to_string(),
             api_url: "".to_string(),

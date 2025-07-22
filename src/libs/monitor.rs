@@ -1,9 +1,9 @@
 use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
 use crate::libs::config::MonitorConfig;
+use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use rdev::{listen, EventType};
-use std::error::Error;
 use std::sync::{Arc, Mutex};
 use tokio::time::{self, Duration, Instant};
 
@@ -47,7 +47,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if initialization fails.
-    pub fn new(config: MonitorConfig) -> Result<Self, Box<dyn Error>> {
+    pub fn new(config: MonitorConfig) -> Result<Self> {
         let pauses = Pauses::new()?;
         let workdays = Workdays::new()?;
         let last_activity = Arc::new(Mutex::new(Instant::now()));
@@ -103,7 +103,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
-    pub async fn run(&mut self) -> Result<(), Box<dyn Error>> {
+    pub async fn run(&mut self) -> Result<()> {
         println!(
             "Monitor is running with pause threshold {}s, poll interval {}ms, activity threshold {}s",
             self.config.pause_threshold, self.config.poll_interval, self.config.activity_threshold
@@ -151,7 +151,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
-    fn handle_inactivity(&mut self) -> Result<(), Box<dyn Error>> {
+    fn handle_inactivity(&mut self) -> Result<()> {
         let idle_time = self.last_activity.lock().unwrap().elapsed();
         if idle_time >= Duration::from_secs(self.config.pause_threshold) {
             println!("Pause Start");
@@ -175,7 +175,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
-    fn handle_return_from_pause(&mut self) -> Result<(), Box<dyn Error>> {
+    fn handle_return_from_pause(&mut self) -> Result<()> {
         println!("Pause End");
         self.pauses.insert_end()?;
         self.state = State::Active;
@@ -195,7 +195,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
-    pub fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<(), Box<dyn Error>> {
+    pub fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<()> {
         let mut activity_start_lock = self.activity_start.lock().unwrap();
         if let Some(start_time) = *activity_start_lock {
             if start_time.elapsed() >= Duration::from_secs(self.config.activity_threshold) {

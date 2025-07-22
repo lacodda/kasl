@@ -11,7 +11,7 @@ use crate::libs::report;
 use chrono::{Duration, NaiveDate, TimeDelta};
 use prettytable::{format, row, Table};
 use std::collections::HashMap;
-use std::error::Error;
+use anyhow::Result;
 
 /// A utility struct for rendering data to the console.
 pub struct View {}
@@ -24,7 +24,7 @@ impl View {
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn tasks(tasks: &[Task]) -> Result<(), Box<dyn Error>> {
+    pub fn tasks(tasks: &[Task]) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS"]);
@@ -53,7 +53,7 @@ impl View {
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn report(workday: &Workday, long_breaks: &[Pause], all_pauses: &[Pause], tasks: &[Task]) -> Result<(), Box<dyn Error>> {
+    pub fn report(workday: &Workday, long_breaks: &[Pause], all_pauses: &[Pause], tasks: &[Task]) -> Result<()> {
         println!("\nReport for {}", workday.date.format("%B %-d, %Y"));
         let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
         let gross_duration = end_time - workday.start;
@@ -104,7 +104,7 @@ impl View {
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, (String, String)>, String, String)) -> Result<(), Box<dyn Error>> {
+    pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, (String, String)>, String, String)) -> Result<()> {
         let mut table: Table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["DATE", "DURATION", "PRODUCTIVITY"]);
@@ -132,7 +132,7 @@ impl View {
     ///
     /// # Returns
     /// A `Result` indicating success.
-    pub fn pauses(pauses: &[Pause], total_pause_time: Duration) -> Result<(), Box<dyn Error>> {
+    pub fn pauses(pauses: &[Pause], total_pause_time: Duration) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["ID", "START", "END", "DURATION"]);

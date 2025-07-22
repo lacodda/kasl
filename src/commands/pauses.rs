@@ -1,9 +1,9 @@
 use crate::db::pauses::Pauses;
 use crate::libs::config::Config;
 use crate::libs::view::View;
+use anyhow::Result;
 use chrono::{Duration, Local, NaiveDate};
 use clap::Args;
-use std::error::Error;
 
 /// Command-line arguments for the `pauses` command.
 #[derive(Debug, Args)]
@@ -26,7 +26,7 @@ pub struct PausesArgs {
 ///
 /// # Returns
 /// A `Result` indicating success or an error if database operations or date parsing fail.
-pub async fn cmd(args: PausesArgs) -> Result<(), Box<dyn Error>> {
+pub async fn cmd(args: PausesArgs) -> Result<()> {
     // Parse the provided date string into a NaiveDate.
     let date = parse_date(&args.date)?;
 
@@ -36,13 +36,10 @@ pub async fn cmd(args: PausesArgs) -> Result<(), Box<dyn Error>> {
 
     // Fetch pauses for the specified date, filtered by minimum duration.
     let pauses = Pauses::new()?.fetch(date, min_duration)?;
-   
+
     // Calculate total pause time
-    let total_pause_time = pauses
-        .iter()
-        .filter_map(|p| p.duration)
-        .fold(Duration::zero(), |acc, d| acc + d);
-   
+    let total_pause_time = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);
+
     // Display the pauses in a formatted table.
     println!("\nPauses for {}", date.format("%B %-d, %Y"));
     View::pauses(&pauses, total_pause_time)?;
@@ -58,7 +55,7 @@ pub async fn cmd(args: PausesArgs) -> Result<(), Box<dyn Error>> {
 ///
 /// # Returns
 /// A `Result` containing the parsed `NaiveDate` or an error if parsing fails.
-fn parse_date(date_str: &str) -> Result<NaiveDate, Box<dyn Error>> {
+fn parse_date(date_str: &str) -> Result<NaiveDate> {
     if date_str.to_lowercase() == "today" {
         Ok(Local::now().date_naive())
     } else {

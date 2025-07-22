@@ -1,11 +1,11 @@
 use crate::libs::update::Updater;
-use std::error::Error;
+use anyhow::Result;
 
 /// Executes the application update process.
 ///
 /// This function initializes the `Updater`, checks for a new release,
 /// and performs the update if a newer version is available.
-pub async fn cmd() -> Result<(), Box<dyn Error>> {
+pub async fn cmd() -> Result<()> {
     // Create a new Updater instance.
     let mut updater = Updater::new()?;
 

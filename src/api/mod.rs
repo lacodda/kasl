@@ -1,9 +1,7 @@
 use crate::libs::{data_storage::DataStorage, secret::Secret};
-use std::{
-    error::Error,
-    fs,
-    io::{self, Write},
-};
+use anyhow::Result;
+use std::fs;
+use std::io::Write;
 
 pub mod gitlab;
 pub mod jira;
@@ -18,14 +16,14 @@ const MAX_RETRY_COUNT: i32 = 3;
 
 #[allow(async_fn_in_trait)]
 pub trait Session {
-    async fn login(&self) -> Result<String, Box<dyn Error>>;
-    fn set_credentials(&mut self, password: &str) -> Result<(), Box<dyn Error>>;
+    async fn login(&self) -> Result<String>;
+    fn set_credentials(&mut self, password: &str) -> Result<()>;
     fn session_id_file(&self) -> &str;
     fn secret(&self) -> Secret;
     fn retry(&self) -> i32;
     fn inc_retry(&mut self);
 
-    async fn get_session_id(&mut self) -> Result<String, Box<dyn Error>> {
+    async fn get_session_id(&mut self) -> Result<String> {
         let session_id_file_path = DataStorage::new().get_path(&self.session_id_file())?;
         let session_id_file_path_str = session_id_file_path.to_str().unwrap();
         if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
@@ -48,23 +46,24 @@ pub trait Session {
                             self.inc_retry();
                             continue;
                         }
-                        break Err(format!("You entered the wrong password {} times!", MAX_RETRY_COUNT).into());
+                        break Err(anyhow::anyhow!("You entered the wrong password {} times!", MAX_RETRY_COUNT));
                     }
                 }
             }
         }
     }
 
-    fn read_session_id(file_name: &str) -> io::Result<String> {
-        fs::read_to_string(file_name)
+    fn read_session_id(file_name: &str) -> Result<String> {
+        Ok(fs::read_to_string(file_name)?)
     }
 
-    fn write_session_id(file_name: &str, session_id: &str) -> io::Result<()> {
+    fn write_session_id(file_name: &str, session_id: &str) -> Result<()> {
         let mut file = fs::OpenOptions::new().write(true).create(true).truncate(true).open(file_name)?;
-        file.write_all(session_id.as_bytes())
+        file.write_all(session_id.as_bytes())?;
+        Ok(())
     }
 
-    fn delete_session_id(&self) -> Result<(), Box<dyn Error>> {
+    fn delete_session_id(&self) -> Result<()> {
         let session_id_file_path = DataStorage::new().get_path(&self.session_id_file())?;
         fs::remove_file(session_id_file_path)?;
         Ok(())

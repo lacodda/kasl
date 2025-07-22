@@ -19,10 +19,10 @@ use crate::{
         view::View,
     },
 };
+use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
 use clap::Args;
 use serde_json::json;
-use std::error::Error;
 
 /// Command-line arguments for the `report` command.
 #[derive(Debug, Args)]
@@ -43,7 +43,7 @@ pub struct ReportArgs {
 /// This function acts as a dispatcher based on the provided arguments,
 /// determining the target date and delegating to the appropriate handler for
 /// daily, monthly, display, or send actions.
-pub async fn cmd(args: ReportArgs) -> Result<(), Box<dyn Error>> {
+pub async fn cmd(args: ReportArgs) -> Result<()> {
     let date = determine_report_date(args.last);
     if args.month {
         handle_monthly_report(date).await
@@ -62,7 +62,7 @@ fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
 }
 
 /// Handles the logic for daily reports, dispatching to either the submission or display handler.
-async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result<(), Box<dyn Error>> {
+async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result<()> {
     if should_send {
         send_daily_report(date).await
     } else {
@@ -74,7 +74,7 @@ async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result
 ///
 /// It initializes the API service and sends the report. In case of a network
 /// error, it prints a message to `stderr` instead of crashing.
-async fn handle_monthly_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> {
+async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     let mut si = get_si_service()?;
     let naive_date = date.date_naive();
 
@@ -96,7 +96,7 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<(), Box<dyn Erro
 }
 
 /// Fetches all necessary data and displays a formatted daily report in the terminal.
-async fn display_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> {
+async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let workday = match Workdays::new()?.fetch(naive_date)? {
         Some(wd) => wd,
@@ -124,7 +124,7 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error
 /// This includes finalizing the workday, fetching data, building the JSON payload,
 /// and submitting it. It also triggers a monthly report if it's the last working
 /// day of the month.
-async fn send_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> {
+async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let mut workdays_db = Workdays::new()?;
 
@@ -133,7 +133,7 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<(), Box<dyn Error>> 
     // Load the data needed for the report.
     let workday = workdays_db
         .fetch(naive_date)?
-        .ok_or_else(|| format!("Could not find workday for {} after finalizing.", naive_date))?;
+        .ok_or_else(|| anyhow::anyhow!("Could not find workday for {} after finalizing.", naive_date))?;
 
     let mut tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
     if tasks.is_empty() {
@@ -243,9 +243,9 @@ fn build_report_payload(workday: &Workday, tasks: &mut Vec<Task>, pauses: &[Paus
 }
 
 /// Reads the application configuration and returns an initialized `Si` service instance.
-fn get_si_service() -> Result<Si, Box<dyn Error>> {
+fn get_si_service() -> Result<Si> {
     Config::read()?
         .si
         .map(|si_config| Si::new(&si_config))
-        .ok_or_else(|| "SiServer configuration not found in config file.".into())
+        .ok_or_else(|| anyhow::anyhow!("SiServer configuration not found in config file."))
 }

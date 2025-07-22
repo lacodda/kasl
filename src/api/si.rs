@@ -8,6 +8,7 @@ use crate::{
     api::Session,
     libs::{config::ConfigModule, secret::Secret},
 };
+use anyhow::Result;
 use base64::prelude::*;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
 use dialoguer::{theme::ColorfulTheme, Input};
@@ -16,7 +17,7 @@ use reqwest::{
     multipart, Client, StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, error::Error};
+use std::collections::HashSet;
 
 const MAX_RETRY_COUNT: i32 = 3;
 const COOKIE_KEY: &str = "PORTALSESSID=";
@@ -54,7 +55,7 @@ pub struct RestDatesResponse {
 
 impl RestDatesResponse {
     /// Parses and collects all dates from the response into a single `HashSet`.
-    pub fn unique_dates(&self) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
+    pub fn unique_dates(&self) -> Result<HashSet<NaiveDate>> {
         let mut date_set = HashSet::new();
         self.process_dates(&self.dates, &mut date_set)?;
         self.process_dates(&self.v_dates, &mut date_set)?;
@@ -64,7 +65,7 @@ impl RestDatesResponse {
     }
 
     /// Helper function to parse a list of date strings and add them to a `HashSet`.
-    fn process_dates(&self, dates: &Vec<String>, date_set: &mut HashSet<NaiveDate>) -> Result<(), Box<dyn Error>> {
+    fn process_dates(&self, dates: &Vec<String>, date_set: &mut HashSet<NaiveDate>) -> Result<()> {
         dates
             .iter()
             .filter_map(|date_str| NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok())
@@ -84,7 +85,7 @@ pub struct Si {
 }
 
 impl Session for Si {
-    async fn login(&self) -> Result<String, Box<dyn Error>> {
+    async fn login(&self) -> Result<String> {
         let credentials = self.credentials.clone().expect("Credentials not set!");
         let auth_url = format!("{}/{}", self.config.auth_url, AUTH_URL);
         let auth_res = self.client.post(auth_url).json(&credentials).send().await?;
@@ -108,10 +109,10 @@ impl Session for Si {
             }
         }
 
-        Err("Login failed".into())
+        anyhow::bail!("Login failed")
     }
 
-    fn set_credentials(&mut self, password: &str) -> Result<(), Box<dyn Error>> {
+    fn set_credentials(&mut self, password: &str) -> Result<()> {
         let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
         self.credentials = Some(LoginCredentials {
             login: self.config.login.to_string(),
@@ -154,7 +155,7 @@ impl Si {
     ///
     /// * `data` - A JSON string representing the report payload.
     /// * `date` - The date for which the report is being sent.
-    pub async fn send(&mut self, data: &String, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
+    pub async fn send(&mut self, data: &String, date: &NaiveDate) -> Result<StatusCode> {
         loop {
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, REPORT_URL);
@@ -185,7 +186,7 @@ impl Si {
     }
 
     /// Sends a request to generate a monthly report for the given date's month.
-    pub async fn send_monthly(&mut self, date: &NaiveDate) -> Result<StatusCode, Box<dyn Error>> {
+    pub async fn send_monthly(&mut self, date: &NaiveDate) -> Result<StatusCode> {
         loop {
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, MONTHLY_REPORT_URL);
@@ -214,7 +215,7 @@ impl Si {
     /// This function is resilient to network errors. If an API request or
     /// session fetch fails, it logs the error to `stderr` and returns an
     /// empty `HashSet`, preventing the application from crashing.
-    pub async fn rest_dates(&mut self, year: NaiveDate) -> Result<HashSet<NaiveDate>, Box<dyn Error>> {
+    pub async fn rest_dates(&mut self, year: NaiveDate) -> Result<HashSet<NaiveDate>> {
         loop {
             let session_id = match self.get_session_id().await {
                 Ok(id) => id,
@@ -259,7 +260,7 @@ impl Si {
     /// Determines if a given date is the last working day of its month.
     ///
     /// This calculation currently ignores holidays and only considers weekends.
-    pub fn is_last_working_day_of_month(&self, date: &NaiveDate) -> Result<bool, Box<dyn Error>> {
+    pub fn is_last_working_day_of_month(&self, date: &NaiveDate) -> Result<bool> {
         let (year, month) = (date.year(), date.month());
         let mut last_day_of_month = NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap().pred_opt().unwrap();
         while matches!(last_day_of_month.weekday(), Weekday::Sat | Weekday::Sun) {
@@ -294,7 +295,7 @@ impl SiConfig {
     }
 
     /// Runs an interactive prompt to initialize the SiServer configuration.
-    pub fn init(config: &Option<SiConfig>) -> Result<Self, Box<dyn Error>> {
+    pub fn init(config: &Option<SiConfig>) -> Result<Self> {
         let config = config
             .clone()
             .or(Some(Self {

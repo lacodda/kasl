@@ -5,8 +5,8 @@
 //! for normal use.
 
 use crate::libs::{config::Config, daemon, monitor::Monitor};
+use anyhow::Result;
 use clap::Args;
-use std::error::Error;
 
 /// Command-line arguments for the `watch` command.
 #[derive(Debug, Args)]
@@ -21,7 +21,7 @@ pub struct WatchArgs {
 }
 
 /// Main entry point for the `watch` command, acting as a dispatcher.
-pub async fn cmd(args: WatchArgs) -> Result<(), Box<dyn Error>> {
+pub async fn cmd(args: WatchArgs) -> Result<()> {
     if args.stop {
         daemon::stop()?;
     } else if args.foreground {
@@ -35,7 +35,7 @@ pub async fn cmd(args: WatchArgs) -> Result<(), Box<dyn Error>> {
 
 /// The core logic that initializes and runs the activity monitor.
 /// This function is called either directly for foreground mode or by the daemon process.
-async fn run_monitor() -> Result<(), Box<dyn Error>> {
+async fn run_monitor() -> Result<()> {
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
     let mut monitor = Monitor::new(monitor_config)?;
@@ -44,6 +44,6 @@ async fn run_monitor() -> Result<(), Box<dyn Error>> {
 
 /// This function is executed by the detached daemon process.
 /// It's called from `main.rs` when the `--daemon-run` argument is detected.
-pub async fn run_as_daemon() -> Result<(), Box<dyn Error>> {
+pub async fn run_as_daemon() -> Result<()> {
     daemon::run_with_signal_handling().await
 }

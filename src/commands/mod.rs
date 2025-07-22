@@ -6,10 +6,10 @@ pub mod task;
 pub mod update;
 pub mod watch;
 
-use crate::db::workdays::Workdays;
+use crate::{db::workdays::Workdays, libs::messages::WORKDAY_ENDED};
+use anyhow::Result;
 use chrono::Local;
 use clap::{Parser, Subcommand};
-use std::error::Error;
 
 /// Defines the main subcommands that the application can execute.
 #[derive(Debug, Subcommand)]
@@ -63,14 +63,14 @@ impl Cli {
     /// Parses the command-line arguments and executes the corresponding command.
     ///
     /// This is the main entry point for the CLI logic.
-    pub async fn menu() -> Result<(), Box<dyn Error>> {
+    pub async fn menu() -> Result<()> {
         let cli = Self::parse();
         match cli.command {
             Commands::Init(args) => init::cmd(args),
             Commands::Task(args) => task::cmd(args).await,
             Commands::End => {
                 Workdays::new()?.insert_end(Local::now().date_naive())?;
-                println!("Workday ended for today.");
+                println!("{}", WORKDAY_ENDED);
                 Ok(())
             }
             Commands::Sum(args) => sum::cmd(args).await,

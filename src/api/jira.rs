@@ -1,5 +1,6 @@
 use super::Session;
 use crate::libs::{config::ConfigModule, secret::Secret};
+use anyhow::Result;
 use chrono::NaiveDate;
 use dialoguer::{theme::ColorfulTheme, Input};
 use reqwest::{
@@ -7,7 +8,7 @@ use reqwest::{
     Client, StatusCode,
 };
 use serde::{Deserialize, Serialize};
-use std::{error::Error, time::Duration};
+use std::time::Duration;
 
 const MAX_RETRY_COUNT: i32 = 3;
 const SESSION_ID_FILE: &str = ".jira_session_id";
@@ -66,13 +67,13 @@ pub struct Jira {
 }
 
 impl Session for Jira {
-    async fn login(&self) -> Result<String, Box<dyn Error>> {
+    async fn login(&self) -> Result<String> {
         let credentials = self.credentials.clone().expect("Credentials not set!");
         let auth_url = format!("{}/{}", self.config.api_url, AUTH_URL);
         let auth_res = self.client.post(auth_url).json(&credentials).send().await?;
 
         if !auth_res.status().is_success() {
-            return Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Jira authenticate failed")));
+            anyhow::bail!("Jira authenticate failed")
         }
 
         let session_res = auth_res.json::<JiraSessionResponse>().await?;
@@ -80,7 +81,7 @@ impl Session for Jira {
         Ok(session_id)
     }
 
-    fn set_credentials(&mut self, password: &str) -> Result<(), Box<dyn Error>> {
+    fn set_credentials(&mut self, password: &str) -> Result<()> {
         self.credentials = Some(LoginCredentials {
             username: self.config.login.to_string(),
             password: password.to_owned(),
@@ -115,7 +116,7 @@ impl Jira {
         }
     }
 
-    pub async fn get_completed_issues(&mut self, date: &NaiveDate) -> Result<Vec<JiraIssue>, Box<dyn Error>> {
+    pub async fn get_completed_issues(&mut self, date: &NaiveDate) -> Result<Vec<JiraIssue>> {
         loop {
             let session_id = match self.get_session_id().await {
                 Ok(id) => id,
@@ -165,7 +166,7 @@ impl JiraConfig {
             name: "Jira".to_string(),
         }
     }
-    pub fn init(config: &Option<Self>) -> Result<Self, Box<dyn Error>> {
+    pub fn init(config: &Option<Self>) -> Result<Self> {
         let config = config
             .clone()
             .or(Some(Self {

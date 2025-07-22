@@ -13,10 +13,10 @@ use crate::{
         view::View,
     },
 };
+use anyhow::Result;
 use chrono::Local;
 use clap::Args;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
-use std::error::Error;
 
 /// Enum to identify the origin of a task suggestion.
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -59,7 +59,7 @@ pub struct TaskArgs {
 /// - `--show`: Displays tasks based on filters (`--all`, `--id`, or default to today).
 /// - `--find`: Aggregates tasks from different sources and presents an interactive selection.
 /// - Default: Enters an interactive mode to create a new task.
-pub async fn cmd(task_args: TaskArgs) -> Result<(), Box<dyn Error>> {
+pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     let date = Local::now();
 
     // Handle showing tasks

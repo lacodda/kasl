@@ -7,9 +7,10 @@ use crate::{
         view::View,
     },
 };
+use anyhow::Result;
 use chrono::{Datelike, Duration, Local, NaiveDate};
 use clap::Args;
-use std::{collections::HashSet, error::Error};
+use std::collections::HashSet;
 
 #[derive(Debug, Args)]
 pub struct SumArgs {
@@ -17,7 +18,7 @@ pub struct SumArgs {
     send: bool,
 }
 
-pub async fn cmd(_sum_args: SumArgs) -> Result<(), Box<dyn Error>> {
+pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
     let now = Local::now();
     let config = Config::read()?;
     let monitor_config = config.monitor.clone().unwrap_or_default();

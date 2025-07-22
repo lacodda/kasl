@@ -6,7 +6,7 @@ use block_modes::{BlockMode, Cbc};
 use dialoguer::{theme::ColorfulTheme, Password};
 use dotenv::dotenv;
 use std::env;
-use std::error::Error;
+use anyhow::Result;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -45,7 +45,7 @@ impl Secret {
         }
     }
 
-    pub fn get_or_prompt(&self) -> Result<String, Box<dyn Error>> {
+    pub fn get_or_prompt(&self) -> Result<String> {
         if fs::metadata(&self.secret_file_path).is_ok() {
             if let Ok(password) = self.decrypt() {
                 return Ok(password);
@@ -54,13 +54,13 @@ impl Secret {
         self.prompt()
     }
 
-    pub fn prompt(&self) -> Result<String, Box<dyn Error>> {
+    pub fn prompt(&self) -> Result<String> {
         let password = Password::with_theme(&ColorfulTheme::default()).with_prompt(&self.prompt).interact().unwrap();
         self.set_password(&password).encrypt()?;
         Ok(password)
     }
 
-    fn encrypt(&self) -> Result<Self, Box<dyn Error>> {
+    fn encrypt(&self) -> Result<Self> {
         let cipher = Aes256Cbc::new_from_slices(&self.key, &self.iv)?;
         let password = &self.password.clone().unwrap();
         let ciphertext = cipher.encrypt_vec(&password.as_bytes());
@@ -71,7 +71,7 @@ impl Secret {
         Ok(self.clone())
     }
 
-    fn decrypt(&self) -> Result<String, Box<dyn Error>> {
+    fn decrypt(&self) -> Result<String> {
         let mut file = File::open(&self.secret_file_path)?;
         let mut encoded = String::new();
         file.read_to_string(&mut encoded)?;
