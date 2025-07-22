@@ -2,6 +2,8 @@
 //! by checking for new releases on GitHub, downloading, and replacing the binary.
 
 use crate::libs::data_storage::DataStorage;
+use crate::libs::messages::Message;
+use crate::msg_info;
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use flate2::read::GzDecoder;
@@ -94,10 +96,7 @@ impl Updater {
 
         if let Ok(true) = updater.check_for_latest_release().await {
             if let Some(latest_version) = &updater.latest_version {
-                println!(
-                    "\nA new version of {} is available: v{}\nUpgrade now by running: {} update\n",
-                    updater.name, latest_version, updater.name
-                );
+                msg_info!(Message::UpdateAvailable{ app_name: updater.name, latest: latest_version.to_string() }, true)
             }
         }
     }

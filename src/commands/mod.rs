@@ -6,7 +6,7 @@ pub mod task;
 pub mod update;
 pub mod watch;
 
-use crate::{db::workdays::Workdays, libs::messages::WORKDAY_ENDED};
+use crate::{db::workdays::Workdays, libs::messages::types::Message, msg_info};
 use anyhow::Result;
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -70,7 +70,7 @@ impl Cli {
             Commands::Task(args) => task::cmd(args).await,
             Commands::End => {
                 Workdays::new()?.insert_end(Local::now().date_naive())?;
-                println!("{}", WORKDAY_ENDED);
+                msg_info!(Message::WorkdayEnded);
                 Ok(())
             }
             Commands::Sum(args) => sum::cmd(args).await,

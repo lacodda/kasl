@@ -1,6 +1,8 @@
 use crate::db::pauses::Pauses;
 use crate::libs::config::Config;
+use crate::libs::messages::Message;
 use crate::libs::view::View;
+use crate::msg_print;
 use anyhow::Result;
 use chrono::{Duration, Local, NaiveDate};
 use clap::Args;
@@ -41,7 +43,7 @@ pub async fn cmd(args: PausesArgs) -> Result<()> {
     let total_pause_time = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);
 
     // Display the pauses in a formatted table.
-    println!("\nPauses for {}", date.format("%B %-d, %Y"));
+    msg_print!(Message::PausesTitle(date.format("%B %-d, %Y").to_string()), true);
     View::pauses(&pauses, total_pause_time)?;
     Ok(())
 }

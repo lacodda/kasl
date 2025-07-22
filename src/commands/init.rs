@@ -1,4 +1,4 @@
-use crate::libs::{config::Config, messages::CONFIG_SAVED};
+use crate::{libs::{config::Config, messages::Message}, msg_success};
 use anyhow::Result;
 use clap::Args;
 
@@ -14,6 +14,6 @@ pub fn cmd(init_args: InitArgs) -> Result<()> {
         return Ok(());
     }
     Config::init()?.save()?;
-    println!("{}", CONFIG_SAVED);
+    msg_success!(Message::ConfigSaved);
     Ok(())
 }
