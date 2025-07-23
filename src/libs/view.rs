@@ -6,12 +6,14 @@
 use super::task::Task;
 use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
+use crate::libs::messages::Message;
 use crate::libs::pause::Pause;
 use crate::libs::report;
+use crate::msg_print;
+use anyhow::Result;
 use chrono::{Duration, NaiveDate, TimeDelta};
 use prettytable::{format, row, Table};
 use std::collections::HashMap;
-use anyhow::Result;
 
 /// A utility struct for rendering data to the console.
 pub struct View {}
@@ -54,7 +56,7 @@ impl View {
     /// # Returns
     /// A `Result` indicating success.
     pub fn report(workday: &Workday, long_breaks: &[Pause], all_pauses: &[Pause], tasks: &[Task]) -> Result<()> {
-        println!("\nReport for {}", workday.date.format("%B %-d, %Y"));
+        msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
         let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
         let gross_duration = end_time - workday.start;
 
@@ -90,7 +92,7 @@ impl View {
         table.printstd();
 
         if !tasks.is_empty() {
-            println!("\nTasks:");
+            msg_print!(Message::TasksHeader, true);
             Self::tasks(tasks)?;
         }
 

@@ -1,12 +1,13 @@
 use super::data_storage::DataStorage;
+use crate::libs::messages::Message;
 use aes::Aes256;
+use anyhow::Result;
 use base64::prelude::*;
 use block_modes::block_padding::Pkcs7;
 use block_modes::{BlockMode, Cbc};
 use dialoguer::{theme::ColorfulTheme, Password};
 use dotenv::dotenv;
 use std::env;
-use anyhow::Result;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -25,9 +26,9 @@ pub struct Secret {
 impl Secret {
     pub fn new(secret_name: &str, prompt: &str) -> Self {
         dotenv().ok();
-        let key = env::var("ENCRYPTION_KEY").expect("ENCRYPTION_KEY must be set");
-        let iv = env::var("ENCRYPTION_IV").expect("ENCRYPTION_IV must be set");
-        let secret_file_path = DataStorage::new().get_path(secret_name).expect("DataStorage get_path error");
+        let key = env::var("ENCRYPTION_KEY").expect(&Message::EncryptionKeyMustBeSet.to_string());
+        let iv = env::var("ENCRYPTION_IV").expect(&Message::EncryptionIvMustBeSet.to_string());
+        let secret_file_path = DataStorage::new().get_path(secret_name).expect(&Message::DataStoragePathError.to_string());
 
         Self {
             password: None,

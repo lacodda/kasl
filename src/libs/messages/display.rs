@@ -81,6 +81,7 @@ impl Display for Message {
             Message::MonitorExitedNormally => "Monitor exited normally".to_string(),
             Message::MonitorShuttingDown => "Shutting down monitor...".to_string(),
             Message::MonitorError(error) => format!("Monitor error: {}", error),
+            Message::MonitorTaskPanicked(error) => format!("Monitor task panicked: {}", error),
             Message::PauseStarted => "Pause Start".to_string(),
             Message::PauseEnded => "Pause End".to_string(),
 
@@ -89,14 +90,20 @@ impl Display for Message {
             Message::WatcherStopped(pid) => format!("Watcher process (PID: {}) stopped successfully.", pid),
             Message::WatcherStoppedSuccessfully => "Watcher stopped successfully".to_string(),
             Message::WatcherNotRunning => "Watcher is not running.".to_string(),
+            Message::WatcherNotRunningPidNotFound => "Watcher does not appear to be running (PID file not found).".to_string(),
             Message::WatcherStartingForeground => "Starting watcher in foreground... Press Ctrl+C to exit.".to_string(),
             Message::WatcherStoppingExisting(pid) => format!("Stopping existing watcher (PID: {})...", pid),
             Message::WatcherFailedToStopExisting(error) => format!("Warning: Failed to stop existing daemon: {}", error),
+            Message::WatcherFailedToStop(pid) => format!("Failed to stop watcher process (PID: {})", pid),
             Message::WatcherReceivedSigterm => "Received SIGTERM, shutting down gracefully...".to_string(),
             Message::WatcherReceivedSigint => "Received SIGINT, shutting down gracefully...".to_string(),
             Message::WatcherReceivedCtrlC => "Received Ctrl+C, shutting down gracefully...".to_string(),
             Message::WatcherCtrlCListenFailed(error) => format!("Failed to listen for Ctrl+C: {}", error),
             Message::WatcherSignalHandlingNotSupported => "Warning: Signal handling not supported on this platform".to_string(),
+            Message::DaemonModeNotSupported => "Daemon mode is not supported on this platform.".to_string(),
+            Message::FailedToGetCurrentExecutable => "Failed to get the path of the current executable".to_string(),
+            Message::FailedToCreateSigtermHandler => "Failed to create SIGTERM handler".to_string(),
+            Message::FailedToCreateSigintHandler => "Failed to create SIGINT handler".to_string(),
 
             // === UPDATE MESSAGES ===
             Message::UpdateAvailable { app_name, latest } => {
@@ -109,12 +116,17 @@ impl Display for Message {
                 format!("The {} application has been successfully updated to version {}!", app_name, version)
             }
             Message::NoUpdateRequired => "No update required. You are using the latest version!".to_string(),
+            Message::UpdateDownloadUrlNotSet => "Download URL not set".to_string(),
+            Message::UpdateBinaryNotFoundInArchive => "Binary not found in the release archive.".to_string(),
 
             // === AUTHENTICATION MESSAGES ===
             Message::WrongPassword(count) => format!("You entered the wrong password {} times!", count),
             Message::InvalidCredentials => "Invalid credentials".to_string(),
             Message::SessionExpired => "Session expired".to_string(),
             Message::AuthenticationFailed(service) => format!("Authentication failed: {}", service),
+            Message::JiraAuthenticateFailed => "Jira authenticate failed".to_string(),
+            Message::LoginFailed => "Login failed".to_string(),
+            Message::CredentialsNotSet => "Credentials not set!".to_string(),
 
             // === API MESSAGES ===
             Message::ApiConnectionFailed => "Failed to connect to API".to_string(),
@@ -132,18 +144,34 @@ impl Display for Message {
             Message::DbConnectionFailed => "Failed to connect to database".to_string(),
             Message::DbQueryFailed => "Database query failed".to_string(),
             Message::DbMigrationFailed => "Database migration failed".to_string(),
+            Message::NoIdSet => "No ID set".to_string(),
 
             // === FILE SYSTEM MESSAGES ===
             Message::FileNotFound => "File not found".to_string(),
             Message::FileReadError => "Failed to read file".to_string(),
             Message::FileWriteError => "Failed to write file".to_string(),
+            Message::InvalidPidFileContent => "Invalid PID file content".to_string(),
+            Message::DataStoragePathError => "DataStorage get_path error".to_string(),
 
             // === SYSTEM/PATH MESSAGES ===
             Message::PathQueryFailed(status) => format!("Failed to query PATH from registry: {:?}", status),
             Message::PathSetFailed => "Failed to set PATH in registry".to_string(),
+            Message::FailedToJoinPaths => "Failed to join paths".to_string(),
+            Message::FailedToExecuteRegQuery => "Failed to execute reg query".to_string(),
+            Message::FailedToParseRegOutput => "Failed to parse reg query output".to_string(),
+            Message::FailedToGetPathFromReg => "Failed to get PATH value from reg query".to_string(),
+            Message::FailedToExecuteRegSet => "Failed to execute reg set".to_string(),
+            Message::FailedToOpenProcess(code) => format!("Failed to open process: error code {}", code),
+            Message::FailedToTerminateProcess(code) => format!("Failed to terminate process: error code {}", code),
+            Message::ProcessNotFound => "Process doesn't exist".to_string(),
+            Message::ProcessTerminationNotSupported => "Process termination not supported on this platform".to_string(),
 
             // === PRODUCTIVITY MESSAGES ===
             Message::MonthlyProductivity(percentage) => format!("Monthly work productivity: {:.1}%", percentage),
+
+            // === ENCRYPTION/SECRET MESSAGES ===
+            Message::EncryptionKeyMustBeSet => "ENCRYPTION_KEY must be set".to_string(),
+            Message::EncryptionIvMustBeSet => "ENCRYPTION_IV must be set".to_string(),
 
             // === PROMPTS ===
             Message::PromptTaskName => "Enter task name".to_string(),

@@ -1,6 +1,8 @@
 use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
 use crate::libs::config::MonitorConfig;
+use crate::libs::messages::Message;
+use crate::{msg_error, msg_info};
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use rdev::{listen, EventType};
@@ -81,7 +83,7 @@ impl Monitor {
             }) {
                 // In a production application, consider using a proper logging framework
                 // like `tracing::error!` for better error handling and visibility.
-                eprintln!("Error in rdev listener: {:?}", e);
+                msg_error!(Message::ErrorInRdevListener(format!("{:?}", e)));
             }
         });
 
@@ -104,10 +106,11 @@ impl Monitor {
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
     pub async fn run(&mut self) -> Result<()> {
-        println!(
-            "Monitor is running with pause threshold {}s, poll interval {}ms, activity threshold {}s",
-            self.config.pause_threshold, self.config.poll_interval, self.config.activity_threshold
-        );
+        msg_info!(Message::MonitorStarted {
+            pause_threshold: self.config.pause_threshold,
+            poll_interval: self.config.poll_interval,
+            activity_threshold: self.config.activity_threshold,
+        });
 
         // If pause threshold is 0, pauses are disabled, so the monitor can exit.
         if self.config.pause_threshold == 0 {
@@ -154,7 +157,7 @@ impl Monitor {
     fn handle_inactivity(&mut self) -> Result<()> {
         let idle_time = self.last_activity.lock().unwrap().elapsed();
         if idle_time >= Duration::from_secs(self.config.pause_threshold) {
-            println!("Pause Start");
+            msg_info!(Message::PauseStarted);
 
             // Calculate the actual pause start time by subtracting the threshold
             let pause_start_time = Local::now().naive_local() - chrono::Duration::seconds(self.config.pause_threshold as i64);
@@ -176,7 +179,7 @@ impl Monitor {
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
     fn handle_return_from_pause(&mut self) -> Result<()> {
-        println!("Pause End");
+        msg_info!(Message::PauseEnded);
         self.pauses.insert_end()?;
         self.state = State::Active;
         Ok(())
@@ -201,7 +204,7 @@ impl Monitor {
             if start_time.elapsed() >= Duration::from_secs(self.config.activity_threshold) {
                 // Only insert a new workday if one doesn't already exist for today.
                 if self.workdays.fetch(today)?.is_none() {
-                    println!("Starting workday for {}", today);
+                    msg_info!(Message::WorkdayStarting(today.to_string()));
                     self.workdays.insert_start(today)?;
                 }
                 // Reset `activity_start` after a workday is confirmed.

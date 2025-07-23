@@ -1,5 +1,7 @@
 use super::db::Db;
+use crate::libs::messages::Message;
 use crate::libs::task::{Task, TaskFilter};
+use crate::msg_error_anyhow;
 use anyhow::Result;
 use rusqlite::{params, Connection, Statement, ToSql};
 use std::vec;
@@ -58,7 +60,7 @@ impl Tasks {
     }
 
     pub fn get(&mut self) -> Result<Vec<Task>> {
-        let id = self.id.ok_or_else(|| anyhow::anyhow!("No ID set"))?;
+        let id = self.id.ok_or_else(|| msg_error_anyhow!(Message::NoIdSet))?;
         self.fetch(TaskFilter::ByIds(vec![id]))
     }
 

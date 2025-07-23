@@ -3,7 +3,7 @@
 
 use crate::libs::data_storage::DataStorage;
 use crate::libs::messages::Message;
-use crate::msg_info;
+use crate::{msg_bail_anyhow, msg_error_anyhow, msg_info};
 use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use flate2::read::GzDecoder;
@@ -96,7 +96,13 @@ impl Updater {
 
         if let Ok(true) = updater.check_for_latest_release().await {
             if let Some(latest_version) = &updater.latest_version {
-                msg_info!(Message::UpdateAvailable{ app_name: updater.name, latest: latest_version.to_string() }, true)
+                msg_info!(
+                    Message::UpdateAvailable {
+                        app_name: updater.name,
+                        latest: latest_version.to_string()
+                    },
+                    true
+                )
             }
         }
     }
@@ -112,7 +118,7 @@ impl Updater {
     ///
     /// Returns an error if downloading, file I/O, or extraction fails.
     pub async fn perform_update(&self) -> Result<()> {
-        let download_url = self.download_url.as_ref().ok_or(anyhow::anyhow!("Download URL not set"))?;
+        let download_url = self.download_url.as_ref().ok_or(msg_error_anyhow!(Message::UpdateDownloadUrlNotSet))?;
 
         // Download the release asset (tar.gz).
         let response = self.client.get(download_url).send().await?;
@@ -202,7 +208,7 @@ impl Updater {
         if is_updated {
             Ok(())
         } else {
-            anyhow::bail!("Binary not found in the release archive.")
+            msg_bail_anyhow!(Message::UpdateBinaryNotFoundInArchive);
         }
     }
 

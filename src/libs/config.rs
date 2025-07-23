@@ -2,6 +2,8 @@ use super::data_storage::DataStorage;
 use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
+use crate::libs::messages::Message;
+use crate::{msg_error, msg_print};
 use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use serde::{Deserialize, Serialize};
@@ -94,7 +96,7 @@ impl Config {
             },
         ];
         let selected_nodes = MultiSelect::with_theme(&ColorfulTheme::default())
-            .with_prompt("Select nodes to configure")
+            .with_prompt(Message::PromptSelectModules.to_string())
             .items(&node_descriptions.iter().map(|module| &module.name).collect::<Vec<_>>())
             .interact()?;
 
@@ -105,22 +107,22 @@ impl Config {
                 "jira" => config.jira = Some(JiraConfig::init(&config.jira)?),
                 "monitor" => {
                     let default = config.monitor.clone().unwrap_or_default();
-                    println!("Monitor settings");
+                    msg_print!(Message::ConfigModuleMonitor);
                     config.monitor = Some(MonitorConfig {
                         min_pause_duration: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter minimum pause duration (minutes)")
+                            .with_prompt(Message::PromptMinPauseDuration.to_string())
                             .default(default.min_pause_duration)
                             .interact_text()?,
                         pause_threshold: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter pause threshold (seconds)")
+                            .with_prompt(Message::PromptPauseThreshold.to_string())
                             .default(default.pause_threshold)
                             .interact_text()?,
                         poll_interval: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter poll interval (milliseconds)")
+                            .with_prompt(Message::PromptPollInterval.to_string())
                             .default(default.poll_interval)
                             .interact_text()?,
                         activity_threshold: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter activity threshold (seconds)")
+                            .with_prompt(Message::PromptActivityThreshold.to_string())
                             .default(default.activity_threshold)
                             .interact_text()?,
                     });
@@ -130,14 +132,14 @@ impl Config {
                         api_url: "".to_string(),
                         auth_token: "".to_string(),
                     });
-                    println!("Server settings");
+                    msg_print!(Message::ConfigModuleServer);
                     config.server = Some(ServerConfig {
                         api_url: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter server API URL")
+                            .with_prompt(Message::PromptServerApiUrl.to_string())
                             .default(default.api_url)
                             .interact_text()?,
                         auth_token: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt("Enter server auth token")
+                            .with_prompt(Message::PromptServerAuthToken.to_string())
                             .default(default.auth_token)
                             .interact_text()?,
                     });
@@ -165,7 +167,7 @@ impl Config {
 
         paths.push(exe_dir.to_path_buf());
 
-        let new_path = env::join_paths(paths).expect("Failed to join paths");
+        let new_path = env::join_paths(paths).expect(&Message::FailedToJoinPaths.to_string());
         let path_key = r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
 
         let reg_query_output = Command::new("reg")
@@ -174,18 +176,18 @@ impl Config {
             .arg("/v")
             .arg("Path")
             .output()
-            .expect("Failed to execute reg query");
+            .expect(&Message::FailedToExecuteRegQuery.to_string());
 
         if !reg_query_output.status.success() {
-            println!("Failed to query PATH from registry: {:?}", reg_query_output.status);
+            msg_error!(Message::PathQueryFailed(reg_query_output.status.to_string()));
             return Ok(());
         }
 
         let current_path = str::from_utf8(&reg_query_output.stdout)
-            .expect("Failed to parse reg query output")
+            .expect(&Message::FailedToParseRegOutput.to_string())
             .split_whitespace()
             .last()
-            .expect("Failed to get PATH value from reg query");
+            .expect(&Message::FailedToGetPathFromReg.to_string());
 
         let reg_set_output = Command::new("reg")
             .arg("add")
@@ -198,10 +200,10 @@ impl Config {
             .arg(&format!("{};{}", current_path, new_path.to_string_lossy()))
             .arg("/f")
             .output()
-            .expect("Failed to execute reg set");
+            .expect(&Message::FailedToExecuteRegSet.to_string());
 
         if !reg_set_output.status.success() {
-            println!("Failed to set PATH in registry");
+            msg_error!(Message::PathSetFailed);
             return Ok(());
         }
 

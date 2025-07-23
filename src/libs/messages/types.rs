@@ -60,6 +60,7 @@ pub enum Message {
     MonitorExitedNormally,
     MonitorShuttingDown,
     MonitorError(String),
+    MonitorTaskPanicked(String),
     PauseStarted,
     PauseEnded,
 
@@ -68,14 +69,20 @@ pub enum Message {
     WatcherStopped(u32), // PID
     WatcherStoppedSuccessfully,
     WatcherNotRunning,
+    WatcherNotRunningPidNotFound,
     WatcherStartingForeground,
     WatcherStoppingExisting(String),     // PID
     WatcherFailedToStopExisting(String), // error
+    WatcherFailedToStop(u32),            // PID
     WatcherReceivedSigterm,
     WatcherReceivedSigint,
     WatcherReceivedCtrlC,
     WatcherCtrlCListenFailed(String), // error
     WatcherSignalHandlingNotSupported,
+    DaemonModeNotSupported,
+    FailedToGetCurrentExecutable,
+    FailedToCreateSigtermHandler,
+    FailedToCreateSigintHandler,
 
     // === UPDATE MESSAGES ===
     UpdateAvailable {
@@ -87,12 +94,17 @@ pub enum Message {
         version: String,
     },
     NoUpdateRequired,
+    UpdateDownloadUrlNotSet,
+    UpdateBinaryNotFoundInArchive,
 
     // === AUTHENTICATION MESSAGES ===
     WrongPassword(i32), // attempt count
     InvalidCredentials,
     SessionExpired,
     AuthenticationFailed(String), // service name
+    JiraAuthenticateFailed,
+    LoginFailed,
+    CredentialsNotSet,
 
     // === API MESSAGES ===
     ApiConnectionFailed,
@@ -110,18 +122,34 @@ pub enum Message {
     DbConnectionFailed,
     DbQueryFailed,
     DbMigrationFailed,
+    NoIdSet,
 
     // === FILE SYSTEM MESSAGES ===
     FileNotFound,
     FileReadError,
     FileWriteError,
+    InvalidPidFileContent,
+    DataStoragePathError,
 
     // === SYSTEM/PATH MESSAGES ===
     PathQueryFailed(String), // status
     PathSetFailed,
+    FailedToJoinPaths,
+    FailedToExecuteRegQuery,
+    FailedToParseRegOutput,
+    FailedToGetPathFromReg,
+    FailedToExecuteRegSet,
+    FailedToOpenProcess(u32),      // error code
+    FailedToTerminateProcess(u32), // error code
+    ProcessNotFound,
+    ProcessTerminationNotSupported,
 
     // === PRODUCTIVITY MESSAGES ===
     MonthlyProductivity(f64), // percentage
+
+    // === ENCRYPTION/SECRET MESSAGES ===
+    EncryptionKeyMustBeSet,
+    EncryptionIvMustBeSet,
 
     // === PROMPTS ===
     PromptTaskName,
