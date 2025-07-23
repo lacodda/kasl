@@ -1,4 +1,6 @@
+use crate::libs::messages::Message;
 use crate::libs::{data_storage::DataStorage, secret::Secret};
+use crate::msg_error_anyhow;
 use anyhow::Result;
 use std::fs;
 use std::io::Write;
@@ -46,7 +48,7 @@ pub trait Session {
                             self.inc_retry();
                             continue;
                         }
-                        break Err(anyhow::anyhow!("You entered the wrong password {} times!", MAX_RETRY_COUNT));
+                        break Err(msg_error_anyhow!(Message::WrongPassword(MAX_RETRY_COUNT)));
                     }
                 }
             }

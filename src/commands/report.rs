@@ -13,11 +13,13 @@ use crate::{
     libs::{
         config::Config,
         formatter::format_duration,
+        messages::Message,
         pause::Pause,
         report,
         task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
+    msg_error, msg_error_anyhow, msg_info, msg_print,
 };
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
@@ -81,15 +83,12 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     match si.send_monthly(&naive_date).await {
         Ok(status) => {
             if status.is_success() {
-                println!(
-                    "Your monthly report dated {} has been successfully submitted\nWait for a message to your email address",
-                    date.format("%B %-d, %Y")
-                );
+                msg_info!(Message::MonthlyReportSent(date.format("%B %-d, %Y").to_string()));
             } else {
-                println!("Failed to send monthly report. Status: {}", status);
+                msg_error!(Message::MonthlyReportSendFailed(status.to_string()));
             }
         }
-        Err(e) => eprintln!("[kasl] Error sending monthly report: {}", e),
+        Err(e) => msg_error!(Message::ErrorSendingMonthlyReport(e.to_string())),
     }
 
     Ok(())
@@ -101,7 +100,7 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let workday = match Workdays::new()?.fetch(naive_date)? {
         Some(wd) => wd,
         None => {
-            println!("\nNo workday record found for {}", date.format("%B %-d, %Y"));
+            msg_print!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()), true);
             return Ok(());
         }
     };
@@ -133,11 +132,11 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     // Load the data needed for the report.
     let workday = workdays_db
         .fetch(naive_date)?
-        .ok_or_else(|| anyhow::anyhow!("Could not find workday for {} after finalizing.", naive_date))?;
+        .ok_or_else(|| msg_error_anyhow!(Message::WorkdayCouldNotFindAfterFinalizing(naive_date.to_string())))?;
 
     let mut tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
     if tasks.is_empty() {
-        println!("Tasks not found for {}, report not sent.", date.format("%B %-d, %Y"));
+        msg_error!(Message::TasksNotFoundForDate(date.format("%B %-d, %Y").to_string()));
         return Ok(());
     }
 
@@ -152,20 +151,17 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     match si.send(&events_json, &naive_date).await {
         Ok(status) => {
             if status.is_success() {
-                println!(
-                    "Your report dated {} has been successfully submitted\nWait for a message to your email address",
-                    date.format("%B %-d, %Y")
-                );
+                msg_info!(Message::DailyReportSent(date.format("%B %-d, %Y").to_string()));
                 // If it's the last working day of the month, also send the monthly report.
                 if si.is_last_working_day_of_month(&naive_date)? {
-                    println!("It's the last working day of the month. Submitting the monthly report as well...");
+                    msg_info!(Message::MonthlyReportTriggered);
                     handle_monthly_report(date).await?;
                 }
             } else {
-                println!("Failed to send report. Status: {}", status);
+                msg_error!(Message::ReportSendFailed(status.to_string()));
             }
         }
-        Err(e) => eprintln!("[kasl] Error sending events: {}", e),
+        Err(e) => msg_error!(Message::ErrorSendingEvents(e.to_string())),
     }
 
     Ok(())
@@ -247,5 +243,5 @@ fn get_si_service() -> Result<Si> {
     Config::read()?
         .si
         .map(|si_config| Si::new(&si_config))
-        .ok_or_else(|| anyhow::anyhow!("SiServer configuration not found in config file."))
+        .ok_or_else(|| msg_error_anyhow!(Message::SiServerConfigNotFound))
 }

@@ -6,7 +6,8 @@
 
 use crate::{
     api::Session,
-    libs::{config::ConfigModule, secret::Secret},
+    libs::{config::ConfigModule, messages::Message, secret::Secret},
+    msg_error, msg_print,
 };
 use anyhow::Result;
 use base64::prelude::*;
@@ -220,7 +221,7 @@ impl Si {
             let session_id = match self.get_session_id().await {
                 Ok(id) => id,
                 Err(e) => {
-                    eprintln!("[kasl] Failed to get SiServer session for rest dates: {}", e);
+                    msg_error!(Message::SiServerSessionFailed(e.to_string()));
                     return Ok(HashSet::new());
                 }
             };
@@ -233,7 +234,7 @@ impl Si {
             let res = match self.client.post(url).headers(headers).multipart(form).send().await {
                 Ok(resp) => resp,
                 Err(e) => {
-                    eprintln!("[kasl] Failed to request rest dates: {}", e);
+                    msg_error!(Message::SiServerRestDatesFailed(e.to_string()));
                     return Ok(HashSet::new());
                 }
             };
@@ -248,7 +249,7 @@ impl Si {
                     return match res.json::<RestDatesResponse>().await {
                         Ok(response) => Ok(response.unique_dates()?),
                         Err(e) => {
-                            eprintln!("[kasl] Failed to parse rest dates response: {}", e);
+                            msg_error!(Message::SiServerRestDatesParsingFailed(e.to_string()));
                             Ok(HashSet::new())
                         }
                     };
@@ -304,7 +305,7 @@ impl SiConfig {
                 api_url: "".to_string(),
             }))
             .unwrap();
-        println!("SiServer settings");
+        msg_print!(Message::ConfigModuleSiServer);
         Ok(Self {
             login: Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your SiServer login")

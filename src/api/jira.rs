@@ -1,5 +1,6 @@
 use super::Session;
-use crate::libs::{config::ConfigModule, secret::Secret};
+use crate::libs::{config::ConfigModule, messages::Message, secret::Secret};
+use crate::msg_print;
 use anyhow::Result;
 use chrono::NaiveDate;
 use dialoguer::{theme::ColorfulTheme, Input};
@@ -174,7 +175,7 @@ impl JiraConfig {
                 api_url: "".to_string(),
             }))
             .unwrap();
-        println!("Jira settings");
+        msg_print!(Message::ConfigModuleJira);
         Ok(Self {
             login: Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your Jira login")

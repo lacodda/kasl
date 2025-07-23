@@ -5,6 +5,8 @@
 //! within the application.
 
 use crate::libs::config::ConfigModule;
+use crate::libs::messages::Message;
+use crate::{msg_error, msg_print};
 use anyhow::Result;
 use chrono::{Duration, Local};
 use dialoguer::{theme::ColorfulTheme, Input};
@@ -95,7 +97,7 @@ impl GitLab {
         let user_id = match self.get_user_id().await {
             Ok(id) => id,
             Err(e) => {
-                eprintln!("[kasl] Failed to get GitLab user ID: {}", e);
+                msg_error!(Message::GitlabUserIdFailed(e.to_string()));
                 return Ok(Vec::new());
             }
         };
@@ -108,7 +110,7 @@ impl GitLab {
         let response = match self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await {
             Ok(res) => res,
             Err(e) => {
-                eprintln!("[kasl] Failed to get GitLab events: {}", e);
+                msg_error!(Message::GitlabFetchFailed(e.to_string()));
                 return Ok(Vec::new());
             }
         };
@@ -116,7 +118,7 @@ impl GitLab {
         let events = match response.json::<Vec<Event>>().await {
             Ok(ev) => ev,
             Err(e) => {
-                eprintln!("[kasl] Failed to parse GitLab events: {}", e);
+                msg_error!(Message::GitlabFetchFailed(e.to_string()));
                 return Ok(Vec::new());
             }
         };
@@ -185,7 +187,7 @@ impl GitLabConfig {
             api_url: "".to_string(),
         });
 
-        println!("GitLab settings");
+        msg_print!(Message::ConfigModuleGitLab);
         Ok(Self {
             access_token: Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your GitLab private token")

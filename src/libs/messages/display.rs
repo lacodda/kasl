@@ -15,6 +15,10 @@ impl Display for Message {
             Message::TasksDeletedCount(count) => format!("Deleted {} task(s) successfully.", count),
             Message::TasksNotFoundForDate(date) => format!("Tasks not found for {}, report not sent.", date),
             Message::TasksNotFoundSad => "Tasks not found((".to_string(),
+            Message::TasksHeader => "Tasks:".to_string(),
+            Message::TasksIncompleteHeader => "Incomplete tasks".to_string(),
+            Message::TasksGitlabHeader => "Gitlab commits".to_string(),
+            Message::TasksJiraHeader => "Jira issues".to_string(),
 
             // === WORKDAY MESSAGES ===
             Message::WorkdayEnded => "Workday ended for today.".to_string(),
@@ -32,6 +36,11 @@ impl Display for Message {
             Message::ConfigFileNotFound => "Configuration file not found".to_string(),
             Message::ConfigParseError => "Failed to parse configuration".to_string(),
             Message::ConfigSaveError => "Failed to save configuration".to_string(),
+            Message::ConfigModuleGitLab => "GitLab settings".to_string(),
+            Message::ConfigModuleJira => "Jira settings".to_string(),
+            Message::ConfigModuleSiServer => "SiServer settings".to_string(),
+            Message::ConfigModuleMonitor => "Monitor settings".to_string(),
+            Message::ConfigModuleServer => "Server settings".to_string(),
 
             // === REPORT MESSAGES ===
             Message::DailyReportSent(date) => {
@@ -49,6 +58,8 @@ impl Display for Message {
             Message::MonthlyReportTriggered => "It's the last working day of the month. Submitting the monthly report as well...".to_string(),
             Message::ReportSendFailed(status) => format!("Failed to send report. Status: {}", status),
             Message::MonthlyReportSendFailed(status) => format!("Failed to send monthly report. Status: {}", status),
+            Message::ReportHeader(date) => format!("Report for {}", date),
+            Message::WorkingHoursForMonth(month_year) => format!("Working hours for {}", month_year),
 
             // === PAUSE MESSAGES ===
             Message::PausesTitle(date) => format!("Pauses for {}", date),
@@ -67,6 +78,9 @@ impl Display for Message {
             Message::MonitorStopped => "Monitor stopped".to_string(),
             Message::MonitorStartFailed => "Failed to start monitor".to_string(),
             Message::MonitorStopFailed => "Failed to stop monitor".to_string(),
+            Message::MonitorExitedNormally => "Monitor exited normally".to_string(),
+            Message::MonitorShuttingDown => "Shutting down monitor...".to_string(),
+            Message::MonitorError(error) => format!("Monitor error: {}", error),
             Message::PauseStarted => "Pause Start".to_string(),
             Message::PauseEnded => "Pause End".to_string(),
 
@@ -76,6 +90,13 @@ impl Display for Message {
             Message::WatcherStoppedSuccessfully => "Watcher stopped successfully".to_string(),
             Message::WatcherNotRunning => "Watcher is not running.".to_string(),
             Message::WatcherStartingForeground => "Starting watcher in foreground... Press Ctrl+C to exit.".to_string(),
+            Message::WatcherStoppingExisting(pid) => format!("Stopping existing watcher (PID: {})...", pid),
+            Message::WatcherFailedToStopExisting(error) => format!("Warning: Failed to stop existing daemon: {}", error),
+            Message::WatcherReceivedSigterm => "Received SIGTERM, shutting down gracefully...".to_string(),
+            Message::WatcherReceivedSigint => "Received SIGINT, shutting down gracefully...".to_string(),
+            Message::WatcherReceivedCtrlC => "Received Ctrl+C, shutting down gracefully...".to_string(),
+            Message::WatcherCtrlCListenFailed(error) => format!("Failed to listen for Ctrl+C: {}", error),
+            Message::WatcherSignalHandlingNotSupported => "Warning: Signal handling not supported on this platform".to_string(),
 
             // === UPDATE MESSAGES ===
             Message::UpdateAvailable { app_name, latest } => {
@@ -100,8 +121,12 @@ impl Display for Message {
             Message::ApiAuthFailed => "API authentication failed".to_string(),
             Message::ApiRequestFailed => "API request failed".to_string(),
             Message::GitlabFetchFailed(error) => format!("[kasl] Failed to get GitLab events: {}", error),
+            Message::GitlabUserIdFailed(error) => format!("[kasl] Failed to get GitLab user ID: {}", error),
             Message::JiraFetchFailed(error) => format!("[kasl] Failed to get Jira issues: {}", error),
             Message::SiServerConfigNotFound => "SiServer configuration not found in config file.".to_string(),
+            Message::SiServerSessionFailed(error) => format!("[kasl] Failed to get SiServer session for rest dates: {}", error),
+            Message::SiServerRestDatesFailed(error) => format!("[kasl] Failed to request rest dates: {}", error),
+            Message::SiServerRestDatesParsingFailed(error) => format!("[kasl] Failed to parse rest dates response: {}", error),
 
             // === DATABASE MESSAGES ===
             Message::DbConnectionFailed => "Failed to connect to database".to_string(),
@@ -112,6 +137,13 @@ impl Display for Message {
             Message::FileNotFound => "File not found".to_string(),
             Message::FileReadError => "Failed to read file".to_string(),
             Message::FileWriteError => "Failed to write file".to_string(),
+
+            // === SYSTEM/PATH MESSAGES ===
+            Message::PathQueryFailed(status) => format!("Failed to query PATH from registry: {:?}", status),
+            Message::PathSetFailed => "Failed to set PATH in registry".to_string(),
+
+            // === PRODUCTIVITY MESSAGES ===
+            Message::MonthlyProductivity(percentage) => format!("Monthly work productivity: {:.1}%", percentage),
 
             // === PROMPTS ===
             Message::PromptTaskName => "Enter task name".to_string(),

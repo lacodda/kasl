@@ -4,7 +4,8 @@
 //! both as a foreground process for debugging and as a background daemon
 //! for normal use.
 
-use crate::libs::{config::Config, daemon, monitor::Monitor};
+use crate::libs::{config::Config, daemon, messages::Message, monitor::Monitor};
+use crate::msg_print;
 use anyhow::Result;
 use clap::Args;
 
@@ -25,7 +26,7 @@ pub async fn cmd(args: WatchArgs) -> Result<()> {
     if args.stop {
         daemon::stop()?;
     } else if args.foreground {
-        println!("Starting watcher in foreground... Press Ctrl+C to exit.");
+        msg_print!(Message::WatcherStartingForeground);
         run_monitor().await?;
     } else {
         daemon::spawn()?;

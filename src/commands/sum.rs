@@ -3,9 +3,11 @@ use crate::{
     db::{pauses::Pauses, workdays::Workdays},
     libs::{
         config::Config,
+        messages::Message,
         summary::{DailySummary, SummaryCalculator, SummaryFormatter},
         view::View,
     },
+    msg_error, msg_print,
 };
 use anyhow::Result;
 use chrono::{Datelike, Duration, Local, NaiveDate};
@@ -23,7 +25,7 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
     let config = Config::read()?;
     let monitor_config = config.monitor.clone().unwrap_or_default();
 
-    println!("\nWorking hours for {}", now.format("%B, %Y"));
+    msg_print!(Message::WorkingHoursForMonth(now.format("%B, %Y").to_string()), true);
 
     // 1. Fetch rest dates from API
     let mut rest_dates: HashSet<NaiveDate> = HashSet::new();
@@ -33,7 +35,7 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
                 // Filter for dates in the current month
                 rest_dates = dates.into_iter().filter(|d| d.month() == now.month()).collect();
             }
-            Err(e) => eprintln!("Error requesting rest dates: {}", e),
+            Err(e) => msg_error!(Message::ErrorRequestingRestDates(e.to_string())),
         }
     }
 
@@ -92,7 +94,7 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
 
     // 5. Display monthly productivity (calculated with ALL pauses)
     if total_productivity > 0.0 && workdays_count > 0.0 {
-        println!("\nMonthly work productivity: {:.1}%", total_productivity / workdays_count);
+        msg_print!(Message::MonthlyProductivity(total_productivity / workdays_count), true);
     }
 
     Ok(())

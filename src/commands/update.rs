@@ -1,4 +1,7 @@
-use crate::libs::update::Updater;
+use crate::{
+    libs::{messages::Message, update::Updater},
+    msg_info, msg_success,
+};
 use anyhow::Result;
 
 /// Executes the application update process.
@@ -13,18 +16,17 @@ pub async fn cmd() -> Result<()> {
     let needs_update = updater.check_for_latest_release().await?;
 
     if !needs_update {
-        println!("No update required. You are using the latest version!");
+        msg_info!(Message::NoUpdateRequired);
         return Ok(());
     }
 
     // If an update is available, perform the update.
     updater.perform_update().await?;
 
-    println!(
-        "The {} application has been successfully updated to version {}!",
-        updater.name,
-        updater.latest_version.as_deref().unwrap_or("unknown")
-    );
+    msg_success!(Message::UpdateCompleted {
+        app_name: updater.name,
+        version: updater.latest_version.as_deref().unwrap_or("unknown").to_string()
+    });
 
     Ok(())
 }

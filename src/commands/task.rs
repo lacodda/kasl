@@ -9,9 +9,11 @@ use crate::{
     db::tasks::Tasks,
     libs::{
         config::Config,
+        messages::Message,
         task::{Task, TaskFilter},
         view::View,
     },
+    msg_error, msg_print,
 };
 use anyhow::Result;
 use chrono::Local;
@@ -72,7 +74,7 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
         }
         let tasks = Tasks::new()?.fetch(filter)?;
         if tasks.is_empty() {
-            println!("Tasks not found.");
+            msg_error!(Message::TaskNotFound);
             return Ok(());
         }
         View::tasks(&tasks)?;
@@ -123,7 +125,7 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
         }
 
         if tasks.iter().all(|(_, task)| task.is_empty()) {
-            println!("Tasks not found((");
+            msg_error!(Message::TasksNotFoundSad);
             return Ok(());
         }
 
@@ -132,17 +134,17 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
             let mut name_format: Box<dyn Fn(&Task) -> String> = Box::new(|task: &Task| task.name.to_owned());
             match task_source {
                 TaskSource::Incomplete => {
-                    println!("\nIncomplete tasks");
+                    msg_print!(Message::TasksIncompleteHeader, true);
                     name_format = Box::new(|task: &Task| format!("{} - {}%", task.name, task.completeness.unwrap_or(0)));
                 }
-                TaskSource::Gitlab => println!("\nGitlab commits"),
-                TaskSource::Jira => println!("\nJira issues"),
+                TaskSource::Gitlab => msg_print!(Message::TasksGitlabHeader, true),
+                TaskSource::Jira => msg_print!(Message::TasksJiraHeader, true),
             }
             let task_names: Vec<String> = tasks.iter().map(name_format).collect();
             selected_tasks.push((
                 task_source,
                 MultiSelect::with_theme(&ColorfulTheme::default())
-                    .with_prompt("Select options")
+                    .with_prompt(Message::PromptSelectOptions.to_string())
                     .items(&task_names)
                     .interact()
                     .unwrap(),
@@ -154,7 +156,7 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
                 let mut task = tasks.iter().find(|(ts, _)| ts == &task_source).map_or(&vec![], |(_, tasks)| tasks)[index].clone();
                 match task_source {
                     TaskSource::Incomplete => {
-                        println!("Selected task: {}", &task.name);
+                        msg_print!(Message::SelectingTask(task.name.clone()));
                         if task.task_id.is_none() || task.task_id.is_some_and(|id| id == 0) {
                             task.task_id = task.id;
                         }
@@ -162,7 +164,7 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
                         task.completeness = Some(
                             Input::with_theme(&ColorfulTheme::default())
                                 .allow_empty(true)
-                                .with_prompt("Enter completeness")
+                                .with_prompt(Message::PromptTaskCompleteness.to_string())
                                 .default(default_completeness)
                                 .interact_text()
                                 .unwrap(),
@@ -180,21 +182,21 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     // Handle creating a new task
     let name = task_args.name.unwrap_or_else(|| {
         Input::with_theme(&ColorfulTheme::default())
-            .with_prompt("Enter task name")
+            .with_prompt(Message::PromptTaskName.to_string())
             .interact_text()
             .unwrap()
     });
     let comment = task_args.comment.unwrap_or_else(|| {
         Input::with_theme(&ColorfulTheme::default())
             .allow_empty(true)
-            .with_prompt("Enter comment")
+            .with_prompt(Message::PromptTaskComment.to_string())
             .interact_text()
             .unwrap()
     });
     let completeness = task_args.completeness.unwrap_or_else(|| {
         Input::with_theme(&ColorfulTheme::default())
             .allow_empty(true)
-            .with_prompt("Enter completeness")
+            .with_prompt(Message::PromptTaskCompleteness.to_string())
             .default(100)
             .interact_text()
             .unwrap()

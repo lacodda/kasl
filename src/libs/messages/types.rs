@@ -11,6 +11,10 @@ pub enum Message {
     TasksDeletedCount(usize),
     TasksNotFoundForDate(String),
     TasksNotFoundSad, // "Tasks not found(("
+    TasksHeader,
+    TasksIncompleteHeader,
+    TasksGitlabHeader,
+    TasksJiraHeader,
 
     // === WORKDAY MESSAGES ===
     WorkdayEnded,
@@ -26,6 +30,11 @@ pub enum Message {
     ConfigFileNotFound,
     ConfigParseError,
     ConfigSaveError,
+    ConfigModuleGitLab,
+    ConfigModuleJira,
+    ConfigModuleSiServer,
+    ConfigModuleMonitor,
+    ConfigModuleServer,
 
     // === REPORT MESSAGES ===
     DailyReportSent(String),   // date
@@ -33,6 +42,8 @@ pub enum Message {
     MonthlyReportTriggered,
     ReportSendFailed(String),        // status
     MonthlyReportSendFailed(String), // status
+    ReportHeader(String),            // date
+    WorkingHoursForMonth(String),    // month/year
 
     // === PAUSE MESSAGES ===
     PausesTitle(String),
@@ -46,6 +57,9 @@ pub enum Message {
     MonitorStopped,
     MonitorStartFailed,
     MonitorStopFailed,
+    MonitorExitedNormally,
+    MonitorShuttingDown,
+    MonitorError(String),
     PauseStarted,
     PauseEnded,
 
@@ -55,6 +69,13 @@ pub enum Message {
     WatcherStoppedSuccessfully,
     WatcherNotRunning,
     WatcherStartingForeground,
+    WatcherStoppingExisting(String),     // PID
+    WatcherFailedToStopExisting(String), // error
+    WatcherReceivedSigterm,
+    WatcherReceivedSigint,
+    WatcherReceivedCtrlC,
+    WatcherCtrlCListenFailed(String), // error
+    WatcherSignalHandlingNotSupported,
 
     // === UPDATE MESSAGES ===
     UpdateAvailable {
@@ -77,9 +98,13 @@ pub enum Message {
     ApiConnectionFailed,
     ApiAuthFailed,
     ApiRequestFailed,
-    GitlabFetchFailed(String), // error message
-    JiraFetchFailed(String),   // error message
+    GitlabFetchFailed(String),  // error message
+    GitlabUserIdFailed(String), // error message
+    JiraFetchFailed(String),    // error message
     SiServerConfigNotFound,
+    SiServerSessionFailed(String),          // error message
+    SiServerRestDatesFailed(String),        // error message
+    SiServerRestDatesParsingFailed(String), // error message
 
     // === DATABASE MESSAGES ===
     DbConnectionFailed,
@@ -90,6 +115,13 @@ pub enum Message {
     FileNotFound,
     FileReadError,
     FileWriteError,
+
+    // === SYSTEM/PATH MESSAGES ===
+    PathQueryFailed(String), // status
+    PathSetFailed,
+
+    // === PRODUCTIVITY MESSAGES ===
+    MonthlyProductivity(f64), // percentage
 
     // === PROMPTS ===
     PromptTaskName,
