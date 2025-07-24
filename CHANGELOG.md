@@ -1,5 +1,59 @@
 # Changelog
 
+## 🎉 [0.7.0] - 2025-07-24
+
+### ✨ Features
+
+- Add optional --month flag to generate report for current month
+- Add activity monitoring daemon with enigo
+- Add breaks table and CRUD operations
+- Implement real activity detection
+- Add kasl breaks command
+- Add break monitoring and server configuration
+- Add workdays table with basic CRUD operations
+- Automate workday start detection in Monitor based on activity threshold
+- Refactor 'sum' command to use workday/break model
+- Refactor report command and remove events system
+- Centralize formatting logic and improve documentation
+- Implement background daemon mode
+- Add total pause time calculation and display
+- Add work productivity calculation and display
+- Implement automatic restart on new instance
+- Add application icon for Windows
+- Add anyhow for better error handling
+- Add centralized messages system
+- Implement centralized messaging system and begin migration
+
+### 🎛️ Refactor
+
+- Remove system event-based scheduler
+- Change start and end to TIMESTAMP in breaks table
+- Refactor state management and activity detection
+- Improve report command and table output
+- Rename 'Break' entity to 'Pause'
+- Refactor update logic and improve command structure
+- Migrate database modules to anyhow
+- Migrate entire codebase to anyhow for better error handling
+- Migrate api and commands to new messaging system
+- Migrate all messages to new messaging system
+
+### 🛠️ Bug Fixes
+
+- Fixed a bug with password request after session expires in Jira
+- Fixed bug with requesting unavailable Jira API
+- Refine activity detection with rdev
+- Improve network error handling to prevent crashes
+- Align sent payload with displayed report logic
+- Correct visibility and imports to fix build errors
+- Adjust pause start time by threshold value
+- Fix Windows process termination and refactor daemon logic
+- Embed encryption keys at compile time
+
+### 🧪 Testing
+
+- Add tests for config
+- Tests for report have been fixed
+
 ## 🎉 [0.6.0] - 2024-08-01
 
 ### ✨ Features
