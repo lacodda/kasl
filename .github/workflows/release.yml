@@ -3,12 +3,12 @@ name: release
 on:
   push:
     tags:
-      - 'v*' # Run when tag matches v*, i.e. v1.0, v20.15.10
+      - "v*" # Run when tag matches v*, i.e. v1.0, v20.15.10
 
 env:
   RELEASE_BIN: kasl
   RELEASE_DIR: artifacts
-  GITHUB_REF: '${{ github.ref }}'
+  GITHUB_REF: "${{ github.ref }}"
   WINDOWS_TARGET: x86_64-pc-windows-msvc
 
   # Space separated paths to include in the archive.
@@ -26,7 +26,7 @@ jobs:
             rust: stable
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Query version number
@@ -34,36 +34,36 @@ jobs:
         shell: bash
         run: |
           echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
+          echo "version=${GITHUB_REF:10}" >> $GITHUB_OUTPUT
 
       - name: Add rustup target
         run: rustup target add ${{ matrix.target }}
-
-      - name: Build
-        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Set RUSTFLAGS (Windows)
         if: matrix.os == 'windows-latest'
         run: echo "RUSTFLAGS=-Ctarget-feature=+crt-static" >> $GITHUB_ENV
 
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
       - name: Create artifact directory
         run: |
           mkdir ${{ env.RELEASE_DIR }}
-          mkdir -p ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}
+          mkdir -p ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}
 
       - name: Move binaries (Windows)
         if: matrix.os == 'windows-latest'
         shell: bash
         run: |
-          mv ./target/${{ matrix.target }}/release/${{ env.RELEASE_BIN }}.exe ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}/${{ env.RELEASE_BIN }}.exe
-          mv ${{ env.RELEASE_ADDS }} ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}
+          mv ./target/${{ matrix.target }}/release/${{ env.RELEASE_BIN }}.exe ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}/${{ env.RELEASE_BIN }}.exe
+          mv ${{ env.RELEASE_ADDS }} ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}
 
       - name: Create tarball
         shell: bash
-        run: 7z a -ttar -so -an ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }} | 7z a -si ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.VERSION }}-${{ matrix.target }}.tar.gz
+        run: 7z a -ttar -so -an ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }} | 7z a -si ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}.tar.gz
 
       - name: Upload Zip
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
           path: ./${{ env.RELEASE_DIR }}
@@ -72,34 +72,24 @@ jobs:
     name: GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Query version number
         id: get_version
         shell: bash
         run: |
           echo "using version tag ${GITHUB_REF:10}"
-          echo ::set-output name=version::"${GITHUB_REF:10}"
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.get_version.outputs.VERSION }}
-          release_name: ${{ steps.get_version.outputs.VERSION }}
+          echo "version=${GITHUB_REF:10}" >> $GITHUB_OUTPUT
 
       - name: Download Windows tarball
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v4
         with:
           name: ${{ env.WINDOWS_TARGET }}
 
-      - name: Release Windows tarball
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./kasl-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.tar.gz
-          asset_content_type: application/gzip
-          asset_name: kasl-${{ steps.get_version.outputs.VERSION }}-${{ env.WINDOWS_TARGET }}.tar.gz
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: ${{ steps.get_version.outputs.version }}
+          files: ./kasl-${{ steps.get_version.outputs.version }}-${{ env.WINDOWS_TARGET }}.tar.gz
