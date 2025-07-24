@@ -63,7 +63,8 @@ mod tests {
         let pauses_vec = pauses_db.fetch(date, 0).unwrap(); // min_duration = 0 to fetch all
         let tasks = vec![];
 
-        let output = View::report(&workday, &pauses_vec, &tasks);
+        // Pass the same pauses for both long_breaks and all_pauses in tests
+        let output = View::report(&workday, &pauses_vec, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
 
@@ -92,7 +93,8 @@ mod tests {
         let tasks = vec![];
 
         assert_eq!(pauses_vec.len(), 0);
-        let output = View::report(&workday, &pauses_vec, &tasks);
+        // Pass empty pauses for both parameters
+        let output = View::report(&workday, &pauses_vec, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
 }
