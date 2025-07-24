@@ -1,6 +1,24 @@
 # Changelog
 
-## 🎉 [0.5.0] - 2024-07-09
+## 🎉 [0.6.0] - 2024-08-01
+
+### ✨ Features
+
+- Added Secret module for encryption and decryption of passwords to services
+- Secret module functionality added to Jira service
+- Secret module functionality added to Si service
+- Added update checking functionality and a command to update the application to the latest version
+
+### 🎛️ Refactor
+
+- Common methods are moved to the Session trait
+- Improved functionality of build.rs
+
+### 🛠️ Bug Fixes
+
+- Added message that update is not required if the latest version is used
+
+## 🎉 [0.5.0] - 2024-07-11
 
 ### ✨ Features
 
