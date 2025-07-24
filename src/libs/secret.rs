@@ -1,16 +1,16 @@
 use super::data_storage::DataStorage;
-use crate::libs::messages::Message;
 use aes::Aes256;
 use anyhow::Result;
 use base64::prelude::*;
 use block_modes::block_padding::Pkcs7;
 use block_modes::{BlockMode, Cbc};
 use dialoguer::{theme::ColorfulTheme, Password};
-use dotenv::dotenv;
-use std::env;
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+
+// Include generated metadata with encryption keys
+include!(concat!(env!("OUT_DIR"), "/app_metadata.rs"));
 
 type Aes256Cbc = Cbc<Aes256, Pkcs7>;
 
@@ -25,17 +25,18 @@ pub struct Secret {
 
 impl Secret {
     pub fn new(secret_name: &str, prompt: &str) -> Self {
-        dotenv().ok();
-        let key = env::var("ENCRYPTION_KEY").expect(&Message::EncryptionKeyMustBeSet.to_string());
-        let iv = env::var("ENCRYPTION_IV").expect(&Message::EncryptionIvMustBeSet.to_string());
-        let secret_file_path = DataStorage::new().get_path(secret_name).expect(&Message::DataStoragePathError.to_string());
+        // Use compile-time embedded keys
+        let key = APP_METADATA_ENCRYPTION_KEY.to_vec();
+        let iv = APP_METADATA_ENCRYPTION_IV.to_vec();
+
+        let secret_file_path = DataStorage::new().get_path(secret_name).unwrap_or_else(|_| PathBuf::from(secret_name));
 
         Self {
             password: None,
             secret_file_path,
             prompt: prompt.to_owned(),
-            key: key.as_bytes().to_vec(),
-            iv: iv.as_bytes().to_vec(),
+            key,
+            iv,
         }
     }
 
@@ -66,6 +67,12 @@ impl Secret {
         let password = &self.password.clone().unwrap();
         let ciphertext = cipher.encrypt_vec(&password.as_bytes());
         let encoded = BASE64_STANDARD.encode(&ciphertext);
+
+        // Create directory if it doesn't exist
+        if let Some(parent) = self.secret_file_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+
         let mut file = File::create(&self.secret_file_path)?;
         file.write_all(encoded.as_bytes())?;
 
