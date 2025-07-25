@@ -10,11 +10,14 @@ use crate::libs::monitor::Monitor;
 use crate::{msg_bail_anyhow, msg_error, msg_error_anyhow, msg_info, msg_warning};
 use anyhow::Result;
 use std::time::Duration;
+use tracing::{debug, info, instrument, warn};
 
 const PID_FILE: &str = "kasl-watch.pid";
 
 /// Runs the daemon with proper signal handling for graceful shutdown.
+#[instrument]
 pub async fn run_with_signal_handling() -> Result<()> {
+    info!("Starting daemon with signal handling");
     // Set up a channel to handle shutdown signals
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 
@@ -104,7 +107,9 @@ async fn run_monitor() -> Result<()> {
 
 /// Spawns the application as a detached background process.
 /// If a daemon is already running, it will be stopped first.
+#[instrument]
 pub fn spawn() -> Result<()> {
+    debug!("Attempting to spawn daemon process");
     let pid_path = DataStorage::new().get_path(PID_FILE)?;
 
     // Check if a daemon is already running and stop it

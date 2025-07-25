@@ -50,6 +50,30 @@ To start kasl and begin tracking:
 kasl --help
 ```
 
+## Debugging 🔍
+
+kasl supports enhanced logging for debugging purposes. By default, only clean messages are displayed to users.
+
+### Enable debug logging
+
+To see detailed logs with timestamps, module paths, and debug information:
+
+```bash
+# Enable debug mode with full formatting
+KASL_DEBUG=1 kasl watch
+
+# Or use standard Rust logging with custom format
+RUST_LOG=kasl=debug KASL_LOG_FORMAT=full kasl watch
+
+# For even more verbose output
+RUST_LOG=kasl=trace KASL_LOG_FORMAT=full kasl watch
+```
+### Logging environment variables
+
+- `KASL_DEBUG` - Enables debug level logging with full formatting
+- `KASL_LOG_FORMAT=full` - Shows timestamps, module paths, and thread info
+- `RUST_LOG` - Standard Rust logging configuration (e.g., kasl=debug, kasl::monitor=trace)
+
 ## Roadmap 🗺️
 
 - [ ] Enhance task management with categories and priorities.

@@ -8,6 +8,7 @@ use crate::libs::{config::Config, daemon, messages::Message, monitor::Monitor};
 use crate::msg_print;
 use anyhow::Result;
 use clap::Args;
+use tracing::instrument;
 
 /// Command-line arguments for the `watch` command.
 #[derive(Debug, Args)]
@@ -22,6 +23,7 @@ pub struct WatchArgs {
 }
 
 /// Main entry point for the `watch` command, acting as a dispatcher.
+#[instrument]
 pub async fn cmd(args: WatchArgs) -> Result<()> {
     if args.stop {
         daemon::stop()?;
@@ -36,6 +38,7 @@ pub async fn cmd(args: WatchArgs) -> Result<()> {
 
 /// The core logic that initializes and runs the activity monitor.
 /// This function is called either directly for foreground mode or by the daemon process.
+#[instrument]
 async fn run_monitor() -> Result<()> {
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
@@ -45,6 +48,7 @@ async fn run_monitor() -> Result<()> {
 
 /// This function is executed by the detached daemon process.
 /// It's called from `main.rs` when the `--daemon-run` argument is detected.
+#[instrument]
 pub async fn run_as_daemon() -> Result<()> {
     daemon::run_with_signal_handling().await
 }

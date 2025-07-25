@@ -2,12 +2,13 @@ use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
 use crate::libs::config::MonitorConfig;
 use crate::libs::messages::Message;
-use crate::{msg_error, msg_info};
+use crate::{msg_debug, msg_error, msg_info};
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use rdev::{listen, EventType};
 use std::sync::{Arc, Mutex};
 use tokio::time::{self, Duration, Instant};
+use tracing::{debug, instrument, span, Level};
 
 /// Represents the current state of the user's activity.
 /// Using an enum provides a more explicit and robust way to manage state
@@ -49,7 +50,12 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if initialization fails.
+    #[instrument(skip(config))]
     pub fn new(config: MonitorConfig) -> Result<Self> {
+        let span = span!(Level::INFO, "monitor_init");
+        let _enter = span.enter();
+
+        debug!("Initializing monitor with config: {:?}", config);
         let pauses = Pauses::new()?;
         let workdays = Workdays::new()?;
         let last_activity = Arc::new(Mutex::new(Instant::now()));
@@ -105,6 +111,7 @@ impl Monitor {
     ///
     /// # Returns
     /// A `Result` indicating success or an error if a database operation fails.
+    #[instrument(skip(self))]
     pub async fn run(&mut self) -> Result<()> {
         msg_info!(Message::MonitorStarted {
             pause_threshold: self.config.pause_threshold,
@@ -141,9 +148,15 @@ impl Monitor {
     /// `true` if activity was detected, `false` otherwise.
     pub fn detect_activity(&self) -> bool {
         let elapsed = self.last_activity.lock().unwrap().elapsed();
+
         // Activity is considered detected if the time since `last_activity`
         // is less than the `poll_interval`.
-        elapsed < Duration::from_millis(self.config.poll_interval)
+        let is_active = elapsed < Duration::from_millis(self.config.poll_interval);
+
+        // Debug logging only visible with KASL_DEBUG=1
+        msg_debug!(format!("Activity check: elapsed={:?}, active={}", elapsed, is_active));
+
+        is_active
     }
 
     /// Handles the scenario when user inactivity is detected.
