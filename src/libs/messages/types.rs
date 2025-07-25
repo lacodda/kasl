@@ -1,5 +1,17 @@
 #[derive(Debug, Clone)]
 pub enum Message {
+    // === AUTOSTART MESSAGES ===
+    AutostartEnabled,
+    AutostartEnabledUser,
+    AutostartDisabled,
+    AutostartAlreadyDisabled,
+    AutostartEnableFailed(String),
+    AutostartDisableFailed(String),
+    AutostartStatus(String),
+    AutostartNotImplemented,
+    AutostartRequiresAdmin,
+    AutostartCheckingAlternative,
+
     // === TASK MESSAGES ===
     TaskCreated,
     TaskUpdated,

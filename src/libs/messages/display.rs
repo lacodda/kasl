@@ -4,6 +4,18 @@ use std::fmt::{Display, Formatter, Result};
 impl Display for Message {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let text = match self {
+            // === AUTOSTART MESSAGES ===
+            Message::AutostartEnabled => "Autostart has been enabled. Kasl will start automatically on system boot.".to_string(),
+            Message::AutostartEnabledUser => "Autostart has been enabled for current user. Kasl will start when you log in.".to_string(),
+            Message::AutostartDisabled => "Autostart has been disabled.".to_string(),
+            Message::AutostartAlreadyDisabled => "Autostart was already disabled.".to_string(),
+            Message::AutostartEnableFailed(error) => format!("Failed to enable autostart: {}", error),
+            Message::AutostartDisableFailed(error) => format!("Failed to disable autostart: {}", error),
+            Message::AutostartStatus(status) => format!("Autostart is currently: {}", status),
+            Message::AutostartNotImplemented => "Autostart is not yet implemented for this operating system.".to_string(),
+            Message::AutostartRequiresAdmin => "Administrator privileges required for system-level autostart. Trying user-level alternative...".to_string(),
+            Message::AutostartCheckingAlternative => "Checking alternative autostart method...".to_string(),
+
             // === TASK MESSAGES ===
             Message::TaskCreated => "Task created successfully".to_string(),
             Message::TaskUpdated => "Task updated successfully".to_string(),

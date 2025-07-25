@@ -1,3 +1,4 @@
+pub mod autostart;
 pub mod init;
 pub mod pauses;
 pub mod report;
@@ -14,6 +15,10 @@ use clap::{Parser, Subcommand};
 /// Defines the main subcommands that the application can execute.
 #[derive(Debug, Subcommand)]
 enum Commands {
+    /// Manage autostart on system boot
+    #[command(about = "Manage autostart on system boot")]
+    Autostart(autostart::AutostartArgs),
+
     /// Initializes the application configuration.
     #[command(about = "Configuration initialization")]
     Init(init::InitArgs),
@@ -66,6 +71,7 @@ impl Cli {
     pub async fn menu() -> Result<()> {
         let cli = Self::parse();
         match cli.command {
+            Commands::Autostart(args) => autostart::cmd(args),
             Commands::Init(args) => init::cmd(args),
             Commands::Task(args) => task::cmd(args).await,
             Commands::End => {

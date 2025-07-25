@@ -1,3 +1,4 @@
+pub mod autostart;
 pub mod config;
 pub mod daemon;
 pub mod data_storage;
