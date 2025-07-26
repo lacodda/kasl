@@ -28,6 +28,9 @@ const WHERE_INCOMPLETE: &str = "WHERE
   WHERE DATE(timestamp) BETWEEN datetime(CURRENT_TIMESTAMP, 'localtime', '-15 day') AND datetime(CURRENT_TIMESTAMP, 'localtime', '-1 day')
   GROUP BY task_id)
   GROUP BY task_id";
+const DELETE_TASK: &str = "DELETE FROM tasks WHERE id = ?";
+const DELETE_TASKS_BY_IDS: &str = "DELETE FROM tasks WHERE id IN";
+const SELECT_COUNT_BY_ID: &str = "SELECT COUNT(*) FROM tasks WHERE id = ?";
 
 #[derive(Debug)]
 pub struct Tasks {
@@ -97,5 +100,33 @@ impl Tasks {
 
     fn query_by_ids(ids: &Vec<i32>) -> String {
         format!("{} {} ({})", SELECT_TASKS, WHERE_ID_IN, vec!["?"; ids.len()].join(", "))
+    }
+
+    /// Delete a single task by ID
+    pub fn delete(&mut self, id: i32) -> Result<usize> {
+        let affected = self.conn.execute(DELETE_TASK, params![id])?;
+        Ok(affected)
+    }
+
+    /// Delete multiple tasks by IDs
+    pub fn delete_many(&mut self, ids: &[i32]) -> Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let placeholders = vec!["?"; ids.len()].join(", ");
+        let query = format!("{} ({})", DELETE_TASKS_BY_IDS, placeholders);
+
+        let params: Vec<Box<dyn ToSql>> = ids.iter().map(|id| Box::new(*id) as Box<dyn ToSql>).collect();
+        let params_refs: Vec<&dyn ToSql> = params.iter().map(|p| &**p).collect();
+
+        let affected = self.conn.execute(&query, &params_refs[..])?;
+        Ok(affected)
+    }
+
+    /// Check if a task exists
+    pub fn exists(&mut self, id: i32) -> Result<bool> {
+        let count: i32 = self.conn.query_row(SELECT_COUNT_BY_ID, params![id], |row| row.get(0))?;
+        Ok(count > 0)
     }
 }

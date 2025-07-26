@@ -31,6 +31,14 @@ impl Display for Message {
             Message::TasksIncompleteHeader => "Incomplete tasks".to_string(),
             Message::TasksGitlabHeader => "Gitlab commits".to_string(),
             Message::TasksJiraHeader => "Jira issues".to_string(),
+            Message::NoTaskIdsProvided => "No task IDs provided for deletion.".to_string(),
+            Message::TasksNotFoundForIds(ids) => format!("No tasks found with IDs: {:?}", ids),
+            Message::TasksToBeDeleted => "The following tasks will be deleted:".to_string(),
+            Message::ConfirmDeleteTask => "Are you sure you want to delete this task?".to_string(),
+            Message::ConfirmDeleteTasks(count) => format!("Are you sure you want to delete {} tasks?", count),
+            Message::ConfirmDeleteAllTodayTasks(count) => format!("Are you sure you want to delete ALL {} tasks for today?", count),
+            Message::ConfirmDeleteAllTodayTasksFinal => "This action cannot be undone. Are you REALLY sure?".to_string(),
+            Message::NoTasksForToday => "No tasks found for today.".to_string(),
 
             // === WORKDAY MESSAGES ===
             Message::WorkdayEnded => "Workday ended for today.".to_string(),

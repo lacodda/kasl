@@ -29,15 +29,16 @@ impl View {
     pub fn tasks(tasks: &[Task]) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS"]);
+        table.set_titles(row!["#", "ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS"]);
 
         for (index, task) in tasks.iter().enumerate() {
             table.add_row(row![
                 index + 1,
+                task.id.unwrap_or(0),
                 task.task_id.unwrap_or(0),
                 task.name,
                 task.comment,
-                task.completeness.unwrap_or(100)
+                format!("{}%", task.completeness.unwrap_or(100))
             ]);
         }
         table.printstd();

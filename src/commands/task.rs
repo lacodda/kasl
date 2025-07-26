@@ -13,12 +13,12 @@ use crate::{
         task::{Task, TaskFilter},
         view::View,
     },
-    msg_error, msg_print,
+    msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
 use chrono::Local;
 use clap::Args;
-use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect};
 
 /// Enum to identify the origin of a task suggestion.
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -52,6 +52,12 @@ pub struct TaskArgs {
     /// Find and suggest tasks from various sources (incomplete, GitLab, Jira).
     #[arg(short, long, help = "Find incomplete tasks")]
     find: bool,
+    /// Delete tasks by IDs
+    #[arg(short, long, help = "Delete tasks by IDs")]
+    delete: Option<Vec<i32>>,
+    /// Delete all tasks for today (use with caution)
+    #[arg(long, help = "Delete all tasks for today")]
+    delete_today: bool,
 }
 
 /// Main entry point for the `task` command.
@@ -63,6 +69,15 @@ pub struct TaskArgs {
 /// - Default: Enters an interactive mode to create a new task.
 pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     let date = Local::now();
+
+    // Handle deletion
+    if let Some(ids) = task_args.delete {
+        return handle_delete_by_ids(ids).await;
+    }
+
+    if task_args.delete_today {
+        return handle_delete_today().await;
+    }
 
     // Handle showing tasks
     if task_args.show {
@@ -205,6 +220,95 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     let task = Task::new(&name, &comment, Some(completeness));
     let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
     View::tasks(&new_task)?;
+
+    Ok(())
+}
+
+/// Handle deletion of tasks by IDs
+async fn handle_delete_by_ids(ids: Vec<i32>) -> Result<()> {
+    if ids.is_empty() {
+        msg_error!(Message::NoTaskIdsProvided);
+        return Ok(());
+    }
+
+    let mut tasks_db = Tasks::new()?;
+
+    // Fetch tasks to show what will be deleted
+    let tasks = tasks_db.fetch(TaskFilter::ByIds(ids.clone()))?;
+
+    if tasks.is_empty() {
+        msg_error!(Message::TasksNotFoundForIds(ids));
+        return Ok(());
+    }
+
+    // Show tasks that will be deleted
+    msg_print!(Message::TasksToBeDeleted, true);
+    View::tasks(&tasks)?;
+
+    // Confirm deletion
+    let confirmed = if ids.len() == 1 {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::ConfirmDeleteTask.to_string())
+            .default(false)
+            .interact()?
+    } else {
+        Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::ConfirmDeleteTasks(ids.len()).to_string())
+            .default(false)
+            .interact()?
+    };
+
+    if confirmed {
+        let deleted_count = tasks_db.delete_many(&ids)?;
+        msg_success!(Message::TasksDeletedCount(deleted_count));
+    } else {
+        msg_info!(Message::OperationCancelled);
+    }
+
+    Ok(())
+}
+
+/// Handle deletion of all tasks for today
+async fn handle_delete_today() -> Result<()> {
+    let mut tasks_db = Tasks::new()?;
+    let today = Local::now().date_naive();
+
+    // Fetch today's tasks
+    let tasks = tasks_db.fetch(TaskFilter::Date(today))?;
+
+    if tasks.is_empty() {
+        msg_info!(Message::NoTasksForToday);
+        return Ok(());
+    }
+
+    // Show tasks that will be deleted
+    msg_print!(Message::TasksToBeDeleted, true);
+    View::tasks(&tasks)?;
+
+    // Double confirmation for bulk delete
+    let first_confirm = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::ConfirmDeleteAllTodayTasks(tasks.len()).to_string())
+        .default(false)
+        .interact()?;
+
+    if !first_confirm {
+        msg_info!(Message::OperationCancelled);
+        return Ok(());
+    }
+
+    // Second confirmation
+    let second_confirm = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::ConfirmDeleteAllTodayTasksFinal.to_string())
+        .default(false)
+        .interact()?;
+
+    if second_confirm {
+        let ids: Vec<i32> = tasks.iter().filter_map(|t| t.id).collect();
+        let deleted_count = tasks_db.delete_many(&ids)?;
+        msg_success!(Message::TasksDeletedCount(deleted_count));
+    } else {
+        msg_info!(Message::OperationCancelled);
+    }
 
     Ok(())
 }

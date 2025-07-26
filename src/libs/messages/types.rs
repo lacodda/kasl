@@ -27,6 +27,14 @@ pub enum Message {
     TasksIncompleteHeader,
     TasksGitlabHeader,
     TasksJiraHeader,
+    NoTaskIdsProvided,
+    TasksNotFoundForIds(Vec<i32>),
+    TasksToBeDeleted,
+    ConfirmDeleteTask,
+    ConfirmDeleteTasks(usize),
+    ConfirmDeleteAllTodayTasks(usize),
+    ConfirmDeleteAllTodayTasksFinal,
+    NoTasksForToday,
 
     // === WORKDAY MESSAGES ===
     WorkdayEnded,
