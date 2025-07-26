@@ -31,6 +31,7 @@ const WHERE_INCOMPLETE: &str = "WHERE
 const DELETE_TASK: &str = "DELETE FROM tasks WHERE id = ?";
 const DELETE_TASKS_BY_IDS: &str = "DELETE FROM tasks WHERE id IN";
 const SELECT_COUNT_BY_ID: &str = "SELECT COUNT(*) FROM tasks WHERE id = ?";
+const UPDATE_TASK: &str = "UPDATE tasks SET name = ?, comment = ?, completeness = ? WHERE id = ?";
 
 #[derive(Debug)]
 pub struct Tasks {
@@ -128,5 +129,24 @@ impl Tasks {
     pub fn exists(&mut self, id: i32) -> Result<bool> {
         let count: i32 = self.conn.query_row(SELECT_COUNT_BY_ID, params![id], |row| row.get(0))?;
         Ok(count > 0)
+    }
+
+    /// Update an existing task
+    pub fn update(&mut self, task: &Task) -> Result<()> {
+        let id = task.id.ok_or_else(|| msg_error_anyhow!(Message::NoIdSet))?;
+
+        let affected = self.conn.execute(UPDATE_TASK, params![task.name, task.comment, task.completeness, id])?;
+
+        if affected == 0 {
+            return Err(msg_error_anyhow!(Message::TaskUpdateFailed));
+        }
+
+        Ok(())
+    }
+
+    /// Fetch a single task by ID
+    pub fn get_by_id(&mut self, id: i32) -> Result<Option<Task>> {
+        let mut tasks = self.fetch(TaskFilter::ByIds(vec![id]))?;
+        Ok(tasks.pop())
     }
 }

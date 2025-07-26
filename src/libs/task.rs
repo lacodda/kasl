@@ -23,6 +23,13 @@ impl Task {
             excluded_from_search: None,
         }
     }
+
+    /// Update task fields from another task, preserving ID and task_id
+    pub fn update_from(&mut self, other: &Task) {
+        self.name = other.name.clone();
+        self.comment = other.comment.clone();
+        self.completeness = other.completeness;
+    }
 }
 
 #[derive(Debug, Clone)]

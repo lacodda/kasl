@@ -58,6 +58,12 @@ pub struct TaskArgs {
     /// Delete all tasks for today (use with caution)
     #[arg(long, help = "Delete all tasks for today")]
     delete_today: bool,
+    /// Edit task by ID
+    #[arg(short, long, help = "Edit task by ID")]
+    edit: Option<i32>,
+    /// Edit multiple tasks interactively
+    #[arg(long, help = "Edit multiple tasks interactively")]
+    edit_interactive: bool,
 }
 
 /// Main entry point for the `task` command.
@@ -77,6 +83,15 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
 
     if task_args.delete_today {
         return handle_delete_today().await;
+    }
+
+    // Handle editing
+    if let Some(id) = task_args.edit {
+        return handle_edit_by_id(id).await;
+    }
+
+    if task_args.edit_interactive {
+        return handle_edit_interactive().await;
     }
 
     // Handle showing tasks
@@ -311,4 +326,142 @@ async fn handle_delete_today() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Handle editing a single task by ID
+async fn handle_edit_by_id(id: i32) -> Result<()> {
+    let mut tasks_db = Tasks::new()?;
+
+    // Fetch the task
+    let task = match tasks_db.get_by_id(id)? {
+        Some(task) => task,
+        None => {
+            msg_error!(Message::TaskNotFoundWithId(id));
+            return Ok(());
+        }
+    };
+
+    // Show current task
+    msg_print!(Message::CurrentTaskState, true);
+    View::tasks(&[task.clone()])?;
+
+    // Interactive edit
+    let edited_task = edit_task_interactive(&task)?;
+
+    // Check if anything changed
+    if edited_task.name == task.name && edited_task.comment == task.comment && edited_task.completeness == task.completeness {
+        msg_info!(Message::NoChangesDetected);
+        return Ok(());
+    }
+
+    // Show preview of changes
+    msg_print!(Message::TaskEditPreview, true);
+    View::tasks(&[edited_task.clone()])?;
+
+    // Confirm changes
+    let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::ConfirmTaskUpdate.to_string())
+        .default(true)
+        .interact()?;
+
+    if confirmed {
+        let mut task_to_update = task;
+        task_to_update.update_from(&edited_task);
+        tasks_db.update(&task_to_update)?;
+        msg_success!(Message::TaskUpdated);
+    } else {
+        msg_info!(Message::OperationCancelled);
+    }
+
+    Ok(())
+}
+
+/// Handle interactive editing of multiple tasks
+async fn handle_edit_interactive() -> Result<()> {
+    let mut tasks_db = Tasks::new()?;
+
+    // Show tasks for today by default
+    let today = Local::now().date_naive();
+    let tasks = tasks_db.fetch(TaskFilter::Date(today))?;
+
+    if tasks.is_empty() {
+        msg_info!(Message::NoTasksForToday);
+        return Ok(());
+    }
+
+    // Let user select which tasks to edit
+    let task_descriptions: Vec<String> = tasks
+        .iter()
+        .map(|t| format!("[{}] {} ({}%)", t.id.unwrap_or(0), t.name, t.completeness.unwrap_or(0)))
+        .collect();
+
+    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::SelectTasksToEdit.to_string())
+        .items(&task_descriptions)
+        .interact()?;
+
+    if selections.is_empty() {
+        msg_info!(Message::NoTasksSelected);
+        return Ok(());
+    }
+
+    // Edit each selected task
+    for &index in &selections {
+        let task = &tasks[index];
+
+        msg_print!(Message::EditingTask(task.name.clone()), true);
+        View::tasks(&[task.clone()])?;
+
+        let edited_task = edit_task_interactive(task)?;
+
+        // Update if changed
+        if edited_task.name != task.name || edited_task.comment != task.comment || edited_task.completeness != task.completeness {
+            let mut task_to_update = task.clone();
+            task_to_update.update_from(&edited_task);
+            tasks_db.update(&task_to_update)?;
+            msg_success!(Message::TaskUpdatedWithName(task.name.clone()));
+        } else {
+            msg_info!(Message::TaskSkippedNoChanges(task.name.clone()));
+        }
+    }
+
+    msg_success!(Message::TaskEditingCompleted);
+    Ok(())
+}
+
+/// Interactive task editing helper
+fn edit_task_interactive(task: &Task) -> Result<Task> {
+    let name = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptTaskNameEdit.to_string())
+        .default(task.name.clone())
+        .interact_text()?;
+
+    let comment = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptTaskCommentEdit.to_string())
+        .default(task.comment.clone())
+        .allow_empty(true)
+        .interact_text()?;
+
+    let completeness_range_msg = Message::TaskCompletenessRange.to_string();
+    let completeness = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptTaskCompletenessEdit.to_string())
+        .default(task.completeness.unwrap_or(100))
+        .validate_with(|input: &i32| -> Result<(), &str> {
+            if *input >= 0 && *input <= 100 {
+                Ok(())
+            } else {
+                Err(&completeness_range_msg)
+            }
+        })
+        .interact_text()?;
+
+    Ok(Task {
+        id: task.id,
+        task_id: task.task_id,
+        timestamp: task.timestamp.clone(),
+        name,
+        comment,
+        completeness: Some(completeness),
+        excluded_from_search: task.excluded_from_search,
+    })
 }
