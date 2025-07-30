@@ -3,7 +3,7 @@ use crate::libs::pause::Pause;
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeDelta};
 use parking_lot::Mutex;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 use std::sync::Arc;
 
 const SCHEMA_PAUSES: &str = "CREATE TABLE IF NOT EXISTS pauses (
@@ -18,6 +18,7 @@ const UPDATE_PAUSE: &str = "UPDATE pauses SET end = (datetime(CURRENT_TIMESTAMP,
 const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL ORDER BY id DESC LIMIT 1";
 const SELECT_DAILY_PAUSES: &str =
     "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND (duration IS NULL OR duration >= ?2)";
+const DELETE_PAUSE: &str = "DELETE FROM pauses WHERE id = ?";
 
 // Manages operations for the 'pauses' table.
 pub struct Pauses {
@@ -88,5 +89,28 @@ impl Pauses {
             pauses.push(pause_result?);
         }
         Ok(pauses)
+    }
+
+    /// Delete a pause by ID
+    pub fn delete(&self, id: i32) -> Result<()> {
+        let conn_guard = self.conn.lock();
+        conn_guard.execute(DELETE_PAUSE, params![id])?;
+        Ok(())
+    }
+
+    /// Delete multiple pauses by their IDs
+    pub fn delete_many(&self, ids: &[i32]) -> Result<usize> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let conn_guard = self.conn.lock();
+        let mut deleted = 0;
+
+        for id in ids {
+            deleted += conn_guard.execute(DELETE_PAUSE, params![id])?;
+        }
+
+        Ok(deleted)
     }
 }

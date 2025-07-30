@@ -96,6 +96,17 @@ impl Display for Message {
             Message::ReportHeader(date) => format!("Report for {}", date),
             Message::WorkingHoursForMonth(month_year) => format!("Working hours for {}", month_year),
 
+            // === SHORT INTERVALS MESSAGES ===
+            Message::ShortIntervalsDetected(count, duration) => format!("Found {} short work intervals (total: {})", count, duration),
+            Message::NoShortIntervalsFound(min) => format!("No work intervals shorter than {} minutes found.", min),
+            Message::UseReportClearCommand => "Use 'kasl report --clear-short-intervals' to remove them.".to_string(),
+            Message::ShortIntervalsToRemove(count) => format!("Found {} short intervals to remove:", count),
+            Message::RemovingPauses(count) => format!("Removing {} pauses to merge intervals...", count),
+            Message::ShortIntervalsCleared(count) => format!("Successfully removed {} pauses and merged intervals.", count),
+            Message::NoRemovablePausesFound => "No pauses found that can be removed to clear short intervals.".to_string(),
+            Message::UpdatedReport => "Updated report:".to_string(),
+            Message::PromptMinWorkInterval => "Minimum work interval (minutes)".to_string(),
+
             // === PAUSE MESSAGES ===
             Message::PausesTitle(date) => format!("Pauses for {}", date),
 

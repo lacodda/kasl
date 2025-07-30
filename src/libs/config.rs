@@ -26,6 +26,7 @@ pub struct MonitorConfig {
     pub pause_threshold: u64,    // Inactivity threshold in seconds
     pub poll_interval: u64,      // Poll interval in milliseconds
     pub activity_threshold: u64, // Activity duration threshold in seconds
+    pub min_work_interval: u64,  // Minimum work interval in minutes (new field)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -55,6 +56,7 @@ impl Default for MonitorConfig {
             pause_threshold: 60,    // 60 seconds
             poll_interval: 500,     // 500 milliseconds
             activity_threshold: 30, // 30 seconds
+            min_work_interval: 10,  // 10 minutes minimum work interval
         }
     }
 }
@@ -124,6 +126,10 @@ impl Config {
                         activity_threshold: Input::with_theme(&ColorfulTheme::default())
                             .with_prompt(Message::PromptActivityThreshold.to_string())
                             .default(default.activity_threshold)
+                            .interact_text()?,
+                        min_work_interval: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(Message::PromptMinWorkInterval.to_string())
+                            .default(default.min_work_interval)
                             .interact_text()?,
                     });
                 }

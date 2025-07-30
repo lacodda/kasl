@@ -15,11 +15,11 @@ use crate::{
         formatter::format_duration,
         messages::Message,
         pause::Pause,
-        report,
+        report::{self, analyze_short_intervals},
         task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
-    msg_error, msg_error_anyhow, msg_info, msg_print,
+    msg_error, msg_error_anyhow, msg_info, msg_print, msg_success, msg_warning,
 };
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
@@ -38,6 +38,9 @@ pub struct ReportArgs {
     /// Submits a monthly summary report to the API.
     #[arg(long, help = "Submit monthly report")]
     month: bool,
+    /// Clear short work intervals by removing pauses
+    #[arg(long, short, help = "Clear short work intervals automatically")]
+    clear_short_intervals: bool,
 }
 
 /// Main entry point for the `report` command.
@@ -47,6 +50,11 @@ pub struct ReportArgs {
 /// daily, monthly, display, or send actions.
 pub async fn cmd(args: ReportArgs) -> Result<()> {
     let date = determine_report_date(args.last);
+
+    if args.clear_short_intervals {
+        return handle_clear_short_intervals(date).await;
+    }
+
     if args.month {
         handle_monthly_report(date).await
     } else {
@@ -94,6 +102,65 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     Ok(())
 }
 
+/// Handle clearing short intervals
+async fn handle_clear_short_intervals(date: DateTime<Local>) -> Result<()> {
+    let naive_date = date.date_naive();
+    let workday = match Workdays::new()?.fetch(naive_date)? {
+        Some(wd) => wd,
+        None => {
+            msg_error!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()));
+            return Ok(());
+        }
+    };
+
+    let config = Config::read()?;
+    let monitor_config = config.monitor.unwrap_or_default();
+
+    let pauses_db = Pauses::new()?;
+    let all_pauses = pauses_db.fetch(naive_date, 0)?;
+
+    // Calculate intervals
+    let intervals = report::calculate_work_intervals(&workday, &all_pauses);
+
+    // Analyze for short intervals
+    if let Some(short_info) = analyze_short_intervals(&intervals, monitor_config.min_work_interval) {
+        msg_print!(Message::ShortIntervalsToRemove(short_info.count), true);
+
+        // Show which intervals will be removed
+        for (_idx, interval) in &short_info.intervals {
+            println!(
+                "  • {} - {} ({})",
+                interval.start.format("%H:%M"),
+                interval.end.format("%H:%M"),
+                format_duration(&interval.duration)
+            );
+        }
+
+        // Get pause IDs to delete
+        let pause_ids: Vec<i32> = short_info
+            .pauses_to_remove
+            .iter()
+            .filter_map(|&idx| all_pauses.get(idx).and_then(|p| Some(p.id)))
+            .collect();
+
+        if !pause_ids.is_empty() {
+            msg_info!(Message::RemovingPauses(pause_ids.len()));
+            let deleted = pauses_db.delete_many(&pause_ids)?;
+            msg_success!(Message::ShortIntervalsCleared(deleted));
+
+            // Show updated report
+            msg_print!(Message::UpdatedReport, true);
+            display_daily_report(date).await?;
+        } else {
+            msg_warning!(Message::NoRemovablePausesFound);
+        }
+    } else {
+        msg_info!(Message::NoShortIntervalsFound(monitor_config.min_work_interval));
+    }
+
+    Ok(())
+}
+
 /// Fetches all necessary data and displays a formatted daily report in the terminal.
 async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
@@ -115,6 +182,14 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let all_pauses = Pauses::new()?.fetch(naive_date, 0)?;
 
     View::report(&workday, &long_breaks, &all_pauses, &tasks)?;
+
+    // Check for short intervals
+    let intervals = report::calculate_work_intervals(&workday, &long_breaks);
+    if let Some(short_info) = analyze_short_intervals(&intervals, monitor_config.min_work_interval) {
+        msg_warning!(Message::ShortIntervalsDetected(short_info.count, format_duration(&short_info.total_duration)));
+        msg_info!(Message::UseReportClearCommand);
+    }
+
     Ok(())
 }
 
