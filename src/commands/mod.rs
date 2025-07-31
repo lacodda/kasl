@@ -1,6 +1,7 @@
 pub mod adjust;
 pub mod autostart;
 pub mod init;
+pub mod migrations;
 pub mod pauses;
 pub mod report;
 pub mod sum;
@@ -55,6 +56,11 @@ enum Commands {
     /// Adjust workday time by removing time or adding pauses
     #[command(about = "Adjust workday time by removing time or adding pauses")]
     Adjust(adjust::AdjustArgs),
+
+    /// Database migration management (for debugging)
+    #[cfg(debug_assertions)]
+    #[command(about = "Database migration management")]
+    Migrations(migrations::MigrationsArgs),
 }
 
 /// The main CLI structure that parses command-line arguments.
@@ -90,6 +96,8 @@ impl Cli {
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
             Commands::Adjust(args) => adjust::cmd(args).await,
+            #[cfg(debug_assertions)]
+            Commands::Migrations(args) => migrations::cmd(args),
         }
     }
 }

@@ -272,6 +272,20 @@ impl Display for Message {
             // === SPECIFIC UI MESSAGES ===
             Message::SelectingTask(name) => format!("Selected task: {}", name),
             Message::SelectedTaskFormat(name, completeness) => format!("{} - {}%", name, completeness),
+
+            // === MIGRATION MESSAGES ===
+            Message::MigrationsFound(count) => format!("Found {} pending database migrations", count),
+            Message::RunningMigration(version, name) => format!("Running migration v{}: {}", version, name),
+            Message::MigrationCompleted(version) => format!("✓ Migration v{} completed", version),
+            Message::MigrationFailed(version, error) => format!("✗ Migration v{} failed: {}", version, error),
+            Message::AllMigrationsCompleted => "All database migrations completed successfully".to_string(),
+            Message::DatabaseVersion(version) => format!("Current database version: {}", version),
+            Message::DatabaseUpToDate => "Database schema is up to date".to_string(),
+            Message::DatabaseNeedsUpdate => "Database schema needs to be updated".to_string(),
+            Message::MigrationHistory => "Migration history:".to_string(),
+            Message::NothingToRollback => "Nothing to rollback".to_string(),
+            Message::RollingBack(from, to) => format!("Rolling back from v{} to v{}", from, to),
+            Message::RollbackCompleted(version) => format!("Rollback to v{} completed", version),
         };
 
         write!(f, "{}", text)

@@ -250,4 +250,18 @@ pub enum Message {
     // === SPECIFIC UI MESSAGES ===
     SelectingTask(String),           // task name
     SelectedTaskFormat(String, i32), // task name, completeness
+
+    // === MIGRATION MESSAGES ===
+    MigrationsFound(usize),        // count
+    RunningMigration(u32, String), // version, name
+    MigrationCompleted(u32),       // version
+    MigrationFailed(u32, String),  // version, error
+    AllMigrationsCompleted,
+    DatabaseVersion(u32),
+    DatabaseUpToDate,
+    DatabaseNeedsUpdate,
+    MigrationHistory,
+    NothingToRollback,
+    RollingBack(u32, u32),  // from, to
+    RollbackCompleted(u32), // version
 }
