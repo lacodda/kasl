@@ -80,6 +80,12 @@ pub enum Message {
     ReportHeader(String),            // date
     WorkingHoursForMonth(String),    // month/year
 
+    // === EXPORT MESSAGES ===
+    ExportingData(String, String), // data type, format
+    ExportCompleted(String), // file path
+    ExportingAllData,
+    ExportFailed(String), // error
+
     // === SHORT INTERVALS MESSAGES ===
     ShortIntervalsDetected(usize, String), // count, total duration
     NoShortIntervalsFound(u64),            // min_minutes

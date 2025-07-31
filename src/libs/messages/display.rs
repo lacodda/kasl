@@ -96,6 +96,12 @@ impl Display for Message {
             Message::ReportHeader(date) => format!("Report for {}", date),
             Message::WorkingHoursForMonth(month_year) => format!("Working hours for {}", month_year),
 
+            // === EXPORT MESSAGES ===
+            Message::ExportingData(data, format) => format!("Exporting {} in {} format...", data, format),
+            Message::ExportCompleted(path) => format!("Export completed successfully: {}", path),
+            Message::ExportingAllData => "Exporting all data...".to_string(),
+            Message::ExportFailed(error) => format!("Export failed: {}", error),
+
             // === SHORT INTERVALS MESSAGES ===
             Message::ShortIntervalsDetected(count, duration) => format!("Found {} short work intervals (total: {})", count, duration),
             Message::NoShortIntervalsFound(min) => format!("No work intervals shorter than {} minutes found.", min),

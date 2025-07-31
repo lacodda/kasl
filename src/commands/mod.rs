@@ -1,5 +1,6 @@
 pub mod adjust;
 pub mod autostart;
+pub mod export;
 pub mod init;
 pub mod migrations;
 pub mod pauses;
@@ -44,6 +45,10 @@ enum Commands {
     /// Prepares and optionally sends a work report.
     #[command(about = "Prepare a report")]
     Report(report::ReportArgs),
+
+    /// Export data to various formats
+    #[command(about = "Export data to various formats")]
+    Export(export::ExportArgs),
 
     /// Watches for user activity to automatically record pauses.
     #[command(about = "Watch user activity in the background to record pauses")]
@@ -92,6 +97,7 @@ impl Cli {
             }
             Commands::Sum(args) => sum::cmd(args).await,
             Commands::Report(args) => report::cmd(args).await,
+            Commands::Export(args) => export::cmd(args).await,
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
