@@ -107,6 +107,17 @@ impl Display for Message {
             Message::UpdatedReport => "Updated report:".to_string(),
             Message::PromptMinWorkInterval => "Minimum work interval (minutes)".to_string(),
 
+            // === TIME ADJUSTMENT MESSAGES ===
+            Message::SelectAdjustmentMode => "Select adjustment mode".to_string(),
+            Message::PromptAdjustmentMinutes => "How many minutes to adjust?".to_string(),
+            Message::PromptPauseStartTime => "When should the pause start? (HH:MM)".to_string(),
+            Message::ConfirmTimeAdjustment => "Apply this time adjustment?".to_string(),
+            Message::TimeAdjustmentApplied => "Time adjustment applied successfully.".to_string(),
+            Message::AdjustmentPreview => "Time adjustment preview:".to_string(),
+            Message::InvalidAdjustmentTooMuchTime => "Cannot adjust that much time - would result in invalid workday.".to_string(),
+            Message::InvalidPauseOutsideWorkday => "Pause must be within workday hours.".to_string(),
+            Message::WorkdayUpdateFailed => "Failed to update workday.".to_string(),
+
             // === PAUSE MESSAGES ===
             Message::PausesTitle(date) => format!("Pauses for {}", date),
 

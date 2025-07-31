@@ -91,6 +91,17 @@ pub enum Message {
     UpdatedReport,
     PromptMinWorkInterval,
 
+    // === TIME ADJUSTMENT MESSAGES ===
+    SelectAdjustmentMode,
+    PromptAdjustmentMinutes,
+    PromptPauseStartTime,
+    ConfirmTimeAdjustment,
+    TimeAdjustmentApplied,
+    AdjustmentPreview,
+    InvalidAdjustmentTooMuchTime,
+    InvalidPauseOutsideWorkday,
+    WorkdayUpdateFailed,
+
     // === PAUSE MESSAGES ===
     PausesTitle(String),
 

@@ -1,3 +1,4 @@
+pub mod adjust;
 pub mod autostart;
 pub mod init;
 pub mod pauses;
@@ -50,6 +51,10 @@ enum Commands {
     /// Displays recorded pauses for a given date.
     #[command(about = "Display pauses for a given date")]
     Pauses(pauses::PausesArgs),
+
+    /// Adjust workday time by removing time or adding pauses
+    #[command(about = "Adjust workday time by removing time or adding pauses")]
+    Adjust(adjust::AdjustArgs),
 }
 
 /// The main CLI structure that parses command-line arguments.
@@ -84,6 +89,7 @@ impl Cli {
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
+            Commands::Adjust(args) => adjust::cmd(args).await,
         }
     }
 }

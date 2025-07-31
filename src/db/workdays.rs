@@ -1,4 +1,4 @@
-use crate::db::db::Db;
+use crate::{db::db::Db, libs::messages::Message, msg_error_anyhow};
 use anyhow::Result;
 use chrono::{NaiveDate, NaiveDateTime};
 use rusqlite::{Connection, OptionalExtension};
@@ -13,6 +13,9 @@ const INSERT_START: &str = "INSERT INTO workdays (date, start) VALUES (?1, datet
 const UPDATE_END: &str = "UPDATE workdays SET end = datetime(CURRENT_TIMESTAMP, 'localtime') WHERE date = ?1";
 const SELECT_BY_DATE: &str = "SELECT id, date, start, end FROM workdays WHERE date = ?1";
 const SELECT_BY_MONTH: &str = "SELECT id, date, start, end FROM workdays WHERE strftime('%Y-%m', date) = strftime('%Y-%m', ?1)";
+const UPDATE_START: &str = "UPDATE workdays SET start = ?1 WHERE date = ?2";
+const UPDATE_END_TIME: &str = "UPDATE workdays SET end = ?1 WHERE date = ?2";
+const UNSET_END_TIME: &str = "UPDATE workdays SET end = NULL WHERE date = ?1";
 
 #[derive(Debug, Clone)]
 pub struct Workday {
@@ -84,5 +87,33 @@ impl Workdays {
             workdays.push(workday?);
         }
         Ok(workdays)
+    }
+
+    /// Update the start time of a workday
+    pub fn update_start(&mut self, date: NaiveDate, new_start: NaiveDateTime) -> Result<()> {
+        let date_str = date.format("%Y-%m-%d").to_string();
+        let start_str = new_start.format("%Y-%m-%d %H:%M:%S").to_string();
+
+        let affected = self.conn.execute(UPDATE_START, [&start_str, &date_str])?;
+        if affected == 0 {
+            return Err(msg_error_anyhow!(Message::WorkdayUpdateFailed));
+        }
+        Ok(())
+    }
+
+    /// Update the end time of a workday
+    pub fn update_end(&mut self, date: NaiveDate, new_end: Option<NaiveDateTime>) -> Result<()> {
+        let date_str = date.format("%Y-%m-%d").to_string();
+        let end_str = new_end.map(|e| e.format("%Y-%m-%d %H:%M:%S").to_string());
+
+        let affected = match end_str {
+            Some(end) => self.conn.execute(UPDATE_END_TIME, [&end, &date_str])?,
+            None => self.conn.execute(UNSET_END_TIME, [&date_str])?,
+        };
+
+        if affected == 0 {
+            return Err(msg_error_anyhow!(Message::WorkdayUpdateFailed));
+        }
+        Ok(())
     }
 }
