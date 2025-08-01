@@ -69,8 +69,14 @@ pub struct TaskArgs {
     #[arg(long, short = 't')]
     template: Option<String>,
     /// List available templates when creating a task
-    #[arg(long)]
+    #[arg(long, short = 'l')]
     from_template: bool,
+    /// Tags to add to the task (comma-separated)
+    #[arg(long)]
+    tags: Option<String>,
+    /// Filter tasks by tag
+    #[arg(long)]
+    tag: Option<String>,
 }
 
 /// Main entry point for the `task` command.
@@ -117,6 +123,8 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
             filter = TaskFilter::All;
         } else if task_args.id.is_some() {
             filter = TaskFilter::ByIds(task_args.id.unwrap());
+        } else if let Some(tag) = task_args.tag {
+            filter = TaskFilter::ByTag(tag);
         }
         let tasks = Tasks::new()?.fetch(filter)?;
         if tasks.is_empty() {
@@ -251,6 +259,17 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     let task = Task::new(&name, &comment, Some(completeness));
     let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
     View::tasks(&new_task)?;
+
+    if let Some(tags_str) = task_args.tags {
+        let tag_names: Vec<String> = tags_str.split(',').map(|s| s.trim().to_string()).collect();
+        let mut tags_db = crate::db::tags::Tags::new()?;
+        let tag_ids = tags_db.get_or_create_tags(&tag_names)?;
+
+        if let Some(task_id) = new_task[0].id {
+            tags_db.set_task_tags(task_id, &tag_ids)?;
+            msg_info!(Message::TagsAddedToTask(tag_names.join(", ")));
+        }
+    }
 
     Ok(())
 }
@@ -479,6 +498,7 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
         comment,
         completeness: Some(completeness),
         excluded_from_search: task.excluded_from_search,
+        tags: vec![],
     })
 }
 

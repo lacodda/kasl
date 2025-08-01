@@ -110,6 +110,26 @@ pub enum Message {
     SelectTemplate,
     CreateTemplateFirst,
 
+    // === TAG MESSAGES ===
+    TagCreated(String),
+    TagUpdated(String),
+    TagDeleted(String),
+    TagNotFound(String),
+    TagAlreadyExists(String),
+    NoTagsFound,
+    TagListHeader,
+    EditingTag(String),
+    SelectTagAction,
+    SelectTagToEdit,
+    SelectTagToDelete,
+    ConfirmDeleteTag(String),
+    ConfirmDeleteTagWithTasks(String, usize), // tag name, task count
+    PromptTagName,
+    PromptTagColor,
+    NoTasksWithTag(String),
+    TasksWithTag(String),
+    TagsAddedToTask(String),
+
     // === SHORT INTERVALS MESSAGES ===
     ShortIntervalsDetected(usize, String), // count, total duration
     NoShortIntervalsFound(u64),            // min_minutes

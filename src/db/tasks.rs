@@ -28,6 +28,8 @@ const WHERE_INCOMPLETE: &str = "WHERE
   WHERE DATE(timestamp) BETWEEN datetime(CURRENT_TIMESTAMP, 'localtime', '-15 day') AND datetime(CURRENT_TIMESTAMP, 'localtime', '-1 day')
   GROUP BY task_id)
   GROUP BY task_id";
+const WHERE_TAG: &str = "WHERE id IN (SELECT task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name = ?1)";
+const WHERE_TAGS: &str = "WHERE id IN (SELECT task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN";
 const DELETE_TASK: &str = "DELETE FROM tasks WHERE id = ?";
 const DELETE_TASKS_BY_IDS: &str = "DELETE FROM tasks WHERE id IN";
 const SELECT_COUNT_BY_ID: &str = "SELECT COUNT(*) FROM tasks WHERE id = ?";
@@ -77,6 +79,13 @@ impl Tasks {
                 let ids_params: Vec<Box<dyn ToSql>> = ids.clone().into_iter().map(|id| Box::new(id) as Box<dyn ToSql>).collect();
                 (self.conn.prepare(&Self::query_by_ids(&ids))?, ids_params)
             }
+            TaskFilter::ByTag(tag_name) => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_TAG))?, vec![Box::new(tag_name)]),
+            TaskFilter::ByTags(tag_names) => {
+                let placeholders = vec!["?"; tag_names.len()].join(", ");
+                let query = format!("{} {} ({}))", SELECT_TASKS, WHERE_TAGS, placeholders);
+                let params: Vec<Box<dyn ToSql>> = tag_names.into_iter().map(|name| Box::new(name) as Box<dyn ToSql>).collect();
+                (self.conn.prepare(&query)?, params)
+            }
         };
 
         let params_refs: Vec<&dyn ToSql> = params.iter().map(|p| &**p).collect();
@@ -89,11 +98,19 @@ impl Tasks {
                 comment: row.get(4)?,
                 completeness: row.get(5)?,
                 excluded_from_search: row.get(6)?,
+                tags: vec![],
             })
         })?;
         let mut tasks = Vec::new();
         for task_result in task_iter {
             tasks.push(task_result?);
+        }
+
+        let mut tags_db = crate::db::tags::Tags::new()?;
+        for task in &mut tasks {
+            if let Some(task_id) = task.id {
+                task.tags = tags_db.get_task_tags(task_id)?;
+            }
         }
 
         Ok(tasks)

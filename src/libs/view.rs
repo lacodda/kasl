@@ -30,16 +30,19 @@ impl View {
     pub fn tasks(tasks: &[Task]) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["#", "ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS"]);
+        table.set_titles(row!["#", "ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS", "TAGS"]);
 
         for (index, task) in tasks.iter().enumerate() {
+            let tags_str = task.tags.iter().map(|t| t.name.clone()).collect::<Vec<_>>().join(", ");
+
             table.add_row(row![
                 index + 1,
                 task.id.unwrap_or(0),
                 task.task_id.unwrap_or(0),
                 task.name,
                 task.comment,
-                format!("{}%", task.completeness.unwrap_or(100))
+                format!("{}%", task.completeness.unwrap_or(100)),
+                tags_str
             ]);
         }
         table.printstd();
@@ -208,6 +211,20 @@ impl View {
 
         for template in templates {
             table.add_row(row![template.name, template.task_name, template.comment, format!("{}%", template.completeness)]);
+        }
+
+        table.printstd();
+        Ok(())
+    }
+
+    /// Displays a table of tags
+    pub fn tags(tags: &[crate::db::tags::Tag]) -> Result<()> {
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["ID", "NAME", "COLOR"]);
+
+        for tag in tags {
+            table.add_row(row![tag.id.unwrap_or(0), tag.name, tag.color.as_deref().unwrap_or("-")]);
         }
 
         table.printstd();

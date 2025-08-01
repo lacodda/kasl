@@ -6,6 +6,7 @@ pub mod migrations;
 pub mod pauses;
 pub mod report;
 pub mod sum;
+pub mod tag;
 pub mod task;
 pub mod template;
 pub mod update;
@@ -54,6 +55,10 @@ enum Commands {
     /// Manage task templates
     #[command(about = "Manage task templates")]
     Template(template::TemplateArgs),
+
+    /// Manage task tags
+    #[command(about = "Manage task tags")]
+    Tag(tag::TagArgs),
 
     /// Watches for user activity to automatically record pauses.
     #[command(about = "Watch user activity in the background to record pauses")]
@@ -104,6 +109,7 @@ impl Cli {
             Commands::Report(args) => report::cmd(args).await,
             Commands::Export(args) => export::cmd(args).await,
             Commands::Template(args) => template::cmd(args),
+            Commands::Tag(args) => tag::cmd(args).await,
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,

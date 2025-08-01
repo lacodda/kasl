@@ -126,6 +126,26 @@ impl Display for Message {
             Message::SelectTemplate => "Select a template".to_string(),
             Message::CreateTemplateFirst => "Create templates with 'kasl template create'".to_string(),
 
+            // === TAG MESSAGES ===
+            Message::TagCreated(name) => format!("Tag '{}' created successfully.", name),
+            Message::TagUpdated(name) => format!("Tag '{}' updated successfully.", name),
+            Message::TagDeleted(name) => format!("Tag '{}' deleted successfully.", name),
+            Message::TagNotFound(name) => format!("Tag '{}' not found.", name),
+            Message::TagAlreadyExists(name) => format!("Tag '{}' already exists.", name),
+            Message::NoTagsFound => "No tags found.".to_string(),
+            Message::TagListHeader => "Tags:".to_string(),
+            Message::EditingTag(name) => format!("Editing tag: {}", name),
+            Message::SelectTagAction => "What would you like to do?".to_string(),
+            Message::SelectTagToEdit => "Select tag to edit".to_string(),
+            Message::SelectTagToDelete => "Select tag to delete".to_string(),
+            Message::ConfirmDeleteTag(name) => format!("Delete tag '{}'?", name),
+            Message::ConfirmDeleteTagWithTasks(name, count) => format!("Tag '{}' is used by {} task(s). Delete anyway?", name, count),
+            Message::PromptTagName => "Tag name".to_string(),
+            Message::PromptTagColor => "Tag color (e.g., blue, green, red)".to_string(),
+            Message::NoTasksWithTag(tag) => format!("No tasks found with tag '{}'.", tag),
+            Message::TasksWithTag(tag) => format!("Tasks with tag '{}':", tag),
+            Message::TagsAddedToTask(tags) => format!("Tags added: {}", tags),
+
             // === SHORT INTERVALS MESSAGES ===
             Message::ShortIntervalsDetected(count, duration) => format!("Found {} short work intervals (total: {})", count, duration),
             Message::NoShortIntervalsFound(min) => format!("No work intervals shorter than {} minutes found.", min),

@@ -1,3 +1,4 @@
+use crate::db::tags::Tag;
 use chrono::NaiveDate;
 
 #[derive(Debug, Clone)]
@@ -9,6 +10,7 @@ pub struct Task {
     pub comment: String,
     pub completeness: Option<i32>,
     pub excluded_from_search: Option<bool>,
+    pub tags: Vec<Tag>,
 }
 
 impl Task {
@@ -21,6 +23,7 @@ impl Task {
             comment: comment.to_string(),
             completeness,
             excluded_from_search: None,
+            tags: Vec::new(),
         }
     }
 
@@ -38,6 +41,8 @@ pub enum TaskFilter {
     Date(NaiveDate),
     Incomplete,
     ByIds(Vec<i32>),
+    ByTag(String),
+    ByTags(Vec<String>),
 }
 
 pub trait FormatTasks {
