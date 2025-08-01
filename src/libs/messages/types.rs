@@ -82,9 +82,33 @@ pub enum Message {
 
     // === EXPORT MESSAGES ===
     ExportingData(String, String), // data type, format
-    ExportCompleted(String), // file path
+    ExportCompleted(String),       // file path
     ExportingAllData,
     ExportFailed(String), // error
+
+    // === TEMPLATE MESSAGES ===
+    TemplateCreated(String),
+    TemplateUpdated(String),
+    TemplateDeleted(String),
+    TemplateNotFound(String),
+    TemplateAlreadyExists(String),
+    TemplateCreateFailed,
+    NoTemplatesFound,
+    TemplateListHeader,
+    SelectTemplateToEdit,
+    SelectTemplateToDelete,
+    ConfirmDeleteTemplate(String),
+    EditingTemplate(String),
+    NoTemplatesMatchingQuery(String),
+    TemplateSearchResults(String),
+    SelectTemplateAction,
+    PromptTemplateName,
+    PromptTemplateTaskName,
+    PromptTemplateComment,
+    PromptTemplateCompleteness,
+    CreatingTaskFromTemplate(String),
+    SelectTemplate,
+    CreateTemplateFirst,
 
     // === SHORT INTERVALS MESSAGES ===
     ShortIntervalsDetected(usize, String), // count, total duration

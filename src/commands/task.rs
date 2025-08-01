@@ -7,6 +7,7 @@
 use crate::{
     api::{gitlab::GitLab, jira::Jira},
     db::tasks::Tasks,
+    db::templates::Templates,
     libs::{
         config::Config,
         messages::Message,
@@ -18,7 +19,7 @@ use crate::{
 use anyhow::Result;
 use chrono::Local;
 use clap::Args;
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect};
+use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 
 /// Enum to identify the origin of a task suggestion.
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -64,6 +65,12 @@ pub struct TaskArgs {
     /// Edit multiple tasks interactively
     #[arg(long, help = "Edit multiple tasks interactively")]
     edit_interactive: bool,
+    /// Create task from template
+    #[arg(long, short = 't')]
+    template: Option<String>,
+    /// List available templates when creating a task
+    #[arg(long)]
+    from_template: bool,
 }
 
 /// Main entry point for the `task` command.
@@ -92,6 +99,15 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
 
     if task_args.edit_interactive {
         return handle_edit_interactive().await;
+    }
+
+    // Handle template-based creation
+    if let Some(template_name) = task_args.template {
+        return handle_create_from_template(template_name).await;
+    }
+
+    if task_args.from_template {
+        return handle_create_from_template_interactive().await;
     }
 
     // Handle showing tasks
@@ -464,4 +480,61 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
         completeness: Some(completeness),
         excluded_from_search: task.excluded_from_search,
     })
+}
+
+async fn handle_create_from_template(template_name: String) -> Result<()> {
+    let mut templates_db = Templates::new()?;
+    let template = match templates_db.get(&template_name)? {
+        Some(t) => t,
+        None => {
+            msg_error!(Message::TemplateNotFound(template_name));
+            return Ok(());
+        }
+    };
+
+    msg_info!(Message::CreatingTaskFromTemplate(template.name.clone()));
+
+    // Allow user to modify values before creating
+    let name = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptTaskName.to_string())
+        .default(template.task_name)
+        .interact_text()?;
+
+    let comment = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptTaskComment.to_string())
+        .default(template.comment)
+        .allow_empty(true)
+        .interact_text()?;
+
+    let completeness = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptTaskCompleteness.to_string())
+        .default(template.completeness)
+        .interact_text()?;
+
+    let task = Task::new(&name, &comment, Some(completeness));
+    let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
+    View::tasks(&new_task)?;
+
+    Ok(())
+}
+
+async fn handle_create_from_template_interactive() -> Result<()> {
+    let mut templates_db = Templates::new()?;
+    let templates = templates_db.list()?;
+
+    if templates.is_empty() {
+        msg_info!(Message::NoTemplatesFound);
+        msg_info!(Message::CreateTemplateFirst);
+        return Ok(());
+    }
+
+    let template_options: Vec<String> = templates.iter().map(|t| format!("{} - {}", t.name, t.task_name)).collect();
+
+    let selection = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::SelectTemplate.to_string())
+        .items(&template_options)
+        .interact()?;
+
+    let template = &templates[selection];
+    handle_create_from_template(template.name.clone()).await
 }

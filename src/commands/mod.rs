@@ -7,6 +7,7 @@ pub mod pauses;
 pub mod report;
 pub mod sum;
 pub mod task;
+pub mod template;
 pub mod update;
 pub mod watch;
 
@@ -49,6 +50,10 @@ enum Commands {
     /// Export data to various formats
     #[command(about = "Export data to various formats")]
     Export(export::ExportArgs),
+
+    /// Manage task templates
+    #[command(about = "Manage task templates")]
+    Template(template::TemplateArgs),
 
     /// Watches for user activity to automatically record pauses.
     #[command(about = "Watch user activity in the background to record pauses")]
@@ -98,6 +103,7 @@ impl Cli {
             Commands::Sum(args) => sum::cmd(args).await,
             Commands::Report(args) => report::cmd(args).await,
             Commands::Export(args) => export::cmd(args).await,
+            Commands::Template(args) => template::cmd(args),
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,

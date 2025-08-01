@@ -4,6 +4,7 @@
 //! such as tasks, work reports, and summaries, in a human-readable format.
 
 use super::task::Task;
+use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
 use crate::libs::messages::Message;
@@ -197,5 +198,19 @@ impl View {
 
         // Ensure the resulting percentage is within the valid range [0.0, 100.0]
         productivity.max(0.0).min(100.0)
+    }
+
+    /// Displays a table of task templates
+    pub fn templates(templates: &[TaskTemplate]) -> Result<()> {
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["TEMPLATE NAME", "TASK NAME", "COMMENT", "COMPLETENESS"]);
+
+        for template in templates {
+            table.add_row(row![template.name, template.task_name, template.comment, format!("{}%", template.completeness)]);
+        }
+
+        table.printstd();
+        Ok(())
     }
 }
