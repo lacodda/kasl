@@ -1,3 +1,9 @@
+//! Monthly working hours summary command.
+//!
+//! This command generates comprehensive monthly reports showing daily work hours,
+//! productivity metrics, and calendar integration with company rest days. It provides
+//! both detailed daily breakdowns and aggregate statistics for the current month.
+
 use crate::{
     api::si::Si,
     db::{pauses::Pauses, workdays::Workdays},
@@ -14,87 +20,170 @@ use chrono::{Datelike, Duration, Local, NaiveDate};
 use clap::Args;
 use std::collections::HashSet;
 
+/// Command-line arguments for the monthly summary command.
+///
+/// Currently supports basic summary generation with optional report submission.
+/// Future versions may add date range selection and detailed filtering options.
 #[derive(Debug, Args)]
 pub struct SumArgs {
+    /// Submit the monthly summary report
+    ///
+    /// When specified, the generated summary will be submitted to the configured
+    /// reporting API in addition to being displayed locally. This is useful for
+    /// organizational reporting requirements.
     #[arg(long, help = "Send report")]
     send: bool,
 }
 
+/// Generates and displays a comprehensive monthly working hours summary.
+///
+/// This function creates a detailed analysis of work patterns for the current month,
+/// including productivity calculations, rest day integration, and daily breakdowns.
+///
+/// ## Report Components
+///
+/// The monthly summary includes:
+///
+/// 1. **Daily Breakdown**: Each workday with hours and productivity percentage
+/// 2. **Rest Days**: Company holidays and weekends with default hours
+/// 3. **Monthly Totals**: Total hours worked and average daily hours
+/// 4. **Productivity Metrics**: Average productivity across all workdays
+///
+/// ## Data Sources
+///
+/// The summary integrates data from multiple sources:
+/// - **Local Database**: Recorded workdays and pause information
+/// - **External API**: Company rest dates and holidays (if configured)
+/// - **Configuration**: Default work hours for rest days
+///
+/// ## Productivity Calculation
+///
+/// Productivity is calculated as:
+/// ```
+/// Productivity = (Net Working Time / Gross Working Time) * 100%
+/// ```
+///
+/// Where:
+/// - **Net Working Time**: Actual productive work (excluding all pauses)
+/// - **Gross Working Time**: Total presence time (excluding long breaks only)
+///
+/// This provides insight into how effectively time is used during work sessions.
+///
+/// ## Rest Day Integration
+///
+/// If SiServer integration is configured, the summary will:
+/// - Fetch official company rest dates for the current month
+/// - Include these dates with default 8-hour entries
+/// - Distinguish between work days and rest days in the display
+///
+/// # Arguments
+///
+/// * `_sum_args` - Command arguments (currently unused but reserved for future features)
+///
+/// # Returns
+///
+/// Returns `Ok(())` on successful summary generation and display, or an error
+/// if data retrieval or calculation fails.
+///
+/// # Examples
+///
+/// ```bash
+/// # Display monthly summary
+/// kasl sum
+///
+/// # Generate and submit summary report
+/// kasl sum --send
+/// ```
+///
+/// # Error Scenarios
+///
+/// - Database connection failures
+/// - API connectivity issues (for rest dates)
+/// - Configuration errors
+/// - Invalid date calculations
+/// - Missing workday data
 pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
     let now = Local::now();
     let config = Config::read()?;
     let monitor_config = config.monitor.clone().unwrap_or_default();
 
+    // Display header with current month and year
     msg_print!(Message::WorkingHoursForMonth(now.format("%B, %Y").to_string()), true);
 
-    // 1. Fetch rest dates from API
+    // Step 1: Fetch company rest dates from external API if configured
     let mut rest_dates: HashSet<NaiveDate> = HashSet::new();
     if let Some(si_config) = config.si {
         match Si::new(&si_config).rest_dates(now.date_naive()).await {
             Ok(dates) => {
-                // Filter for dates in the current month
+                // Filter rest dates to only include current month
                 rest_dates = dates.into_iter().filter(|d| d.month() == now.month()).collect();
             }
-            Err(e) => msg_error!(Message::ErrorRequestingRestDates(e.to_string())),
+            Err(e) => {
+                // Log error but continue with local data only
+                msg_error!(Message::ErrorRequestingRestDates(e.to_string()));
+            }
         }
     }
 
-    // 2. Fetch all workdays for the current month
+    // Step 2: Fetch all workdays for the current month from local database
     let workdays = Workdays::new()?.fetch_month(now.date_naive())?;
     let workdays_count = workdays.len() as f64;
     let mut daily_summaries = Vec::new();
     let mut total_productivity = 0.0;
 
-    // 3. Calculate net time for each workday
+    // Step 3: Process each workday to calculate durations and productivity
     for workday in workdays {
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
         let gross_duration = end_time.signed_duration_since(workday.start);
 
-        // Use ALL pauses for productivity calculation (min_duration = 0)
+        // Fetch all pauses (including micro-breaks) for accurate productivity calculation
         let all_pauses_duration = Pauses::new()?
-            .fetch(workday.date, 0)?
+            .fetch(workday.date, 0)? // min_duration = 0 to include all pauses
             .iter()
             .filter_map(|b| b.duration)
             .fold(Duration::zero(), |acc, d| acc + d);
 
-        // But for display purposes, we'll use the filtered pauses
+        // Fetch filtered long breaks for display purposes
         let long_breaks_duration = Pauses::new()?
             .fetch(workday.date, monitor_config.min_pause_duration)?
             .iter()
             .filter_map(|b| b.duration)
             .fold(Duration::zero(), |acc, d| acc + d);
 
-        // Net duration for display uses filtered long breaks
+        // Calculate display duration (gross time minus long breaks only)
         let gross_work_time_minus_long_breaks = gross_duration - long_breaks_duration;
-        // Net duration for productivity uses ALL pauses
+
+        // Calculate net working duration (gross time minus ALL pauses)
         let net_working_duration = gross_duration - all_pauses_duration;
 
-        // Calculate productivity as (net working duration / gross work time minus long breaks) * 100.
-        // This gives the percentage of time truly spent productively out of the time "on duty"
-        // (excluding only major breaks).
+        // Calculate productivity percentage
+        // This shows how much of the "on duty" time was spent in actual productive work
         let productivity = (net_working_duration.num_seconds() as f64 / gross_work_time_minus_long_breaks.num_seconds() as f64) * 100.0;
 
-        // Accumulate productivity
-        total_productivity = total_productivity + productivity;
+        // Accumulate productivity for monthly average calculation
+        total_productivity += productivity;
 
+        // Create daily summary entry
         daily_summaries.push(DailySummary {
             date: workday.date,
-            duration: gross_work_time_minus_long_breaks, // Use filtered duration for display
+            duration: gross_work_time_minus_long_breaks, // Display duration
             productivity,
         });
     }
 
-    // 4. Combine with rest dates, calculate totals, and format for view
+    // Step 4: Integrate rest dates and calculate summary statistics
     let event_summary = daily_summaries
-        .add_rest_dates(rest_dates, Duration::hours(8))
+        .add_rest_dates(rest_dates, Duration::hours(8)) // Default 8 hours for rest days
         .calculate_totals()
         .format_summary();
 
+    // Step 5: Display the formatted summary table
     View::sum(&event_summary)?;
 
-    // 5. Display monthly productivity (calculated with ALL pauses)
+    // Step 6: Display monthly productivity average
     if total_productivity > 0.0 && workdays_count > 0.0 {
-        msg_print!(Message::MonthlyProductivity(total_productivity / workdays_count), true);
+        let average_productivity = total_productivity / workdays_count;
+        msg_print!(Message::MonthlyProductivity(average_productivity), true);
     }
 
     Ok(())
