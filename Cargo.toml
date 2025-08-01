@@ -1,3 +1,7 @@
+# Kasl - Key Activity Synchronization and Logging
+# A comprehensive command-line utility for tracking work activities, 
+# managing tasks, and generating productivity reports.
+
 [package]
 name = "kasl"
 version = "0.7.0"
@@ -11,48 +15,81 @@ keywords = ["cli", "tool", "work", "time", "flow"]
 categories = ["cli"]
 build = "build.rs"
 
+# Application metadata used during build process
 [package.metadata]
 owner = "lacodda"
 
+# Runtime dependencies
 [dependencies]
-anyhow = "1.0.93"
-thiserror = "2.0.12"
-tracing = "0.1.41"
+# Error handling
+anyhow = "1.0.93"    # Flexible error handling
+thiserror = "2.0.12" # Custom error types
+
+# Logging and tracing
+tracing = "0.1.41"                                                            # Structured logging
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "fmt"] }
-base64 = "0.22.1"
-chrono = "0.4.41"
-clap = { version = "4.5.42", features = ["derive"] }
-dialoguer = "0.11.0"
-prettytable-rs = "0.10.0"
+
+# Encoding and cryptography
+base64 = "0.22.1"       # Base64 encoding/decoding
+aes = "0.7.5"           # AES encryption
+block-modes = "0.8.1"   # Block cipher modes
+block-padding = "0.3.3" # PKCS padding
+
+# Date and time handling
+chrono = "0.4.41" # Date and time library
+
+# Command-line interface
+clap = { version = "4.5.42", features = ["derive"] } # CLI argument parsing
+dialoguer = "0.11.0"                                 # Interactive prompts
+
+# Data presentation
+prettytable-rs = "0.10.0" # Terminal tables
+
+# HTTP client and async runtime
 reqwest = { version = "0.12.22", features = ["json", "multipart", "cookies"] }
+tokio = { version = "1.47.1", features = ["full"] }
+
+# Database
 rusqlite = { version = "0.37.0", features = ["bundled", "chrono"] }
+
+# Serialization
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.141"
-tokio = { version = "1.47.0", features = ["full"] }
-dotenv = "0.15.0"
-aes = "0.7.5"
-block-modes = "0.8.1"
-block-padding = "0.3.3"
-tar = "0.4.44"
-flate2 = "1.1.2"
-rdev = "0.5.3"
-parking_lot = "0.12.4"
-sysinfo = "0.36.1"
-encoding_rs = "0.8.35"
-csv = "1.3.1"
-rust_xlsxwriter = "0.89.1"
+serde_json = "1.0.142"
 
+# System and file operations
+dotenv = "0.15.0"      # Environment variables from .env files
+tar = "0.4.44"         # TAR archive handling
+flate2 = "1.1.2"       # Compression
+rdev = "0.5.3"         # Input device monitoring
+parking_lot = "0.12.4" # Faster synchronization primitives
+sysinfo = "0.36.1"     # System information
+encoding_rs = "0.8.35" # Text encoding conversion
+
+# Data export formats
+csv = "1.3.1"              # CSV reading/writing
+rust_xlsxwriter = "0.89.1" # Excel file generation
+
+# Build-time dependencies
 [build-dependencies]
-toml = "0.9.4"
-winres = "0.1.12"
-dotenv = "0.15.0"
+toml = "0.9.4"    # TOML parsing for build script
+winres = "0.1.12" # Windows resource embedding
+dotenv = "0.15.0" # Environment variables during build
 
+# Platform-specific dependencies for Unix systems
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30.1", features = ["process"] }
 
+# Platform-specific dependencies for Windows
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["processthreadsapi", "winnt", "handleapi", "errhandlingapi", "securitybaseapi"] }
+winapi = { version = "0.3", features = [
+    "processthreadsapi",
+    "winnt",
+    "handleapi",
+    "errhandlingapi",
+    "securitybaseapi",
+] }
 
+# Development dependencies for testing
 [dev-dependencies]
-tempfile = "3.20.0"
-test-context = "0.4.1"
+tempfile = "3.20.0"    # Temporary files for tests
+test-context = "0.4.1" # Test setup/teardown utilities
