@@ -12,6 +12,7 @@ mod tests {
         pause_threshold: u64,
         poll_interval: u64,
         activity_threshold: u64,
+        min_work_interval: u64,
         api_url: String,
         auth_token: String,
     }
@@ -28,6 +29,7 @@ mod tests {
                 pause_threshold: 60,
                 poll_interval: 500,
                 activity_threshold: 30,
+                min_work_interval: 5,
                 api_url: "https://api.example.com".to_string(),
                 auth_token: "token123".to_string(),
             }
@@ -63,6 +65,7 @@ mod tests {
                 pause_threshold: ctx.pause_threshold,
                 poll_interval: ctx.poll_interval,
                 activity_threshold: ctx.activity_threshold,
+                min_work_interval: ctx.min_work_interval,
             }),
             server: Some(ServerConfig {
                 api_url: ctx.api_url.clone(),
@@ -81,6 +84,7 @@ mod tests {
         assert_eq!(monitor_config.pause_threshold, ctx.pause_threshold);
         assert_eq!(monitor_config.poll_interval, ctx.poll_interval);
         assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
+        assert_eq!(monitor_config.min_work_interval, ctx.min_work_interval);
         assert_eq!(server_config.api_url, ctx.api_url.clone());
         assert_eq!(server_config.auth_token, ctx.auth_token.clone());
     }
