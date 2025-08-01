@@ -1,3 +1,11 @@
+//! Configuration management for the kasl application.
+//!
+//! This module handles:
+//! - Reading and writing configuration files
+//! - Interactive configuration setup
+//! - Default values for all settings
+//! - Cross-platform configuration paths
+
 use super::data_storage::DataStorage;
 use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
@@ -13,20 +21,35 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::str;
 
+/// Configuration file name used for storing settings.
 pub const CONFIG_FILE_NAME: &str = "config.json";
 
+/// Represents a configurable module in the application.
 pub struct ConfigModule {
+    /// Unique identifier for the module
     pub key: String,
+    /// Display name for the module
     pub name: String,
 }
 
+/// Monitor configuration settings.
+///
+/// Controls the behavior of the activity monitor including:
+/// - Pause detection thresholds
+/// - Polling intervals
+/// - Minimum work interval durations
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MonitorConfig {
-    pub min_pause_duration: u64, // Minimum pause duration in minutes
-    pub pause_threshold: u64,    // Inactivity threshold in seconds
-    pub poll_interval: u64,      // Poll interval in milliseconds
-    pub activity_threshold: u64, // Activity duration threshold in seconds
-    pub min_work_interval: u64,  // Minimum work interval in minutes (new field)
+    /// Minimum pause duration in minutes to be recorded
+    pub min_pause_duration: u64,
+    /// Inactivity threshold in seconds before a pause is detected
+    pub pause_threshold: u64,
+    /// Poll interval in milliseconds for checking activity
+    pub poll_interval: u64,
+    /// Activity duration threshold in seconds for workday start
+    pub activity_threshold: u64,
+    /// Minimum work interval in minutes (intervals shorter are merged)
+    pub min_work_interval: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -50,13 +73,21 @@ pub struct Config {
 }
 
 impl Default for MonitorConfig {
+    /// Provides sensible defaults for monitor configuration.
+    ///
+    /// Default values:
+    /// - 20 minutes minimum pause duration
+    /// - 60 seconds inactivity threshold
+    /// - 500ms polling interval
+    /// - 30 seconds activity threshold
+    /// - 10 minutes minimum work interval
     fn default() -> Self {
         MonitorConfig {
-            min_pause_duration: 20, // 20 minutes
-            pause_threshold: 60,    // 60 seconds
-            poll_interval: 500,     // 500 milliseconds
-            activity_threshold: 30, // 30 seconds
-            min_work_interval: 10,  // 10 minutes minimum work interval
+            min_pause_duration: 20,
+            pause_threshold: 60,
+            poll_interval: 500,
+            activity_threshold: 30,
+            min_work_interval: 10,
         }
     }
 }

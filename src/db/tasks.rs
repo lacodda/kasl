@@ -1,3 +1,12 @@
+//! Database operations for task management.
+//!
+//! This module provides CRUD operations for tasks, including:
+//! - Creating new tasks
+//! - Updating existing tasks
+//! - Deleting tasks (single or bulk)
+//! - Querying tasks with various filters
+//! - Managing task-tag relationships
+
 use super::db::Db;
 use crate::libs::messages::Message;
 use crate::libs::task::{Task, TaskFilter};
@@ -6,6 +15,16 @@ use anyhow::Result;
 use rusqlite::{params, Connection, Statement, ToSql};
 use std::vec;
 
+/// SQL schema for the tasks table.
+///
+/// The table stores:
+/// - `id`: Primary key
+/// - `task_id`: Reference to parent task for linked tasks
+/// - `timestamp`: Creation time
+/// - `name`: Task name/title
+/// - `comment`: Optional description
+/// - `completeness`: Progress percentage (0-100)
+/// - `excluded_from_search`: Flag for hiding from searches
 const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     id INTEGER NOT NULL PRIMARY KEY,
     task_id INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
@@ -35,13 +54,35 @@ const DELETE_TASKS_BY_IDS: &str = "DELETE FROM tasks WHERE id IN";
 const SELECT_COUNT_BY_ID: &str = "SELECT COUNT(*) FROM tasks WHERE id = ?";
 const UPDATE_TASK: &str = "UPDATE tasks SET name = ?, comment = ?, completeness = ? WHERE id = ?";
 
+/// Database interface for task operations.
+///
+/// Provides methods for creating, reading, updating, and deleting tasks
+/// in the SQLite database.
 #[derive(Debug)]
 pub struct Tasks {
+    /// SQLite database connection
     pub conn: Connection,
+    /// ID of the last inserted task
     pub id: Option<i32>,
 }
 
 impl Tasks {
+    /// Creates a new Tasks instance and ensures the database schema exists.
+    ///
+    /// # Returns
+    ///
+    /// Returns a Result containing the Tasks instance or a database error.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use kasl::db::tasks::Tasks;
+    ///
+    /// # fn example() -> anyhow::Result<()> {
+    /// let mut tasks = Tasks::new()?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn new() -> Result<Self> {
         let db = Db::new()?;
         db.conn.execute(&SCHEMA_TASKS, [])?;
@@ -49,6 +90,29 @@ impl Tasks {
         Ok(Self { conn: db.conn, id: None })
     }
 
+    /// Inserts a new task into the database.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - The task to insert
+    ///
+    /// # Returns
+    ///
+    /// Returns a mutable reference to self for method chaining.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use kasl::db::tasks::Tasks;
+    /// use kasl::libs::task::Task;
+    ///
+    /// # fn example() -> anyhow::Result<()> {
+    /// let mut tasks = Tasks::new()?;
+    /// let task = Task::new("Write documentation", "Important task", Some(50));
+    /// tasks.insert(&task)?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn insert(&mut self, task: &Task) -> Result<&mut Self> {
         self.id = Some(self.conn.query_row(
             INSERT_TASK,
@@ -70,6 +134,37 @@ impl Tasks {
         self.fetch(TaskFilter::ByIds(vec![id]))
     }
 
+    /// Fetches tasks based on the provided filter.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - The filter to apply when fetching tasks
+    ///
+    /// # Returns
+    ///
+    /// Returns a vector of tasks matching the filter criteria.
+    ///
+    /// # Filters
+    ///
+    /// - `All`: Returns all tasks
+    /// - `Date(date)`: Returns tasks for a specific date
+    /// - `Incomplete`: Returns tasks with completeness < 100%
+    /// - `ByIds(ids)`: Returns tasks with specific IDs
+    /// - `ByTag(tag)`: Returns tasks with a specific tag
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use kasl::db::tasks::Tasks;
+    /// use kasl::libs::task::TaskFilter;
+    /// use chrono::Local;
+    ///
+    /// # fn example() -> anyhow::Result<()> {
+    /// let mut tasks = Tasks::new()?;
+    /// let today_tasks = tasks.fetch(TaskFilter::Date(Local::now().date_naive()))?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn fetch(&mut self, filter: TaskFilter) -> Result<Vec<Task>> {
         let (mut stmt, params): (Statement, Vec<Box<dyn ToSql>>) = match filter {
             TaskFilter::All => (self.conn.prepare(SELECT_TASKS)?, vec![]),
