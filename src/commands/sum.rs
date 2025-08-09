@@ -138,14 +138,14 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
 
         // Fetch all pauses (including micro-breaks) for accurate productivity calculation
         let all_pauses_duration = Pauses::new()?
-            .fetch(workday.date, 0)? // min_duration = 0 to include all pauses
+            .get_daily_pauses(workday.date, 0)? // min_duration = 0 to include all pauses
             .iter()
             .filter_map(|b| b.duration)
             .fold(Duration::zero(), |acc, d| acc + d);
 
         // Fetch filtered long breaks for display purposes
         let long_breaks_duration = Pauses::new()?
-            .fetch(workday.date, monitor_config.min_pause_duration)?
+            .get_daily_pauses(workday.date, monitor_config.min_pause_duration)?
             .iter()
             .filter_map(|b| b.duration)
             .fold(Duration::zero(), |acc, d| acc + d);

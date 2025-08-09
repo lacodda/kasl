@@ -389,7 +389,7 @@ fn apply_adjustment(workdays_db: &mut Workdays, workday: &crate::db::workdays::W
             pauses_db.insert_start_with_time(pause_start)?;
 
             // Update the pause with end time and duration
-            let pauses = pauses_db.fetch(date, 0)?;
+            let pauses = pauses_db.get_daily_pauses(date, 0)?;
             if let Some(last_pause) = pauses.iter().rev().find(|p| p.start == pause_start) {
                 let conn_guard = pauses_db.conn.lock();
                 conn_guard.execute(

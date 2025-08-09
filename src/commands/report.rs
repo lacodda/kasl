@@ -270,7 +270,7 @@ async fn handle_clear_short_intervals(date: DateTime<Local>) -> Result<()> {
     let monitor_config = config.monitor.unwrap_or_default();
 
     let pauses_db = Pauses::new()?;
-    let all_pauses = pauses_db.fetch(naive_date, 0)?; // Fetch all pauses including short ones
+    let all_pauses = pauses_db.get_daily_pauses(naive_date, 0)?; // Fetch all pauses including short ones
 
     // Calculate work intervals to analyze for short periods
     let intervals = report::calculate_work_intervals(&workday, &all_pauses);
@@ -366,9 +366,9 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let monitor_config = config.monitor.unwrap_or_default();
 
     // Fetch filtered long breaks for display (removes noise from short interruptions)
-    let long_breaks = Pauses::new()?.fetch(naive_date, monitor_config.min_pause_duration)?;
+    let long_breaks = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
     // Fetch ALL pauses for accurate productivity calculation
-    let all_pauses = Pauses::new()?.fetch(naive_date, 0)?;
+    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date, 0)?;
 
     // Display the formatted report with all components
     View::report(&workday, &long_breaks, &all_pauses, &tasks)?;
@@ -438,7 +438,7 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let pauses = Pauses::new()?.fetch(naive_date, monitor_config.min_pause_duration)?;
+    let pauses = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
 
     // Generate JSON payload for API submission
     let report_json = build_report_payload(&workday, &mut tasks, &pauses);

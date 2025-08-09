@@ -254,7 +254,7 @@ fn handle_create(name: Option<String>) -> Result<()> {
 /// about creating the first template rather than displaying an empty table.
 fn handle_list() -> Result<()> {
     let mut templates_db = Templates::new()?;
-    let templates = templates_db.list()?;
+    let templates = templates_db.get_all()?;
 
     if templates.is_empty() {
         msg_info!(Message::NoTemplatesFound);
@@ -298,7 +298,7 @@ fn handle_edit(name: Option<String>) -> Result<()> {
     let name = match name {
         Some(n) => n,
         None => {
-            let templates = templates_db.list()?;
+            let templates = templates_db.get_all()?;
             if templates.is_empty() {
                 msg_info!(Message::NoTemplatesFound);
                 return Ok(());
@@ -386,7 +386,7 @@ fn handle_delete(name: Option<String>) -> Result<()> {
     let name = match name {
         Some(n) => n,
         None => {
-            let templates = templates_db.list()?;
+            let templates = templates_db.get_all()?;
             if templates.is_empty() {
                 msg_info!(Message::NoTemplatesFound);
                 return Ok(());

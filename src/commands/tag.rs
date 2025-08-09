@@ -245,7 +245,7 @@ fn handle_create(name: String, color: Option<String>) -> Result<()> {
 /// creating the first tag rather than displaying an empty table.
 fn handle_list() -> Result<()> {
     let mut tags_db = Tags::new()?;
-    let tags = tags_db.list()?;
+    let tags = tags_db.get_all()?;
 
     if tags.is_empty() {
         msg_info!(Message::NoTagsFound);
@@ -317,10 +317,10 @@ fn handle_edit(tag_identifier: String) -> Result<()> {
         .interact_text()?;
 
     // Handle empty color input
-    let color = if new_color.is_empty() { None } else { Some(new_color.as_str()) };
+    let color = if new_color.is_empty() { None } else { Some(new_color) };
 
     // Update the tag
-    tags_db.update(tag.id.unwrap(), &new_name, color)?;
+    tags_db.update(&Tag{id: tag.id, name: new_name.clone(), color, created_at: None})?;
     msg_success!(Message::TagUpdated(new_name));
     Ok(())
 }
@@ -374,7 +374,7 @@ fn handle_delete(tag_identifier: String) -> Result<()> {
     };
 
     // Analyze usage impact
-    let task_count = tags_db.get_tasks_with_tag(tag.id.unwrap())?.len();
+    let task_count = tags_db.get_tasks_by_tag(tag.id.unwrap())?.len();
 
     // Provide appropriate confirmation prompt based on usage
     let prompt = if task_count > 0 {
@@ -436,7 +436,7 @@ async fn handle_show_tasks(tag_name: String) -> Result<()> {
     };
 
     // Get task IDs associated with this tag
-    let task_ids = tags_db.get_tasks_with_tag(tag.id.unwrap())?;
+    let task_ids = tags_db.get_tasks_by_tag(tag.id.unwrap())?;
 
     if task_ids.is_empty() {
         msg_info!(Message::NoTasksWithTag(tag_name));
@@ -510,7 +510,7 @@ fn handle_interactive() -> Result<()> {
         2 => {
             // Interactive tag editing with selection
             let mut tags_db = Tags::new()?;
-            let tags = tags_db.list()?;
+            let tags = tags_db.get_all()?;
             if tags.is_empty() {
                 msg_info!(Message::NoTagsFound);
                 return Ok(());
@@ -527,7 +527,7 @@ fn handle_interactive() -> Result<()> {
         3 => {
             // Interactive tag deletion with selection
             let mut tags_db = Tags::new()?;
-            let tags = tags_db.list()?;
+            let tags = tags_db.get_all()?;
             if tags.is_empty() {
                 msg_info!(Message::NoTagsFound);
                 return Ok(());

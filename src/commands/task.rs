@@ -850,7 +850,7 @@ async fn handle_create_from_template(template_name: String) -> Result<()> {
 /// to choose from existing templates without needing to remember template names.
 async fn handle_create_from_template_interactive() -> Result<()> {
     let mut templates_db = Templates::new()?;
-    let templates = templates_db.list()?;
+    let templates = templates_db.get_all()?;
 
     if templates.is_empty() {
         msg_info!(Message::NoTemplatesFound);

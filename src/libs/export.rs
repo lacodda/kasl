@@ -223,7 +223,7 @@ impl Exporter {
             .ok_or_else(|| msg_error_anyhow!(Message::WorkdayNotFoundForDate(date.to_string())))?;
 
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
-        let pauses = Pauses::new()?.fetch(date, 0)?;
+        let pauses = Pauses::new()?.get_daily_pauses(date, 0)?;
 
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
         let intervals = report::calculate_work_intervals(&workday, &pauses);
