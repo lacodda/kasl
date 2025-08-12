@@ -757,7 +757,7 @@ pub trait FormatTasks {
     ///
     /// The method produces a multi-line string with each task formatted as:
     /// ```text
-    /// Task ID: {id} | {name} | {completeness}% | {comment}
+    /// {name} ({completeness}%)
     /// ```
     ///
     /// ## Field Handling
@@ -790,8 +790,8 @@ pub trait FormatTasks {
     ///
     /// let output = tasks.format();
     /// // Output:
-    /// // Task ID: New | Review PR | 25% | Code review for auth changes
-    /// // Task ID: New | Write tests | 75% | Unit tests for API endpoints
+    /// // Review PR (25%)
+    /// // Write tests (75%)
     /// ```
     fn format(&mut self) -> String;
 
@@ -970,29 +970,24 @@ impl FormatTasks for Vec<Task> {
     ///
     /// Each task is formatted on a separate line with pipe-separated fields:
     /// ```text
-    /// Task ID: {id} | {name} | {completeness}% | {comment}
+    /// {name} ({completeness}%)
     /// ```
     ///
     /// ## Field Processing
     ///
-    /// - **ID Display**: Shows numeric ID or "New" for None values
     /// - **Name**: Used as-is from task struct
     /// - **Completeness**: Shows percentage or "Unknown" for None values
-    /// - **Comment**: Used as-is from task struct
     ///
     /// The method handles all field types gracefully and provides consistent
     /// output regardless of which optional fields are present.
     fn format(&mut self) -> String {
         self.iter()
             .map(|task| {
-                // Format ID field
-                let id_display = task.id.map_or("New".to_string(), |id| id.to_string());
-
                 // Format completeness field
                 let completeness_display = task.completeness.map_or("Unknown".to_string(), |comp| format!("{}%", comp));
 
                 // Create formatted line for this task
-                format!("Task ID: {} | {} | {} | {}", id_display, task.name, completeness_display, task.comment)
+                return format!("{} ({})", task.name, completeness_display);
             })
             .collect::<Vec<_>>()
             .join("\n")
