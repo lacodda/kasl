@@ -1,7 +1,155 @@
+//! Display implementation for kasl application messages.
+//!
+//! This module provides the core `Display` trait implementation for the `Message`
+//! enum, enabling automatic conversion of structured message data into human-readable
+//! text suitable for terminal output. It serves as the central localization and
+//! text formatting system for all user-facing messages in the kasl application.
+//!
+//! ## Architecture Overview
+//!
+//! The display system follows a centralized message management approach:
+//! - **Single Source of Truth**: All message text is defined in one location
+//! - **Type Safety**: Compile-time verification of message parameter usage
+//! - **Internationalization Ready**: Structured for future localization support
+//! - **Consistent Formatting**: Uniform message presentation across the application
+//! - **Parameter Interpolation**: Safe string formatting with typed parameters
+//!
+//! ## Message Categories
+//!
+//! The implementation handles these message categories:
+//! - **Autostart Messages**: System boot integration status and operations
+//! - **Task Messages**: Work item management, creation, updates, and deletion
+//! - **Workday Messages**: Daily work session lifecycle and management
+//! - **Configuration Messages**: Setup, validation, and module configuration
+//! - **Report Messages**: Daily and monthly report generation and submission
+//! - **Export Messages**: Data export operations and format handling
+//! - **Template Messages**: Task template management and operations
+//! - **Tag Messages**: Organizational tag management and assignment
+//! - **Monitor Messages**: Activity monitoring and daemon process management
+//! - **Pause Messages**: Break detection and timing management
+//! - **Update Messages**: Application update checking and installation
+//! - **Error Messages**: Comprehensive error reporting and troubleshooting
+//!
+//! ## Text Formatting Standards
+//!
+//! All message text follows consistent formatting guidelines:
+//! - **Sentence Case**: Natural capitalization for readability
+//! - **Active Voice**: Clear, direct communication style
+//! - **Specific Details**: Include relevant context and parameters
+//! - **Professional Tone**: Appropriate for business and personal use
+//! - **Action Guidance**: Clear next steps when applicable
+//!
+//! ## Parameter Interpolation
+//!
+//! Messages with dynamic content use safe parameter interpolation:
+//! ```rust
+//! // Type-safe parameter usage
+//! Message::TaskCreated(name) => format!("Task '{}' created successfully", name)
+//! Message::WorkdayStarting(date) => format!("Starting workday for {}", date)
+//! Message::ExportCompleted(path) => format!("Export completed: {}", path)
+//! ```
+//!
+//! ## Error Message Design
+//!
+//! Error messages follow specific principles:
+//! - **Problem Description**: Clear explanation of what went wrong
+//! - **Context Information**: Relevant details for troubleshooting
+//! - **Resolution Guidance**: Suggested actions when possible
+//! - **Technical Details**: Specific error codes or system information
+//!
+//! ## Usage Integration
+//!
+//! The display system integrates with kasl's messaging macros:
+//! ```rust
+//! use kasl::{msg_info, msg_error, msg_success};
+//!
+//! // Automatic message formatting
+//! msg_info!(Message::TaskCreated);
+//! msg_error!(Message::ConfigSaveError);
+//! msg_success!(Message::ReportSent(date));
+//! ```
+//!
+//! ## Future Extensibility
+//!
+//! The centralized design supports future enhancements:
+//! - **Internationalization**: Replace text with locale-specific versions
+//! - **Rich Formatting**: Add terminal colors, bold, and other styling
+//! - **Context Awareness**: Modify messages based on user preferences
+//! - **Help Integration**: Link messages to relevant documentation
+
 use super::types::Message;
 use std::fmt::{Display, Formatter, Result};
 
 impl Display for Message {
+    /// Converts a `Message` enum variant into human-readable text.
+    ///
+    /// This method implements the core message-to-text conversion logic for
+    /// the entire kasl application. It provides consistent, professional
+    /// text formatting for all user-facing messages while maintaining
+    /// type safety and parameter interpolation.
+    ///
+    /// ## Implementation Strategy
+    ///
+    /// The method uses a comprehensive match statement to handle each message
+    /// variant individually, ensuring that:
+    /// - All message types are explicitly handled
+    /// - Parameter interpolation is type-safe
+    /// - Text formatting is consistent across message categories
+    /// - New message types require explicit formatting decisions
+    ///
+    /// ## Text Quality Standards
+    ///
+    /// All generated text adheres to these quality standards:
+    /// - **Clarity**: Messages are easily understood by users
+    /// - **Specificity**: Include relevant details and context
+    /// - **Actionability**: Provide guidance for next steps when appropriate
+    /// - **Professionalism**: Suitable for business and personal environments
+    /// - **Consistency**: Uniform tone and style across all messages
+    ///
+    /// ## Parameter Handling
+    ///
+    /// Messages with parameters use safe string interpolation:
+    /// - String parameters are inserted directly
+    /// - Numeric parameters are formatted appropriately
+    /// - Collections are joined with appropriate separators
+    /// - Optional values are handled with meaningful defaults
+    ///
+    /// ## Error Message Philosophy
+    ///
+    /// Error messages are designed to be helpful rather than technical:
+    /// - Focus on user-understandable problems
+    /// - Suggest concrete resolution steps
+    /// - Avoid intimidating technical jargon
+    /// - Provide sufficient context for troubleshooting
+    ///
+    /// # Arguments
+    ///
+    /// * `f` - The formatter for writing the text output
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` if the message was successfully formatted,
+    /// or an error if the formatting operation fails.
+    ///
+    /// # Error Scenarios
+    ///
+    /// - **Formatter Errors**: Underlying write operations fail
+    /// - **Memory Allocation**: Insufficient memory for string operations
+    /// - **Parameter Formatting**: Invalid parameter values (rare)
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kasl::libs::messages::Message;
+    ///
+    /// // Automatic formatting through Display trait
+    /// let message = Message::TaskCreated;
+    /// println!("{}", message); // "Task created successfully"
+    ///
+    /// // With parameters
+    /// let date_message = Message::WorkdayStarting("2025-01-15".to_string());
+    /// println!("{}", date_message); // "Starting workday for 2025-01-15"
+    /// ```
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let text = match self {
             // === AUTOSTART MESSAGES ===

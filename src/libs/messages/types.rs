@@ -1,3 +1,111 @@
+//! Message type definitions for the kasl application.
+//!
+//! This module defines the central `Message` enum that represents all user-facing
+//! messages in the kasl application. It serves as a type-safe, centralized system
+//! for managing application communication, ensuring consistent messaging across
+//! all components while providing compile-time verification of message parameters.
+//!
+//! ## Design Philosophy
+//!
+//! The message system is built around several core principles:
+//! - **Type Safety**: All messages are strongly typed with appropriate parameters
+//! - **Centralization**: Single enum captures all application messaging needs
+//! - **Extensibility**: Easy addition of new message types and categories
+//! - **Maintainability**: Clear organization and documentation of message purposes
+//! - **Internationalization**: Structure supports future localization efforts
+//!
+//! ## Message Organization
+//!
+//! Messages are logically organized into functional categories:
+//! - **System Integration**: Autostart, path management, and OS interaction
+//! - **Core Operations**: Tasks, workdays, and primary application functions
+//! - **Configuration**: Setup, validation, and module configuration
+//! - **Reporting**: Daily reports, monthly summaries, and data export
+//! - **Process Management**: Daemon control, monitoring, and lifecycle
+//! - **User Interaction**: Prompts, confirmations, and interface elements
+//! - **Error Handling**: Comprehensive error reporting and diagnostics
+//!
+//! ## Parameter Strategy
+//!
+//! Message variants use different parameter strategies based on their needs:
+//! - **Unit Variants**: Simple messages without dynamic content
+//! - **Single Parameters**: Messages with one piece of dynamic information
+//! - **Multiple Parameters**: Complex messages requiring several data points
+//! - **Structured Parameters**: Named fields for complex message data
+//!
+//! ## Usage Examples
+//!
+//! ```rust
+//! use kasl::libs::messages::Message;
+//!
+//! // Simple status messages
+//! let success = Message::TaskCreated;
+//! let failure = Message::TaskCreateFailed;
+//!
+//! // Messages with parameters
+//! let with_name = Message::TaskCreated("My Task".to_string());
+//! let with_count = Message::TasksDeletedCount(5);
+//!
+//! // Complex structured messages
+//! let monitor_status = Message::MonitorStarted {
+//!     pause_threshold: 60,
+//!     poll_interval: 500,
+//!     activity_threshold: 30,
+//! };
+//! ```
+//!
+//! ## Integration Points
+//!
+//! The `Message` enum integrates with several application systems:
+//! - **Display System**: Automatic text conversion via `Display` trait
+//! - **Logging System**: Integration with application logging and tracing
+//! - **Macro System**: Convenient usage through messaging macros
+//! - **Error Handling**: Rich error context and user-friendly error messages
+//!
+//! ## Future Considerations
+//!
+//! The message system is designed to support future enhancements:
+//! - **Localization**: Replace English text with locale-specific versions
+//! - **Message Metadata**: Additional fields for context, severity, or categorization
+//! - **Rich Content**: Support for formatted text, links, or embedded data
+//! - **Message Queuing**: Batched message delivery for performance optimization
+
+/// Comprehensive message enumeration for all user-facing communication.
+///
+/// This enum represents every type of message that the kasl application can
+/// present to users. It provides a type-safe way to handle all application
+/// communication while ensuring consistent formatting and proper parameter
+/// handling across all components.
+///
+/// ## Message Categories
+///
+/// The enum is organized into logical categories that correspond to different
+/// areas of application functionality. Each category groups related messages
+/// to improve maintainability and make it easier to understand the scope
+/// of each functional area.
+///
+/// ## Parameter Conventions
+///
+/// - **String Parameters**: Used for names, descriptions, and user-provided text
+/// - **Numeric Parameters**: Used for counts, IDs, and measurements
+/// - **Status Parameters**: Used for system states and operation results
+/// - **Structured Parameters**: Named fields for complex message data
+///
+/// ## Adding New Messages
+///
+/// When adding new message variants:
+/// 1. Choose the appropriate category section
+/// 2. Use descriptive names that clearly indicate the message purpose
+/// 3. Include necessary parameters with appropriate types
+/// 4. Add corresponding text in the `Display` implementation
+/// 5. Document the message purpose and usage context
+///
+/// ## Backward Compatibility
+///
+/// The enum is designed to maintain backward compatibility:
+/// - New variants can be added without breaking existing code
+/// - Parameter changes should be additive when possible
+/// - Deprecated messages can be maintained for transition periods
 #[derive(Debug, Clone)]
 pub enum Message {
     // === AUTOSTART MESSAGES ===
