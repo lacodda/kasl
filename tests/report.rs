@@ -60,7 +60,7 @@ mod tests {
         drop(conn);
 
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let pauses_vec = pauses_db.fetch(date, 0).unwrap(); // min_duration = 0 to fetch all
+        let pauses_vec = pauses_db.get_daily_pauses(date, 0).unwrap(); // min_duration = 0 to fetch all
         let tasks = vec![];
 
         // Pass the same pauses for both long_breaks and all_pauses in tests
@@ -89,7 +89,7 @@ mod tests {
         let pauses_db = Pauses::new().unwrap();
 
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let pauses_vec = pauses_db.fetch(date, 0).unwrap();
+        let pauses_vec = pauses_db.get_daily_pauses(date, 0).unwrap(); // min_duration = 0 to fetch all
         let tasks = vec![];
 
         assert_eq!(pauses_vec.len(), 0);

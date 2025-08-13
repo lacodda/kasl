@@ -35,7 +35,10 @@ mod tests {
         assert_eq!(fetched.color, Some("red".to_string()));
 
         // Update tag
-        tags.update(tag_id, "critical", Some("orange")).unwrap();
+        let mut tag = tags.get_by_id(tag_id).unwrap().unwrap();
+        tag.name = "critical".to_string();
+        tag.color = Some("orange".to_string());
+        tags.update(&tag).unwrap();
         let updated = tags.get_by_id(tag_id).unwrap().unwrap();
         assert_eq!(updated.name, "critical");
         assert_eq!(updated.color, Some("orange".to_string()));
@@ -67,11 +70,11 @@ mod tests {
         tags.set_task_tags(task_id, &[tag1_id, tag2_id]).unwrap();
 
         // Verify tags
-        let task_tags = tags.get_task_tags(task_id).unwrap();
+        let task_tags = tags.get_tags_by_task(task_id).unwrap();
         assert_eq!(task_tags.len(), 2);
 
         // Get tasks by tag
-        let backend_tasks = tags.get_tasks_with_tag(tag1_id).unwrap();
+        let backend_tasks = tags.get_tasks_by_tag(tag1_id).unwrap();
         assert_eq!(backend_tasks.len(), 1);
         assert_eq!(backend_tasks[0], task_id);
     }
