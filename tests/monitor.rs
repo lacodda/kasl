@@ -26,8 +26,7 @@ mod tests {
     /// Helper to run the relevant part of the monitor's main loop for testing.
     async fn simulate_monitor_cycle(monitor: &mut Monitor) -> Result<(), Box<dyn Error>> {
         if monitor.detect_activity() {
-            // ensure_workday_started() is private and called automatically within the Monitor
-            // No manual call needed - it's handled internally by the monitor loop
+            monitor.ensure_workday_started(Local::now().date_naive())?;
         }
         Ok(())
     }

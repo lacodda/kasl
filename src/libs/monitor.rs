@@ -906,7 +906,7 @@ impl Monitor {
     /// // - If activity_threshold = 30s, workday is created at 9:00:30
     /// // - Workday start_time is recorded as current timestamp
     /// ```
-    fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<()> {
+    pub fn ensure_workday_started(&mut self, today: NaiveDate) -> Result<()> {
         // Check if we have an activity start timestamp
         let activity_start_time = {
             let activity_start_guard = self.activity_start.lock().unwrap();
