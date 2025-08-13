@@ -148,9 +148,50 @@ impl MigrationManager {
         // Initial schema - version 0 is implicit (empty database)
         // Base tables are created by individual modules as needed
 
-        // Version 1: Performance optimization through strategic indexing
-        // Adds indices to frequently queried columns for better performance
-        self.add_migration(1, "add_indices", |tx| {
+        // Version 1: Base tables and performance indices
+        // Creates fundamental tables and adds indices for better performance
+        self.add_migration(1, "create_tables_and_indices", |tx| {
+            // First, create base tables that individual modules depend on
+            // This ensures tables exist before any indices are created
+
+            // Create tasks table
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS tasks (
+        id INTEGER NOT NULL PRIMARY KEY,
+        task_id INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        name TEXT NOT NULL,
+        comment TEXT,
+        completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
+        excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE
+    )",
+                [],
+            )?;
+
+            // Create pauses table
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS pauses (
+        id INTEGER NOT NULL PRIMARY KEY,
+        start TIMESTAMP NOT NULL,
+        end TIMESTAMP,
+        duration INTEGER
+    )",
+                [],
+            )?;
+
+            // Create workdays table
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS workdays (
+        id INTEGER PRIMARY KEY,
+        date DATE NOT NULL UNIQUE,
+        start TIMESTAMP NOT NULL,
+        end TIMESTAMP
+    )",
+                [],
+            )?;
+
+            // Now create indices for the tables we just created
+
             // Index tasks by timestamp for chronological queries
             tx.execute("CREATE INDEX IF NOT EXISTS idx_tasks_timestamp ON tasks(timestamp)", [])?;
             // Index tasks by parent task relationship
@@ -159,6 +200,7 @@ impl MigrationManager {
             tx.execute("CREATE INDEX IF NOT EXISTS idx_pauses_start ON pauses(start)", [])?;
             // Index workdays by date for daily/monthly reporting
             tx.execute("CREATE INDEX IF NOT EXISTS idx_workdays_date ON workdays(date)", [])?;
+
             Ok(())
         });
 
