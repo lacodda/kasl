@@ -58,7 +58,7 @@ use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use serde::{Deserialize, Serialize};
 use std::env;
-use std::fs::{self, File};
+use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str;
@@ -385,10 +385,10 @@ impl Config {
     pub fn save(&self) -> Result<()> {
         // Resolve the configuration file path and ensure directory exists
         let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
-
-        // Create the configuration file with pretty-printed JSON
-        let config_file = File::create(config_file_path)?;
-        serde_json::to_writer_pretty(&config_file, &self)?;
+        // Serialize to JSON string first
+        let json_content = serde_json::to_string_pretty(&self)?;
+        // Write the JSON string to file and ensure it's flushed to disk
+        fs::write(config_file_path, json_content)?;
         Ok(())
     }
 
