@@ -1,84 +1,34 @@
 //! Core activity monitoring system for kasl.
 //!
-//! This module implements the heart of kasl's activity tracking functionality,
-//! providing real-time monitoring of user input to automatically detect work
-//! sessions, breaks, and productivity patterns. It integrates keyboard and mouse
-//! monitoring with intelligent state management and database recording.
+//! Implements the heart of kasl's activity tracking functionality, providing
+//! real-time monitoring of user input to automatically detect work sessions,
+//! breaks, and productivity patterns.
 //!
-//! ## Architecture Overview
+//! ## Features
 //!
-//! The monitor system consists of several key components:
 //! - **Input Detection**: Low-level keyboard and mouse event capture
 //! - **State Machine**: Activity state tracking (Active/InPause)
 //! - **Timing Logic**: Configurable thresholds for activity and pause detection
 //! - **Database Integration**: Automatic workday and pause recording
 //! - **Configuration Management**: Flexible behavior customization
 //!
-//! ## Activity Detection
-//!
-//! The system monitors these input events:
-//! - **Keyboard**: Key presses and releases for typing activity
-//! - **Mouse**: Button clicks, movement, and scroll wheel events
-//! - **Timing**: Precise timestamp tracking for activity intervals
-//!
-//! ## State Management
-//!
-//! The monitor uses a state machine with two primary states:
-//! - **Active**: User is present and working
-//! - **InPause**: User is away or inactive
-//!
-//! State transitions are governed by configurable thresholds:
-//! - `pause_threshold`: Inactivity duration before entering pause state
-//! - `activity_threshold`: Activity duration required for workday start
-//! - `poll_interval`: Frequency of state checks
-//!
-//! ## Workday Logic
-//!
-//! The system automatically manages workday records:
-//! - **Start Detection**: Sustained activity triggers workday creation
-//! - **End Detection**: Final activity determines workday end time
-//! - **Pause Recording**: Significant breaks are tracked with precise timing
-//! - **Data Quality**: Short intervals are filtered to improve report accuracy
-//!
-//! ## Configuration Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::libs::config::MonitorConfig;
 //! use kasl::libs::monitor::Monitor;
 //!
-//! // Conservative configuration for busy environments
 //! let config = MonitorConfig {
-//!     pause_threshold: 120,     // 2 minutes before pause
-//!     activity_threshold: 60,   // 1 minute to start workday
-//!     poll_interval: 1000,      // Check every second
-//!     min_pause_duration: 30,   // Record pauses >= 30 minutes
-//!     min_work_interval: 15,    // Merge intervals < 15 minutes
+//!     pause_threshold: 120,
+//!     activity_threshold: 60,
+//!     poll_interval: 1000,
+//!     min_pause_duration: 30,
+//!     min_work_interval: 15,
 //! };
 //!
-//! // Sensitive configuration for focused work
-//! let sensitive_config = MonitorConfig {
-//!     pause_threshold: 30,      // 30 seconds before pause
-//!     activity_threshold: 10,   // 10 seconds to start workday
-//!     poll_interval: 500,       // Check twice per second
-//!     min_pause_duration: 5,    // Record pauses >= 5 minutes
-//!     min_work_interval: 5,     // Merge intervals < 5 minutes
-//! };
+//! let monitor = Monitor::new(config)?;
+//! monitor.run().await?;
 //! ```
-//!
-//! ## Database Integration
-//!
-//! The monitor automatically maintains database records:
-//! - **Workdays**: Daily work session boundaries
-//! - **Pauses**: Break periods with start and end times
-//! - **Timestamps**: Precise timing for accurate reporting
-//!
-//! ## Performance Characteristics
-//!
-//! The monitor is designed for continuous operation with minimal resource usage:
-//! - **CPU Usage**: Configurable polling interval balances responsiveness and efficiency
-//! - **Memory**: Minimal state maintenance, no activity history buffering
-//! - **I/O**: Batched database operations for efficiency
-//! - **Network**: No network activity during monitoring
 
 use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
@@ -94,25 +44,9 @@ use tracing::{debug, instrument, span, Level};
 
 /// Represents the current state of the user's activity.
 ///
-/// This enum provides a clean, explicit way to manage the monitor's operational
-/// state. Using an enum instead of boolean flags makes the code more readable
-/// and reduces the likelihood of state-related bugs.
-///
-/// ## State Transitions
-///
-/// ```text
-/// Active ←→ InPause
-/// ```
-///
-/// State changes are triggered by:
-/// - **Active → InPause**: Inactivity exceeds `pause_threshold`
-/// - **InPause → Active**: New input activity detected
-///
-/// ## Thread Safety
-///
-/// This enum implements `Copy` and `Clone` for efficient sharing across
-/// threads and async tasks. The simple enum structure ensures atomic
-/// operations when used with appropriate synchronization primitives.
+/// Provides a clean, explicit way to manage the monitor's operational state.
+/// State changes are triggered by inactivity exceeding `pause_threshold` or
+/// new input activity detected.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum State {
     /// The user is currently active and not on a pause.
@@ -137,17 +71,8 @@ enum State {
 /// The core activity monitor responsible for tracking user presence
 /// and managing workday and pause records.
 ///
-/// This struct orchestrates all aspects of activity monitoring, from low-level
-/// input detection to high-level workday management. It maintains the necessary
-/// state and provides the main monitoring loop that runs continuously during
-/// active monitoring sessions.
-///
-/// ## Component Architecture
-///
-/// ```text
-/// ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-/// │   Input Events  │───▶│     Monitor     │───▶│    Database     │
-/// │ (keyboard/mouse)│    │  (state logic)  │    │ (workdays/pauses)│
+/// Orchestrates all aspects of activity monitoring, from low-level input detection
+/// to high-level workday management.
 /// └─────────────────┘    └─────────────────┘    └─────────────────┘
 /// ```
 ///

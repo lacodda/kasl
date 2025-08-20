@@ -1,118 +1,25 @@
 //! Data export functionality for external analysis and backup.
 //!
-//! This module provides a comprehensive data export system that enables users to extract
-//! their work tracking data in multiple formats for external analysis, backup purposes,
-//! integration with other tools, or compliance reporting. The export system is designed
-//! to be flexible, extensible, and user-friendly while maintaining data integrity and
-//! providing rich formatting options.
+//! Provides a comprehensive data export system that enables users to extract
+//! their work tracking data in multiple formats for external analysis, backup,
+//! integration with other tools, or compliance reporting.
 //!
-//! ## Supported Export Formats
+//! ## Features
 //!
-//! The export system supports three primary output formats, each optimized for different use cases:
+//! - **Export Formats**: CSV, JSON, Excel with formatting and multiple sheets
+//! - **Data Types**: Reports, tasks, summaries, and complete data export
+//! - **File Naming**: Intelligent naming conventions with timestamp-based uniqueness
+//! - **Error Handling**: Robust validation and error recovery
 //!
-//! ### CSV (Comma-Separated Values)
-//! - **Use Case**: Spreadsheet applications, data analysis tools, simple imports
-//! - **Features**: Universal compatibility, lightweight, easy parsing
-//! - **Best For**: Quick data analysis, Excel imports, programmatic processing
-//!
-//! ### JSON (JavaScript Object Notation)
-//! - **Use Case**: Programmatic processing, web applications, API integrations
-//! - **Features**: Structured data, nested objects, type preservation
-//! - **Best For**: Software integration, backup/restore, complex data structures
-//!
-//! ### Excel (XLSX)
-//! - **Use Case**: Professional reports, formatted presentations, business analysis
-//! - **Features**: Multiple worksheets, formatting, charts, auto-sizing
-//! - **Best For**: Executive reports, formatted presentations, advanced Excel features
-//!
-//! ## Data Types and Categories
-//!
-//! The export system can extract four categories of information:
-//!
-//! ### Reports
-//! Daily work reports containing:
-//! - Work intervals with precise start/end times
-//! - Productivity calculations and metrics
-//! - Task associations and completion status
-//! - Break periods and their durations
-//!
-//! ### Tasks
-//! Individual task records including:
-//! - Task names and descriptions
-//! - Completion percentages and status
-//! - Creation timestamps and metadata
-//! - Comments and additional context
-//!
-//! ### Summaries
-//! Monthly aggregated statistics featuring:
-//! - Daily work hour totals
-//! - Average work hours calculation
-//! - Productivity trends and patterns
-//! - Work/rest day classifications
-//!
-//! ### All Data
-//! Complete dataset export combining:
-//! - All the above categories in a single export
-//! - Cross-references and relationships
-//! - Comprehensive backup for migration
-//!
-//! ## Export Architecture
-//!
-//! The export system uses a modular architecture with clear separation of concerns:
-//!
-//! ```text
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │  Data Gathering │───►│  Format Handler │───►│  File Writer    │
-//! │                 │    │                 │    │                 │
-//! │ • Database      │    │ • CSV Formatter │    │ • Path Manager  │
-//! │ • Calculations  │    │ • JSON Serializer│   │ • File Creation │
-//! │ • Aggregations  │    │ • Excel Builder │    │ • Error Handling│
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//! ```
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::libs::export::{Exporter, ExportFormat, ExportData};
 //! use chrono::NaiveDate;
 //!
-//! // Export today's report as CSV
 //! let exporter = Exporter::new(ExportFormat::Csv, None);
 //! exporter.export(ExportData::Report, NaiveDate::from_ymd(2025, 1, 15)).await?;
-//!
-//! // Export tasks to custom Excel file
-//! let exporter = Exporter::new(ExportFormat::Excel, Some("tasks.xlsx".into()));
-//! exporter.export(ExportData::Tasks, NaiveDate::from_ymd(2025, 1, 15)).await?;
-//!
-//! // Export complete monthly summary as JSON
-//! let exporter = Exporter::new(ExportFormat::Json, Some("backup.json".into()));
-//! exporter.export(ExportData::All, NaiveDate::from_ymd(2025, 1, 1)).await?;
 //! ```
-//!
-//! ## File Naming and Organization
-//!
-//! The export system uses intelligent file naming conventions:
-//! - **Default Names**: `kasl_export_YYYYMMDD_HHMMSS.{ext}`
-//! - **Custom Names**: User-specified paths with automatic extension detection
-//! - **Multi-File Exports**: Automatic suffixing for comprehensive exports
-//! - **Collision Prevention**: Timestamp-based uniqueness
-//!
-//! ## Error Handling and Validation
-//!
-//! Comprehensive error handling covers:
-//! - Database connectivity issues
-//! - File system permission problems
-//! - Data format conversion errors
-//! - Invalid date ranges or parameters
-//! - Output file write failures
-//!
-//! ## Performance Considerations
-//!
-//! The export system is optimized for:
-//! - **Memory Efficiency**: Streaming data processing for large datasets
-//! - **I/O Optimization**: Buffered writes and efficient file operations
-//! - **Database Efficiency**: Optimized queries and minimal connections
-//! - **Format Optimization**: Native library usage for best performance
 
 use crate::{
     db::{pauses::Pauses, tasks::Tasks, workdays::Workdays},

@@ -1,65 +1,18 @@
 //! Work interval calculation and productivity analysis for daily reports.
 //!
-//! This module provides core logic for analyzing work patterns and generating
-//! detailed reports about productivity, work intervals, and break patterns.
-//! It transforms raw time data into actionable insights for users and managers.
+//! Provides core logic for analyzing work patterns and generating detailed reports
+//! about productivity, work intervals, and break patterns.
 //!
-//! ## Core Functionality
+//! ## Features
 //!
-//! ### Work Interval Analysis
-//! - **Interval Calculation**: Convert workday and pause data into continuous work periods
+//! - **Work Interval Analysis**: Convert workday and pause data into continuous work periods
 //! - **Productivity Metrics**: Calculate efficiency ratios and work pattern analysis
 //! - **Short Interval Detection**: Identify and analyze brief work periods that may indicate interruptions
 //! - **Interval Optimization**: Provide suggestions for merging short intervals
+//! - **Report Generation**: Comprehensive breakdown of workdays with productivity analysis
 //!
-//! ### Report Generation
-//! - **Daily Reports**: Comprehensive breakdown of a single workday
-//! - **Productivity Analysis**: Detailed metrics on work efficiency
-//! - **Pattern Recognition**: Identify trends and optimization opportunities
-//! - **Data Visualization**: Structured data for charts and graphs
+//! ## Usage
 //!
-//! ## Data Processing Pipeline
-//!
-//! ```text
-//! Raw Data → Interval Calculation → Analysis → Optimization → Report
-//!     ↓             ↓                  ↓           ↓          ↓
-//! Workday      Work intervals    Productivity   Short      Final
-//! Pauses       Time segments     Percentages    detection   report
-//! Tasks        Break patterns    Efficiency     Merging     Export
-//! ```
-//!
-//! ## Key Algorithms
-//!
-//! ### Work Interval Calculation
-//! 1. **Start with Full Workday**: Use workday start and end times as boundaries
-//! 2. **Apply Pause Breaks**: Split the workday at each pause period
-//! 3. **Create Intervals**: Generate continuous work periods between pauses
-//! 4. **Calculate Durations**: Determine the length of each work interval
-//! 5. **Associate Pauses**: Link each interval to its following pause (if any)
-//!
-//! ### Short Interval Analysis
-//! 1. **Threshold Detection**: Identify intervals shorter than minimum duration
-//! 2. **Impact Assessment**: Calculate total time lost to short intervals
-//! 3. **Merge Candidates**: Identify pauses that could be removed to merge intervals
-//! 4. **Optimization Suggestions**: Provide actionable recommendations
-//!
-//! ## Productivity Insights
-//!
-//! ### Metrics Calculated
-//! - **Work Efficiency**: Ratio of productive time to total time
-//! - **Interruption Analysis**: Frequency and impact of work breaks
-//! - **Focus Periods**: Identification of sustained work sessions
-//! - **Optimization Potential**: Time that could be reclaimed through better habits
-//!
-//! ### Pattern Recognition
-//! - **Peak Hours**: Times of highest productivity and focus
-//! - **Break Patterns**: Frequency and duration of interruptions
-//! - **Work Rhythm**: Natural cycles of productivity throughout the day
-//! - **Improvement Areas**: Specific recommendations for optimization
-//!
-//! ## Examples
-//!
-//! ### Basic Interval Calculation
 //! ```rust
 //! use kasl::libs::report::{calculate_work_intervals, WorkInterval};
 //! use kasl::db::workdays::Workday;
@@ -68,30 +21,10 @@
 //! let workday = Workday {
 //!     start: start_time,
 //!     end: Some(end_time),
-//!     // ... other fields
 //! };
 //!
 //! let pauses = vec![/* pause data */];
 //! let intervals = calculate_work_intervals(&workday, &pauses);
-//!
-//! for interval in intervals {
-//!     println!("Work period: {} - {} ({})",
-//!         interval.start, interval.end, interval.duration);
-//! }
-//! ```
-//!
-//! ### Short Interval Analysis
-//! ```rust
-//! use kasl::libs::report::{analyze_short_intervals, WorkInterval};
-//!
-//! let intervals = vec![/* work intervals */];
-//! let min_minutes = 30; // Minimum interval duration
-//!
-//! if let Some(analysis) = analyze_short_intervals(&intervals, min_minutes) {
-//!     println!("Found {} short intervals totaling {}",
-//!         analysis.count, analysis.total_duration);
-//!     println!("Consider removing pauses: {:?}", analysis.pauses_to_remove);
-//! }
 //! ```
 
 use crate::db::workdays::Workday;

@@ -1,25 +1,8 @@
 //! Daily and monthly report generation and submission command.
 //!
-//! This module handles the core reporting functionality of kasl, including:
-//! - Generation of detailed daily work reports with intervals and tasks
-//! - Automatic detection and cleanup of short work intervals
-//! - Integration with external APIs for report submission
-//! - Monthly report generation for organizational requirements
-//! - Productivity analysis and work pattern insights
-//!
-//! ## Report Types
-//!
-//! - **Daily Reports**: Detailed breakdown of work sessions, breaks, and completed tasks
-//! - **Monthly Reports**: Aggregate statistics and summaries for organizational reporting
-//! - **Productivity Reports**: Analysis of work efficiency and time utilization
-//!
-//! ## Data Integration
-//!
-//! Reports integrate data from multiple sources:
-//! - Workday records (start/end times)
-//! - Pause detection (automatic break recording)
-//! - Task management (completed work items)
-//! - External API integration (submission to reporting systems)
+//! Handles the core reporting functionality of kasl including generation of detailed
+//! daily work reports, automatic cleanup of short work intervals, integration with
+//! external APIs, and productivity analysis.
 
 use crate::{
     api::si::Si,
@@ -87,23 +70,9 @@ pub struct ReportArgs {
 
 /// Main entry point for the report command.
 ///
-/// This function acts as a dispatcher based on the provided arguments,
-/// determining the target date and delegating to the appropriate handler for
-/// daily, monthly, display, or send actions.
-///
-/// ## Operation Flow
-///
-/// 1. **Date Determination**: Calculate target date (today or yesterday)
-/// 2. **Mode Selection**: Route to appropriate handler based on arguments
-/// 3. **Data Processing**: Gather and process relevant work data
-/// 4. **Output Generation**: Create formatted reports or perform cleanup
-/// 5. **API Integration**: Submit reports if requested
-///
-/// ## Special Modes
-///
-/// - **Clear Intervals**: Analyzes and removes short work intervals
-/// - **Monthly Reports**: Aggregate statistics for the entire month
-/// - **API Submission**: Automatic report delivery to external systems
+/// Acts as a dispatcher based on the provided arguments, determining the target
+/// date and delegating to the appropriate handler for daily, monthly, display,
+/// or send actions.
 ///
 /// # Arguments
 ///
@@ -113,8 +82,6 @@ pub struct ReportArgs {
 ///
 /// Returns `Ok(())` on successful report generation or processing,
 /// or an error if data retrieval or submission fails.
-///
-/// # Examples
 ///
 /// ```bash
 /// # Display today's report

@@ -1,41 +1,21 @@
 //! Command-line interface commands for kasl application.
 //!
-//! This module contains all CLI command implementations. Each command is responsible
-//! for a specific aspect of the application's functionality:
+//! Contains all CLI command implementations for task management, activity monitoring,
+//! reporting, and system configuration.
 //!
-//! ## Core Commands
-//! - [`task`] - Task management (create, edit, delete, list tasks)
-//! - [`watch`] - Activity monitoring and daemon management
-//! - [`report`] - Generate and send daily/monthly reports
-//! - [`export`] - Export data to various formats (CSV, JSON, Excel)
+//! ## Features
 //!
-//! ## Utility Commands
-//! - [`init`] - Initialize application configuration
-//! - [`sum`] - Display monthly working hours summary
-//! - [`pauses`] - View recorded breaks for a specific date
-//! - [`adjust`] - Modify workday times and add pauses
-//! - [`update`] - Check for and install application updates
-//! - [`autostart`] - Manage system boot autostart settings
+//! - **Core Commands**: Task management, activity monitoring, reporting, export
+//! - **Utility Commands**: Configuration, summaries, pauses, adjustments, updates
+//! - **Advanced Commands**: Templates, tags, database migrations
 //!
-//! ## Advanced Commands
-//! - [`template`] - Manage reusable task templates
-//! - [`tag`] - Organize tasks with custom tags
-//! - [`migrations`] - Database schema management (debug builds only)
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```bash
-//! # Start activity monitoring
-//! kasl watch
-//!
-//! # Create a new task
-//! kasl task --name "Review code" --completeness 75
-//!
-//! # Generate today's report
-//! kasl report
-//!
-//! # Export tasks to CSV
-//! kasl export tasks --format csv
+//! kasl watch                    # Start activity monitoring
+//! kasl task --name "Review code" # Create a new task
+//! kasl report                   # Generate today's report
+//! kasl export tasks --format csv # Export tasks to CSV
 //! ```
 
 pub mod adjust;

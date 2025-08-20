@@ -1,10 +1,10 @@
 //! Database operations for tracking work breaks and pause periods.
 //!
-//! This module manages the storage and retrieval of pause/break records during work sessions.
-//! It provides functionality for automatically tracking user inactivity periods and manually
-//! recorded breaks, essential for accurate work time calculations and productivity analysis.
+//! Manages the storage and retrieval of pause/break records during work sessions.
+//! Provides functionality for automatically tracking user inactivity periods and
+//! manually recorded breaks.
 //!
-//! ## Pause Tracking Features
+//! ## Features
 //!
 //! - **Automatic Detection**: Records pauses when user activity stops
 //! - **Manual Entry**: Support for manually adding break periods
@@ -12,40 +12,15 @@
 //! - **Daily Filtering**: Retrieve pauses for specific dates with duration thresholds
 //! - **Batch Operations**: Delete multiple pause records efficiently
 //!
-//! ## Database Schema
-//!
-//! The `pauses` table structure:
-//! - `id`: Primary key for unique identification
-//! - `start`: Timestamp when the pause began (NOT NULL)
-//! - `end`: Timestamp when the pause ended (NULL for ongoing pauses)
-//! - `duration`: Calculated pause length in seconds
-//!
-//! ## Pause Lifecycle
-//!
-//! 1. **Start Detection**: User inactivity triggers pause start recording
-//! 2. **Activity Resume**: User activity triggers pause end calculation
-//! 3. **Duration Storage**: Pause length is computed and stored
-//! 4. **Filtering**: Short pauses may be filtered based on configuration
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::pauses::Pauses;
 //! use chrono::Local;
 //!
 //! let pauses = Pauses::new()?;
-//!
-//! // Start a new pause
 //! pauses.insert_start()?;
-//!
-//! // End the current pause (automatic duration calculation)
 //! pauses.insert_end(300)?; // 5 minutes
-//!
-//! // Retrieve daily pauses (minimum 10 minutes)
-//! let daily_pauses = pauses.get_daily_pauses(
-//!     Local::now().date_naive(),
-//!     600 // 10 minutes in seconds
-//! )?;
 //! ```
 
 use crate::db::db::Db;

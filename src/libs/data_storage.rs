@@ -1,84 +1,25 @@
 //! Cross-platform data storage path management for application files.
 //!
-//! This module provides a unified interface for managing application data storage
-//! locations across different operating systems. It handles the complexities of
-//! platform-specific directory structures and ensures consistent data placement
-//! following OS conventions and user expectations.
-//!
-//! ## Platform-Specific Storage Locations
-//!
-//! The module automatically selects appropriate storage locations based on the target OS:
-//!
-//! ### Windows
-//! - **Location**: `%LOCALAPPDATA%\lacodda\kasl\`
-//! - **Example**: `C:\Users\Username\AppData\Local\lacodda\kasl\`
-//! - **Rationale**: Uses Windows Local AppData for user-specific application data
-//! - **Backup**: Typically excluded from roaming profiles, suitable for local storage
-//!
-//! ### macOS
-//! - **Location**: `~/Library/Application Support/lacodda/kasl/`
-//! - **Example**: `/Users/Username/Library/Application Support/lacodda/kasl/`
-//! - **Rationale**: Follows Apple's guidelines for application support files
-//! - **Backup**: Included in Time Machine backups by default
-//!
-//! ### Linux/Unix
-//! - **Location**: `~/.local/share/lacodda/kasl/`
-//! - **Example**: `/home/username/.local/share/lacodda/kasl/`
-//! - **Rationale**: Complies with XDG Base Directory Specification
-//! - **Backup**: User-space location compatible with most backup solutions
-//!
-//! ## Directory Structure
-//!
-//! All platforms follow the same hierarchical structure:
-//! ```
-//! {platform_base}/lacodda/kasl/
-//! ├── kasl.db              # SQLite database
-//! ├── config.json          # Application configuration
-//! ├── .jira_session_id     # Cached session tokens
-//! ├── .gitlab_secret       # Encrypted credentials
-//! └── kasl-watch.pid       # Process ID files
-//! ```
+//! Provides a unified interface for managing application data storage locations
+//! across different operating systems following OS conventions.
 //!
 //! ## Features
 //!
+//! - **Platform Support**: Windows LocalAppData, macOS Application Support, Linux XDG
 //! - **Automatic Directory Creation**: Creates required directories on first access
 //! - **Permission Handling**: Uses locations where users have write permissions
 //! - **Environment Variable Support**: Respects custom environment overrides
 //! - **Fallback Strategy**: Uses current directory if standard locations fail
-//! - **Path Validation**: Ensures paths are valid and accessible
 //!
-//! ## Security Considerations
-//!
-//! - **User Isolation**: Each user has their own isolated data directory
-//! - **Permission Inheritance**: Respects parent directory permission models
-//! - **Sensitive Data**: Appropriate for storing encrypted credentials and session tokens
-//! - **Access Control**: Leverages OS-level user access controls
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::libs::data_storage::DataStorage;
 //!
-//! // Initialize storage manager
 //! let storage = DataStorage::new();
-//!
-//! // Get path for database file
 //! let db_path = storage.get_path("kasl.db")?;
-//!
-//! // Get path for configuration
 //! let config_path = storage.get_path("config.json")?;
-//!
-//! // Get path for session cache
-//! let session_path = storage.get_path(".jira_session_id")?;
 //! ```
-//!
-//! ## Error Handling
-//!
-//! The module handles various error scenarios gracefully:
-//! - **Missing Environment Variables**: Falls back to safe defaults
-//! - **Permission Denied**: Attempts alternative locations when possible
-//! - **Directory Creation**: Creates parent directories as needed
-//! - **Path Validation**: Ensures returned paths are usable
 
 use anyhow::Result;
 use serde::Deserialize;

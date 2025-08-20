@@ -1,11 +1,9 @@
 //! Daily work session tracking and time management operations.
 //!
-//! This module provides comprehensive functionality for managing daily work sessions,
-//! including automatic start/end time tracking, time adjustments, and period-based
-//! querying. It serves as the foundation for work time calculations, productivity
-//! analysis, and reporting throughout the kasl application.
+//! Provides functionality for managing daily work sessions, including automatic
+//! start/end time tracking, time adjustments, and period-based querying.
 //!
-//! ## Workday Management Features
+//! ## Features
 //!
 //! - **Session Tracking**: Automatic recording of daily work start and end times
 //! - **Time Adjustments**: Manual correction of work session boundaries
@@ -13,53 +11,17 @@
 //! - **Duplicate Prevention**: Ensures only one workday record per date
 //! - **Timezone Handling**: Consistent local timezone management for all operations
 //!
-//! ## Database Schema
-//!
-//! The `workdays` table structure:
-//! - `id`: Primary key for unique workday identification
-//! - `date`: Work date (DATE type, unique constraint prevents duplicates)
-//! - `start`: Work session start timestamp (NOT NULL, local timezone)
-//! - `end`: Work session end timestamp (NULL for ongoing sessions)
-//!
-//! ## Workday Lifecycle
-//!
-//! 1. **Session Start**: Automatic or manual recording of work start time
-//! 2. **Active Session**: Workday exists with start time but no end time
-//! 3. **Session End**: Recording of work completion time
-//! 4. **Time Adjustment**: Optional manual correction of session boundaries
-//! 5. **Reporting**: Historical analysis and productivity calculations
-//!
-//! ## Time Management Philosophy
-//!
-//! The workday system operates on the principle of one work session per calendar date,
-//! using local timezone for consistency. This approach provides:
-//! - Clear daily work boundaries
-//! - Simplified reporting and analysis
-//! - Reliable productivity tracking
-//! - Intuitive user experience
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::workdays::Workdays;
-//! use chrono::{Local, NaiveDate, NaiveDateTime};
+//! use chrono::Local;
 //!
 //! let mut workdays = Workdays::new()?;
 //! let today = Local::now().date_naive();
 //!
-//! // Start a work session
 //! workdays.insert_start(today)?;
-//!
-//! // End the work session
 //! workdays.insert_end(today)?;
-//!
-//! // Retrieve a specific workday
-//! if let Some(workday) = workdays.fetch(today)? {
-//!     println!("Worked from {:?} to {:?}", workday.start, workday.end);
-//! }
-//!
-//! // Get all workdays for current month
-//! let monthly_workdays = workdays.fetch_month(today)?;
 //! ```
 
 use crate::{db::db::Db, libs::messages::Message, msg_error_anyhow};

@@ -1,103 +1,32 @@
 //! Self-updating functionality for the kasl application.
 //!
-//! This module provides comprehensive auto-update capabilities that enable the application
+//! Provides comprehensive auto-update capabilities that enable the application
 //! to automatically check for, download, and install newer versions from GitHub releases.
-//! The update system is designed to be safe, reliable, and transparent to users while
-//! maintaining backwards compatibility and system integrity.
 //!
-//! ## Update Architecture
+//! ## Features
 //!
-//! The update system follows a multi-stage pipeline approach:
+//! - **Safety Mechanisms**: Automatic backup, rollback capability, atomic operations
+//! - **Platform Detection**: Architecture awareness, OS detection, ABI compatibility
+//! - **Network Resilience**: Throttled checks, graceful degradation, retry logic
+//! - **Version Management**: Semantic versioning, GitHub API integration
+//! - **Platform Support**: Windows, macOS Intel/Apple Silicon, Linux
 //!
-//! ```text
-//! Version Check → Asset Discovery → Download → Verification → Installation
-//!      ↓               ↓              ↓            ↓              ↓
-//!   GitHub API    Platform ID    Binary Data   Integrity     Binary Replace
-//! ```
-//!
-//! ## Safety Mechanisms
-//!
-//! The update process incorporates several safety mechanisms:
-//!
-//! ### Backup and Recovery
-//! - **Automatic Backup**: Current executable is backed up before replacement
-//! - **Rollback Capability**: Failed updates can be rolled back to previous version
-//! - **Atomic Operations**: Binary replacement is performed atomically
-//! - **Validation**: Downloaded binaries are validated before installation
-//!
-//! ### Platform Detection
-//! - **Architecture Awareness**: Automatically detects CPU architecture
-//! - **OS Detection**: Identifies operating system and selects appropriate binary
-//! - **ABI Compatibility**: Ensures binary compatibility with current system
-//! - **Format Support**: Handles platform-specific archive formats
-//!
-//! ### Network Resilience
-//! - **Throttled Checks**: Rate-limited update checks to avoid API abuse
-//! - **Graceful Degradation**: Continues operation if update checks fail
-//! - **Timeout Handling**: Reasonable timeouts for network operations
-//! - **Retry Logic**: Intelligent retry mechanisms for transient failures
-//!
-//! ## Version Management
-//!
-//! The system uses semantic versioning (SemVer) for version comparison:
-//! - **Current Version**: Embedded at compile time via build metadata
-//! - **Latest Version**: Fetched from GitHub releases API
-//! - **Comparison Logic**: Uses string comparison for version precedence
-//! - **Version Display**: Provides clear version information to users
-//!
-//! ## Platform Support
-//!
-//! The updater supports multiple platforms with automatic detection:
-//!
-//! ### Supported Platforms
-//! - **Windows**: `x86_64-pc-windows-msvc` (MSVC toolchain)
-//! - **macOS Intel**: `x86_64-apple-darwin` (Intel processors)
-//! - **macOS Apple Silicon**: `aarch64-apple-darwin` (M1/M2 processors)
-//! - **Linux**: `x86_64-unknown-linux-musl` (statically linked)
-//!
-//! ### Asset Selection
-//! The updater automatically selects the correct binary asset based on:
-//! - Target architecture (x86_64, aarch64)
-//! - Operating system (Windows, macOS, Linux)
-//! - ABI/Toolchain (MSVC, Darwin, musl)
-//!
-//! ## Security Considerations
-//!
-//! While the current implementation provides basic security measures,
-//! future versions may include:
-//! - **Signature Verification**: Cryptographic validation of downloaded binaries
-//! - **HTTPS Enforcement**: Mandatory encrypted connections for all operations
-//! - **Checksum Validation**: SHA-256 verification of downloaded content
-//! - **Chain of Trust**: Verification of GitHub's SSL certificate chain
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::libs::update::Updater;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Create updater instance
 //!     let mut updater = Updater::new()?;
 //!    
-//!     // Check for updates
 //!     if updater.check_for_latest_release().await? {
-//!         println!("New version available: {}",
-//!             updater.latest_version.as_ref().unwrap());
-//!        
-//!         // Perform update
 //!         updater.perform_update().await?;
-//!         println!("Update completed successfully");
 //!     }
 //!    
 //!     Ok(())
 //! }
 //! ```
-//!
-//! ## Configuration
-//!
-//! The update system uses compile-time configuration:
-//! - **Repository Info**: GitHub owner and repository name
 //! - **Current Version**: Application version string
 //! - **API Endpoints**: GitHub releases API URLs
 //! - **Check Intervals**: Throttling and caching configuration

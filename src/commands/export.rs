@@ -1,22 +1,12 @@
 //! Data export command for external analysis and backup.
 //!
-//! This module provides comprehensive data export functionality, supporting
-//! multiple output formats and data types. It enables users to extract their
-//! work data for external analysis, backup purposes, or integration with
-//! other tools and systems.
+//! Provides comprehensive data export functionality supporting multiple output
+//! formats and data types for external analysis, backup, and integration.
 //!
-//! ## Supported Export Formats
+//! ## Features
 //!
-//! - **CSV**: Comma-separated values for spreadsheet applications
-//! - **JSON**: Structured data for programmatic processing
-//! - **Excel**: Native spreadsheet format with formatting and multiple sheets
-//!
-//! ## Data Types
-//!
-//! - **Reports**: Daily work reports with intervals, tasks, and productivity
-//! - **Tasks**: Task records with completion status and metadata
-//! - **Summary**: Monthly summaries with aggregate statistics
-//! - **All**: Complete data export including all available information
+//! - **Export Formats**: CSV, JSON, Excel with formatting and multiple sheets
+//! - **Data Types**: Reports, tasks, summaries, and complete data export
 
 use crate::{
     libs::{
@@ -86,28 +76,8 @@ pub struct ExportArgs {
 
 /// Executes the data export command.
 ///
-/// This function orchestrates the complete export process:
-/// 1. **Date Parsing**: Converts date string to structured format
-/// 2. **Exporter Initialization**: Sets up output format and destination
-/// 3. **Data Processing**: Delegates to appropriate export handler
-/// 4. **File Generation**: Creates output file with requested data
-/// 5. **User Feedback**: Provides confirmation and file location
-///
-/// ## Export Process
-///
-/// The export process varies by data type but generally follows:
-/// 1. **Data Retrieval**: Fetch relevant records from database
-/// 2. **Data Transformation**: Convert to export-friendly format
-/// 3. **Format Application**: Apply CSV, JSON, or Excel formatting
-/// 4. **File Writing**: Save to specified or default location
-/// 5. **Validation**: Verify export completeness and integrity
-///
-/// ## Error Handling
-///
-/// The export process includes robust error handling for:
-/// - Invalid date formats or ranges
-/// - Database connectivity issues
-/// - File system permission problems
+/// Orchestrates the complete export process including date parsing, exporter
+/// initialization, data processing, file generation, and user feedback.
 /// - Data format conversion errors
 /// - Output file write failures
 ///

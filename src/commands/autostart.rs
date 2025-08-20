@@ -56,9 +56,8 @@ enum AutostartCommand {
 
 /// Executes the autostart command based on the specified operation.
 ///
-/// This function delegates to the appropriate autostart library function
-/// based on the user's choice. It handles platform-specific implementations
-/// transparently.
+/// Delegates to the appropriate autostart library function based on the user's choice,
+/// handling platform-specific implementations transparently.
 ///
 /// # Arguments
 ///
@@ -68,36 +67,6 @@ enum AutostartCommand {
 ///
 /// Returns `Ok(())` on successful operation, or an error if the autostart
 /// operation fails (e.g., insufficient privileges, unsupported platform).
-///
-/// # Examples
-///
-/// ```bash
-/// # Enable autostart
-/// kasl autostart enable
-///
-/// # Check status
-/// kasl autostart status
-///
-/// # Disable autostart
-/// kasl autostart disable
-/// ```
-///
-/// # Platform-Specific Behavior
-///
-/// **Windows**:
-/// - Attempts system-level Task Scheduler first (requires admin)
-/// - Falls back to user-level Registry entry if admin access denied
-/// - Provides clear feedback about which method was used
-///
-/// **Unix-like Systems**:
-/// - Currently returns "not implemented" error
-/// - Future versions will support LaunchAgent (macOS) and systemd (Linux)
-///
-/// # Errors
-///
-/// Common error scenarios:
-/// - Insufficient privileges (Windows Task Scheduler)
-/// - Platform not supported (Unix systems)
 /// - System configuration conflicts
 pub fn cmd(args: AutostartArgs) -> Result<()> {
     match args.command {

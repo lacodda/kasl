@@ -1,22 +1,8 @@
 //! Activity monitoring and daemon management command.
 //!
-//! This module handles the core functionality of kasl - monitoring user activity
-//! to automatically detect work sessions, breaks, and workday boundaries. It supports
-//! both foreground debugging mode and background daemon operation.
-//!
-//! ## Monitoring Process
-//!
-//! The watch command operates by:
-//! 1. **Input Detection**: Monitors keyboard and mouse activity using system APIs
-//! 2. **Activity Analysis**: Determines work vs. break periods based on configurable thresholds
-//! 3. **Database Recording**: Automatically records workday start/end times and pause periods
-//! 4. **State Management**: Maintains activity state across application restarts
-//!
-//! ## Operating Modes
-//!
-//! - **Background Daemon**: Runs silently in the background, perfect for daily use
-//! - **Foreground Debug**: Runs in the terminal with detailed logging for troubleshooting
-//! - **Stop Mode**: Terminates any running background processes
+//! Handles the core functionality of kasl - monitoring user activity to automatically
+//! detect work sessions, breaks, and workday boundaries. Supports both foreground
+//! debugging mode and background daemon operation.
 
 use crate::libs::{config::Config, daemon, messages::Message, monitor::Monitor};
 use crate::msg_print;
@@ -59,9 +45,8 @@ pub struct WatchArgs {
 
 /// Main entry point for the watch command.
 ///
-/// This function acts as a dispatcher that routes to the appropriate operation
-/// based on the provided command-line arguments. It handles the three main
-/// operational modes of the watch command.
+/// Acts as a dispatcher that routes to the appropriate operation based on the
+/// provided command-line arguments, handling the three main operational modes.
 ///
 /// # Arguments
 ///
@@ -71,34 +56,6 @@ pub struct WatchArgs {
 ///
 /// Returns `Ok(())` on successful operation completion, or an error if
 /// the requested operation fails.
-///
-/// # Examples
-///
-/// ```bash
-/// # Start background monitoring
-/// kasl watch
-///
-/// # Run in foreground with debug output
-/// kasl watch --foreground
-///
-/// # Stop background monitoring
-/// kasl watch --stop
-/// ```
-///
-/// # Operation Modes
-///
-/// 1. **Stop Mode** (`--stop`): Terminates background daemon
-/// 2. **Foreground Mode** (`--foreground`): Runs interactively with logging
-/// 3. **Default Mode**: Spawns background daemon process
-///
-/// # Error Handling
-///
-/// Common error scenarios:
-/// - Daemon already running (for default mode)
-/// - No daemon to stop (for stop mode)
-/// - Configuration errors (invalid settings)
-/// - Permission issues (system API access)
-/// - Database connection failures
 #[instrument]
 pub async fn cmd(args: WatchArgs) -> Result<()> {
     if args.stop {

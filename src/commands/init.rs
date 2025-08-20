@@ -28,16 +28,8 @@ pub struct InitArgs {
 
 /// Executes the initialization command.
 ///
-/// This function handles two main scenarios:
-/// 1. **Configuration Setup**: Interactive wizard for first-time setup
-/// 2. **Configuration Removal**: Cleanup of existing settings when `--delete` is used
-///
-/// The setup process includes:
-/// - Global PATH configuration for command availability
-/// - Interactive module selection (GitLab, Jira, SiServer, etc.)
-/// - API credential configuration
-/// - Monitor settings (pause thresholds, polling intervals)
-/// - Server configuration for report submission
+/// Handles configuration setup with interactive wizard for first-time setup,
+/// or configuration removal when `--delete` is used.
 ///
 /// # Arguments
 ///
@@ -46,25 +38,6 @@ pub struct InitArgs {
 /// # Returns
 ///
 /// Returns `Ok(())` on successful configuration, or an error if the setup fails.
-///
-/// # Examples
-///
-/// ```bash
-/// # Interactive configuration setup
-/// kasl init
-///
-/// # Remove existing configuration
-/// kasl init --delete
-/// ```
-///
-/// # Configuration Modules
-///
-/// The init process allows users to configure these optional modules:
-/// - **GitLab**: Integration for importing daily commits as tasks
-/// - **Jira**: Integration for tracking completed issues
-/// - **SiServer**: Custom reporting server for organization integration
-/// - **Monitor**: Activity detection and pause recording settings
-/// - **Server**: Generic API server for report submission
 pub fn cmd(init_args: InitArgs) -> Result<()> {
     // Set up global application PATH configuration
     // This ensures the 'kasl' command is available system-wide

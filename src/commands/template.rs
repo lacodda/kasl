@@ -1,11 +1,9 @@
 //! Task template management command.
 //!
-//! This module provides comprehensive template management functionality for kasl,
-//! enabling users to create, edit, delete, and search reusable task templates.
-//! Templates streamline the creation of frequently used tasks by providing
-//! predefined values for name, comment, and completion status.
+//! Provides comprehensive template management functionality for kasl, enabling
+//! users to create, edit, delete, and search reusable task templates.
 //!
-//! ## Template Features
+//! ## Features
 //!
 //! - **Template CRUD**: Create, read, update, and delete operations
 //! - **Search Functionality**: Find templates by name or content

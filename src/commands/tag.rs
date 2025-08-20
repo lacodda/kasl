@@ -1,11 +1,9 @@
 //! Tag management command for task organization and categorization.
 //!
-//! This module provides comprehensive tag management functionality, enabling users
-//! to create, organize, and utilize tags for better task categorization. Tags serve
-//! as a flexible labeling system that allows users to group and filter tasks by
-//! project, priority, type, or any custom criteria.
+//! Provides comprehensive tag management functionality, enabling users to create,
+//! organize, and utilize tags for better task categorization.
 //!
-//! ## Tag Features
+//! ## Features
 //!
 //! - **Tag CRUD Operations**: Create, read, update, and delete tag definitions
 //! - **Color Coding**: Visual organization with customizable tag colors
@@ -13,15 +11,6 @@
 //! - **Filtering**: Find tasks by tag assignments
 //! - **Auto-Creation**: Automatically create tags when assigned to tasks
 //! - **Usage Analytics**: View which tasks are associated with each tag
-//!
-//! ## Use Cases
-//!
-//! Tags are useful for organizing tasks by:
-//! - **Projects**: "frontend", "backend", "mobile"
-//! - **Priority**: "urgent", "low-priority", "nice-to-have"
-//! - **Type**: "bug", "feature", "documentation", "meeting"
-//! - **Status**: "blocked", "waiting-review", "in-progress"
-//! - **Context**: "remote", "office", "client-work"
 
 use crate::{
     db::tags::{Tag, Tags},

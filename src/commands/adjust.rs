@@ -92,12 +92,8 @@ pub struct AdjustArgs {
 
 /// Executes the workday time adjustment command.
 ///
-/// This function handles the complete adjustment workflow:
-/// 1. **Validation**: Ensures a workday exists for the specified date
-/// 2. **Parameter Collection**: Gathers adjustment mode and duration (interactively if needed)
-/// 3. **Preview Generation**: Shows the current state and proposed changes
-/// 4. **Confirmation**: Requests user approval (unless `--force` is used)
-/// 5. **Application**: Applies the changes to the database
+/// Handles the complete adjustment workflow including validation, parameter collection,
+/// preview generation, confirmation, and application of changes to the database.
 ///
 /// ## Safety Features
 ///

@@ -1,57 +1,22 @@
 //! Centralized message management system for kasl application.
 //!
-//! This module provides a comprehensive message handling infrastructure that serves
-//! as the foundation for all user communication in the kasl application. It offers
-//! type-safe message definitions, consistent formatting utilities, and extensible
-//! macro systems for application-wide messaging standards.
+//! Provides a comprehensive message handling infrastructure that serves as the
+//! foundation for all user communication in the kasl application.
 //!
-//! ## Architecture Overview
+//! ## Features
 //!
-//! The message system is built around several core components:
-//! - **Message Types**: Strongly-typed enum definitions for all application messages
-//! - **Display Implementation**: Automatic text conversion with proper formatting
-//! - **Utility Functions**: Convenient helpers for common message patterns
-//! - **Macro Integration**: Seamless integration with logging and output macros
-//!
-//! ## Design Principles
-//!
-//! The message system follows these key design principles:
 //! - **Type Safety**: All messages are compile-time verified with proper parameters
 //! - **Centralization**: Single source of truth for all user-facing text
 //! - **Consistency**: Uniform formatting and presentation across the application
 //! - **Extensibility**: Easy addition of new message types and categories
 //! - **Internationalization**: Structure supports future localization efforts
 //!
-//! ## Message Categories
+//! ## Usage
 //!
-//! The system organizes messages into logical categories:
-//! - **Success Messages**: Positive feedback for completed operations
-//! - **Error Messages**: Clear problem descriptions with context
-//! - **Warning Messages**: Important notifications requiring attention
-//! - **Info Messages**: General status updates and informational content
-//! - **Wrapped Messages**: Special formatting for emphasis or separation
-//!
-//! ## Integration Points
-//!
-//! The message system integrates with several application components:
-//! - **CLI Commands**: User interface feedback and status reporting
-//! - **Background Services**: Daemon process status and error reporting
-//! - **Configuration**: Setup wizard prompts and validation messages
-//! - **Data Operations**: Database operation results and error handling
-//! - **External APIs**: Integration status and communication feedback
-//!
-//! ## Usage Patterns
-//!
-//! Common usage patterns throughout the application:
 //! ```rust
 //! use kasl::libs::messages::{Message, success, error};
 //! use kasl::{msg_info, msg_error, msg_success};
 //!
-//! // Direct message usage
-//! println!("{}", success(Message::TaskCreated));
-//! println!("{}", error(Message::ConfigSaveError));
-//!
-//! // Macro-based usage (recommended)
 //! msg_success!(Message::TaskCreated);
 //! msg_error!(Message::ConfigSaveError);
 //! msg_info!(Message::MonitorStarted {
@@ -60,23 +25,6 @@
 //!     activity_threshold: 30,
 //! });
 //! ```
-//!
-//! ## Formatting Standards
-//!
-//! All message formatting follows consistent standards:
-//! - **Visual Indicators**: Emoji prefixes for quick visual categorization
-//! - **Color Awareness**: Support for terminal color when available
-//! - **Wrapping Options**: Optional newline formatting for emphasis
-//! - **Length Considerations**: Appropriate message length for terminal display
-//!
-//! ## Future Extensions
-//!
-//! The system is designed to support future enhancements:
-//! - **Localization Support**: Replace text with locale-specific versions
-//! - **Rich Formatting**: Terminal colors, bold text, and other styling
-//! - **Context-Aware Messages**: Dynamic content based on user preferences
-//! - **Message Queuing**: Batched message delivery for performance
-//! - **Logging Integration**: Automatic forwarding to logging systems
 
 pub mod display;
 pub mod macros;

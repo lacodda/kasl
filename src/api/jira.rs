@@ -1,8 +1,7 @@
 //! Jira API integration for issue tracking and task synchronization.
 //!
-//! This module provides functionality to connect to Jira instances and retrieve
-//! completed issues for automatic task generation and time tracking integration.
-//! It implements session-based authentication with automatic retry logic.
+//! Provides functionality to connect to Jira instances and retrieve completed
+//! issues for automatic task generation and time tracking integration.
 //!
 //! ## Features
 //!
@@ -11,21 +10,7 @@
 //! - **Error Recovery**: Robust retry logic for authentication failures
 //! - **JQL Integration**: Flexible issue querying using Jira Query Language
 //!
-//! ## Authentication Flow
-//!
-//! 1. **Initial Login**: Authenticate with username/password
-//! 2. **Session Caching**: Store session cookies for reuse
-//! 3. **Automatic Retry**: Re-authenticate when sessions expire
-//! 4. **Error Handling**: Graceful fallback when authentication fails
-//!
-//! ## Usage in Task Discovery
-//!
-//! Completed Jira issues are automatically discovered during task import:
-//! - Issues marked as "Done" or "Решена" (Resolved) for the target date
-//! - Filtered to only include issues assigned to the current user
-//! - Converted to tasks with issue key and summary as task name
-//!
-//! ## Example
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::api::{Jira, JiraConfig};

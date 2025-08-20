@@ -1,8 +1,7 @@
 //! GitLab API client for fetching user activity and commit data.
 //!
-//! This module provides integration with GitLab instances (both self-hosted and GitLab.com)
-//! to automatically discover and import development activities as tasks. It focuses on
-//! retrieving commit information that can be used to populate daily task lists.
+//! Provides integration with GitLab instances (both self-hosted and GitLab.com)
+//! to automatically discover and import development activities as tasks.
 //!
 //! ## Features
 //!
@@ -11,12 +10,7 @@
 //! - **Error Resilience**: Gracefully handles network failures without crashing
 //! - **Multi-Instance Support**: Works with GitLab.com, self-hosted, and enterprise instances
 //!
-//! ## Authentication
-//!
-//! Uses GitLab Personal Access Tokens for API authentication. The token should have
-//! at least `read_user` and `read_repository` scopes to access user events and commit data.
-//!
-//! ## Usage Example
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::api::gitlab::{GitLab, GitLabConfig};
@@ -29,14 +23,6 @@
 //! let client = GitLab::new(&config);
 //! let commits = client.get_today_commits().await?;
 //! ```
-//!
-//! ## Error Handling Strategy
-//!
-//! This client is designed to be resilient in production environments:
-//! - Network timeouts return empty results rather than errors
-//! - API failures are logged but don't interrupt application flow
-//! - Malformed responses are handled gracefully
-//! - Missing commits or projects are skipped rather than causing failures
 
 use crate::libs::config::ConfigModule;
 use crate::libs::messages::Message;
@@ -68,12 +54,6 @@ pub struct GitLab {
 /// GitLab events capture various user activities including pushes, merges,
 /// comments, and other repository interactions. This structure focuses on
 /// push events which contain commit information.
-///
-/// ## Event Types
-///
-/// While GitLab supports many event types, this client primarily processes:
-/// - `"pushed to"` events that contain commit references
-/// - Events are filtered by date to find today's activity
 #[derive(Debug, Deserialize)]
 struct Event {
     /// Type of action performed (e.g., "pushed to", "opened", "commented on")

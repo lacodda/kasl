@@ -1,8 +1,7 @@
 //! Time duration formatting utilities for user-friendly display.
 //!
-//! This module provides formatting functions and types for converting time durations
-//! into human-readable string representations. It's used throughout the application
-//! for displaying work hours, pause durations, and time intervals in reports.
+//! Provides formatting functions and types for converting time durations into
+//! human-readable string representations used throughout the application.
 //!
 //! ## Features
 //!
@@ -11,62 +10,15 @@
 //! - **Performance**: Lightweight formatting with minimal allocations
 //! - **Integration**: Works seamlessly with `chrono::Duration` types
 //!
-//! ## Usage Patterns
-//!
-//! The module is primarily used in three contexts:
-//!
-//! ### Report Generation
-//! Work reports display total hours, break durations, and productivity metrics
-//! using formatted time strings for easy reading.
-//!
-//! ### Data Export
-//! When exporting data to CSV, JSON, or Excel formats, time durations are
-//! converted to standardized string representations.
-//!
-//! ### Console Display
-//! Table views and status messages use formatted durations to show time
-//! information in a consistent, readable format.
-//!
-//! ## Format Specifications
-//!
-//! ### Duration Format
-//! All durations follow the "HH:MM" pattern:
-//! - Hours are zero-padded to 2 digits
-//! - Minutes are zero-padded to 2 digits
-//! - No seconds are displayed (rounded to nearest minute)
-//! - Negative durations are treated as "00:00"
-//!
-//! ### Examples
-//! - 1 hour 30 minutes → "01:30"
-//! - 8 hours 45 minutes → "08:45"
-//! - 30 minutes → "00:30"
-//! - Negative duration → "00:00"
-//!
-//! ## Error Handling
-//!
-//! The formatting functions are designed to be robust:
-//! - Invalid durations default to zero time
-//! - Overflow conditions are handled safely
-//! - No panics or errors are possible during formatting
-//!
-//! ## Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::libs::formatter::{format_duration, FormattedEvent};
 //! use chrono::Duration;
 //!
-//! // Format a duration
 //! let duration = Duration::hours(2) + Duration::minutes(30);
 //! let formatted = format_duration(&duration);
 //! assert_eq!(formatted, "02:30");
-//!
-//! // Create a formatted event for display
-//! let event = FormattedEvent {
-//!     id: 1,
-//!     start: "09:00".to_string(),
-//!     end: "17:30".to_string(),
-//!     duration: "08:30".to_string(),
-//! };
 //! ```
 
 use chrono::Duration;

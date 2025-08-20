@@ -1,36 +1,17 @@
 //! Pause data management and formatting utilities.
 //!
-//! This module provides the core data structures and formatting functionality
-//! for handling break periods detected by the activity monitor. It bridges
-//! the gap between raw database records and user-friendly display formats
-//! used throughout the application.
+//! Provides the core data structures and formatting functionality for handling
+//! break periods detected by the activity monitor.
 //!
-//! ## Core Functionality
+//! ## Features
 //!
 //! - **Data Modeling**: Represents pause periods with precise timing information
 //! - **Display Formatting**: Converts raw pause data into human-readable formats
 //! - **Collection Processing**: Batch operations on pause collections
 //! - **Report Integration**: Provides data structures suitable for reporting systems
 //!
-//! ## Data Flow
+//! ## Usage
 //!
-//! ```text
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │   Database      │    │     Pause       │    │   Formatted     │
-//! │   Records       │───▶│   Structures    │───▶│   Display       │
-//! │   (SQLite)      │    │   (Rust)        │    │   (Tables)      │
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//!          │                       │                       │
-//!          ▼                       ▼                       ▼
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │ Raw Timestamps  │    │ Duration Calc   │    │ "HH:MM" Format  │
-//! │ Start/End Times │    │ Nullable Fields │    │ Sequential IDs  │
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//! ```
-//!
-//! ## Usage Patterns
-//!
-//! ### Single Pause Processing
 //! ```rust,no_run
 //! use kasl::libs::pause::Pause;
 //! use chrono::{NaiveDateTime, Duration};
@@ -42,24 +23,6 @@
 //!     duration: Some(Duration::minutes(15)),
 //! };
 //! ```
-//!
-//! ### Collection Formatting
-//! ```rust,no_run
-//! use kasl::libs::pause::{Pause, PauseGroup};
-//!
-//! let mut pauses = vec![pause1, pause2, pause3];
-//! let formatted_events = pauses.format();
-//! // Now ready for table display
-//! ```
-//!
-//! ## Integration Points
-//!
-//! This module integrates with several other components:
-//! - **Database Layer**: Receives pause data from `db::pauses` module
-//! - **Monitor System**: Provides structures for real-time pause tracking  
-//! - **Report Generation**: Supplies formatted data for daily/monthly reports
-//! - **Export System**: Provides serializable formats for data export
-//! - **Display System**: Offers table-ready formatted data structures
 
 use crate::libs::formatter::FormattedEvent;
 use chrono::{prelude::NaiveDateTime, Duration, TimeDelta};

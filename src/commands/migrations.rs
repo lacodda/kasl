@@ -73,30 +73,8 @@ enum MigrationsCommand {
 
 /// Executes database migration management operations.
 ///
-/// This function provides essential database schema inspection capabilities
-/// for development and debugging. All operations are designed to be safe
-/// and non-destructive, focusing on information gathering rather than
-/// schema modification.
-///
-/// ## Available Operations
-///
-/// - **Status Check**: Reports current database version and pending migrations
-/// - **History Review**: Shows complete migration application history
-///
-/// ## Safety Features
-///
-/// - **Debug-Only Availability**: Command not available in release builds
-/// - **Read-Only Operations**: No schema modifications through this interface
-/// - **Direct Database Access**: Uses dedicated connection for inspection
-/// - **Error Isolation**: Database errors don't affect main application
-///
-/// ## Development Workflow
-///
-/// This command supports these development scenarios:
-/// - **Schema Validation**: Verify database is at expected version
-/// - **Migration Debugging**: Understand what migrations have been applied
-/// - **Development Setup**: Ensure local database is properly configured
-/// - **Testing Preparation**: Validate test database schema state
+/// Provides essential database schema inspection capabilities for development
+/// and debugging. All operations are designed to be safe and non-destructive.
 ///
 /// # Arguments
 ///

@@ -1,11 +1,10 @@
 //! Task template system for efficient task creation and workflow standardization.
 //!
-//! This module provides comprehensive functionality for managing reusable task templates
-//! that streamline the creation of frequently used tasks. Templates store predefined
-//! task configurations including names, descriptions, and completion status, enabling
-//! consistent task creation and workflow standardization.
+//! Provides functionality for managing reusable task templates that streamline
+//! the creation of frequently used tasks. Templates store predefined task
+//! configurations including names, descriptions, and completion status.
 //!
-//! ## Template System Features
+//! ## Features
 //!
 //! - **Template Management**: Create, update, delete, and query template definitions
 //! - **Search Capabilities**: Find templates by name or task content with fuzzy matching
@@ -13,56 +12,19 @@
 //! - **Content Reuse**: Store commonly used task patterns for rapid deployment
 //! - **Validation Support**: Ensure template uniqueness and data integrity
 //!
-//! ## Database Schema
-//!
-//! The `task_templates` table structure:
-//! - `id`: Primary key for unique template identification
-//! - `name`: Unique template identifier for human-readable reference
-//! - `task_name`: The actual task name that will be used when creating tasks
-//! - `comment`: Default description or notes for tasks created from this template
-//! - `completeness`: Default completion percentage (0-100, defaults to 100)
-//! - `created_at`: Timestamp tracking template creation for audit trails
-//!
-//! ## Template Lifecycle
-//!
-//! 1. **Creation**: Templates are defined with unique names and default values
-//! 2. **Storage**: Template data is validated and stored for reuse
-//! 3. **Discovery**: Templates can be searched and listed for selection
-//! 4. **Application**: Templates are used to create new tasks with predefined values
-//! 5. **Maintenance**: Templates can be updated or removed as workflows evolve
-//!
-//! ## Use Cases
-//!
-//! - **Daily Standup Tasks**: Standardized meeting preparation tasks
-//! - **Code Review Process**: Consistent review checklist templates
-//! - **Testing Workflows**: Predefined testing task patterns
-//! - **Project Milestones**: Standard project phase templates
-//! - **Administrative Tasks**: Regular administrative and maintenance tasks
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::templates::{Templates, TaskTemplate};
 //!
 //! let mut templates = Templates::new()?;
-//!
-//! // Create a new template
 //! let template = TaskTemplate::new(
 //!     "daily-standup".to_string(),
 //!     "Prepare for daily standup".to_string(),
 //!     "Review yesterday's work and plan today".to_string(),
-//!     50 // Default to 50% complete when created
+//!     50
 //! );
 //! templates.create(&template)?;
-//!
-//! // Search for templates
-//! let standup_templates = templates.search("standup")?;
-//!
-//! // Use template to create a task
-//! if let Some(template) = templates.get("daily-standup")? {
-//!     // Use template.task_name, template.comment, template.completeness
-//!     // to create a new task with predefined values
-//! }
 //! ```
 
 use crate::db::db::Db;

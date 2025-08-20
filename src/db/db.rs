@@ -1,11 +1,9 @@
 //! Core database connection management and initialization infrastructure.
 //!
-//! This module provides the foundational database functionality for the kasl application,
-//! including connection management, schema initialization, and migration orchestration.
-//! It serves as the central point for database access and ensures consistent
-//! configuration across all database operations.
+//! Provides foundational database functionality including connection management,
+//! schema initialization, and migration orchestration.
 //!
-//! ## Core Responsibilities
+//! ## Features
 //!
 //! - **Connection Management**: Establishing and configuring SQLite connections
 //! - **Schema Initialization**: Ensuring database structure is properly set up
@@ -13,74 +11,18 @@
 //! - **Configuration Enforcement**: Applying consistent database settings
 //! - **Error Handling**: Providing robust error management for database operations
 //!
-//! ## Database Configuration
+//! ## Usage
 //!
-//! The module automatically configures SQLite connections with optimal settings:
-//! - **Foreign Key Enforcement**: Enabled for referential integrity
-//! - **Local Timezone Handling**: Consistent timezone management
-//! - **UTF-8 Encoding**: Universal text encoding support
-//! - **Transaction Support**: Full ACID compliance
-//! - **Performance Optimization**: Appropriate settings for desktop usage
-//!
-//! ## File Location Strategy
-//!
-//! Database files are stored in platform-specific application data directories
-//! following operating system conventions and user expectations:
-//!
-//! - **Windows**: `%LOCALAPPDATA%\lacodda\kasl\kasl.db`
-//! - **macOS**: `~/Library/Application Support/lacodda/kasl/kasl.db`
-//! - **Linux**: `~/.local/share/lacodda/kasl/kasl.db`
-//!
-//! This approach ensures:
-//! - **User Data Separation**: Keeps application data separate from system files
-//! - **Permission Compliance**: Uses locations where users have write access
-//! - **Backup Integration**: Leverages platform backup and sync systems
-//! - **Migration Support**: Enables smooth data transfer between machines
-//!
-//! ## Connection Lifecycle
-//!
-//! 1. **Path Resolution**: Determines appropriate database file location
-//! 2. **Directory Creation**: Ensures all parent directories exist
-//! 3. **Connection Establishment**: Opens SQLite connection with proper settings
-//! 4. **Foreign Key Activation**: Enables referential integrity enforcement
-//! 5. **Migration Execution**: Applies any pending schema updates
-//! 6. **Readiness Confirmation**: Validates database is ready for operations
-//!
-//! ## Usage Patterns
-//!
-//! ### Standard Database Access
 //! ```rust
 //! use kasl::db::db::Db;
 //!
-//! // Initialize with full setup (recommended)
 //! let db = Db::new()?;
-//!
-//! // Use connection for queries
 //! let count: i32 = db.conn.query_row(
 //!     "SELECT COUNT(*) FROM tasks",
 //!     [],
 //!     |row| row.get(0)
 //! )?;
 //! ```
-//!
-//! ### Migration Management Access
-//! ```rust
-//! use kasl::db::db::Db;
-//!
-//! // Access without automatic migrations (for migration tools)
-//! let conn = Db::new_without_migrations()?;
-//!
-//! // Check migration status
-//! let version = kasl::db::migrations::get_db_version(&conn)?;
-//! ```
-//!
-//! ## Error Handling Philosophy
-//!
-//! The module implements comprehensive error handling that:
-//! - **Preserves Context**: Maintains error context through the call stack
-//! - **Provides Details**: Offers specific error information for debugging
-//! - **Enables Recovery**: Allows callers to implement appropriate recovery strategies
-//! - **Maintains Safety**: Ensures database consistency even during error conditions
 
 use crate::db::migrations;
 use crate::libs::data_storage::DataStorage;

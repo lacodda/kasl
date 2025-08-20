@@ -1,42 +1,25 @@
 //! API client modules for external service integrations.
 //!
-//! This module provides a unified interface for interacting with various external APIs
-//! that kasl integrates with. It includes clients for GitLab, Jira, and internal
+//! Provides a unified interface for interacting with various external APIs
+//! that kasl integrates with. Includes clients for GitLab, Jira, and internal
 //! SiServer systems, all implementing a common session management pattern.
 //!
-//! ## Available API Clients
+//! ## Features
 //!
 //! - **GitLab**: Fetches user activity and commit data for task creation
 //! - **Jira**: Retrieves assigned issues and project information
 //! - **SiServer**: Internal reporting API for time tracking submissions
+//! - **Session Management**: Automatic caching, encrypted storage, retry logic
+//! - **Security**: Encrypted tokens, secure prompting, session invalidation
 //!
-//! ## Session Management
-//!
-//! All API clients implement the `Session` trait which provides:
-//! - Automatic session caching and restoration
-//! - Encrypted credential storage
-//! - Retry logic with exponential backoff
-//! - Interactive authentication prompts
-//!
-//! ## Configuration
-//!
-//! Each API client exports its own configuration struct that can be managed
-//! through the application's configuration system:
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::api::{GitLabConfig, JiraConfig, SiConfig};
 //!
-//! // Each config provides module metadata and interactive setup
 //! let jira_module = JiraConfig::module();
 //! let jira_config = JiraConfig::init(&existing_config)?;
 //! ```
-//!
-//! ## Security Features
-//!
-//! - Session tokens are encrypted before storage
-//! - Passwords are never persisted to disk
-//! - Automatic session invalidation on authentication failure
-//! - Secure credential prompting with hidden input
 
 use crate::libs::messages::Message;
 use crate::libs::{data_storage::DataStorage, secret::Secret};
@@ -63,25 +46,8 @@ const MAX_RETRY_COUNT: i32 = 3;
 
 /// Common session management trait for all API clients.
 ///
-/// This trait provides a standardized interface for handling authentication,
-/// session caching, and credential management across different API providers.
-/// All API clients in this module implement this trait to ensure consistent
-/// behavior and security practices.
-///
-/// ## Session Lifecycle
-///
-/// 1. **Session Retrieval**: Check for cached session, restore if valid
-/// 2. **Authentication**: If no valid session, prompt for credentials
-/// 3. **Session Storage**: Cache successful session for future use
-/// 4. **Retry Logic**: Handle authentication failures with limited retries
-/// 5. **Session Cleanup**: Remove invalid sessions and retry on failure
-///
-/// ## Security Considerations
-///
-/// - Sessions are stored encrypted using application-specific keys
-/// - Passwords are only held in memory during authentication
-/// - Session files are created with restricted permissions
-/// - Failed authentication attempts are rate-limited
+/// Provides a standardized interface for handling authentication, session caching,
+/// and credential management across different API providers.
 #[allow(async_fn_in_trait)]
 pub trait Session {
     /// Performs authentication and returns a session identifier.

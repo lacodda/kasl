@@ -37,44 +37,8 @@ pub struct SumArgs {
 
 /// Generates and displays a comprehensive monthly working hours summary.
 ///
-/// This function creates a detailed analysis of work patterns for the current month,
-/// including productivity calculations, rest day integration, and daily breakdowns.
-///
-/// ## Report Components
-///
-/// The monthly summary includes:
-///
-/// 1. **Daily Breakdown**: Each workday with hours and productivity percentage
-/// 2. **Rest Days**: Company holidays and weekends with default hours
-/// 3. **Monthly Totals**: Total hours worked and average daily hours
-/// 4. **Productivity Metrics**: Average productivity across all workdays
-///
-/// ## Data Sources
-///
-/// The summary integrates data from multiple sources:
-/// - **Local Database**: Recorded workdays and pause information
-/// - **External API**: Company rest dates and holidays (if configured)
-/// - **Configuration**: Default work hours for rest days
-///
-/// ## Productivity Calculation
-///
-/// Productivity is calculated as:
-/// ```
-/// Productivity = (Net Working Time / Gross Working Time) * 100%
-/// ```
-///
-/// Where:
-/// - **Net Working Time**: Actual productive work (excluding all pauses)
-/// - **Gross Working Time**: Total presence time (excluding long breaks only)
-///
-/// This provides insight into how effectively time is used during work sessions.
-///
-/// ## Rest Day Integration
-///
-/// If SiServer integration is configured, the summary will:
-/// - Fetch official company rest dates for the current month
-/// - Include these dates with default 8-hour entries
-/// - Distinguish between work days and rest days in the display
+/// Creates a detailed analysis of work patterns for the current month, including
+/// productivity calculations, rest day integration, and daily breakdowns.
 ///
 /// # Arguments
 ///
@@ -84,20 +48,6 @@ pub struct SumArgs {
 ///
 /// Returns `Ok(())` on successful summary generation and display, or an error
 /// if data retrieval or calculation fails.
-///
-/// # Examples
-///
-/// ```bash
-/// # Display monthly summary
-/// kasl sum
-///
-/// # Generate and submit summary report
-/// kasl sum --send
-/// ```
-///
-/// # Error Scenarios
-///
-/// - Database connection failures
 /// - API connectivity issues (for rest dates)
 /// - Configuration errors
 /// - Invalid date calculations

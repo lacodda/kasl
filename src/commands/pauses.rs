@@ -48,30 +48,8 @@ pub struct PausesArgs {
 
 /// Executes the pauses command to display breaks for a given date.
 ///
-/// This function retrieves and displays pause records from the database,
-/// applying duration filtering and presenting the results in a formatted table.
-/// It provides both individual pause details and summary statistics.
-///
-/// ## Display Format
-///
-/// The output includes:
-/// - **Pause List**: Each pause with start time, end time, and duration
-/// - **Total Time**: Sum of all pause durations for the day
-/// - **Pause Count**: Number of breaks recorded
-///
-/// ## Duration Filtering
-///
-/// Pauses are filtered by minimum duration to remove noise:
-/// 1. Uses command-line `--min-duration` if provided
-/// 2. Falls back to config file `min_pause_duration` setting
-/// 3. Defaults to reasonable threshold if no configuration exists
-///
-/// ## Data Sources
-///
-/// Pause data comes from:
-/// - **Automatic Detection**: Monitor-recorded inactivity periods
-/// - **Manual Adjustments**: User-added pauses via adjust command
-/// - **Time Corrections**: Modified pause times from manual adjustments
+/// Retrieves and displays pause records from the database, applying duration
+/// filtering and presenting the results in a formatted table.
 ///
 /// # Arguments
 ///
@@ -81,22 +59,6 @@ pub struct PausesArgs {
 ///
 /// Returns `Ok(())` on successful display, or an error if date parsing fails
 /// or database operations encounter issues.
-///
-/// # Examples
-///
-/// ```bash
-/// # Show today's pauses
-/// kasl pauses
-///
-/// # Show pauses for specific date
-/// kasl pauses --date 2025-01-15
-///
-/// # Filter to show only pauses longer than 30 minutes
-/// kasl pauses --min-duration 30
-///
-/// # Combine date and duration filtering
-/// kasl pauses --date 2025-01-15 --min-duration 10
-/// ```
 ///
 /// # Error Scenarios
 ///

@@ -1,16 +1,7 @@
 //! # Kasl - Key Activity Synchronization and Logging
 //!
-//! A comprehensive command-line utility for tracking work activities, managing tasks,
-//! and generating productivity reports. This library provides the core functionality
-//! for monitoring user activity, managing work sessions, and integrating with
-//! external services.
-//!
-//! ## Main Modules
-//!
-//! - [`api`] - External API integrations (GitLab, Jira, SiServer)
-//! - [`commands`] - CLI command implementations
-//! - [`db`] - Database operations and models
-//! - [`libs`] - Core library utilities and helpers
+//! A command-line utility for tracking work activities, managing tasks,
+//! and generating productivity reports.
 //!
 //! ## Features
 //!
@@ -22,14 +13,13 @@
 //! - **Template System**: Reusable task templates
 //! - **Tag System**: Organize tasks with custom tags
 //!
-//! ## Example
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::commands::Cli;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Initialize and run the CLI
 //!     Cli::menu().await
 //! }
 //! ```

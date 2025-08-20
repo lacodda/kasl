@@ -1,20 +1,10 @@
-//! Comprehensive task management command.
+//! Task management command.
 //!
-//! This module provides the core task management functionality of kasl, enabling users
-//! to create, edit, delete, and organize tasks. It integrates with external services
-//! like GitLab and Jira to automatically import work items, and supports advanced
-//! features like templates, tags, and batch operations.
+//! Provides core task management functionality for creating, editing, deleting, and organizing tasks.
+//! Integrates with external services like GitLab and Jira to automatically import work items,
+//! and supports advanced features like templates, tags, and batch operations.
 //!
-//! ## Task Sources
-//!
-//! Tasks can be created from multiple sources:
-//! - **Manual Creation**: Direct user input with name, comment, and completion
-//! - **GitLab Integration**: Automatic import of daily commits as completed tasks
-//! - **Jira Integration**: Import of completed issues and work items
-//! - **Template System**: Quick creation from predefined task templates
-//! - **Incomplete Tasks**: Continuation of previously started work
-//!
-//! ## Task Operations
+//! ## Features
 //!
 //! - **CRUD Operations**: Create, read, update, and delete individual tasks
 //! - **Batch Operations**: Mass editing and deletion of multiple tasks

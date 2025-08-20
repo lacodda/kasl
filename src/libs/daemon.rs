@@ -1,10 +1,9 @@
 //! Daemon management functionality for the kasl watch command.
 //!
-//! This module provides comprehensive background process management for the kasl
-//! activity monitoring system. It handles the complete lifecycle of daemon processes
-//! including spawning, signal handling, graceful shutdown, and process monitoring.
+//! Provides comprehensive background process management for the kasl activity
+//! monitoring system including spawning, signal handling, and graceful shutdown.
 //!
-//! ## Core Functionality
+//! ## Features
 //!
 //! - **Process Spawning**: Creates detached background processes for continuous monitoring
 //! - **Signal Handling**: Responds to system signals for graceful shutdown and restart
@@ -13,52 +12,14 @@
 //! - **Resource Cleanup**: Ensures proper cleanup of database connections and system resources
 //! - **Error Recovery**: Manages process failures and provides meaningful error messages
 //!
-//! ## Process Architecture
-//!
-//! The daemon system uses a two-process architecture:
-//! 1. **Main Process**: Handles CLI commands and spawns daemon
-//! 2. **Daemon Process**: Runs activity monitoring in the background
-//!
-//! ## Signal Handling
-//!
-//! The daemon responds to these signals for graceful shutdown:
-//! - **Unix Systems**: SIGTERM (termination), SIGINT (interrupt)
-//! - **Windows**: Ctrl+C console events
-//! - **All Platforms**: Application-level shutdown commands
-//!
-//! ## PID File Management
-//!
-//! The daemon uses a PID file for process tracking:
-//! - **Location**: Platform-specific application data directory
-//! - **Content**: Process ID of the running daemon
-//! - **Cleanup**: Automatically removed on graceful shutdown
-//! - **Stale Detection**: Handles cases where PID file outlives process
-//!
-//! ## Platform Differences
-//!
-//! ### Unix Systems
-//! - Uses `nix::unistd::setsid()` to create new session
-//! - Handles SIGTERM and SIGINT signals
-//! - Uses `ps` and `kill` commands for process management
-//!
-//! ### Windows
-//! - Uses `CREATE_NO_WINDOW` flag for background execution
-//! - Handles Ctrl+C events
-//! - Uses WinAPI for process termination
-//!
-//! ## Example Usage
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::libs::daemon;
 //!
-//! // Start background monitoring
-//! daemon::spawn()?;
-//!
-//! // Stop background monitoring
-//! daemon::stop()?;
-//!
-//! // Run in current process with signal handling
-//! daemon::run_with_signal_handling().await?;
+//! daemon::spawn()?;                           // Start background monitoring
+//! daemon::stop()?;                            // Stop background monitoring
+//! daemon::run_with_signal_handling().await?;  // Run with signal handling
 //! ```
 
 use crate::libs::config::Config;
@@ -85,58 +46,13 @@ const PID_FILE: &str = "kasl-watch.pid";
 
 /// Runs the daemon with proper signal handling for graceful shutdown.
 ///
-/// This function sets up comprehensive signal handling and runs the activity
-/// monitor in a controlled environment. It's designed to be the main entry
-/// point for daemon operation, whether started directly or spawned as a
-/// background process.
-///
-/// ## Signal Handling Setup
-///
-/// The function establishes signal handlers for graceful shutdown:
-/// - **Unix**: Listens for SIGTERM and SIGINT signals
-/// - **Windows**: Listens for Ctrl+C console events
-/// - **Graceful Shutdown**: Allows monitor to complete current operations
-///
-/// ## Execution Flow
-///
-/// 1. **Signal Handler Setup**: Creates async signal handlers in separate tasks
-/// 2. **Monitor Initialization**: Starts the activity monitoring loop
-/// 3. **Concurrent Execution**: Runs monitor and signal handlers concurrently
-/// 4. **Shutdown Coordination**: Handles shutdown signals and monitor completion
-/// 5. **Resource Cleanup**: Ensures proper cleanup of files and connections
-///
-/// ## Error Handling
-///
-/// The function provides comprehensive error handling for:
-/// - Signal handler setup failures
-/// - Monitor initialization errors
-/// - Runtime monitoring errors
-/// - Cleanup operation failures
-///
-/// ## Platform-Specific Behavior
-///
-/// ### Unix Systems
-/// ```rust,no_run
-/// // Sets up SIGTERM and SIGINT handlers
-/// let mut sigterm = signal(SignalKind::terminate())?;
-/// let mut sigint = signal(SignalKind::interrupt())?;
-/// ```
-///
-/// ### Windows
-/// ```rust,no_run
-/// // Sets up Ctrl+C handler
-/// tokio::signal::ctrl_c().await?;
-/// ```
-///
-/// ### Unsupported Platforms
-/// Issues a warning and continues without signal handling.
+/// Sets up comprehensive signal handling and runs the activity monitor in a
+/// controlled environment. Designed to be the main entry point for daemon operation.
 ///
 /// # Returns
 ///
 /// Returns `Ok(())` when the daemon shuts down cleanly, or an error if
 /// initialization fails or a critical error occurs during operation.
-///
-/// # Error Scenarios
 ///
 /// - **Signal Handler Setup**: Platform signal APIs not available
 /// - **Monitor Initialization**: Database connection or configuration errors

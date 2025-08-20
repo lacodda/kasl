@@ -1,103 +1,27 @@
-//! Database layer for the kasl time tracking application.
+//! Database layer for the kasl application.
 //!
-//! This module provides a complete data persistence layer built on SQLite, offering
-//! type-safe database operations for all application entities. It implements a migration
-//! system for schema evolution and provides specialized modules for different data types.
+//! Provides a complete data persistence layer built on SQLite, offering type-safe
+//! database operations for all application entities. Implements a migration system
+//! for schema evolution and provides specialized modules for different data types.
 //!
-//! ## Architecture Overview
-//!
-//! The database layer is organized around domain-specific modules, each responsible
-//! for managing a particular type of data:
+//! ## Features
 //!
 //! - **Core Infrastructure**: Connection management and migrations
 //! - **Time Tracking**: Workdays and pause records for activity monitoring
 //! - **Task Management**: Tasks, templates, and organizational features
 //! - **Productivity Analytics**: Data aggregation and reporting support
 //!
-//! ## Database Schema
-//!
-//! The SQLite database contains the following main tables:
-//!
-//! ```sql
-//! -- Core time tracking
-//! workdays    -- Daily work sessions with start/end times
-//! pauses      -- Break periods during work sessions
-//!
-//! -- Task management
-//! tasks       -- User tasks with completion status
-//! templates   -- Reusable task templates
-//! tags        -- Task categorization system
-//! task_tags   -- Many-to-many relationship between tasks and tags
-//!
-//! -- System management
-//! migrations  -- Schema versioning and migration tracking
-//! ```
-//!
-//! ## Key Features
-//!
-//! ### Automatic Migration System
-//! - **Version Tracking**: Each schema change is tracked with a version number
-//! - **Forward Migration**: Automatic application of pending migrations on startup
-//! - **Rollback Support**: Development-time rollback capabilities (debug builds)
-//! - **Integrity Checks**: Validation of migration state and schema consistency
-//!
-//! ### Foreign Key Enforcement
-//! - **Referential Integrity**: All relationships are enforced at the database level
-//! - **Cascade Operations**: Automatic cleanup when parent records are deleted
-//! - **Constraint Validation**: Prevention of orphaned records and invalid references
-//!
-//! ### Thread Safety
-//! - **Connection Pooling**: Safe concurrent access using Arc<Mutex<Connection>>
-//! - **Transaction Support**: ACID compliance for complex operations
-//! - **Deadlock Prevention**: Consistent locking order across modules
-//!
-//! ### Error Handling
-//! - **Typed Errors**: Comprehensive error types for different failure modes
-//! - **Transaction Rollback**: Automatic cleanup on operation failures
-//! - **Constraint Violations**: Clear error messages for data validation failures
-//!
-//! ## Usage Examples
-//!
-//! ### Basic Database Operations
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::{db::Db, tasks::Tasks, workdays::Workdays};
 //! use kasl::libs::task::Task;
 //!
-//! // Initialize database connection
 //! let db = Db::new()?;
-//!
-//! // Work with tasks
 //! let mut tasks = Tasks::new()?;
 //! let task = Task::new("Review code", "Check PR #123", Some(75));
-//! let task_id = tasks.create(&task)?;
-//!
-//! // Work with workdays
-//! let workdays = Workdays::new()?;
-//! workdays.start_workday()?;
+//! tasks.insert(&task)?;
 //! ```
-//!
-//! ### Advanced Querying with Filters
-//!
-//! ```rust
-//! use kasl::db::tasks::Tasks;
-//! use kasl::libs::task::TaskFilter;
-//! use chrono::Local;
-//!
-//! let mut tasks = Tasks::new()?;
-//!
-//! // Get today's tasks
-//! let today = Local::now().date_naive();
-//! let today_tasks = tasks.fetch(TaskFilter::Date(today))?;
-//!
-//! // Get incomplete tasks
-//! let incomplete = tasks.fetch(TaskFilter::Incomplete)?;
-//!
-//! // Get tasks by IDs
-//! let specific_tasks = tasks.fetch(TaskFilter::ByIds(vec![1, 2, 3]))?;
-//! ```
-//!
-//! ### Working with Tags and Templates
 //!
 //! ```rust
 //! use kasl::db::{tags::Tags, templates::Templates};

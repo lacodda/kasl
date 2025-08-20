@@ -1,70 +1,25 @@
-//! Comprehensive task management database operations and querying.
+//! Task management database operations.
 //!
-//! This module provides the core functionality for managing tasks within the kasl
-//! application. It handles all database interactions for task creation, modification,
-//! deletion, and retrieval with support for advanced filtering, tagging, and
-//! relationship management.
+//! Provides core functionality for managing tasks within the kasl application.
+//! Handles all database interactions for task creation, modification, deletion,
+//! and retrieval with support for advanced filtering, tagging, and relationship management.
 //!
-//! ## Task Management Features
+//! ## Features
 //!
 //! - **CRUD Operations**: Complete Create, Read, Update, Delete functionality
-//! - **Advanced Filtering**: Multi-criteria task querying with date, completion, and tag filters  
+//! - **Advanced Filtering**: Multi-criteria task querying with date, completion, and tag filters
 //! - **Batch Operations**: Efficient bulk deletion and modification operations
 //! - **Tag Integration**: Seamless integration with the tagging system for categorization
-//! - **Task Hierarchies**: Support for parent-child task relationships
-//! - **Search Capabilities**: Flexible task discovery and filtering mechanisms
 //!
-//! ## Database Schema
-//!
-//! The `tasks` table structure:
-//! - `id`: Primary key for unique task identification
-//! - `task_id`: Reference to parent task for hierarchical relationships
-//! - `timestamp`: Creation time with automatic local timezone handling
-//! - `name`: Task title/description (required, human-readable)
-//! - `comment`: Optional detailed description or notes
-//! - `completeness`: Progress percentage (0-100, defaults to 100)
-//! - `excluded_from_search`: Flag to hide tasks from certain queries
-//!
-//! ## Task Lifecycle
-//!
-//! 1. **Creation**: Tasks are created with automatic timestamp and ID assignment
-//! 2. **Association**: Tags can be linked to provide categorization
-//! 3. **Updates**: Properties can be modified while preserving relationships
-//! 4. **Completion**: Progress tracking through completion percentage
-//! 5. **Archival**: Soft deletion and search exclusion capabilities
-//!
-//! ## Filtering and Querying
-//!
-//! The module supports sophisticated task filtering:
-//! - **Date-based**: Retrieve tasks created on specific dates
-//! - **Completion-based**: Find incomplete tasks from recent periods
-//! - **Tag-based**: Filter by single or multiple tag associations
-//! - **ID-based**: Direct lookup by task identifiers
-//! - **Comprehensive**: Retrieve all tasks without restrictions
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::tasks::{Tasks, TaskFilter};
 //! use kasl::libs::task::Task;
-//! use chrono::Local;
 //!
 //! let mut tasks = Tasks::new()?;
-//!
-//! // Create a new task
 //! let task = Task::new("Review code", "Check PR #123", Some(75));
 //! tasks.insert(&task)?;
-//!
-//! // Fetch tasks for today
-//! let today_tasks = tasks.fetch(TaskFilter::Date(Local::now().date_naive()))?;
-//!
-//! // Find incomplete tasks
-//! let incomplete = tasks.fetch(TaskFilter::Incomplete)?;
-//!
-//! // Update task progress
-//! let mut task = tasks.get_by_id(task_id)?.unwrap();
-//! task.completeness = 100;
-//! tasks.update(&task)?;
 //! ```
 
 use super::db::Db;

@@ -1,103 +1,24 @@
 //! System boot integration and automatic startup management.
 //!
-//! This module provides cross-platform functionality for enabling and disabling
-//! automatic startup of the kasl application when the system boots. It handles
-//! the platform-specific differences in autostart mechanisms while providing
-//! a unified interface for autostart management.
+//! Provides cross-platform functionality for enabling and disabling automatic
+//! startup of the kasl application when the system boots.
 //!
-//! ## Platform Support
+//! ## Features
 //!
-//! The module supports multiple platform-specific autostart mechanisms:
+//! - **Platform Support**: Windows Task Scheduler/Registry, Linux systemd, macOS Launch Agents
+//! - **Tiered Approach**: System-level, user-level, and fallback methods
+//! - **Security**: Privilege management, attack vector mitigation
+//! - **Error Handling**: Graceful degradation, clear user feedback
 //!
-//! ### Windows
-//! - **Task Scheduler**: System-level autostart using Windows Task Scheduler
-//! - **Registry Autostart**: User-level autostart via Windows Registry
-//! - **Administrative Privileges**: Automatic detection and handling of privilege requirements
-//! - **Fallback Mechanisms**: Graceful degradation when system-level access is unavailable
+//! ## Usage
 //!
-//! ### Linux/Unix
-//! - **Systemd Integration**: Modern Linux distributions using systemd
-//! - **Desktop Autostart**: XDG autostart specification for desktop environments
-//! - **Init System Support**: Traditional init systems and service managers
-//! - **User Session**: User-level autostart without requiring root privileges
-//!
-//! ### macOS
-//! - **Launch Agents**: User-level autostart using macOS Launch Services
-//! - **Launch Daemons**: System-level autostart for administrative installations
-//! - **Login Items**: Integration with macOS login item management
-//! - **Sandboxing Support**: Compatibility with macOS app sandboxing requirements
-//!
-//! ## Autostart Strategies
-//!
-//! The module implements a tiered approach to autostart configuration:
-//!
-//! ### Tier 1: System-Level Integration
-//! - Requires administrative privileges
-//! - Starts before user login
-//! - Highest reliability and startup priority
-//! - Suitable for enterprise deployments
-//!
-//! ### Tier 2: User-Level Integration
-//! - No administrative privileges required
-//! - Starts after user login
-//! - Easy setup and configuration
-//! - Suitable for personal use
-//!
-//! ### Tier 3: Fallback Methods
-//! - Manual configuration assistance
-//! - Documentation and guidance
-//! - Alternative setup methods
-//! - Last resort options
-//!
-//! ## Security Considerations
-//!
-//! ### Privilege Management
-//! - Automatic detection of current privilege level
-//! - Safe fallback to user-level methods when needed
-//! - Clear communication about privilege requirements
-//! - No elevation attempts without user consent
-//!
-//! ### Attack Vector Mitigation
-//! - Validation of executable paths and signatures
-//! - Protection against autostart hijacking
-//! - Secure storage of autostart configurations
-//! - Regular validation of autostart integrity
-//!
-//! ## Error Handling and Recovery
-//!
-//! ### Graceful Degradation
-//! The module handles various failure scenarios:
-//! - **Permission Denied**: Falls back to user-level autostart
-//! - **Service Unavailable**: Tries alternative autostart methods
-//! - **Configuration Corruption**: Attempts repair or recreation
-//! - **Platform Unsupported**: Provides manual setup guidance
-//!
-//! ### User Feedback
-//! - Clear error messages with actionable information
-//! - Status reporting for successful operations
-//! - Alternative method suggestions when primary methods fail
-//! - Documentation links for manual configuration
-//!
-//! ## Examples
-//!
-//! ### Basic Autostart Management
 //! ```rust
 //! use kasl::libs::autostart;
 //!
-//! // Enable autostart (tries system-level, falls back to user-level)
-//! autostart::enable()?;
-//!
-//! // Check current autostart status
-//! let status = autostart::status()?;
-//! println!("Autostart is {}", status);
-//!
-//! // Disable autostart
-//! autostart::disable()?;
+//! autostart::enable()?;           // Enable autostart
+//! let status = autostart::status()?; // Check current status
+//! autostart::disable()?;          // Disable autostart
 //! ```
-//!
-//! ### Status Checking
-//! ```rust
-//! use kasl::libs::autostart;
 //!
 //! match autostart::is_enabled()? {
 //!     true => println!("Autostart is enabled"),

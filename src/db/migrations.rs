@@ -1,11 +1,9 @@
 //! Database schema migration management and versioning system.
 //!
-//! This module provides a comprehensive migration framework for evolving the database
-//! schema over time while maintaining data integrity and consistency across different
-//! application versions. It implements automatic schema migrations that run during
-//! application startup.
+//! Provides a comprehensive migration framework for evolving the database schema
+//! over time while maintaining data integrity and consistency.
 //!
-//! ## Migration System Features
+//! ## Features
 //!
 //! - **Version Tracking**: Maintains precise records of applied migrations
 //! - **Automatic Application**: Runs pending migrations during database initialization
@@ -13,35 +11,15 @@
 //! - **Rollback Support**: Development-time rollback capabilities (debug builds only)
 //! - **History Tracking**: Complete audit trail of schema changes
 //!
-//! ## Migration Lifecycle
-//!
-//! 1. **Registration**: Migrations are registered in version order during initialization
-//! 2. **Pending Detection**: System identifies unapplied migrations
-//! 3. **Transaction Execution**: Each migration runs in its own transaction
-//! 4. **Version Recording**: Successful migrations are recorded in the migrations table
-//! 5. **Rollback on Failure**: Failed migrations trigger automatic rollback
-//!
-//! ## Schema Evolution History
-//!
-//! - **v1**: Performance indices for core tables
-//! - **v2**: Task templates system
-//! - **v3**: Tags and categorization system  
-//! - **v4**: Soft delete functionality
-//! - **v5**: Workday notes and annotations
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::migrations::{init_with_migrations, get_db_version};
 //! use rusqlite::Connection;
 //!
-//! // Apply all pending migrations to a connection
 //! let mut conn = Connection::open("kasl.db")?;
 //! init_with_migrations(&mut conn)?;
-//!
-//! // Check current schema version
 //! let version = get_db_version(&conn)?;
-//! println!("Database schema version: {}", version);
 //! ```
 
 use crate::libs::messages::Message;

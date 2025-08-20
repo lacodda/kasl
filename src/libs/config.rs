@@ -1,10 +1,9 @@
 //! Configuration management system for the kasl application.
 //!
-//! This module provides a comprehensive configuration management system that handles
-//! application settings, external API integrations, and activity monitoring parameters.
-//! It supports both programmatic configuration and interactive setup wizards.
+//! Provides a comprehensive configuration management system that handles application
+//! settings, external API integrations, and activity monitoring parameters.
 //!
-//! ## Core Features
+//! ## Features
 //!
 //! - **Multi-Service Integration**: Manages configurations for Jira, GitLab, and custom APIs
 //! - **Activity Monitoring**: Configures behavior for work time tracking and pause detection
@@ -12,40 +11,14 @@
 //! - **Cross-Platform Persistence**: Handles configuration storage across Windows, macOS, and Linux
 //! - **System Integration**: Manages global PATH configuration for CLI availability
 //!
-//! ## Configuration Structure
-//!
-//! The configuration system is modular, with each integration service having its own
-//! dedicated configuration structure:
-//!
-//! - **SI Config**: Internal company API integration settings
-//! - **GitLab Config**: GitLab API credentials and endpoints
-//! - **Jira Config**: Jira instance connection parameters
-//! - **Monitor Config**: Activity detection and pause thresholds
-//! - **Server Config**: External reporting server configuration
-//!
-//! ## Storage and Security
-//!
-//! - Configuration files are stored in JSON format in platform-specific directories
-//! - Sensitive data like passwords are never stored in configuration files
-//! - Session tokens and credentials use separate encrypted storage mechanisms
-//! - All configuration paths follow OS conventions for application data storage
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::libs::config::Config;
 //!
-//! // Load existing configuration or create default
 //! let config = Config::read()?;
-//!
-//! // Run interactive configuration setup
 //! let updated_config = Config::init()?;
 //! updated_config.save()?;
-//!
-//! // Access specific service configurations
-//! if let Some(jira_config) = &config.jira {
-//!     println!("Jira URL: {}", jira_config.api_url);
-//! }
 //! ```
 
 use super::data_storage::DataStorage;
@@ -86,25 +59,8 @@ pub struct ConfigModule {
 
 /// Activity monitor configuration settings.
 ///
-/// This structure controls the behavior of the background activity monitoring system
-/// that tracks user presence, detects work patterns, and manages pause recording.
-/// All timing values are carefully calibrated to provide accurate work time tracking
-/// while minimizing false positives and system resource usage.
-///
-/// ## Timing Configuration
-///
-/// The monitor uses several timing thresholds to distinguish between different
-/// types of user activity and inactivity:
-///
-/// - **Pause Detection**: Identifies when the user steps away from their workstation
-/// - **Activity Filtering**: Ensures random brief activity doesn't restart work tracking
-/// - **Interval Merging**: Combines short work periods to reduce fragmentation
-///
-/// ## Performance Considerations
-///
-/// - Lower poll intervals provide more responsive detection but use more CPU
-/// - Higher activity thresholds reduce false workday starts from brief interactions
-/// - Pause thresholds balance between capturing real breaks and ignoring brief interruptions
+/// Controls the behavior of the background activity monitoring system that tracks
+/// user presence, detects work patterns, and manages pause recording.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MonitorConfig {
     /// Minimum pause duration in minutes to be recorded in the database.

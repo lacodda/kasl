@@ -1,134 +1,27 @@
 //! Task management and manipulation functionality for productivity tracking.
 //!
-//! This module provides comprehensive task management capabilities including task
-//! creation, modification, filtering, and formatting. It serves as the foundation
-//! for organizing work items and tracking productivity progress within the kasl
-//! application.
+//! Provides comprehensive task management capabilities including task creation,
+//! modification, filtering, and formatting for organizing work items.
 //!
-//! ## Core Concepts
+//! ## Features
 //!
-//! ### Task Structure
-//! Tasks represent individual work items with the following characteristics:
-//! - **Identification**: Unique IDs for database persistence and reference
-//! - **Description**: Human-readable names and detailed comments
-//! - **Progress Tracking**: Completion percentages from 0% to 100%
-//! - **Categorization**: Tag-based organization and filtering
-//! - **Timestamps**: Creation and modification time tracking
-//! - **Integration**: Links to external systems (Jira, GitLab, etc.)
+//! - **Task Structure**: Identification, description, progress tracking, categorization
+//! - **Filtering System**: Date-based, completion status, ID-based, tag-based filtering
+//! - **Formatting**: Console table rendering, export formatting, template support
+//! - **Integration**: Jira issues, GitLab commits, manual entry, template instantiation
+//! - **Database Integration**: CRUD operations, transaction safety, relationship management
 //!
-//! ### Task Lifecycle
-//! ```text
-//! Creation → Assignment → Progress Updates → Completion → Archival
-//!    ↓          ↓            ↓               ↓          ↓
-//! New Task   Add Tags    Update %      Mark Done   Historical
-//! Database   Categories  Completion    100%        Data
-//! Entry      Labels      Status        Complete    Storage
-//! ```
+//! ## Usage
 //!
-//! ## Filtering System
-//!
-//! The module provides flexible filtering capabilities for task management:
-//!
-//! ### Filter Types
-//! - **All Tasks**: Complete task listing without restrictions
-//! - **Date-Based**: Tasks created or modified on specific dates
-//! - **Completion Status**: Filter by progress level (incomplete, complete)
-//! - **ID-Based**: Retrieve specific tasks by their identifiers
-//! - **Tag-Based**: Filter by single or multiple tag associations
-//!
-//! ### Filter Composition
-//! Filters can be combined and chained for complex queries:
-//! ```rust
-//! // Example: Find incomplete tasks with specific tags from today
-//! let today_incomplete_tagged = TaskFilter::Date(today)
-//!     .and(TaskFilter::Incomplete)
-//!     .and(TaskFilter::ByTag("urgent".to_string()));
-//! ```
-//!
-//! ## Formatting and Display
-//!
-//! ### Formatting Traits
-//! The module implements formatting traits for flexible output:
-//! - **FormatTasks**: Convert task collections to display-ready formats
-//! - **Display Integration**: Console table rendering support
-//! - **Export Formatting**: Structured data for CSV/JSON export
-//! - **Template Support**: Integration with task template system
-//!
-//! ### Data Partitioning
-//! Advanced formatting includes data partitioning capabilities:
-//! - **Load Balancing**: Distribute tasks across multiple workers
-//! - **Display Grouping**: Organize tasks into logical groups
-//! - **Batch Processing**: Handle large task collections efficiently
-//!
-//! ## Integration Points
-//!
-//! ### External System Integration
-//! Tasks can be created from external sources:
-//! - **Jira Issues**: Import completed issues as tasks
-//! - **GitLab Commits**: Convert commits to task records
-//! - **Manual Entry**: User-created tasks via CLI or GUI
-//! - **Template Instantiation**: Tasks created from predefined templates
-//!
-//! ### Database Integration
-//! - **CRUD Operations**: Complete create, read, update, delete support
-//! - **Transaction Safety**: Atomic operations for data consistency
-//! - **Relationship Management**: Tag associations and references
-//! - **Historical Tracking**: Audit trail for task modifications
-//!
-//! ## Usage Examples
-//!
-//! ### Basic Task Creation
 //! ```rust
 //! use kasl::libs::task::Task;
 //!
-//! // Create a new task with basic information
 //! let task = Task::new(
 //!     "Implement user authentication",
 //!     "Add OAuth2 integration with Google and GitHub",
-//!     Some(25) // 25% complete
+//!     Some(25)
 //! );
 //! ```
-//!
-//! ### Task Filtering
-//! ```rust
-//! use kasl::libs::task::{TaskFilter, Task};
-//! use chrono::Local;
-//!
-//! // Filter tasks by various criteria
-//! let today = Local::now().date_naive();
-//! let filters = vec![
-//!     TaskFilter::Date(today),
-//!     TaskFilter::Incomplete,
-//!     TaskFilter::ByTag("priority".to_string()),
-//! ];
-//! ```
-//!
-//! ### Task Formatting
-//! ```rust
-//! use kasl::libs::task::{FormatTasks, Task};
-//!
-//! let mut tasks = vec![/* task collection */];
-//!
-//! // Format for display
-//! let formatted_output = tasks.format();
-//!
-//! // Partition for processing
-//! let task_groups = tasks.divide(3); // Split into 3 groups
-//! ```
-//!
-//! ## Performance Considerations
-//!
-//! ### Memory Efficiency
-//! - **Lazy Loading**: Tasks loaded on-demand from database
-//! - **Streaming Support**: Large collections processed incrementally
-//! - **Reference Counting**: Efficient memory usage for shared tasks
-//! - **Garbage Collection**: Automatic cleanup of unused task data
-//!
-//! ### Query Optimization
-//! - **Index Usage**: Database queries optimized with proper indexing
-//! - **Batch Operations**: Multiple tasks processed in single transactions
-//! - **Caching**: Frequently accessed tasks cached in memory
-//! - **Pagination**: Large result sets handled with pagination
 
 use crate::db::tags::Tag;
 use chrono::NaiveDate;

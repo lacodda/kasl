@@ -1,10 +1,9 @@
 //! Secure credential storage and management with AES encryption.
 //!
-//! This module provides functionality for securely storing and retrieving
-//! sensitive information such as passwords and API tokens. It uses AES-256-CBC
-//! encryption with compile-time embedded keys for credential protection.
+//! Provides functionality for securely storing and retrieving sensitive information
+//! such as passwords and API tokens using AES-256-CBC encryption.
 //!
-//! ## Security Features
+//! ## Features
 //!
 //! - **AES-256-CBC Encryption**: Industry-standard encryption for credential storage
 //! - **Compile-time Keys**: Encryption keys embedded during build process
@@ -12,88 +11,15 @@
 //! - **File Protection**: Encrypted credentials stored in user data directory
 //! - **Memory Safety**: Credentials cleared from memory after use
 //!
-//! ## Use Cases
+//! ## Usage
 //!
-//! The secret system is used throughout kasl for:
-//!
-//! ### API Authentication
-//! - Jira passwords for session-based authentication
-//! - GitLab tokens for repository access
-//! - SI Server credentials for report submission
-//!
-//! ### User Experience
-//! - Optional password caching to avoid repeated prompts
-//! - Secure storage between application sessions
-//! - Automatic re-prompting when credentials expire
-//!
-//! ## Security Model
-//!
-//! ### Encryption Details
-//! - **Algorithm**: AES-256 in CBC mode with PKCS7 padding
-//! - **Key Management**: 256-bit key embedded at compile time
-//! - **Initialization Vector**: Fixed IV for deterministic encryption
-//! - **Encoding**: Base64 encoding for safe file storage
-//!
-//! ### Threat Model
-//! The system protects against:
-//! - **Casual Inspection**: Encrypted files don't reveal credentials
-//! - **File System Access**: Credentials not stored in plain text
-//! - **Process Memory Dumps**: Limited credential lifetime in memory
-//!
-//! ### Limitations
-//! The system does NOT protect against:
-//! - **Malicious Code**: Code with same privileges can decrypt credentials
-//! - **Reverse Engineering**: Determined attackers can extract keys from binary
-//! - **Memory Analysis**: Live process memory may contain decrypted credentials
-//!
-//! ## File Storage
-//!
-//! Encrypted credentials are stored in platform-specific locations:
-//! - **Windows**: `%LOCALAPPDATA%\lacodda\kasl\.jira_secret`
-//! - **macOS**: `~/Library/Application Support/lacodda/kasl/.gitlab_secret`
-//! - **Linux**: `~/.local/share/lacodda/kasl/.si_secret`
-//!
-//! ## Examples
-//!
-//! ### Basic Usage
 //! ```rust
 //! use kasl::libs::secret::Secret;
 //!
-//! // Create secret manager for Jira password
 //! let secret = Secret::new(".jira_secret", "Enter your Jira password");
-//!
-//! // Get password (prompts if not cached)
 //! let password = secret.get_or_prompt()?;
-//!
-//! // Force new password prompt
 //! let new_password = secret.prompt()?;
 //! ```
-//!
-//! ### Integration with APIs
-//! ```rust
-//! use kasl::libs::secret::Secret;
-//!
-//! // API client using cached credentials
-//! struct JiraClient {
-//!     secret: Secret,
-//! }
-//!
-//! impl JiraClient {
-//!     fn authenticate(&self) -> Result<String> {
-//!         let password = self.secret.get_or_prompt()?;
-//!         // Use password for authentication...
-//!         Ok(session_token)
-//!     }
-//! }
-//! ```
-//!
-//! ## Error Handling
-//!
-//! The module handles various error conditions:
-//! - **Encryption Failures**: Invalid keys or corrupted data
-//! - **File System Errors**: Permission issues or disk space
-//! - **User Input Errors**: Cancelled prompts or invalid input
-//! - **Decryption Failures**: Corrupted files or wrong keys
 
 use super::data_storage::DataStorage;
 use aes::Aes256;

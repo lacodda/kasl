@@ -1,11 +1,10 @@
 //! Monthly work summary calculation and formatting system.
 //!
-//! This module provides comprehensive functionality for calculating, processing,
-//! and formatting monthly work summaries. It handles the complex business logic
-//! of combining actual work data with company rest days to produce complete
-//! monthly reports suitable for organizational reporting requirements.
+//! Provides comprehensive functionality for calculating, processing, and formatting
+//! monthly work summaries. Handles the complex business logic of combining actual
+//! work data with company rest days to produce complete monthly reports.
 //!
-//! ## Core Functionality
+//! ## Features
 //!
 //! - **Daily Summary Aggregation**: Combines work duration and productivity metrics
 //! - **Rest Day Integration**: Incorporates company holidays and weekends
@@ -13,75 +12,23 @@
 //! - **Flexible Formatting**: Provides multiple output formats for different use cases
 //! - **Report Generation**: Powers monthly reports and export functionality
 //!
-//! ## Data Processing Pipeline
+//! ## Usage
 //!
-//! ```text
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │   Raw Work      │    │   Daily         │    │   Formatted     │
-//! │   Data          │───▶│   Summaries     │───▶│   Output        │
-//! │   (Database)    │    │   (Calculated)  │    │   (Display)     │
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//!          │                       │                       │
-//!          ▼                       ▼                       ▼
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │ Workdays        │    │ Rest Days       │    │ Monthly         │
-//! │ Pauses          │    │ Default Hours   │    │ Statistics      │
-//! │ Activity Times  │    │ Productivity    │    │ (Total/Average) │
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//! ```
-//!
-//! ## Business Logic
-//!
-//! ### Work Day Processing
-//! 1. **Duration Calculation**: Net work time excluding pauses
-//! 2. **Productivity Analysis**: Ratio of productive time to total presence
-//! 3. **Quality Metrics**: Statistical analysis of work patterns
-//!
-//! ### Rest Day Handling
-//! 1. **External Integration**: Fetches company rest dates from APIs
-//! 2. **Default Allocation**: Assigns standard work hours to rest days
-//! 3. **Calendar Integration**: Merges with actual work data seamlessly
-//!
-//! ### Monthly Aggregation
-//! 1. **Comprehensive Coverage**: Ensures all calendar days are represented
-//! 2. **Statistical Analysis**: Calculates meaningful productivity metrics
-//! 3. **Reporting Standards**: Meets organizational reporting requirements
-//!
-//! ## Usage Examples
-//!
-//! ### Basic Monthly Summary
 //! ```rust,no_run
 //! use kasl::libs::summary::{DailySummary, SummaryCalculator, SummaryFormatter};
 //! use chrono::{Duration, NaiveDate};
 //! use std::collections::HashSet;
 //!
-//! // Create daily summaries from work data
 //! let summaries = vec![
 //!     DailySummary {
 //!         date: NaiveDate::from_ymd_opt(2025, 8, 11).unwrap(),
 //!         duration: Duration::hours(8),
 //!         productivity: 85.5,
 //!     },
-//!     // ... more days
 //! ];
 //!
-//! // Add rest days and calculate totals
-//! let rest_dates = HashSet::new(); // Company holidays
+//! let rest_dates = HashSet::new();
 //! let (processed, total, average) = summaries
-//!     .add_rest_dates(rest_dates, Duration::hours(8))
-//!     .calculate_totals();
-//!
-//! // Format for display
-//! let (daily_map, total_str, avg_str) = (processed, total, average).format_summary();
-//! ```
-//!
-//! ### Integration with External APIs
-//! ```rust,no_run
-//! // Fetch rest dates from company API
-//! let rest_dates = external_api.get_rest_dates(year, month).await?;
-//!
-//! // Integrate with calculated summaries
-//! let complete_summary = work_summaries
 //!     .add_rest_dates(rest_dates, Duration::hours(8))
 //!     .calculate_totals();
 //! ```

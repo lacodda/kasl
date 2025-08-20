@@ -1,8 +1,7 @@
 //! Internal SiServer API client for company reporting and calendar integration.
 //!
-//! This module provides integration with an internal company API system called "SiServer"
-//! that handles employee time tracking reports and company calendar information. It implements
-//! a sophisticated two-stage authentication flow and provides resilient error handling.
+//! Provides integration with an internal company API system that handles employee
+//! time tracking reports and company calendar information.
 //!
 //! ## Features
 //!
@@ -12,29 +11,7 @@
 //! - **Error Resilience**: Graceful handling of network failures and API errors
 //! - **Session Management**: Automatic session caching and renewal
 //!
-//! ## Authentication Flow
-//!
-//! SiServer uses a unique two-stage authentication process:
-//! 1. **LDAP Authentication**: Username/password sent to LDAP endpoint for token
-//! 2. **Session Exchange**: Token exchanged for session cookie at login endpoint
-//! 3. **Session Usage**: Session cookie used for all subsequent API requests
-//!
-//! ## Error Handling Philosophy
-//!
-//! Unlike other API integrations, SiServer operations prioritize application stability:
-//! - Network failures return empty results rather than errors
-//! - API errors are logged but don't interrupt application flow
-//! - Missing configuration gracefully disables features
-//! - Authentication failures fallback to local-only operation
-//!
-//! ## Usage in Monthly Reports
-//!
-//! SiServer integration is used for:
-//! - Fetching official company holiday calendars
-//! - Submitting time tracking reports for payroll integration
-//! - Determining working vs. non-working days for productivity calculations
-//!
-//! ## Example
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::api::{Si, SiConfig};

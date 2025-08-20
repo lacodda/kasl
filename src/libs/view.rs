@@ -1,51 +1,22 @@
-//! Console display and table formatting system for kasl application.
+//! Console display and table formatting system.
 //!
-//! This module provides a comprehensive interface for rendering application data
-//! in well-formatted, human-readable console tables. It handles the presentation
-//! layer for all major data types including work reports, task lists, summaries,
-//! templates, and tags.
+//! Provides interface for rendering application data in well-formatted console tables.
+//! Handles presentation layer for work reports, task lists, summaries, templates, and tags.
 //!
-//! ## Core Features
+//! ## Features
 //!
 //! - **Structured Data Display**: Converts complex data structures into readable tables
 //! - **Consistent Formatting**: Maintains uniform appearance across all table types
 //! - **Productivity Analysis**: Calculates and displays work efficiency metrics
 //! - **Duration Formatting**: Handles time duration display in human-readable formats
-//! - **Extensible Design**: Easy to add new table types and formatting options
 //!
-//! ## Table Types
-//!
-//! The module supports rendering various types of application data:
-//!
-//! - **Work Reports**: Daily reports with time intervals, breaks, and productivity
-//! - **Task Lists**: Comprehensive task displays with metadata and completion status
-//! - **Monthly Summaries**: Aggregated statistics with daily breakdowns
-//! - **Templates**: Reusable task templates for quick task creation
-//! - **Tags**: Task categorization and organization labels
-//!
-//! ## Productivity Calculation
-//!
-//! The module implements sophisticated productivity analysis that distinguishes
-//! between different types of work interruptions:
-//!
-//! - **Net Working Time**: Pure productive work excluding all breaks
-//! - **Gross Working Time**: Total presence time excluding only major breaks
-//! - **Productivity Percentage**: Ratio of net to gross working time
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust,no_run
 //! use kasl::libs::view::View;
-//! use kasl::libs::task::Task;
 //!
-//! // Display a list of tasks
-//! let tasks = vec![/* task instances */];
 //! View::tasks(&tasks)?;
-//!
-//! // Show a daily work report
 //! View::report(&workday, &long_breaks, &all_pauses, &tasks)?;
-//!
-//! // Display monthly summary statistics
 //! View::sum(&summary_data)?;
 //! ```
 
@@ -64,43 +35,15 @@ use std::collections::HashMap;
 
 /// A utility struct for rendering application data to the console.
 ///
-/// The `View` struct serves as a namespace for various table rendering functions.
-/// All methods are static, making it easy to call formatting functions without
-/// needing to instantiate the struct. This design pattern keeps the formatting
-/// logic organized while maintaining simplicity of use.
-///
-/// ## Design Philosophy
-///
-/// - **Separation of Concerns**: Pure presentation logic separate from business logic
-/// - **Consistent Interface**: All methods follow similar patterns for predictability
-/// - **Error Handling**: Comprehensive error handling for all rendering operations
-/// - **Flexibility**: Support for various data types and formatting requirements
+/// Serves as a namespace for various table rendering functions. All methods are static,
+/// making it easy to call formatting functions without needing to instantiate the struct.
 pub struct View {}
 
 impl View {
     /// Displays a formatted table of tasks with comprehensive metadata.
     ///
-    /// This method renders a detailed table showing all relevant task information
-    /// including identification numbers, names, completion status, comments, and
-    /// associated tags. The table format is optimized for readability with proper
-    /// column alignment and spacing.
-    ///
-    /// ## Table Structure
-    ///
-    /// The task table includes the following columns:
-    /// - **#**: Sequential index for easy reference during selection
-    /// - **ID**: Internal database identifier for the task record
-    /// - **TASK ID**: External task identifier (e.g., from Jira or GitLab)
-    /// - **NAME**: Task title or summary description
-    /// - **COMMENT**: Additional notes or detailed description
-    /// - **COMPLETENESS**: Percentage completion status (0-100%)
-    /// - **TAGS**: Comma-separated list of associated tags for categorization
-    ///
-    /// ## Tag Display
-    ///
-    /// Tags are formatted as a comma-separated list for compact display.
-    /// If a task has no tags, the column shows as empty. Tag names are
-    /// displayed exactly as stored, preserving user-defined formatting.
+    /// Renders a detailed table showing task information including identification numbers,
+    /// names, completion status, comments, and associated tags.
     ///
     /// # Arguments
     ///
@@ -110,22 +53,6 @@ impl View {
     ///
     /// Returns `Ok(())` on successful table rendering, or an error if
     /// the table cannot be displayed due to terminal or formatting issues.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use kasl::libs::view::View;
-    /// use kasl::libs::task::Task;
-    ///
-    /// let tasks = vec![
-    ///     Task {
-    ///         name: "Review code".to_string(),
-    ///         completeness: Some(75),
-    ///         // ... other fields
-    ///     }
-    /// ];
-    /// View::tasks(&tasks)?;
-    /// ```
     pub fn tasks(tasks: &[Task]) -> Result<()> {
         // Initialize table with clean formatting suitable for task data
         let mut table = Table::new();
@@ -156,21 +83,8 @@ impl View {
 
     /// Displays a comprehensive daily work report with intervals, productivity, and tasks.
     ///
-    /// This method generates a detailed daily report that includes work time analysis,
-    /// break patterns, productivity calculations, and associated tasks. It provides
-    /// both quantitative metrics and qualitative insights into work patterns for
-    /// the specified day.
-    ///
-    /// ## Report Components
-    ///
-    /// The daily report consists of several sections:
-    ///
-    /// 1. **Report Header**: Date formatted for easy identification
-    /// 2. **Work Intervals Table**: Time blocks with start/end times and durations
-    /// 3. **Summary Statistics**: Total work time and productivity percentage
-    /// 4. **Task List**: Completed tasks for the day (if any exist)
-    ///
-    /// ## Productivity Analysis
+    /// Generates a detailed daily report that includes work time analysis, break patterns,
+    /// productivity calculations, and associated tasks.
     ///
     /// The productivity calculation uses a sophisticated algorithm that distinguishes
     /// between different types of work interruptions:

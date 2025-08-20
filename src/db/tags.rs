@@ -1,11 +1,10 @@
 //! Tag-based task categorization and organization system.
 //!
-//! This module provides comprehensive functionality for managing tags that can be
-//! associated with tasks for categorization, filtering, and organization purposes.
-//! The tag system supports many-to-many relationships between tasks and tags,
-//! allowing flexible task organization and powerful filtering capabilities.
+//! Provides functionality for managing tags that can be associated with tasks
+//! for categorization, filtering, and organization purposes. Supports many-to-many
+//! relationships between tasks and tags.
 //!
-//! ## Tag System Features
+//! ## Features
 //!
 //! - **Tag Management**: Create, update, delete, and query tag definitions
 //! - **Color Coding**: Optional color assignment for visual task organization
@@ -13,37 +12,15 @@
 //! - **Bulk Operations**: Efficient creation and association of multiple tags
 //! - **Search & Filter**: Find tags by name and retrieve tasks by tag association
 //!
-//! ## Database Schema
-//!
-//! The tag system uses two tables:
-//!
-//! ### `tags` table:
-//! - `id`: Primary key for unique tag identification
-//! - `name`: Unique tag name for human-readable identification
-//! - `color`: Optional color code for visual categorization
-//! - `created_at`: Timestamp tracking tag creation
-//!
-//! ### `task_tags` junction table:
-//! - `task_id`: Foreign key reference to tasks table
-//! - `tag_id`: Foreign key reference to tags table
-//! - Composite primary key ensures unique task-tag relationships
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
 //! use kasl::db::tags::{Tags, Tag};
 //!
 //! let mut tags = Tags::new()?;
-//!
-//! // Create a new tag with color
 //! let urgent_tag = Tag::new("urgent".to_string(), Some("red".to_string()));
 //! let tag_id = tags.create(&urgent_tag)?;
-//!
-//! // Associate tag with a task
 //! tags.add_tag_to_task(task_id, tag_id)?;
-//!
-//! // Get all tags for a task
-//! let task_tags = tags.get_tags_by_task(task_id)?;
 //! ```
 
 use crate::db::db::Db;
