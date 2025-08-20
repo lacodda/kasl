@@ -122,8 +122,8 @@ const WHERE_DATE: &str = "WHERE date(timestamp) = date(?1, 'localtime')";
 /// ID-based filtering clause for retrieving specific tasks.
 ///
 /// Dynamically constructed clause for filtering tasks by a list
-/// of specific task_id values using IN operator.
-const WHERE_ID_IN: &str = "WHERE task_id IN";
+/// of specific id values using IN operator.
+const WHERE_ID_IN: &str = "WHERE id IN";
 
 /// Complex filtering for incomplete tasks from recent periods.
 ///
