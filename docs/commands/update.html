@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Commands - kasl documentation</title>
+        <title>update - kasl documentation</title>
 
 
         <!-- Custom HTML head -->
@@ -175,216 +175,219 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="commands"><a class="header" href="#commands">Commands</a></h1>
-<p>kasl provides a comprehensive set of commands for work activity tracking, task management, and reporting.</p>
-<h2 id="command-overview"><a class="header" href="#command-overview">Command Overview</a></h2>
-<h3 id="core-commands"><a class="header" href="#core-commands">Core Commands</a></h3>
-<ul>
-<li><strong><a href="./init.html"><code>init</code></a></strong> - Initialize application configuration</li>
-<li><strong><a href="./watch.html"><code>watch</code></a></strong> - Start activity monitoring</li>
-<li><strong><a href="./task.html"><code>task</code></a></strong> - Manage tasks and work items</li>
-<li><strong><a href="./report.html"><code>report</code></a></strong> - Generate and submit reports</li>
-<li><strong><a href="./sum.html"><code>sum</code></a></strong> - View monthly summaries</li>
-</ul>
-<h3 id="data-management"><a class="header" href="#data-management">Data Management</a></h3>
-<ul>
-<li><strong><a href="./export.html"><code>export</code></a></strong> - Export data to various formats</li>
-<li><strong><a href="./adjust.html"><code>adjust</code></a></strong> - Adjust work times and add pauses</li>
-<li><strong><a href="./pauses.html"><code>pauses</code></a></strong> - View recorded breaks and pauses</li>
-</ul>
-<h3 id="organization"><a class="header" href="#organization">Organization</a></h3>
-<ul>
-<li><strong><a href="./tag.html"><code>tag</code></a></strong> - Manage task tags and categorization</li>
-<li><strong><a href="./template.html"><code>template</code></a></strong> - Create and use task templates</li>
-</ul>
-<h3 id="system-integration"><a class="header" href="#system-integration">System Integration</a></h3>
-<ul>
-<li><strong><a href="./autostart.html"><code>autostart</code></a></strong> - Configure automatic startup</li>
-<li><strong><a href="./update.html"><code>update</code></a></strong> - Update application to latest version</li>
-</ul>
-<h2 id="quick-reference"><a class="header" href="#quick-reference">Quick Reference</a></h2>
-<h3 id="daily-workflow"><a class="header" href="#daily-workflow">Daily Workflow</a></h3>
-<pre><code class="language-bash"># Start monitoring (if not already running)
-kasl watch
-
-# Create today's tasks
-kasl task --name "Code review" --completeness 0
-kasl task --name "Team meeting" --completeness 0
-
-# Update task progress
-kasl task --edit 1
-
-# View today's report
-kasl report
-
-# Submit report (if configured)
-kasl report --send
+                        <h1 id="update-command"><a class="header" href="#update-command"><code>update</code> Command</a></h1>
+<p>The <code>update</code> command handles checking for and installing newer versions of kasl from GitHub releases. It provides automatic binary replacement with backup and rollback capabilities.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<pre><code class="language-bash">kasl update
 </code></pre>
-<h3 id="task-management"><a class="header" href="#task-management">Task Management</a></h3>
-<pre><code class="language-bash"># Create tasks
-kasl task --name "Task name" --comment "Description" --completeness 0
-
-# List tasks
-kasl task --show
-kasl task --show --all
-
-# Edit tasks
-kasl task --edit 1
-kasl task --edit-interactive
-
-# Delete tasks
-kasl task --delete 1 2 3
-kasl task --delete-today
-</code></pre>
-<h3 id="time-adjustments"><a class="header" href="#time-adjustments">Time Adjustments</a></h3>
-<pre><code class="language-bash"># Adjust work start time
-kasl adjust --mode start --minutes 30
-
-# Add a pause
-kasl adjust --mode pause --minutes 15
-
-# Adjust work end time
-kasl adjust --mode end --minutes 20
-</code></pre>
-<h3 id="data-export"><a class="header" href="#data-export">Data Export</a></h3>
-<pre><code class="language-bash"># Export today's data
-kasl export --format csv
-
-# Export all data
-kasl export all --format json
-
-# Export to specific file
-kasl export --output my_report.csv
-</code></pre>
-<h3 id="tag-management"><a class="header" href="#tag-management">Tag Management</a></h3>
-<pre><code class="language-bash"># Create tags
-kasl tag create --name "urgent" --color "red"
-kasl tag create --name "backend" --color "blue"
-
-# List tags
-kasl tag list
-
-# Assign tags to tasks
-kasl task --name "Fix bug" --tags "urgent,backend"
-
-# Filter by tags
-kasl task --show --tag "urgent"
-</code></pre>
-<h3 id="templates"><a class="header" href="#templates">Templates</a></h3>
-<pre><code class="language-bash"># Create template
-kasl template create --name "daily-standup"
-
-# Use template
-kasl task --from-template
-kasl task --template "daily-standup"
-</code></pre>
-<h2 id="command-categories"><a class="header" href="#command-categories">Command Categories</a></h2>
-<h3 id="activity-monitoring"><a class="header" href="#activity-monitoring">Activity Monitoring</a></h3>
-<p>Commands for tracking work sessions and activity:</p>
+<h2 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h2>
+<p>The update process performs a complete workflow:</p>
+<ol>
+<li><strong>Version Check</strong>: Queries GitHub API for the latest release</li>
+<li><strong>Platform Detection</strong>: Identifies the correct binary for the current OS/architecture</li>
+<li><strong>Download</strong>: Retrieves the latest release archive</li>
+<li><strong>Extraction</strong>: Unpacks the new binary from the archive</li>
+<li><strong>Replacement</strong>: Safely replaces the current executable with backup</li>
+</ol>
+<h2 id="update-sources"><a class="header" href="#update-sources">Update Sources</a></h2>
+<p>Updates are fetched from GitHub releases at:
+<code>https://github.com/{owner}/{repo}/releases/latest</code></p>
+<p>The updater automatically selects the appropriate asset based on:</p>
 <ul>
-<li><code>watch</code> - Core monitoring functionality</li>
-<li><code>adjust</code> - Time corrections and adjustments</li>
-<li><code>pauses</code> - Break period management</li>
+<li><strong>Architecture</strong>: x86_64, aarch64, etc.</li>
+<li><strong>Operating System</strong>: Windows (MSVC), macOS (Darwin), Linux (musl)</li>
 </ul>
-<h3 id="task-management-1"><a class="header" href="#task-management-1">Task Management</a></h3>
-<p>Commands for organizing and tracking work items:</p>
+<h2 id="platform-support"><a class="header" href="#platform-support">Platform Support</a></h2>
+<p>Supported platform identifiers:</p>
 <ul>
-<li><code>task</code> - Complete task lifecycle management</li>
-<li><code>tag</code> - Task categorization and organization</li>
-<li><code>template</code> - Reusable task templates</li>
+<li><code>x86_64-pc-windows-msvc</code> - Windows 64-bit</li>
+<li><code>x86_64-apple-darwin</code> - macOS Intel</li>
+<li><code>aarch64-apple-darwin</code> - macOS Apple Silicon</li>
+<li><code>x86_64-unknown-linux-musl</code> - Linux 64-bit</li>
 </ul>
-<h3 id="reporting--analytics"><a class="header" href="#reporting--analytics">Reporting &amp; Analytics</a></h3>
-<p>Commands for generating insights and reports:</p>
+<h2 id="safety-features"><a class="header" href="#safety-features">Safety Features</a></h2>
+<p>The update process is designed to be safe and atomic:</p>
 <ul>
-<li><code>report</code> - Daily work reports</li>
-<li><code>sum</code> - Monthly summaries and statistics</li>
-<li><code>export</code> - Data export for external analysis</li>
+<li><strong>Backup Creation</strong>: Creates backups of the current executable before replacement</li>
+<li><strong>Archive Validation</strong>: Validates downloaded archives before extraction</li>
+<li><strong>Clear Feedback</strong>: Provides detailed information about the update process</li>
+<li><strong>Error Handling</strong>: Handles network errors and other issues gracefully</li>
+<li><strong>Rollback Capability</strong>: Can restore from backup if update fails</li>
 </ul>
-<h3 id="system-management"><a class="header" href="#system-management">System Management</a></h3>
-<p>Commands for application configuration and maintenance:</p>
-<ul>
-<li><code>init</code> - Initial setup and configuration</li>
-<li><code>autostart</code> - System integration</li>
-<li><code>update</code> - Application updates</li>
-</ul>
-<h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
-<h3 id="command-help"><a class="header" href="#command-help">Command Help</a></h3>
-<p>Get help for any command:</p>
-<pre><code class="language-bash">kasl --help
-kasl &lt;command&gt; --help
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-update"><a class="header" href="#basic-update">Basic Update</a></h3>
+<pre><code class="language-bash"># Check for and install updates
+kasl update
 </code></pre>
-<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
-<p>View command examples:</p>
-<pre><code class="language-bash"># Show all available commands
+<h3 id="update-workflow"><a class="header" href="#update-workflow">Update Workflow</a></h3>
+<pre><code class="language-bash"># 1. Check current version
+kasl --version
+
+# 2. Update to latest version
+kasl update
+
+# 3. Verify update
+kasl --version
+</code></pre>
+<h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
+<h3 id="no-update-required"><a class="header" href="#no-update-required">No Update Required</a></h3>
+<pre><code>ℹ️  kasl is already up to date
+Current version: 0.8.0
+Latest version: 0.8.0
+No update required.
+</code></pre>
+<h3 id="update-available"><a class="header" href="#update-available">Update Available</a></h3>
+<pre><code>🔄 Checking for updates...
+✅ New version available: 0.8.1
+
+📥 Downloading update...
+├── Platform: x86_64-pc-windows-msvc
+├── Size: 2.5 MB
+└── Progress: 100%
+
+🔧 Installing update...
+├── Creating backup: kasl.exe.backup
+├── Extracting binary
+└── Replacing executable
+
+✅ Update completed successfully!
+Version: 0.8.1
+Backup: kasl.exe.backup
+</code></pre>
+<h3 id="update-error"><a class="header" href="#update-error">Update Error</a></h3>
+<pre><code>❌ Update failed: Network error
+Error: Failed to download release archive
+Suggestion: Check your internet connection and try again
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="regular-maintenance"><a class="header" href="#regular-maintenance">Regular Maintenance</a></h3>
+<pre><code class="language-bash"># Check for updates weekly
+kasl update
+
+# Verify update was successful
+kasl --version
+</code></pre>
+<h3 id="system-administration"><a class="header" href="#system-administration">System Administration</a></h3>
+<pre><code class="language-bash"># Update kasl on multiple systems
+for system in system1 system2 system3; do
+    ssh $system "kasl update"
+done
+</code></pre>
+<h3 id="development-and-testing"><a class="header" href="#development-and-testing">Development and Testing</a></h3>
+<pre><code class="language-bash"># Update to latest development version
+kasl update
+
+# Test new features
 kasl --help
 
-# Show specific command help
-kasl task --help
-kasl report --help
+# Rollback if needed (manual process)
+# Restore from backup file
 </code></pre>
-<h3 id="interactive-mode"><a class="header" href="#interactive-mode">Interactive Mode</a></h3>
-<p>Some commands support interactive mode:</p>
-<pre><code class="language-bash"># Interactive task creation
-kasl task
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<p><strong>Network connectivity problems</strong></p>
+<pre><code class="language-bash"># Check internet connection
+ping github.com
 
-# Interactive template selection
-kasl task --from-template
-
-# Interactive task editing
-kasl task --edit-interactive
+# Try again later
+kasl update
 </code></pre>
-<h2 id="command-options"><a class="header" href="#command-options">Command Options</a></h2>
-<h3 id="global-options"><a class="header" href="#global-options">Global Options</a></h3>
-<p>Most commands support these global options:</p>
-<ul>
-<li><code>--help</code> - Show command help</li>
-<li><code>--version</code> - Show version information</li>
-</ul>
-<h3 id="common-options"><a class="header" href="#common-options">Common Options</a></h3>
-<p>Many commands support these common options:</p>
-<ul>
-<li><code>--date</code> - Specify date (YYYY-MM-DD or 'today')</li>
-<li><code>--output</code> - Specify output file</li>
-<li><code>--format</code> - Specify output format</li>
-</ul>
-<h3 id="debug-options"><a class="header" href="#debug-options">Debug Options</a></h3>
-<p>Debug options for troubleshooting:</p>
-<ul>
-<li><code>--foreground</code> - Run in foreground mode</li>
-<li><code>--debug</code> - Enable debug logging</li>
-</ul>
+<p><strong>Permission errors</strong></p>
+<pre><code class="language-bash"># Run with elevated privileges (Windows)
+# Right-click Command Prompt -&gt; "Run as Administrator"
+kasl update
+
+# Check file permissions (Unix)
+ls -la $(which kasl)
+</code></pre>
+<p><strong>Insufficient disk space</strong></p>
+<pre><code class="language-bash"># Check available disk space
+df -h
+
+# Clean up space and try again
+kasl update
+</code></pre>
+<h3 id="update-failures"><a class="header" href="#update-failures">Update Failures</a></h3>
+<p><strong>Download failed</strong></p>
+<pre><code class="language-bash"># Check network connection
+curl -I https://github.com
+
+# Try again
+kasl update
+</code></pre>
+<p><strong>Extraction failed</strong></p>
+<pre><code class="language-bash"># Check if backup exists
+ls -la kasl.exe.backup
+
+# Restore from backup manually
+cp kasl.exe.backup kasl.exe
+</code></pre>
+<p><strong>Binary replacement failed</strong></p>
+<pre><code class="language-bash"># Check if kasl is running
+tasklist | grep kasl
+
+# Stop kasl and try again
+kasl watch --stop
+kasl update
+</code></pre>
+<h3 id="verification-steps"><a class="header" href="#verification-steps">Verification Steps</a></h3>
+<pre><code class="language-bash"># 1. Check current version
+kasl --version
+
+# 2. Perform update
+kasl update
+
+# 3. Verify new version
+kasl --version
+
+# 4. Test functionality
+kasl --help
+</code></pre>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
-<h3 id="command-organization"><a class="header" href="#command-organization">Command Organization</a></h3>
+<h3 id="update-strategy"><a class="header" href="#update-strategy">Update Strategy</a></h3>
 <ol>
-<li><strong>Use templates</strong> for frequently created tasks</li>
-<li><strong>Use tags</strong> for task categorization</li>
-<li><strong>Regular exports</strong> for data backup</li>
-<li><strong>Monitor configuration</strong> for optimal detection</li>
+<li><strong>Regular updates</strong>: Check for updates weekly or monthly</li>
+<li><strong>Test after update</strong>: Verify functionality after each update</li>
+<li><strong>Keep backups</strong>: Don't delete backup files immediately</li>
+<li><strong>Monitor for issues</strong>: Watch for any problems after updates</li>
 </ol>
-<h3 id="workflow-integration"><a class="header" href="#workflow-integration">Workflow Integration</a></h3>
+<h3 id="system-management"><a class="header" href="#system-management">System Management</a></h3>
 <ol>
-<li><strong>Start monitoring</strong> at the beginning of your workday</li>
-<li><strong>Create tasks</strong> as you plan your work</li>
-<li><strong>Update progress</strong> throughout the day</li>
-<li><strong>Review reports</strong> at the end of the day</li>
+<li><strong>Update during maintenance windows</strong>: Choose appropriate times for updates</li>
+<li><strong>Update all systems</strong>: Keep all installations on the same version</li>
+<li><strong>Document update process</strong>: Keep track of update procedures</li>
+<li><strong>Test in staging</strong>: Test updates on non-critical systems first</li>
 </ol>
-<h3 id="data-management-1"><a class="header" href="#data-management-1">Data Management</a></h3>
+<h3 id="backup-management"><a class="header" href="#backup-management">Backup Management</a></h3>
 <ol>
-<li><strong>Regular backups</strong> using export functionality</li>
-<li><strong>Clean up old data</strong> periodically</li>
-<li><strong>Validate data</strong> using report commands</li>
-<li><strong>Monitor database</strong> size and performance</li>
+<li><strong>Preserve backups</strong>: Keep backup files for potential rollback</li>
+<li><strong>Clean up old backups</strong>: Remove backups older than a few versions</li>
+<li><strong>Verify backup integrity</strong>: Test backup restoration periodically</li>
+<li><strong>Document rollback procedures</strong>: Know how to restore from backup</li>
 </ol>
+<h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
+<p>The <code>update</code> command works with other kasl commands:</p>
+<ul>
+<li><strong><code>autostart</code></strong>: Updates preserve autostart configuration</li>
+<li><strong><code>init</code></strong>: Configuration settings are preserved during updates</li>
+<li><strong><code>watch</code></strong>: Monitoring continues after update (if autostart is enabled)</li>
+</ul>
+<h2 id="related-commands"><a class="header" href="#related-commands">Related Commands</a></h2>
+<ul>
+<li><strong><a href="./autostart.html"><code>autostart</code></a></strong> - Autostart settings are preserved during updates</li>
+<li><strong><a href="./init.html"><code>init</code></a></strong> - Configuration is maintained during updates</li>
+<li><strong><a href="./watch.html"><code>watch</code></a></strong> - Monitoring continues after successful updates</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../configuration.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../commands/autostart.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../commands/init.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../api-integrations.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -394,11 +397,11 @@ kasl task --edit-interactive
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../configuration.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../commands/autostart.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../commands/init.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../api-integrations.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

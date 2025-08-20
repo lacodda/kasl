@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>event - kasl documentation</title>
+        <title>sum - kasl documentation</title>
 
 
         <!-- Custom HTML head -->
@@ -175,72 +175,183 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="event-command"><a class="header" href="#event-command"><code>event</code> Command</a></h1>
-<p>The <code>event</code> command in <code>kasl</code> is used for managing and displaying events related to the application's operations. This command allows users to insert new events or display information about existing events, depending on the provided arguments.</p>
+                        <h1 id="sum-command"><a class="header" href="#sum-command"><code>sum</code> Command</a></h1>
+<p>The <code>sum</code> command generates comprehensive monthly reports showing daily work hours, productivity metrics, and calendar integration with company rest days. It provides both detailed daily breakdowns and aggregate statistics for the current month.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<pre><code class="language-plaintext">kasl event [OPTIONS] &lt;EVENT_TYPE&gt;
+<pre><code class="language-bash">kasl sum [OPTIONS]
 </code></pre>
-<h3 id="options"><a class="header" href="#options">Options</a></h3>
+<h2 id="options"><a class="header" href="#options">Options</a></h2>
 <ul>
-<li>
-<p><code>&lt;EVENT_TYPE&gt;</code>: Specifies the type of the event to insert. Defaults to <code>start</code>. The <code>EVENT_TYPE</code> can be either <code>start</code> or <code>end</code>, representing the beginning and the end of an event, respectively. This option is used when adding a new event and is not required when simply viewing events.</p>
-</li>
-<li>
-<p><code>-s</code>, <code>--show</code>: Displays the events information. When this option is provided, the command will fetch and display information about events instead of inserting a new event.</p>
+<li><code>--send</code>: Submit the monthly summary report
+<ul>
+<li>Generates and submits the summary to the configured reporting API</li>
+<li>Useful for organizational reporting requirements</li>
+<li>Integrates with external systems like SiServer</li>
+</ul>
 </li>
 </ul>
-<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<h2 id="report-components"><a class="header" href="#report-components">Report Components</a></h2>
+<p>The monthly summary includes:</p>
+<ol>
+<li><strong>Daily Breakdown</strong>: Each workday with hours and productivity percentage</li>
+<li><strong>Rest Days</strong>: Company holidays and weekends with default hours</li>
+<li><strong>Monthly Totals</strong>: Total hours worked and average daily hours</li>
+<li><strong>Productivity Metrics</strong>: Average productivity across all workdays</li>
+</ol>
+<h2 id="data-sources"><a class="header" href="#data-sources">Data Sources</a></h2>
+<p>The summary integrates data from multiple sources:</p>
 <ul>
-<li>
-<p>Inserting a new <code>start</code> event:</p>
-<pre><code class="language-bash">kasl event start
-</code></pre>
-</li>
-<li>
-<p>Inserting a new <code>end</code> event:</p>
-<pre><code class="language-bash">kasl event end
-</code></pre>
-</li>
-<li>
-<p>Displaying information about events:</p>
-<pre><code class="language-bash">kasl event --show
-</code></pre>
-</li>
+<li><strong>Local Database</strong>: Recorded workdays and pause information</li>
+<li><strong>External API</strong>: Company rest dates and holidays (if configured)</li>
+<li><strong>Configuration</strong>: Default work hours for rest days</li>
 </ul>
-<h2 id="description"><a class="header" href="#description">Description</a></h2>
-<p>The <code>event</code> command operates in two modes: insert and display.</p>
+<h2 id="productivity-calculation"><a class="header" href="#productivity-calculation">Productivity Calculation</a></h2>
+<p>Productivity is calculated as:</p>
+<pre><code>Productivity = (Net Working Time / Gross Working Time) * 100%
+</code></pre>
+<p>Where:</p>
 <ul>
-<li>
-<p><strong>Insert Mode:</strong> When called without the <code>--show</code> option, it inserts a new event of the specified type into the application's database. By default, it inserts a <code>start</code> event unless another event type is specified via the <code>--event_type</code> option. This mode is useful for tracking the start and end of events within the application.</p>
-</li>
-<li>
-<p><strong>Display Mode:</strong> When the <code>--show</code> option is used, the command fetches events from the database, merges them based on certain criteria, calculates durations, and formats them for display. It then prints a summary of the working hours and details of each event. This mode is intended for reviewing the events and their durations over time.</p>
-</li>
+<li><strong>Net Working Time</strong>: Actual productive work (excluding all pauses)</li>
+<li><strong>Gross Working Time</strong>: Total presence time (excluding long breaks only)</li>
 </ul>
-<h3 id="implementation-notes"><a class="header" href="#implementation-notes">Implementation Notes</a></h3>
+<p>This provides insight into how effectively time is used during work sessions.</p>
+<h2 id="rest-day-integration"><a class="header" href="#rest-day-integration">Rest Day Integration</a></h2>
+<p>If SiServer integration is configured, the summary will:</p>
 <ul>
-<li>
-<p>The command uses the local system time (<code>chrono::Local</code>) to display the current date when showing events.</p>
-</li>
-<li>
-<p>It leverages the application's <code>Events</code>, <code>EventType</code>, <code>FormatEvents</code>, <code>EventGroup</code>, and <code>View</code> modules for database operations, event handling, and output formatting.</p>
-</li>
-<li>
-<p>The command is designed to be robust, with error handling that ensures graceful failure in case of issues accessing the database or processing events.</p>
-</li>
+<li>Fetch official company rest dates for the current month</li>
+<li>Include these dates with default 8-hour entries</li>
+<li>Distinguish between work days and rest days in the display</li>
 </ul>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
-<p>The <code>event</code> command returns an error if there are issues accessing the database, merging events, or any other operation-related failures. It ensures that errors are properly boxed and communicated back to the caller, facilitating debugging and resolution.</p>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-monthly-summary"><a class="header" href="#basic-monthly-summary">Basic Monthly Summary</a></h3>
+<pre><code class="language-bash"># Display monthly summary for current month
+kasl sum
+</code></pre>
+<h3 id="submit-monthly-report"><a class="header" href="#submit-monthly-report">Submit Monthly Report</a></h3>
+<pre><code class="language-bash"># Generate and submit summary to configured API
+kasl sum --send
+</code></pre>
+<h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
+<pre><code>December 2024
+
++------------+----------+-------------+
+| DATE       | DURATION | PRODUCTIVITY|
++------------+----------+-------------+
+| 2024-12-02 | 08:15    | 92.0%       |
+| 2024-12-03 | 07:45    | 88.0%       |
+| 2024-12-04 | 08:30    | 95.0%       |
+| 2024-12-05 | 07:20    | 85.0%       |
+| 2024-12-06 | 08:00    | 90.0%       |
+| 2024-12-07 | 08:00    | 100.0%      |
+| 2024-12-08 | 08:00    | 100.0%      |
+| 2024-12-09 | 08:15    | 91.0%       |
+| 2024-12-10 | 07:30    | 87.0%       |
+|            |          |             |
+| TOTAL      | 79:15    | 92.5%       |
++------------+----------+-------------+
+</code></pre>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<h3 id="siserver-integration"><a class="header" href="#siserver-integration">SiServer Integration</a></h3>
+<p>To enable rest day integration, configure SiServer in your settings:</p>
+<pre><code class="language-bash">kasl init --si-server-url "https://your-server.com" --si-server-token "your-token"
+</code></pre>
+<h3 id="default-work-hours"><a class="header" href="#default-work-hours">Default Work Hours</a></h3>
+<p>Configure default hours for rest days:</p>
+<pre><code class="language-bash"># Set default hours for rest days (default is 8 hours)
+kasl init --default-hours 8
+</code></pre>
+<h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
+<p>The <code>sum</code> command works with other kasl commands:</p>
+<ul>
+<li><strong><code>report</code></strong>: Daily reports that feed into monthly summaries</li>
+<li><strong><code>watch</code></strong>: Activity monitoring that provides the underlying data</li>
+<li><strong><code>adjust</code></strong>: Manual time adjustments that affect summary calculations</li>
+<li><strong><code>export</code></strong>: Export monthly data for external analysis</li>
+</ul>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="monthly-reporting"><a class="header" href="#monthly-reporting">Monthly Reporting</a></h3>
+<pre><code class="language-bash"># Generate monthly report for management
+kasl sum --send
+</code></pre>
+<h3 id="productivity-analysis"><a class="header" href="#productivity-analysis">Productivity Analysis</a></h3>
+<pre><code class="language-bash"># Review productivity trends
+kasl sum
+# Compare with previous months
+</code></pre>
+<h3 id="compliance-reporting"><a class="header" href="#compliance-reporting">Compliance Reporting</a></h3>
+<pre><code class="language-bash"># Submit required monthly reports
+kasl sum --send
+</code></pre>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<p><strong>No data for current month</strong></p>
+<pre><code class="language-bash"># Check if monitoring is running
+kasl watch --foreground
+
+# Verify data exists
+kasl report --last
+</code></pre>
+<p><strong>API submission fails</strong></p>
+<pre><code class="language-bash"># Check API configuration
+kasl init --show-config
+
+# Test API connection
+kasl report --send
+</code></pre>
+<p><strong>Incorrect rest days</strong></p>
+<pre><code class="language-bash"># Verify SiServer configuration
+kasl init --si-server-url "https://your-server.com"
+
+# Check rest day settings
+kasl init --show-config
+</code></pre>
+<h3 id="data-validation"><a class="header" href="#data-validation">Data Validation</a></h3>
+<pre><code class="language-bash"># Verify daily data before generating summary
+kasl report --last
+
+# Check for missing days
+kasl report --show-all
+</code></pre>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="monthly-workflow"><a class="header" href="#monthly-workflow">Monthly Workflow</a></h3>
+<ol>
+<li><strong>Review daily reports</strong> throughout the month</li>
+<li><strong>Generate summary</strong> at month-end</li>
+<li><strong>Submit to organization</strong> if required</li>
+<li><strong>Archive data</strong> for historical analysis</li>
+</ol>
+<h3 id="data-quality"><a class="header" href="#data-quality">Data Quality</a></h3>
+<ol>
+<li><strong>Ensure monitoring is active</strong> during work hours</li>
+<li><strong>Review and adjust</strong> any incorrect time entries</li>
+<li><strong>Validate rest day configuration</strong></li>
+<li><strong>Check API integration</strong> before submission</li>
+</ol>
+<h3 id="reporting"><a class="header" href="#reporting">Reporting</a></h3>
+<ol>
+<li><strong>Submit reports promptly</strong> at month-end</li>
+<li><strong>Keep local copies</strong> of submitted reports</li>
+<li><strong>Review productivity trends</strong> over time</li>
+<li><strong>Use insights</strong> to improve work patterns</li>
+</ol>
+<h2 id="related-commands"><a class="header" href="#related-commands">Related Commands</a></h2>
+<ul>
+<li><strong><a href="./report.html"><code>report</code></a></strong> - Generate daily work reports</li>
+<li><strong><a href="./watch.html"><code>watch</code></a></strong> - Monitor activity for data collection</li>
+<li><strong><a href="./adjust.html"><code>adjust</code></a></strong> - Adjust recorded times</li>
+<li><strong><a href="./export.html"><code>export</code></a></strong> - Export data for external analysis</li>
+<li><strong><a href="./init.html"><code>init</code></a></strong> - Configure API integration</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../commands/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../commands/report.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../commands/report.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../commands/export.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -250,11 +361,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../commands/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../commands/report.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../commands/report.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../commands/export.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

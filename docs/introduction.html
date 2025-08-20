@@ -175,65 +175,100 @@
 
                 <div id="content" class="content">
                     <main>
-                        <p align="center">
+                        <h1 id="kasl-key-activity-synchronization-and-logging-"><a class="header" href="#kasl-key-activity-synchronization-and-logging-">kasl: Key Activity Synchronization and Logging 🕒</a></h1>
+<p align="center">
   <img src="https://raw.githubusercontent.com/lacodda/kasl/main/kasl.webp" width="320" alt="kasl">
 </p>
-<h1 align="center">kasl: Key Activity Synchronization and Logging 🕒</h1>
-<br>
 <h2 id="overview-"><a class="header" href="#overview-">Overview 📖</a></h2>
-<p>kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ☕, and task completion ✅. It automates the collection of work data 📈, facilitates task management 📋, and generates daily reports 📝, simplifying workflow and productivity tracking 🚀.</p>
-<h2 id="features-"><a class="header" href="#features-">Features 🌟</a></h2>
+<p>kasl is a comprehensive command-line utility designed to streamline work activity tracking, task management, and productivity reporting. It automatically monitors your work sessions, tracks breaks, manages tasks, and generates detailed reports for better productivity insights.</p>
+<h2 id="key-features-"><a class="header" href="#key-features-">Key Features 🌟</a></h2>
+<h3 id="-activity-monitoring"><a class="header" href="#-activity-monitoring">🔍 Activity Monitoring</a></h3>
 <ul>
-<li><strong>Automatic Data Collection</strong> 📊: Tracks the start of work sessions and pauses without manual input.</li>
-<li><strong>Task Management</strong> 📋: Easily add tasks and update completion percentages.</li>
-<li><strong>Daily Reports</strong> 📝: Auto-generates daily reports summarizing work activities.</li>
-<li><strong>API Integration</strong> 🌐: Sends daily reports to a specified API for easy access and storage.</li>
-<li><strong>User-Friendly</strong> 😊: Designed with a focus on simplicity and ease of use.</li>
+<li><strong>Automatic work session tracking</strong> - Detects when you start and end your workday</li>
+<li><strong>Smart break detection</strong> - Automatically records breaks based on inactivity</li>
+<li><strong>Background monitoring</strong> - Runs silently in the background</li>
+<li><strong>Cross-platform support</strong> - Works on Windows, macOS, and Linux</li>
 </ul>
-<h2 id="getting-started-"><a class="header" href="#getting-started-">Getting Started 🚀</a></h2>
-<h3 id="prerequisites-"><a class="header" href="#prerequisites-">Prerequisites 📋</a></h3>
+<h3 id="-task-management"><a class="header" href="#-task-management">📋 Task Management</a></h3>
 <ul>
-<li>Ensure you have a compatible operating system (Windows, macOS, or Linux) 💻.</li>
-<li>Requires Node.js and npm (or an equivalent package manager) for running the utility 📦.</li>
+<li><strong>CRUD operations</strong> - Create, read, update, and delete tasks</li>
+<li><strong>Task templates</strong> - Save frequently used tasks as reusable templates</li>
+<li><strong>Tagging system</strong> - Organize tasks with custom tags and colors</li>
+<li><strong>Progress tracking</strong> - Track task completion percentage</li>
+<li><strong>Batch operations</strong> - Edit or delete multiple tasks at once</li>
 </ul>
-<h2 id="installation-"><a class="header" href="#installation-">Installation 🛠️</a></h2>
-<p>Install kasl now. kasl is installed by running one of the following commands in your terminal.
-You can install this via the command-line with either curl or wget.</p>
-<h3 id="install-kasl-via-curl"><a class="header" href="#install-kasl-via-curl">Install kasl via curl</a></h3>
+<h3 id="-reporting--analytics"><a class="header" href="#-reporting--analytics">📊 Reporting &amp; Analytics</a></h3>
+<ul>
+<li><strong>Daily reports</strong> - Comprehensive view of work intervals and tasks</li>
+<li><strong>Monthly summaries</strong> - Aggregated statistics and productivity metrics</li>
+<li><strong>Productivity calculation</strong> - Measure actual work time vs. presence time</li>
+<li><strong>Short interval detection</strong> - Identify and merge fragmented work periods</li>
+<li><strong>Export capabilities</strong> - Export data to CSV, JSON, or Excel formats</li>
+</ul>
+<h3 id="-advanced-features"><a class="header" href="#-advanced-features">⚙️ Advanced Features</a></h3>
+<ul>
+<li><strong>Time adjustment</strong> - Correct work times with preview before applying</li>
+<li><strong>Database migrations</strong> - Safe schema updates when upgrading</li>
+<li><strong>API integrations</strong> - Connect with GitLab, Jira, and custom APIs</li>
+<li><strong>Autostart support</strong> - Start monitoring automatically on system boot</li>
+<li><strong>Debug logging</strong> - Detailed logs for troubleshooting</li>
+</ul>
+<h2 id="quick-start-"><a class="header" href="#quick-start-">Quick Start 🚀</a></h2>
+<h3 id="installation"><a class="header" href="#installation">Installation</a></h3>
+<p>Install kasl using curl:</p>
 <pre><code class="language-bash">sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"
 </code></pre>
-<h3 id="install-kasl-via-wget"><a class="header" href="#install-kasl-via-wget">Install kasl via wget</a></h3>
+<p>Or using wget:</p>
 <pre><code class="language-bash">sh -c "$(wget https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh -O -)"
 </code></pre>
-<p>This will make the <code>kasl</code> application globally available in your system.</p>
-<h3 id="usage-"><a class="header" href="#usage-">Usage 📚</a></h3>
-<p>To start kasl and begin tracking:</p>
-<pre><code class="language-bash">kasl --help
+<h3 id="initial-setup"><a class="header" href="#initial-setup">Initial Setup</a></h3>
+<pre><code class="language-bash"># Configure kasl interactively
+kasl init
+
+# Start activity monitoring
+kasl watch
+
+# Enable autostart on system boot
+kasl autostart enable
 </code></pre>
-<h2 id="roadmap-"><a class="header" href="#roadmap-">Roadmap 🗺️</a></h2>
+<h3 id="daily-workflow"><a class="header" href="#daily-workflow">Daily Workflow</a></h3>
+<pre><code class="language-bash"># Create a new task
+kasl task --name "Review pull requests" --completeness 0
+
+# Update task progress
+kasl task --edit 1
+
+# View today's report
+kasl report
+
+# Submit daily report
+kasl report --send
+</code></pre>
+<h2 id="system-requirements-"><a class="header" href="#system-requirements-">System Requirements 💻</a></h2>
 <ul>
-<li><input disabled="" type="checkbox"/>
-Enhance task management with categories and priorities.</li>
-<li><input disabled="" type="checkbox"/>
-Integrate with more APIs for report submission.</li>
-<li><input disabled="" type="checkbox"/>
-Implement machine learning for predicting task completion time.</li>
-<li><input disabled="" type="checkbox"/>
-Add support for team collaboration features.</li>
-<li><input disabled="" type="checkbox"/>
-Develop a graphical user interface (GUI) version.</li>
+<li><strong>Operating System</strong>: Windows 10+, macOS 10.15+, or Linux</li>
+<li><strong>Architecture</strong>: x86_64</li>
+<li><strong>Memory</strong>: 50MB RAM</li>
+<li><strong>Storage</strong>: 10MB disk space</li>
+<li><strong>Network</strong>: Optional (for API integrations and updates)</li>
 </ul>
-<h2 id="how-to-contribute-"><a class="header" href="#how-to-contribute-">How to Contribute 🤝</a></h2>
-<p>Contributions are welcome! If you have ideas for new features or improvements, feel free to fork the repository, make your changes, and submit a pull request.</p>
 <h2 id="license-"><a class="header" href="#license-">License 📄</a></h2>
-<p>kasl is open-source software licensed under the MIT license. See the <a href="LICENSE">LICENSE</a> file for more details.</p>
+<p>This project is licensed under the MIT License - see the <a href="LICENSE">LICENSE</a> file for details.</p>
+<h2 id="support-"><a class="header" href="#support-">Support 📞</a></h2>
+<ul>
+<li>📧 Email: lahtachev@gmail.com</li>
+<li>🐛 Issues: <a href="https://github.com/lacodda/kasl/issues">GitHub Issues</a></li>
+<li>📖 Documentation: <a href="https://kasl.lacodda.com">kasl.lacodda.com</a></li>
+</ul>
+<hr />
+<p>Made with ❤️ by <a href="https://lacodda.com">Kirill Lakhtachev</a></p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
 
-                            <a rel="next prefetch" href="commands/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="getting-started.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -244,7 +279,7 @@ Develop a graphical user interface (GUI) version.</li>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
 
-                    <a rel="next prefetch" href="commands/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="getting-started.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

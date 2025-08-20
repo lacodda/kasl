@@ -1,0 +1,580 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>template - kasl documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">kasl documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="template-command"><a class="header" href="#template-command"><code>template</code> Command</a></h1>
+<p>The <code>template</code> command provides comprehensive template management functionality for kasl, enabling users to create, edit, delete, and search reusable task templates. Templates streamline the creation of frequently used tasks by providing predefined values for name, comment, and completion status.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<pre><code class="language-bash">kasl template [COMMAND] [OPTIONS]
+</code></pre>
+<h2 id="commands"><a class="header" href="#commands">Commands</a></h2>
+<h3 id="create---create-a-new-task-template"><a class="header" href="#create---create-a-new-task-template"><code>create</code> - Create a new task template</a></h3>
+<pre><code class="language-bash">kasl template create [OPTIONS]
+</code></pre>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>-n, --name &lt;NAME&gt;</code>: Unique name identifier for the template
+<ul>
+<li>Must be unique across all templates</li>
+<li>Should be descriptive enough to easily identify the template's purpose</li>
+<li>Used for referencing the template in task creation commands</li>
+</ul>
+</li>
+</ul>
+<p><strong>Examples:</strong></p>
+<pre><code class="language-bash"># Create template interactively
+kasl template create
+
+# Create template with name
+kasl template create --name "daily-standup"
+</code></pre>
+<h3 id="list---list-all-available-templates"><a class="header" href="#list---list-all-available-templates"><code>list</code> - List all available templates</a></h3>
+<pre><code class="language-bash">kasl template list
+</code></pre>
+<p>Displays a formatted table of all existing templates with their names, task names, comments, and default completion values.</p>
+<p><strong>Example:</strong></p>
+<pre><code class="language-bash">kasl template list
+</code></pre>
+<h3 id="edit---edit-an-existing-template"><a class="header" href="#edit---edit-an-existing-template"><code>edit</code> - Edit an existing template</a></h3>
+<pre><code class="language-bash">kasl template edit [NAME] [OPTIONS]
+</code></pre>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>NAME</code>: Name of the template to edit (optional)
+<ul>
+<li>If not provided, an interactive selection interface will be presented</li>
+</ul>
+</li>
+</ul>
+<p><strong>Examples:</strong></p>
+<pre><code class="language-bash"># Edit template interactively
+kasl template edit
+
+# Edit specific template
+kasl template edit "daily-standup"
+</code></pre>
+<h3 id="delete---delete-a-template"><a class="header" href="#delete---delete-a-template"><code>delete</code> - Delete a template</a></h3>
+<pre><code class="language-bash">kasl template delete [NAME] [OPTIONS]
+</code></pre>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>NAME</code>: Name of the template to delete (optional)
+<ul>
+<li>If not provided, an interactive selection interface will be presented</li>
+</ul>
+</li>
+</ul>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--force</code>: Skip confirmation prompt</li>
+</ul>
+<p><strong>Examples:</strong></p>
+<pre><code class="language-bash"># Delete template with confirmation
+kasl template delete "old-template"
+
+# Force delete without confirmation
+kasl template delete "old-template" --force
+</code></pre>
+<h3 id="search---search-templates"><a class="header" href="#search---search-templates"><code>search</code> - Search templates</a></h3>
+<pre><code class="language-bash">kasl template search &lt;QUERY&gt;
+</code></pre>
+<p><strong>Arguments:</strong></p>
+<ul>
+<li><code>QUERY</code>: Search query string
+<ul>
+<li>Searches both template names and task names for matches</li>
+<li>Case-insensitive partial matching is supported</li>
+</ul>
+</li>
+</ul>
+<p><strong>Examples:</strong></p>
+<pre><code class="language-bash"># Search for templates containing "meeting"
+kasl template search "meeting"
+
+# Search for templates containing "daily"
+kasl template search "daily"
+</code></pre>
+<h2 id="template-features"><a class="header" href="#template-features">Template Features</a></h2>
+<h3 id="template-crud-operations"><a class="header" href="#template-crud-operations">Template CRUD Operations</a></h3>
+<ul>
+<li><strong>Create</strong>: Define new templates with predefined task values</li>
+<li><strong>Read</strong>: List and view existing templates</li>
+<li><strong>Update</strong>: Modify template properties</li>
+<li><strong>Delete</strong>: Remove templates from the system</li>
+</ul>
+<h3 id="search-functionality"><a class="header" href="#search-functionality">Search Functionality</a></h3>
+<p>Find templates by name or content:</p>
+<ul>
+<li><strong>Name Search</strong>: Find templates by template name</li>
+<li><strong>Content Search</strong>: Find templates by task name or comment</li>
+<li><strong>Partial Matching</strong>: Case-insensitive search with partial matches</li>
+</ul>
+<h3 id="interactive-management"><a class="header" href="#interactive-management">Interactive Management</a></h3>
+<p>User-friendly interfaces for all operations:</p>
+<ul>
+<li><strong>Interactive Creation</strong>: Guided template creation process</li>
+<li><strong>Interactive Selection</strong>: Choose from available templates</li>
+<li><strong>Confirmation Prompts</strong>: Prevent accidental deletions</li>
+</ul>
+<h3 id="integration"><a class="header" href="#integration">Integration</a></h3>
+<p>Seamless integration with task creation workflows:</p>
+<pre><code class="language-bash"># Use template when creating task
+kasl task --from-template
+
+# Use specific template
+kasl task --template "daily-standup"
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="daily-routines"><a class="header" href="#daily-routines">Daily Routines</a></h3>
+<pre><code class="language-bash"># Create daily standup template
+kasl template create --name "daily-standup"
+# Template: Task name: "Daily standup", Comment: "Team sync meeting", Completeness: 0
+
+# Create daily planning template
+kasl template create --name "daily-planning"
+# Template: Task name: "Plan day", Comment: "Review and plan daily tasks", Completeness: 0
+</code></pre>
+<h3 id="meeting-templates"><a class="header" href="#meeting-templates">Meeting Templates</a></h3>
+<pre><code class="language-bash"># Create client meeting template
+kasl template create --name "client-meeting"
+# Template: Task name: "Client meeting", Comment: "Discuss project requirements", Completeness: 0
+
+# Create team meeting template
+kasl template create --name "team-meeting"
+# Template: Task name: "Team meeting", Comment: "Weekly team sync", Completeness: 0
+</code></pre>
+<h3 id="development-tasks"><a class="header" href="#development-tasks">Development Tasks</a></h3>
+<pre><code class="language-bash"># Create code review template
+kasl template create --name "code-review"
+# Template: Task name: "Code review", Comment: "Review pull request", Completeness: 0
+
+# Create bug fix template
+kasl template create --name "bug-fix"
+# Template: Task name: "Fix bug", Comment: "Investigate and fix reported issue", Completeness: 0
+</code></pre>
+<h3 id="administrative-tasks"><a class="header" href="#administrative-tasks">Administrative Tasks</a></h3>
+<pre><code class="language-bash"># Create documentation template
+kasl template create --name "documentation"
+# Template: Task name: "Update documentation", Comment: "Update project documentation", Completeness: 0
+
+# Create email template
+kasl template create --name "email"
+# Template: Task name: "Email correspondence", Comment: "Respond to emails", Completeness: 0
+</code></pre>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="complete-workflow"><a class="header" href="#complete-workflow">Complete Workflow</a></h3>
+<pre><code class="language-bash"># 1. Create templates for common tasks
+kasl template create --name "daily-standup"
+kasl template create --name "code-review"
+kasl template create --name "client-meeting"
+
+# 2. List all templates
+kasl template list
+
+# 3. Use templates to create tasks
+kasl task --from-template
+# Select from available templates
+
+# 4. Use specific template
+kasl task --template "daily-standup"
+</code></pre>
+<h3 id="template-management"><a class="header" href="#template-management">Template Management</a></h3>
+<pre><code class="language-bash"># Create comprehensive template library
+kasl template create --name "morning-routine"
+kasl template create --name "afternoon-review"
+kasl template create --name "end-of-day"
+kasl template create --name "weekly-planning"
+
+# Edit template properties
+kasl template edit "morning-routine"
+
+# Search for specific templates
+kasl template search "meeting"
+
+# Delete unused templates
+kasl template delete "old-template"
+</code></pre>
+<h3 id="interactive-usage"><a class="header" href="#interactive-usage">Interactive Usage</a></h3>
+<pre><code class="language-bash"># Interactive template creation
+kasl template create
+# Prompts for template name, task name, comment, and completeness
+
+# Interactive template selection
+kasl template edit
+# Shows list of available templates to choose from
+
+# Interactive template deletion
+kasl template delete
+# Shows list and prompts for confirmation
+</code></pre>
+<h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
+<h3 id="template-list"><a class="header" href="#template-list">Template List</a></h3>
+<pre><code>+---------------+---------------+---------------------+-------------+
+| TEMPLATE NAME | TASK NAME     | COMMENT             | COMPLETENESS|
++---------------+---------------+---------------------+-------------+
+| daily-standup | Daily standup | Team sync meeting   | 0%          |
+| code-review   | Code review   | Review PR           | 0%          |
+| client-meeting| Client meeting| Discuss requirements| 0%          |
+| bug-fix       | Fix bug       | Investigate and fix | 0%          |
+| documentation | Update docs   | Update documentation| 0%          |
++---------------+---------------+---------------------+-------------+
+</code></pre>
+<h3 id="template-creation"><a class="header" href="#template-creation">Template Creation</a></h3>
+<pre><code>Creating new template...
+
+Template name: daily-standup
+Task name: Daily standup
+Comment: Team sync meeting
+Default completeness (0-100): 0
+
+✅ Template 'daily-standup' created successfully!
+</code></pre>
+<h3 id="template-search"><a class="header" href="#template-search">Template Search</a></h3>
+<pre><code>Searching for templates containing "meeting"...
+
+Results:
+├── client-meeting: Client meeting - Discuss requirements
+├── team-meeting: Team meeting - Weekly team sync
+└── daily-standup: Daily standup - Team sync meeting
+
+Found 3 matching templates.
+</code></pre>
+<h3 id="template-editing"><a class="header" href="#template-editing">Template Editing</a></h3>
+<pre><code>Editing template 'daily-standup'
+
+Current properties:
+├── Task name: Daily standup
+├── Comment: Team sync meeting
+└── Completeness: 0%
+
+New task name (press Enter to keep current): Daily standup meeting
+New comment (press Enter to keep current): Daily team standup meeting
+New completeness (press Enter to keep current): 0
+
+✅ Template updated successfully!
+</code></pre>
+<h2 id="using-templates-with-tasks"><a class="header" href="#using-templates-with-tasks">Using Templates with Tasks</a></h2>
+<h3 id="interactive-template-selection"><a class="header" href="#interactive-template-selection">Interactive Template Selection</a></h3>
+<pre><code class="language-bash"># Create task using template selection
+kasl task --from-template
+
+# The command will show available templates:
+# 1. daily-standup
+# 2. code-review
+# 3. client-meeting
+# Select template: 1
+</code></pre>
+<h3 id="direct-template-usage"><a class="header" href="#direct-template-usage">Direct Template Usage</a></h3>
+<pre><code class="language-bash"># Use specific template
+kasl task --template "daily-standup"
+
+# Use template with additional options
+kasl task --template "code-review" --tags "urgent,backend"
+</code></pre>
+<h3 id="template-with-customization"><a class="header" href="#template-with-customization">Template with Customization</a></h3>
+<pre><code class="language-bash"># Use template but override task name
+kasl task --template "bug-fix" --name "Fix login bug"
+
+# Use template but add custom comment
+kasl task --template "client-meeting" --comment "Discuss new feature requirements"
+</code></pre>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="template-naming"><a class="header" href="#template-naming">Template Naming</a></h3>
+<ol>
+<li><strong>Use descriptive names</strong>: "daily-standup" instead of "ds"</li>
+<li><strong>Be consistent</strong>: Use the same naming convention</li>
+<li><strong>Keep it simple</strong>: Avoid overly complex template names</li>
+<li><strong>Use lowercase</strong>: For consistency and easier typing</li>
+</ol>
+<h3 id="template-content"><a class="header" href="#template-content">Template Content</a></h3>
+<ol>
+<li><strong>Generic task names</strong>: Allow for customization when used</li>
+<li><strong>Clear comments</strong>: Provide helpful default descriptions</li>
+<li><strong>Appropriate completeness</strong>: Usually 0% for new tasks</li>
+<li><strong>Reusable structure</strong>: Make templates flexible for different contexts</li>
+</ol>
+<h3 id="template-organization"><a class="header" href="#template-organization">Template Organization</a></h3>
+<ol>
+<li><strong>Group related templates</strong>: Use consistent naming patterns</li>
+<li><strong>Regular cleanup</strong>: Delete unused templates</li>
+<li><strong>Document template purposes</strong>: Keep track of when to use each template</li>
+<li><strong>Review and update</strong>: Keep templates current with your workflow</li>
+</ol>
+<h3 id="template-usage"><a class="header" href="#template-usage">Template Usage</a></h3>
+<ol>
+<li><strong>Use templates frequently</strong>: For any recurring task type</li>
+<li><strong>Customize when needed</strong>: Override template values when appropriate</li>
+<li><strong>Combine with tags</strong>: Use templates with tags for better organization</li>
+<li><strong>Review effectiveness</strong>: Update templates based on usage patterns</li>
+</ol>
+<h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
+<p>The <code>template</code> command works with other kasl commands:</p>
+<ul>
+<li><strong><code>task</code></strong>: Use templates to create tasks quickly</li>
+<li><strong><code>tag</code></strong>: Combine templates with tags for better organization</li>
+<li><strong><code>report</code></strong>: View tasks created from templates in reports</li>
+<li><strong><code>export</code></strong>: Export template data for backup or sharing</li>
+</ul>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<p><strong>Template name already exists</strong></p>
+<pre><code class="language-bash"># Check existing templates
+kasl template list
+
+# Use different name or edit existing template
+kasl template edit "existing-template"
+</code></pre>
+<p><strong>Template not found</strong></p>
+<pre><code class="language-bash"># List all templates to see available options
+kasl template list
+
+# Search for similar templates
+kasl template search "partial-name"
+</code></pre>
+<p><strong>Template not working with task creation</strong></p>
+<pre><code class="language-bash"># Verify template exists
+kasl template list
+
+# Check template name spelling
+kasl template search "template-name"
+</code></pre>
+<h3 id="data-recovery"><a class="header" href="#data-recovery">Data Recovery</a></h3>
+<pre><code class="language-bash"># Export templates before deletion
+kasl export --format json
+
+# Review template usage before deletion
+kasl template list
+</code></pre>
+<h2 id="related-commands"><a class="header" href="#related-commands">Related Commands</a></h2>
+<ul>
+<li><strong><a href="./task.html"><code>task</code></a></strong> - Create tasks using templates</li>
+<li><strong><a href="./tag.html"><code>tag</code></a></strong> - Combine templates with tags</li>
+<li><strong><a href="./report.html"><code>report</code></a></strong> - View tasks created from templates</li>
+<li><strong><a href="./export.html"><code>export</code></a></strong> - Export template data</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../commands/tag.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../commands/autostart.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../commands/tag.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../commands/autostart.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

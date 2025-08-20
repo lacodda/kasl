@@ -1,0 +1,851 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Troubleshooting - kasl documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
+        <link rel="stylesheet" href="css/general.css">
+        <link rel="stylesheet" href="css/chrome.css">
+        <link rel="stylesheet" href="css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">kasl documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h1>
+<p>This guide helps you resolve common issues with kasl.</p>
+<h2 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h2>
+<h3 id="activity-monitoring"><a class="header" href="#activity-monitoring">Activity Monitoring</a></h3>
+<h4 id="problem-monitoring-not-starting"><a class="header" href="#problem-monitoring-not-starting">Problem: Monitoring not starting</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li><code>kasl watch</code> fails to start</li>
+<li>No work sessions detected</li>
+<li>Error messages about permissions</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check permissions</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+ls -la ~/.local/share/lacodda/kasl/
+
+# Windows
+dir "%LOCALAPPDATA%\lacodda\kasl"
+</code></pre>
+</li>
+<li>
+<p><strong>Run in foreground for debugging</strong>:</p>
+<pre><code class="language-bash">kasl watch --foreground
+</code></pre>
+</li>
+<li>
+<p><strong>Check for existing processes</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+ps aux | grep kasl
+
+# Windows
+tasklist | findstr kasl
+</code></pre>
+</li>
+<li>
+<p><strong>Stop existing processes</strong>:</p>
+<pre><code class="language-bash">kasl watch --stop
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-false-activity-detection"><a class="header" href="#problem-false-activity-detection">Problem: False activity detection</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Work sessions start unexpectedly</li>
+<li>Pauses not detected properly</li>
+<li>Inconsistent timing</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Adjust configuration</strong>:</p>
+<pre><code class="language-bash">kasl init  # Reconfigure monitor settings
+</code></pre>
+</li>
+<li>
+<p><strong>Increase thresholds</strong>:</p>
+<pre><code class="language-json">{
+  "monitor": {
+    "activity_threshold": 60,    // Increase from 30
+    "pause_threshold": 120,      // Increase from 60
+    "min_pause_duration": 30     // Increase from 20
+  }
+}
+</code></pre>
+</li>
+<li>
+<p><strong>Check for background processes</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+ps aux | grep -E "(mouse|keyboard|input)"
+</code></pre>
+</li>
+</ol>
+<h3 id="database-issues"><a class="header" href="#database-issues">Database Issues</a></h3>
+<h4 id="problem-database-locked"><a class="header" href="#problem-database-locked">Problem: Database locked</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"database is locked" errors</li>
+<li>Cannot access data</li>
+<li>Application crashes</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Stop all kasl processes</strong>:</p>
+<pre><code class="language-bash">kasl watch --stop
+</code></pre>
+</li>
+<li>
+<p><strong>Check file permissions</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+ls -la ~/.local/share/lacodda/kasl/kasl.db
+
+# Windows
+dir "%LOCALAPPDATA%\lacodda\kasl\kasl.db"
+</code></pre>
+</li>
+<li>
+<p><strong>Fix permissions</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+chmod 600 ~/.local/share/lacodda/kasl/kasl.db
+chmod 700 ~/.local/share/lacodda/kasl/
+</code></pre>
+</li>
+<li>
+<p><strong>Check for corruption</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "PRAGMA integrity_check;"
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-migration-failures"><a class="header" href="#problem-migration-failures">Problem: Migration failures</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"migration failed" errors</li>
+<li>Database schema issues</li>
+<li>Application won't start</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check migration status</strong>:</p>
+<pre><code class="language-bash">kasl migrations status
+</code></pre>
+</li>
+<li>
+<p><strong>View migration history</strong>:</p>
+<pre><code class="language-bash">kasl migrations history
+</code></pre>
+</li>
+<li>
+<p><strong>Backup and reset</strong>:</p>
+<pre><code class="language-bash"># Backup current database
+cp ~/.local/share/lacodda/kasl/kasl.db kasl_backup.db
+
+# Remove database (will be recreated)
+rm ~/.local/share/lacodda/kasl/kasl.db
+
+# Restart kasl
+kasl watch
+</code></pre>
+</li>
+</ol>
+<h3 id="configuration-issues"><a class="header" href="#configuration-issues">Configuration Issues</a></h3>
+<h4 id="problem-configuration-not-found"><a class="header" href="#problem-configuration-not-found">Problem: Configuration not found</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"configuration not found" errors</li>
+<li>Default settings used</li>
+<li>Cannot save configuration</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check configuration location</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+ls -la ~/.local/share/lacodda/kasl/config.json
+
+# Windows
+dir "%LOCALAPPDATA%\lacodda\kasl\config.json"
+</code></pre>
+</li>
+<li>
+<p><strong>Recreate configuration</strong>:</p>
+<pre><code class="language-bash">kasl init
+</code></pre>
+</li>
+<li>
+<p><strong>Create directory manually</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+mkdir -p ~/.local/share/lacodda/kasl
+
+# Windows
+mkdir "%LOCALAPPDATA%\lacodda\kasl"
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-invalid-configuration"><a class="header" href="#problem-invalid-configuration">Problem: Invalid configuration</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"invalid configuration" errors</li>
+<li>Application crashes on startup</li>
+<li>Settings not applied</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Validate JSON syntax</strong>:</p>
+<pre><code class="language-bash"># Using Python
+python -m json.tool ~/.local/share/lacodda/kasl/config.json
+
+# Using jq
+jq . ~/.local/share/lacodda/kasl/config.json
+</code></pre>
+</li>
+<li>
+<p><strong>Reset configuration</strong>:</p>
+<pre><code class="language-bash">kasl init --delete
+kasl init
+</code></pre>
+</li>
+<li>
+<p><strong>Check for syntax errors</strong>:</p>
+<pre><code class="language-bash"># Common issues:
+# - Missing commas
+# - Extra commas
+# - Unquoted strings
+# - Invalid JSON types
+</code></pre>
+</li>
+</ol>
+<h3 id="api-integration-issues"><a class="header" href="#api-integration-issues">API Integration Issues</a></h3>
+<h4 id="problem-authentication-failures"><a class="header" href="#problem-authentication-failures">Problem: Authentication failures</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"authentication failed" errors</li>
+<li>Cannot connect to APIs</li>
+<li>Session expired messages</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Clear cached sessions</strong>:</p>
+<pre><code class="language-bash"># Remove session files
+rm ~/.local/share/lacodda/kasl/.gitlab_session
+rm ~/.local/share/lacodda/kasl/.jira_session
+rm ~/.local/share/lacodda/kasl/.si_session
+</code></pre>
+</li>
+<li>
+<p><strong>Reconfigure integration</strong>:</p>
+<pre><code class="language-bash">kasl init
+</code></pre>
+</li>
+<li>
+<p><strong>Check credentials</strong>:</p>
+<ul>
+<li>Verify API tokens are valid</li>
+<li>Check username/password</li>
+<li>Confirm API URLs</li>
+</ul>
+</li>
+<li>
+<p><strong>Test connectivity</strong>:</p>
+<pre><code class="language-bash"># Test GitLab
+curl -H "Authorization: Bearer YOUR_TOKEN" https://gitlab.com/api/v4/user
+
+# Test Jira
+curl -u "username:password" https://jira.company.com/rest/api/2/myself
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-network-connectivity"><a class="header" href="#problem-network-connectivity">Problem: Network connectivity</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"connection failed" errors</li>
+<li>Timeout errors</li>
+<li>Cannot reach APIs</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check network connectivity</strong>:</p>
+<pre><code class="language-bash"># Test basic connectivity
+ping gitlab.com
+ping jira.company.com
+
+# Test HTTPS
+curl -I https://gitlab.com
+</code></pre>
+</li>
+<li>
+<p><strong>Check proxy settings</strong>:</p>
+<pre><code class="language-bash"># Set proxy environment variables
+export HTTP_PROXY=http://proxy.company.com:8080
+export HTTPS_PROXY=http://proxy.company.com:8080
+</code></pre>
+</li>
+<li>
+<p><strong>Check firewall settings</strong>:</p>
+<ul>
+<li>Ensure outbound HTTPS (443) is allowed</li>
+<li>Check corporate firewall rules</li>
+<li>Verify VPN connection if required</li>
+</ul>
+</li>
+</ol>
+<h3 id="task-management-issues"><a class="header" href="#task-management-issues">Task Management Issues</a></h3>
+<h4 id="problem-tasks-not-found"><a class="header" href="#problem-tasks-not-found">Problem: Tasks not found</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Empty task lists</li>
+<li>"task not found" errors</li>
+<li>Tasks not saving</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check database</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM tasks;"
+</code></pre>
+</li>
+<li>
+<p><strong>Verify task creation</strong>:</p>
+<pre><code class="language-bash"># Create test task
+kasl task --name "Test task" --completeness 0
+
+# List tasks
+kasl task --show
+</code></pre>
+</li>
+<li>
+<p><strong>Check for database issues</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "PRAGMA integrity_check;"
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-tag-issues"><a class="header" href="#problem-tag-issues">Problem: Tag issues</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Tags not saving</li>
+<li>Tag associations lost</li>
+<li>Tag filtering not working</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check tag tables</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM tags;"
+sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM task_tags;"
+</code></pre>
+</li>
+<li>
+<p><strong>Recreate tags</strong>:</p>
+<pre><code class="language-bash">kasl tag create --name "test" --color "red"
+kasl tag list
+</code></pre>
+</li>
+<li>
+<p><strong>Check foreign key constraints</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "PRAGMA foreign_keys = ON;"
+</code></pre>
+</li>
+</ol>
+<h3 id="report-issues"><a class="header" href="#report-issues">Report Issues</a></h3>
+<h4 id="problem-reports-not-generating"><a class="header" href="#problem-reports-not-generating">Problem: Reports not generating</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>Empty reports</li>
+<li>Missing data</li>
+<li>Report generation errors</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check workday data</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM workdays ORDER BY date DESC LIMIT 5;"
+</code></pre>
+</li>
+<li>
+<p><strong>Check pause data</strong>:</p>
+<pre><code class="language-bash">sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM pauses ORDER BY start DESC LIMIT 5;"
+</code></pre>
+</li>
+<li>
+<p><strong>Generate report manually</strong>:</p>
+<pre><code class="language-bash">kasl report --last
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-report-submission-failures"><a class="header" href="#problem-report-submission-failures">Problem: Report submission failures</a></h4>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>"report send failed" errors</li>
+<li>Reports not reaching server</li>
+<li>Authentication issues</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check API configuration</strong>:</p>
+<pre><code class="language-bash"># Verify SiServer configuration
+cat ~/.local/share/lacodda/kasl/config.json | jq .si
+</code></pre>
+</li>
+<li>
+<p><strong>Test API connectivity</strong>:</p>
+<pre><code class="language-bash"># Test SiServer connection
+curl -X POST https://api.company.com/health
+</code></pre>
+</li>
+<li>
+<p><strong>Check authentication</strong>:</p>
+<pre><code class="language-bash"># Clear session and retry
+rm ~/.local/share/lacodda/kasl/.si_session
+kasl report --send
+</code></pre>
+</li>
+</ol>
+<h2 id="debug-mode"><a class="header" href="#debug-mode">Debug Mode</a></h2>
+<h3 id="enable-debug-logging"><a class="header" href="#enable-debug-logging">Enable Debug Logging</a></h3>
+<pre><code class="language-bash"># Enable debug mode
+RUST_LOG=kasl=debug kasl watch --foreground
+
+# Enable trace logging
+RUST_LOG=kasl=trace kasl watch --foreground
+
+# Enable SQLite logging
+RUST_LOG=kasl=debug kasl report
+</code></pre>
+<h3 id="debug-information"><a class="header" href="#debug-information">Debug Information</a></h3>
+<p>Debug mode shows:</p>
+<ul>
+<li>Configuration loading</li>
+<li>Database operations</li>
+<li>API requests/responses</li>
+<li>Error details</li>
+<li>Performance metrics</li>
+</ul>
+<h3 id="common-debug-commands"><a class="header" href="#common-debug-commands">Common Debug Commands</a></h3>
+<pre><code class="language-bash"># Check configuration
+RUST_LOG=kasl=debug kasl init
+
+# Debug task operations
+RUST_LOG=kasl=debug kasl task --show
+
+# Debug report generation
+RUST_LOG=kasl=debug kasl report
+
+# Debug API operations
+RUST_LOG=kasl=debug kasl task --find
+</code></pre>
+<h2 id="performance-issues"><a class="header" href="#performance-issues">Performance Issues</a></h2>
+<h3 id="high-cpu-usage"><a class="header" href="#high-cpu-usage">High CPU Usage</a></h3>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>High CPU usage</li>
+<li>System slowdown</li>
+<li>Battery drain</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Increase poll interval</strong>:</p>
+<pre><code class="language-json">{
+  "monitor": {
+    "poll_interval": 1000  // Increase from 500
+  }
+}
+</code></pre>
+</li>
+<li>
+<p><strong>Check for multiple instances</strong>:</p>
+<pre><code class="language-bash">ps aux | grep kasl
+kasl watch --stop
+</code></pre>
+</li>
+<li>
+<p><strong>Profile performance</strong>:</p>
+<pre><code class="language-bash"># Linux
+perf record --call-graph=dwarf ./target/release/kasl watch
+perf report
+</code></pre>
+</li>
+</ol>
+<h3 id="high-memory-usage"><a class="header" href="#high-memory-usage">High Memory Usage</a></h3>
+<p><strong>Symptoms</strong>:</p>
+<ul>
+<li>High memory consumption</li>
+<li>Memory leaks</li>
+<li>Application crashes</li>
+</ul>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check memory usage</strong>:</p>
+<pre><code class="language-bash"># Linux/macOS
+ps aux | grep kasl
+
+# Windows
+tasklist | findstr kasl
+</code></pre>
+</li>
+<li>
+<p><strong>Restart application</strong>:</p>
+<pre><code class="language-bash">kasl watch --stop
+kasl watch
+</code></pre>
+</li>
+<li>
+<p><strong>Check for memory leaks</strong>:</p>
+<pre><code class="language-bash"># Use valgrind (Linux)
+valgrind --leak-check=full ./target/release/kasl watch
+</code></pre>
+</li>
+</ol>
+<h2 id="platform-specific-issues"><a class="header" href="#platform-specific-issues">Platform-Specific Issues</a></h2>
+<h3 id="windows-issues"><a class="header" href="#windows-issues">Windows Issues</a></h3>
+<h4 id="problem-autostart-not-working"><a class="header" href="#problem-autostart-not-working">Problem: Autostart not working</a></h4>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check Task Scheduler</strong>:</p>
+<ul>
+<li>Open Task Scheduler</li>
+<li>Look for kasl tasks</li>
+<li>Verify task is enabled</li>
+</ul>
+</li>
+<li>
+<p><strong>Check Registry</strong>:</p>
+<pre><code class="language-cmd">reg query "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v kasl
+</code></pre>
+</li>
+<li>
+<p><strong>Run as Administrator</strong>:</p>
+<pre><code class="language-cmd">kasl autostart enable
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-permission-denied"><a class="header" href="#problem-permission-denied">Problem: Permission denied</a></h4>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Run as Administrator</strong>:</p>
+<ul>
+<li>Right-click Command Prompt</li>
+<li>"Run as administrator"</li>
+</ul>
+</li>
+<li>
+<p><strong>Check file permissions</strong>:</p>
+<pre><code class="language-cmd">icacls "%LOCALAPPDATA%\lacodda\kasl"
+</code></pre>
+</li>
+</ol>
+<h3 id="macos-issues"><a class="header" href="#macos-issues">macOS Issues</a></h3>
+<h4 id="problem-input-monitoring-permissions"><a class="header" href="#problem-input-monitoring-permissions">Problem: Input monitoring permissions</a></h4>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Grant Accessibility permissions</strong>:</p>
+<ul>
+<li>System Preferences → Security &amp; Privacy → Privacy → Accessibility</li>
+<li>Add kasl to the list</li>
+</ul>
+</li>
+<li>
+<p><strong>Grant Input Monitoring permissions</strong>:</p>
+<ul>
+<li>System Preferences → Security &amp; Privacy → Privacy → Input Monitoring</li>
+<li>Add kasl to the list</li>
+</ul>
+</li>
+</ol>
+<h4 id="problem-autostart-not-working-1"><a class="header" href="#problem-autostart-not-working-1">Problem: Autostart not working</a></h4>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check LaunchAgents</strong>:</p>
+<pre><code class="language-bash">ls -la ~/Library/LaunchAgents/
+</code></pre>
+</li>
+<li>
+<p><strong>Load LaunchAgent manually</strong>:</p>
+<pre><code class="language-bash">launchctl load ~/Library/LaunchAgents/com.lacodda.kasl.plist
+</code></pre>
+</li>
+</ol>
+<h3 id="linux-issues"><a class="header" href="#linux-issues">Linux Issues</a></h3>
+<h4 id="problem-input-device-access"><a class="header" href="#problem-input-device-access">Problem: Input device access</a></h4>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check user groups</strong>:</p>
+<pre><code class="language-bash">groups $USER
+</code></pre>
+</li>
+<li>
+<p><strong>Add user to input group</strong>:</p>
+<pre><code class="language-bash">sudo usermod -a -G input $USER
+</code></pre>
+</li>
+<li>
+<p><strong>Check device permissions</strong>:</p>
+<pre><code class="language-bash">ls -la /dev/input/
+</code></pre>
+</li>
+</ol>
+<h4 id="problem-systemd-service-issues"><a class="header" href="#problem-systemd-service-issues">Problem: systemd service issues</a></h4>
+<p><strong>Solutions</strong>:</p>
+<ol>
+<li>
+<p><strong>Check service status</strong>:</p>
+<pre><code class="language-bash">systemctl --user status kasl
+</code></pre>
+</li>
+<li>
+<p><strong>Enable service</strong>:</p>
+<pre><code class="language-bash">systemctl --user enable kasl
+systemctl --user start kasl
+</code></pre>
+</li>
+</ol>
+<h2 id="getting-help"><a class="header" href="#getting-help">Getting Help</a></h2>
+<h3 id="before-asking-for-help"><a class="header" href="#before-asking-for-help">Before Asking for Help</a></h3>
+<ol>
+<li><strong>Check this guide</strong> for your specific issue</li>
+<li><strong>Enable debug logging</strong> and check output</li>
+<li><strong>Try the solutions</strong> provided above</li>
+<li><strong>Gather information</strong> about your system</li>
+</ol>
+<h3 id="information-to-provide"><a class="header" href="#information-to-provide">Information to Provide</a></h3>
+<p>When reporting issues, include:</p>
+<ul>
+<li>Operating system and version</li>
+<li>kasl version (<code>kasl --version</code>)</li>
+<li>Error messages (with debug logging)</li>
+<li>Steps to reproduce</li>
+<li>System configuration</li>
+</ul>
+<h3 id="support-channels"><a class="header" href="#support-channels">Support Channels</a></h3>
+<ul>
+<li><strong>GitHub Issues</strong>: <a href="https://github.com/lacodda/kasl/issues">https://github.com/lacodda/kasl/issues</a></li>
+<li><strong>Email</strong>: lahtachev@gmail.com</li>
+<li><strong>Documentation</strong>: <a href="https://kasl.lacodda.com">https://kasl.lacodda.com</a></li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="development/contributing.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="development/contributing.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

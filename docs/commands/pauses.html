@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>task - kasl documentation</title>
+        <title>pauses - kasl documentation</title>
 
 
         <!-- Custom HTML head -->
@@ -175,278 +175,241 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="task-command"><a class="header" href="#task-command"><code>task</code> Command</a></h1>
-<p>The <code>task</code> command provides comprehensive task management functionality in kasl, including creating, displaying, updating, and organizing tasks. It supports various operations through command-line options and interactive interfaces, providing flexibility in how tasks are handled within the application.</p>
+                        <h1 id="pauses-command"><a class="header" href="#pauses-command"><code>pauses</code> Command</a></h1>
+<p>The <code>pauses</code> command provides detailed views of automatically detected and manually recorded breaks during work sessions. It helps users understand their break patterns and verify the accuracy of automatic pause detection.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<pre><code class="language-bash">kasl task [OPTIONS]
+<pre><code class="language-bash">kasl pauses [OPTIONS]
 </code></pre>
 <h2 id="options"><a class="header" href="#options">Options</a></h2>
-<h3 id="task-creation-and-editing"><a class="header" href="#task-creation-and-editing">Task Creation and Editing</a></h3>
 <ul>
 <li>
-<p><code>-n, --name &lt;NAME&gt;</code>: Specifies the name of the task</p>
+<p><code>-d, --date &lt;DATE&gt;</code>: Date to fetch pauses for (default: <code>today</code>)</p>
 <ul>
-<li>Used for creating a new task or updating an existing one</li>
-<li>Required for task creation</li>
+<li><code>today</code>: Current date</li>
+<li><code>YYYY-MM-DD</code>: Specific date in ISO format</li>
 </ul>
 </li>
 <li>
-<p><code>-c, --comment &lt;COMMENT&gt;</code>: Adds a comment to the task</p>
+<p><code>-m, --min-duration &lt;MINUTES&gt;</code>: Minimum pause duration filter in minutes</p>
 <ul>
-<li>Optional additional information about the task</li>
-<li>Useful for detailed task descriptions</li>
-</ul>
-</li>
-<li>
-<p><code>-p, --completeness &lt;COMPLETENESS&gt;</code>: Indicates the completeness of the task as a percentage (0-100)</p>
-<ul>
-<li>Used to update the task's progress</li>
-<li>0% = not started, 100% = completed</li>
-</ul>
-</li>
-<li>
-<p><code>--tags &lt;TAGS&gt;</code>: Assign tags to the task</p>
-<ul>
-<li>Comma-separated list of tags for categorization</li>
-<li>Tags are automatically created if they don't exist</li>
+<li>When specified, only pauses longer than this duration will be displayed</li>
+<li>Overrides the default minimum pause duration from configuration</li>
+<li>Useful for filtering out brief interruptions and focusing on significant breaks</li>
+<li>If not specified, uses the configured <code>min_pause_duration</code> setting</li>
 </ul>
 </li>
 </ul>
-<h3 id="task-display-and-filtering"><a class="header" href="#task-display-and-filtering">Task Display and Filtering</a></h3>
+<h2 id="display-format"><a class="header" href="#display-format">Display Format</a></h2>
+<p>The output includes:</p>
 <ul>
-<li>
-<p><code>-s, --show</code>: Displays tasks based on the specified filter</p>
-<ul>
-<li>Without additional filtering options, defaults to showing today's tasks</li>
+<li><strong>Pause List</strong>: Each pause with start time, end time, and duration</li>
+<li><strong>Total Time</strong>: Sum of all pause durations for the day</li>
+<li><strong>Pause Count</strong>: Number of breaks recorded</li>
 </ul>
-</li>
-<li>
-<p><code>-a, --all</code>: When used with <code>--show</code>, displays all tasks</p>
+<h2 id="data-sources"><a class="header" href="#data-sources">Data Sources</a></h2>
+<p>Pause data comes from:</p>
 <ul>
-<li>Overrides the default filter of today's tasks</li>
-</ul>
-</li>
-<li>
-<p><code>-i, --id &lt;ID&gt;</code>: Specifies one or more task IDs</p>
-<ul>
-<li>When used with <code>--show</code>, filters the displayed tasks to those with the given IDs</li>
-</ul>
-</li>
-<li>
-<p><code>--tag &lt;TAG&gt;</code>: Filter tasks by tag</p>
-<ul>
-<li>Shows only tasks with the specified tag</li>
-<li>Can be combined with other filters</li>
-</ul>
-</li>
-</ul>
-<h3 id="interactive-operations"><a class="header" href="#interactive-operations">Interactive Operations</a></h3>
-<ul>
-<li>
-<p><code>-f, --find</code>: Finds and allows the user to update incomplete tasks</p>
-<ul>
-<li>Triggers a user interface for selecting incomplete tasks and updating their completeness</li>
-</ul>
-</li>
-<li>
-<p><code>--edit &lt;ID&gt;</code>: Edit a specific task by ID</p>
-<ul>
-<li>Opens interactive editor for the specified task</li>
-</ul>
-</li>
-<li>
-<p><code>--edit-interactive</code>: Edit tasks interactively</p>
-<ul>
-<li>Shows list of tasks to choose from for editing</li>
-</ul>
-</li>
-<li>
-<p><code>--from-template</code>: Create task from template</p>
-<ul>
-<li>Shows available templates to choose from</li>
-</ul>
-</li>
-<li>
-<p><code>--template &lt;TEMPLATE&gt;</code>: Use specific template for task creation</p>
-<ul>
-<li>Creates task using the specified template</li>
-</ul>
-</li>
-</ul>
-<h3 id="task-management"><a class="header" href="#task-management">Task Management</a></h3>
-<ul>
-<li>
-<p><code>--delete &lt;IDS&gt;</code>: Delete tasks by ID</p>
-<ul>
-<li>Accepts multiple task IDs separated by spaces</li>
-</ul>
-</li>
-<li>
-<p><code>--delete-today</code>: Delete all tasks for today</p>
-<ul>
-<li>Removes all tasks created today</li>
-</ul>
-</li>
-<li>
-<p><code>--delete-all</code>: Delete all tasks</p>
-<ul>
-<li>Removes all tasks from the database (use with caution)</li>
-</ul>
-</li>
+<li><strong>Automatic Detection</strong>: Monitor-recorded inactivity periods</li>
+<li><strong>Manual Adjustments</strong>: User-added pauses via <code>adjust</code> command</li>
+<li><strong>Time Corrections</strong>: Modified pause times from manual adjustments</li>
 </ul>
 <h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
-<h3 id="basic-task-operations"><a class="header" href="#basic-task-operations">Basic Task Operations</a></h3>
-<pre><code class="language-bash"># Create a new task
-kasl task --name "New Task" --comment "This is a test task" --completeness 50
+<h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
+<pre><code class="language-bash"># Show today's pauses
+kasl pauses
 
-# Create task with tags
-kasl task --name "Fix bug" --tags "urgent,backend" --completeness 0
+# Show pauses for specific date
+kasl pauses --date 2024-12-15
 
-# Display today's tasks
-kasl task --show
-
-# Display all tasks
-kasl task --show --all
-
-# Display tasks with specific tag
-kasl task --show --tag "urgent"
+# Show pauses for yesterday
+kasl pauses --date 2024-12-14
 </code></pre>
-<h3 id="interactive-operations-1"><a class="header" href="#interactive-operations-1">Interactive Operations</a></h3>
-<pre><code class="language-bash"># Find and update incomplete tasks
-kasl task --find
+<h3 id="duration-filtering"><a class="header" href="#duration-filtering">Duration Filtering</a></h3>
+<pre><code class="language-bash"># Show only pauses longer than 30 minutes
+kasl pauses --min-duration 30
 
-# Edit specific task
-kasl task --edit 1
+# Show only significant breaks (longer than 15 minutes)
+kasl pauses --min-duration 15
 
-# Edit tasks interactively
-kasl task --edit-interactive
-
-# Create task from template
-kasl task --from-template
-
-# Use specific template
-kasl task --template "daily-standup"
+# Filter specific date with duration
+kasl pauses --date 2024-12-15 --min-duration 10
 </code></pre>
-<h3 id="task-management-1"><a class="header" href="#task-management-1">Task Management</a></h3>
-<pre><code class="language-bash"># Update task completeness
-kasl task --edit 1 --completeness 75
+<h3 id="analysis-examples"><a class="header" href="#analysis-examples">Analysis Examples</a></h3>
+<pre><code class="language-bash"># Review break patterns for the week
+kasl pauses --date 2024-12-15
+kasl pauses --date 2024-12-16
+kasl pauses --date 2024-12-17
 
-# Delete specific tasks
-kasl task --delete 1 2 3
+# Focus on significant breaks only
+kasl pauses --min-duration 30
 
-# Delete all today's tasks
-kasl task --delete-today
-
-# Delete all tasks (use with caution)
-kasl task --delete-all
-</code></pre>
-<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
-<h3 id="daily-task-management"><a class="header" href="#daily-task-management">Daily Task Management</a></h3>
-<pre><code class="language-bash"># Create today's tasks
-kasl task --name "Daily standup" --template "daily-standup"
-kasl task --name "Code review" --tags "urgent,backend"
-kasl task --name "Team meeting" --tags "meeting"
-
-# Review and update progress
-kasl task --show
-kasl task --find
-
-# Complete finished tasks
-kasl task --edit 1 --completeness 100
-</code></pre>
-<h3 id="project-organization"><a class="header" href="#project-organization">Project Organization</a></h3>
-<pre><code class="language-bash"># Create project-specific tasks
-kasl task --name "Frontend bug fix" --tags "frontend,bug,urgent"
-kasl task --name "API documentation" --tags "backend,documentation"
-
-# Filter by project
-kasl task --show --tag "frontend"
-kasl task --show --tag "backend"
-</code></pre>
-<h3 id="template-usage"><a class="header" href="#template-usage">Template Usage</a></h3>
-<pre><code class="language-bash"># Create templates for common tasks
-kasl template create --name "bug-fix"
-kasl template create --name "meeting"
-
-# Use templates to create tasks
-kasl task --template "bug-fix" --name "Fix login issue"
-kasl task --template "meeting" --name "Client call"
+# Compare different duration thresholds
+kasl pauses --min-duration 5
+kasl pauses --min-duration 15
+kasl pauses --min-duration 30
 </code></pre>
 <h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
-<h3 id="task-list"><a class="header" href="#task-list">Task List</a></h3>
-<pre><code>+---+----+----------+------------------+------------------+-------------+------------------+
-| # | ID | TASK ID | NAME             | COMMENT          | COMPLETENESS| TAGS             |
-+---+----+----------+------------------+------------------+-------------+------------------+
-| 1 | 1  | 0       | Daily standup    | Team sync        | 100%        | meeting          |
-| 2 | 2  | 0       | Code review      | Review PR #123   | 75%         | urgent           |
-| 3 | 3  | 0       | Bug fix          | Fix login issue  | 0%          | bug, urgent      |
-| 4 | 4  | 0       | Documentation    | Update API docs  | 25%         | docs             |
-+---+----+----------+------------------+------------------+-------------+------------------+
+<h3 id="todays-pauses"><a class="header" href="#todays-pauses">Today's Pauses</a></h3>
+<pre><code>December 15, 2024
+
++--------------+-------+-------+----------+
+| ID           | START | END   | DURATION |
++--------------+-------+-------+----------+
+| 1            | 10:30 | 10:45 | 00:15    |
+| 2            | 12:00 | 13:00 | 01:00    |
+| 3            | 15:15 | 15:30 | 00:15    |
+| 4            | 16:45 | 17:00 | 00:15    |
+|              |       |       |          |
+| TOTAL        |       |       | 01:45    |
++--------------+-------+-------+----------+
 </code></pre>
-<h3 id="interactive-task-selection"><a class="header" href="#interactive-task-selection">Interactive Task Selection</a></h3>
-<pre><code>Select task to edit:
-1. Daily standup (100%)
-2. Code review (75%)
-3. Bug fix (0%)
-4. Documentation (25%)
+<h3 id="filtered-output-min-duration-30"><a class="header" href="#filtered-output-min-duration-30">Filtered Output (min-duration: 30)</a></h3>
+<pre><code>December 15, 2024
 
-Enter task number: 2
++--------------+-------+-------+----------+
+| ID           | START | END   | DURATION |
++--------------+-------+-------+----------+
+| 1            | 12:00 | 13:00 | 01:00    |
+|              |       |       |          |
+| TOTAL        |       |       | 01:00    |
++--------------+-------+-------+----------+
+</code></pre>
+<h3 id="no-pauses-found"><a class="header" href="#no-pauses-found">No Pauses Found</a></h3>
+<pre><code>December 15, 2024
 
-Editing task: Code review
-Current completeness: 75%
++--------------+-------+-------+----------+
+| ID           | START | END   | DURATION |
++--------------+-------+-------+----------+
++--------------+-------+-------+----------+
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="daily-break-review"><a class="header" href="#daily-break-review">Daily Break Review</a></h3>
+<pre><code class="language-bash"># Review today's break patterns
+kasl pauses
 
-New completeness (0-100): 100
-New comment (press Enter to keep current): Review completed
+# Check if lunch break was recorded
+kasl pauses --min-duration 30
+</code></pre>
+<h3 id="break-pattern-analysis"><a class="header" href="#break-pattern-analysis">Break Pattern Analysis</a></h3>
+<pre><code class="language-bash"># Analyze break patterns over multiple days
+for date in 2024-12-15 2024-12-16 2024-12-17; do
+    echo "=== $date ==="
+    kasl pauses --date $date
+    echo
+done
+</code></pre>
+<h3 id="monitoring-verification"><a class="header" href="#monitoring-verification">Monitoring Verification</a></h3>
+<pre><code class="language-bash"># Verify that automatic pause detection is working
+kasl pauses --min-duration 5
 
-✅ Task updated successfully!
+# Check for missed breaks
+kasl pauses --date 2024-12-15
+</code></pre>
+<h3 id="manual-pause-review"><a class="header" href="#manual-pause-review">Manual Pause Review</a></h3>
+<pre><code class="language-bash"># Review manually added pauses
+kasl pauses --date 2024-12-15
+
+# Compare with automatic detection
+kasl report --date 2024-12-15
+</code></pre>
+<h2 id="duration-filtering-1"><a class="header" href="#duration-filtering-1">Duration Filtering</a></h2>
+<h3 id="understanding-duration-filters"><a class="header" href="#understanding-duration-filters">Understanding Duration Filters</a></h3>
+<p>The <code>--min-duration</code> option helps focus on significant breaks:</p>
+<ul>
+<li><strong>5 minutes</strong>: Very short breaks (coffee, bathroom)</li>
+<li><strong>15 minutes</strong>: Standard short breaks</li>
+<li><strong>30 minutes</strong>: Significant breaks (lunch, meetings)</li>
+<li><strong>60 minutes</strong>: Major breaks (lunch, appointments)</li>
+</ul>
+<h3 id="configuration-integration"><a class="header" href="#configuration-integration">Configuration Integration</a></h3>
+<p>The command respects your configuration settings:</p>
+<pre><code class="language-bash"># Check your current minimum pause duration setting
+kasl init --show-config
+
+# The pauses command will use this setting by default
+kasl pauses
 </code></pre>
 <h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
-<p>The <code>task</code> command works with other kasl commands:</p>
+<p>The <code>pauses</code> command works with other kasl commands:</p>
 <ul>
-<li><strong><code>tag</code></strong>: Create and manage tags for task categorization</li>
-<li><strong><code>template</code></strong>: Use templates for quick task creation</li>
-<li><strong><code>report</code></strong>: View tasks in daily and monthly reports</li>
-<li><strong><code>export</code></strong>: Export task data for external analysis</li>
+<li><strong><code>report</code></strong>: Compare pause data with overall workday summary</li>
+<li><strong><code>adjust</code></strong>: Add manual pauses that appear in pause listings</li>
+<li><strong><code>watch</code></strong>: Automatic pause detection that feeds into pause data</li>
+<li><strong><code>export</code></strong>: Export pause data for external analysis</li>
 </ul>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<p><strong>No pauses found</strong></p>
+<pre><code class="language-bash"># Check if workday exists
+kasl report --date 2024-12-15
+
+# Try without duration filter
+kasl pauses --date 2024-12-15
+
+# Check monitoring configuration
+kasl init --show-config
+</code></pre>
+<p><strong>Unexpected pause durations</strong></p>
+<pre><code class="language-bash"># Review pause detection settings
+kasl init --show-config
+
+# Check for manual adjustments
+kasl adjust --date 2024-12-15
+</code></pre>
+<p><strong>Missing breaks</strong></p>
+<pre><code class="language-bash"># Add manual pause if automatic detection missed it
+kasl adjust --mode pause --minutes 30 --date 2024-12-15
+
+# Verify the pause was added
+kasl pauses --date 2024-12-15
+</code></pre>
+<h3 id="data-validation"><a class="header" href="#data-validation">Data Validation</a></h3>
+<pre><code class="language-bash"># Cross-reference with workday report
+kasl report --date 2024-12-15
+kasl pauses --date 2024-12-15
+
+# Export data for external verification
+kasl export --date 2024-12-15 --format json
+</code></pre>
 <h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
-<h3 id="task-organization"><a class="header" href="#task-organization">Task Organization</a></h3>
+<h3 id="regular-review"><a class="header" href="#regular-review">Regular Review</a></h3>
 <ol>
-<li><strong>Use descriptive names</strong>: Clear, specific task names</li>
-<li><strong>Add helpful comments</strong>: Detailed descriptions for complex tasks</li>
-<li><strong>Use tags consistently</strong>: Establish tag conventions for your projects</li>
-<li><strong>Update progress regularly</strong>: Keep task completeness current</li>
+<li><strong>Review daily pauses</strong> to understand break patterns</li>
+<li><strong>Verify automatic detection</strong> is working correctly</li>
+<li><strong>Add manual pauses</strong> for missed breaks</li>
+<li><strong>Analyze patterns</strong> to improve work habits</li>
 </ol>
-<h3 id="workflow-integration"><a class="header" href="#workflow-integration">Workflow Integration</a></h3>
+<h3 id="break-management"><a class="header" href="#break-management">Break Management</a></h3>
 <ol>
-<li><strong>Create tasks at the start</strong>: Plan your day with task creation</li>
-<li><strong>Use templates</strong>: Save time with reusable task templates</li>
-<li><strong>Review regularly</strong>: Check task status throughout the day</li>
-<li><strong>Complete tasks promptly</strong>: Mark tasks as done when finished</li>
+<li><strong>Use appropriate duration filters</strong> for different analysis needs</li>
+<li><strong>Document manual pauses</strong> with clear descriptions</li>
+<li><strong>Review break patterns</strong> to optimize productivity</li>
+<li><strong>Ensure compliance</strong> with break requirements</li>
 </ol>
-<h3 id="data-management"><a class="header" href="#data-management">Data Management</a></h3>
+<h3 id="data-quality"><a class="header" href="#data-quality">Data Quality</a></h3>
 <ol>
-<li><strong>Regular cleanup</strong>: Delete completed tasks periodically</li>
-<li><strong>Use filters</strong>: Leverage tag and date filters for organization</li>
-<li><strong>Backup data</strong>: Export tasks before major cleanup operations</li>
-<li><strong>Monitor patterns</strong>: Review task completion patterns for insights</li>
+<li><strong>Verify pause accuracy</strong> regularly</li>
+<li><strong>Add missing breaks</strong> promptly</li>
+<li><strong>Review monitoring settings</strong> if detection is poor</li>
+<li><strong>Keep pause data consistent</strong> with workday records</li>
 </ol>
 <h2 id="related-commands"><a class="header" href="#related-commands">Related Commands</a></h2>
 <ul>
-<li><strong><a href="./tag.html"><code>tag</code></a></strong> - Manage tags for task categorization</li>
-<li><strong><a href="./template.html"><code>template</code></a></strong> - Create and use task templates</li>
-<li><strong><a href="./report.html"><code>report</code></a></strong> - View tasks in work reports</li>
-<li><strong><a href="./export.html"><code>export</code></a></strong> - Export task data for analysis</li>
+<li><strong><a href="./report.html"><code>report</code></a></strong> - View complete workday summary including pauses</li>
+<li><strong><a href="./adjust.html"><code>adjust</code></a></strong> - Add manual pauses and adjust recorded times</li>
+<li><strong><a href="./watch.html"><code>watch</code></a></strong> - Monitor activity and detect automatic pauses</li>
+<li><strong><a href="./export.html"><code>export</code></a></strong> - Export pause data for external analysis</li>
 </ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../commands/watch.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../commands/adjust.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../commands/report.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../commands/tag.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -456,11 +419,11 @@ New comment (press Enter to keep current): Review completed
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../commands/watch.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../commands/adjust.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../commands/report.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../commands/tag.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

@@ -176,66 +176,260 @@
                 <div id="content" class="content">
                     <main>
                         <h1 id="report-command"><a class="header" href="#report-command"><code>report</code> Command</a></h1>
-<p>The <code>report</code> command in <code>kasl</code> is designed to generate and optionally send a comprehensive report covering the day's events and tasks. This command aggregates data from events and tasks, formats it, and displays or sends it as specified by the user.</p>
+<p>The <code>report</code> command generates comprehensive daily work reports with detailed information about work sessions, breaks, productivity metrics, and completed tasks. It also supports automatic report submission to external systems and monthly summary generation.</p>
 <h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
-<pre><code class="language-plaintext">kasl report [OPTIONS]
+<pre><code class="language-bash">kasl report [OPTIONS]
 </code></pre>
-<h3 id="options"><a class="header" href="#options">Options</a></h3>
-<ul>
-<li><code>--send</code>: When this option is provided, the command will attempt to send the generated report. If not specified, the command will display the report for the current day without sending it.</li>
-</ul>
-<h3 id="examples"><a class="header" href="#examples">Examples</a></h3>
+<h2 id="options"><a class="header" href="#options">Options</a></h2>
 <ul>
 <li>
-<p>Generating and displaying a report for today:</p>
-<pre><code class="language-bash">kasl report
+<p><code>--send</code>: Submit the generated daily report to configured API</p>
+<ul>
+<li>Automatically submits the report to the configured reporting service (typically SiServer)</li>
+<li>Enables integration with organizational time tracking systems</li>
+<li>Useful for compliance and organizational reporting requirements</li>
+</ul>
+</li>
+<li>
+<p><code>--last</code>, <code>-l</code>: Generate report for the previous day instead of today</p>
+<ul>
+<li>Useful for submitting yesterday's report in the morning</li>
+<li>Reviewing completed work sessions</li>
+<li>Batch processing of historical reports</li>
+</ul>
+</li>
+<li>
+<p><code>--month</code>: Submit monthly summary report to configured API</p>
+<ul>
+<li>Generates and submits an aggregate monthly report</li>
+<li>Contains summary statistics and total work hours</li>
+<li>Typically used for organizational reporting requirements at month-end</li>
+</ul>
+</li>
+<li>
+<p><code>--clear-short-intervals</code>, <code>-c</code>: Automatically detect and remove short work intervals</p>
+<ul>
+<li>Analyzes work intervals and removes pauses that create inappropriately short work periods</li>
+<li>Merges adjacent intervals for cleaner reporting</li>
+<li>Helps eliminate noise from brief interruptions</li>
+</ul>
+</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="basic-report-generation"><a class="header" href="#basic-report-generation">Basic Report Generation</a></h3>
+<pre><code class="language-bash"># Generate and display today's report
+kasl report
+
+# Generate report for yesterday
+kasl report --last
+
+# Generate and send today's report
+kasl report --send
 </code></pre>
-</li>
-<li>
-<p>Generating and sending today's report:</p>
-<pre><code class="language-bash">kasl report --send
+<h3 id="advanced-reporting"><a class="header" href="#advanced-reporting">Advanced Reporting</a></h3>
+<pre><code class="language-bash"># Submit monthly summary report
+kasl report --month
+
+# Clean up short intervals and generate report
+kasl report --clear-short-intervals
+
+# Generate yesterday's report and send it
+kasl report --last --send
 </code></pre>
-</li>
-</ul>
-<h2 id="description"><a class="header" href="#description">Description</a></h2>
-<p>The <code>report</code> command operates in two main modes based on the provided options:</p>
+<h3 id="report-analysis"><a class="header" href="#report-analysis">Report Analysis</a></h3>
+<pre><code class="language-bash"># Review today's work without sending
+kasl report
+
+# Check yesterday's productivity
+kasl report --last
+
+# Clean up data and review
+kasl report --clear-short-intervals
+</code></pre>
+<h2 id="report-components"><a class="header" href="#report-components">Report Components</a></h2>
+<h3 id="daily-report-structure"><a class="header" href="#daily-report-structure">Daily Report Structure</a></h3>
+<p>The daily report includes:</p>
+<ol>
+<li>
+<p><strong>Work Session Summary</strong></p>
 <ul>
-<li>
-<p><strong>Display Mode:</strong> By default, without the <code>--send</code> option, the command fetches today's events and tasks, merges and formats the events, and displays a report. This report includes a summary of the events and a list of tasks for the current day.</p>
-</li>
-<li>
-<p><strong>Send Mode:</strong> When the <code>--send</code> option is used, the command performs the same data fetching and processing as in display mode. Additionally, it attempts to send the formatted report. If no tasks are found for the day, it notifies the user that no tasks are available. On successful submission, a confirmation message is shown, indicating that the report has been sent.</p>
-</li>
+<li>Start and end times</li>
+<li>Total work duration</li>
+<li>Productivity percentage</li>
+<li>Break periods</li>
 </ul>
-<h3 id="implementation-notes"><a class="header" href="#implementation-notes">Implementation Notes</a></h3>
+</li>
+<li>
+<p><strong>Task Completion</strong></p>
 <ul>
-<li>
-<p>The command utilizes local system time (<code>chrono::Local</code>) for timestamping and report dating.</p>
-</li>
-<li>
-<p>It leverages multiple modules from the application, such as <code>Events</code>, <code>Tasks</code>, <code>Config</code>, and <code>Si</code> for database operations, configuration management, and server interaction.</p>
-</li>
-<li>
-<p>Data from events is serialized into JSON format for sending. The <code>Si</code> module is responsible for transmitting this data based on application configurations.</p>
-</li>
-<li>
-<p>Error handling is built into the command to manage and report issues with fetching data, reading configuration, or communicating with the server.</p>
-</li>
+<li>List of completed tasks</li>
+<li>Task completion percentages</li>
+<li>Task descriptions and comments</li>
 </ul>
-<h2 id="error-handling"><a class="header" href="#error-handling">Error Handling</a></h2>
-<p>The command is designed to handle various errors gracefully, including database access issues, configuration problems, and network communication errors. Errors are reported to the user with sufficient detail to identify and address the underlying problem.</p>
-<hr />
-<p>This documentation provides users with a clear understanding of how to use the <code>report</code> command within the <code>kasl</code> utility, including its options, operation modes, and handling of different scenarios.</p>
+</li>
+<li>
+<p><strong>Productivity Metrics</strong></p>
+<ul>
+<li>Net working time vs. gross time</li>
+<li>Break analysis</li>
+<li>Efficiency calculations</li>
+</ul>
+</li>
+<li>
+<p><strong>Time Intervals</strong></p>
+<ul>
+<li>Detailed work periods</li>
+<li>Break periods</li>
+<li>Activity patterns</li>
+</ul>
+</li>
+</ol>
+<h3 id="monthly-report-structure"><a class="header" href="#monthly-report-structure">Monthly Report Structure</a></h3>
+<p>Monthly reports include:</p>
+<ol>
+<li>
+<p><strong>Aggregate Statistics</strong></p>
+<ul>
+<li>Total work hours for the month</li>
+<li>Average daily hours</li>
+<li>Overall productivity percentage</li>
+</ul>
+</li>
+<li>
+<p><strong>Daily Breakdown</strong></p>
+<ul>
+<li>Each workday with hours and productivity</li>
+<li>Rest days with default hours</li>
+<li>Missing days identification</li>
+</ul>
+</li>
+<li>
+<p><strong>Trend Analysis</strong></p>
+<ul>
+<li>Productivity trends</li>
+<li>Work pattern analysis</li>
+<li>Performance insights</li>
+</ul>
+</li>
+</ol>
+<h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
+<h3 id="daily-report"><a class="header" href="#daily-report">Daily Report</a></h3>
+<pre><code>December 15, 2024
+
++--------------+-------+-------+----------+
+| ID           | START | END   | DURATION |
++--------------+-------+-------+----------+
+| 1            | 09:00 | 12:00 | 03:00    |
+| 2            | 13:00 | 15:30 | 02:30    |
+| 3            | 15:45 | 17:30 | 01:45    |
+|              |       |       |          |
+| TOTAL        |       |       | 07:15    |
+| PRODUCTIVITY |       |       | 92.0%    |
++--------------+-------+-------+----------+
+
+Tasks
+
++---+----+----------+------------------+------------------+-------------+------------------+
+| # | ID | TASK ID | NAME             | COMMENT          | COMPLETENESS| TAGS             |
++---+----+----------+------------------+------------------+-------------+------------------+
+| 1 | 1  | 0       | Daily standup    | Team sync        | 100%        | meeting          |
+| 2 | 2  | 0       | Code review      | Review PR #123   | 100%        | urgent           |
+| 3 | 3  | 0       | Bug fix          | Fix login issue  | 75%         | bug, urgent      |
+| 4 | 4  | 0       | Documentation    | Update API docs  | 25%         | docs             |
++---+----+----------+------------------+------------------+-------------+------------------+
+</code></pre>
+<h3 id="monthly-report"><a class="header" href="#monthly-report">Monthly Report</a></h3>
+<pre><code>December 2024
+
++------------+----------+-------------+
+| DATE       | DURATION | PRODUCTIVITY|
++------------+----------+-------------+
+| 2024-12-02 | 08:15    | 92.0%       |
+| 2024-12-03 | 07:45    | 88.0%       |
+| 2024-12-04 | 08:30    | 95.0%       |
+| 2024-12-05 | 07:20    | 85.0%       |
+| 2024-12-06 | 08:00    | 90.0%       |
+|            |          |             |
+| TOTAL      | 39:50    | 90.0%       |
++------------+----------+-------------+
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="daily-work-review"><a class="header" href="#daily-work-review">Daily Work Review</a></h3>
+<pre><code class="language-bash"># Review today's work at end of day
+kasl report
+
+# Submit report to organization
+kasl report --send
+</code></pre>
+<h3 id="weekly-planning"><a class="header" href="#weekly-planning">Weekly Planning</a></h3>
+<pre><code class="language-bash"># Review yesterday's work before planning today
+kasl report --last
+
+# Clean up data for better analysis
+kasl report --clear-short-intervals
+</code></pre>
+<h3 id="monthly-reporting"><a class="header" href="#monthly-reporting">Monthly Reporting</a></h3>
+<pre><code class="language-bash"># Generate monthly summary for management
+kasl report --month
+
+# Submit monthly report to HR system
+kasl report --month --send
+</code></pre>
+<h3 id="data-quality-management"><a class="header" href="#data-quality-management">Data Quality Management</a></h3>
+<pre><code class="language-bash"># Clean up short intervals for better reporting
+kasl report --clear-short-intervals
+
+# Review cleaned data
+kasl report
+</code></pre>
+<h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
+<p>The <code>report</code> command works with other kasl commands:</p>
+<ul>
+<li><strong><code>watch</code></strong>: Uses data collected by activity monitoring</li>
+<li><strong><code>task</code></strong>: Includes task completion data in reports</li>
+<li><strong><code>adjust</code></strong>: Reflects manual time adjustments in reports</li>
+<li><strong><code>pauses</code></strong>: Integrates pause data for comprehensive reporting</li>
+</ul>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="daily-workflow"><a class="header" href="#daily-workflow">Daily Workflow</a></h3>
+<ol>
+<li><strong>Review at end of day</strong>: Generate report to review productivity</li>
+<li><strong>Submit promptly</strong>: Send reports to maintain compliance</li>
+<li><strong>Clean data regularly</strong>: Use short interval cleanup for accuracy</li>
+<li><strong>Monitor trends</strong>: Track productivity patterns over time</li>
+</ol>
+<h3 id="report-quality"><a class="header" href="#report-quality">Report Quality</a></h3>
+<ol>
+<li><strong>Verify data accuracy</strong>: Check reports for unusual patterns</li>
+<li><strong>Clean up noise</strong>: Remove short intervals that create confusion</li>
+<li><strong>Document adjustments</strong>: Note any manual time corrections</li>
+<li><strong>Review completeness</strong>: Ensure all work is properly recorded</li>
+</ol>
+<h3 id="organizational-integration"><a class="header" href="#organizational-integration">Organizational Integration</a></h3>
+<ol>
+<li><strong>Configure API settings</strong>: Set up proper integration with reporting systems</li>
+<li><strong>Test submissions</strong>: Verify report delivery before relying on automation</li>
+<li><strong>Monitor compliance</strong>: Ensure reports meet organizational requirements</li>
+<li><strong>Backup locally</strong>: Keep local copies of submitted reports</li>
+</ol>
+<h2 id="related-commands"><a class="header" href="#related-commands">Related Commands</a></h2>
+<ul>
+<li><strong><a href="./watch.html"><code>watch</code></a></strong> - Monitor activity for report data</li>
+<li><strong><a href="./task.html"><code>task</code></a></strong> - Manage tasks included in reports</li>
+<li><strong><a href="./adjust.html"><code>adjust</code></a></strong> - Adjust times reflected in reports</li>
+<li><strong><a href="./pauses.html"><code>pauses</code></a></strong> - View breaks included in reports</li>
+<li><strong><a href="./sum.html"><code>sum</code></a></strong> - Generate monthly summaries</li>
+</ul>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                            <a rel="prev" href="../commands/event.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../commands/task.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
 
-                            <a rel="next prefetch" href="../commands/task.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="../commands/sum.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
 
@@ -245,11 +439,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                    <a rel="prev" href="../commands/event.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../commands/task.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
 
-                    <a rel="next prefetch" href="../commands/task.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="../commands/sum.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
             </nav>

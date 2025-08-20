@@ -1,67 +1,103 @@
+# kasl: Key Activity Synchronization and Logging 🕒
+
 <p align="center">
   <img src="https://raw.githubusercontent.com/lacodda/kasl/main/kasl.webp" width="320" alt="kasl">
 </p>
-<h1 align="center">kasl: Key Activity Synchronization and Logging 🕒</h1>
-<br>
 
 ## Overview 📖
 
-kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ☕, and task completion ✅. It automates the collection of work data 📈, facilitates task management 📋, and generates daily reports 📝, simplifying workflow and productivity tracking 🚀.
+kasl is a comprehensive command-line utility designed to streamline work activity tracking, task management, and productivity reporting. It automatically monitors your work sessions, tracks breaks, manages tasks, and generates detailed reports for better productivity insights.
 
-## Features 🌟
+## Key Features 🌟
 
-- **Automatic Data Collection** 📊: Tracks the start of work sessions and pauses without manual input.
-- **Task Management** 📋: Easily add tasks and update completion percentages.
-- **Daily Reports** 📝: Auto-generates daily reports summarizing work activities.
-- **API Integration** 🌐: Sends daily reports to a specified API for easy access and storage.
-- **User-Friendly** 😊: Designed with a focus on simplicity and ease of use.
+### 🔍 Activity Monitoring
+- **Automatic work session tracking** - Detects when you start and end your workday
+- **Smart break detection** - Automatically records breaks based on inactivity
+- **Background monitoring** - Runs silently in the background
+- **Cross-platform support** - Works on Windows, macOS, and Linux
 
-## Getting Started 🚀
+### 📋 Task Management
+- **CRUD operations** - Create, read, update, and delete tasks
+- **Task templates** - Save frequently used tasks as reusable templates
+- **Tagging system** - Organize tasks with custom tags and colors
+- **Progress tracking** - Track task completion percentage
+- **Batch operations** - Edit or delete multiple tasks at once
 
-### Prerequisites 📋
+### 📊 Reporting & Analytics
+- **Daily reports** - Comprehensive view of work intervals and tasks
+- **Monthly summaries** - Aggregated statistics and productivity metrics
+- **Productivity calculation** - Measure actual work time vs. presence time
+- **Short interval detection** - Identify and merge fragmented work periods
+- **Export capabilities** - Export data to CSV, JSON, or Excel formats
 
-- Ensure you have a compatible operating system (Windows, macOS, or Linux) 💻.
-- Requires Node.js and npm (or an equivalent package manager) for running the utility 📦.
+### ⚙️ Advanced Features
+- **Time adjustment** - Correct work times with preview before applying
+- **Database migrations** - Safe schema updates when upgrading
+- **API integrations** - Connect with GitLab, Jira, and custom APIs
+- **Autostart support** - Start monitoring automatically on system boot
+- **Debug logging** - Detailed logs for troubleshooting
 
-## Installation 🛠️
+## Quick Start 🚀
 
-Install kasl now. kasl is installed by running one of the following commands in your terminal. 
-You can install this via the command-line with either curl or wget. 
+### Installation
 
-### Install kasl via curl
-
+Install kasl using curl:
 ```bash
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"
 ```
 
-### Install kasl via wget
-
+Or using wget:
 ```bash
 sh -c "$(wget https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh -O -)"
 ```
 
-This will make the `kasl` application globally available in your system.
-
-### Usage 📚
-
-To start kasl and begin tracking:
+### Initial Setup
 
 ```bash
-kasl --help
+# Configure kasl interactively
+kasl init
+
+# Start activity monitoring
+kasl watch
+
+# Enable autostart on system boot
+kasl autostart enable
 ```
 
-## Roadmap 🗺️
+### Daily Workflow
 
-- [ ] Enhance task management with categories and priorities.
-- [ ] Integrate with more APIs for report submission.
-- [ ] Implement machine learning for predicting task completion time.
-- [ ] Add support for team collaboration features.
-- [ ] Develop a graphical user interface (GUI) version.
+```bash
+# Create a new task
+kasl task --name "Review pull requests" --completeness 0
 
-## How to Contribute 🤝
+# Update task progress
+kasl task --edit 1
 
-Contributions are welcome! If you have ideas for new features or improvements, feel free to fork the repository, make your changes, and submit a pull request.
+# View today's report
+kasl report
+
+# Submit daily report
+kasl report --send
+```
+
+## System Requirements 💻
+
+- **Operating System**: Windows 10+, macOS 10.15+, or Linux
+- **Architecture**: x86_64
+- **Memory**: 50MB RAM
+- **Storage**: 10MB disk space
+- **Network**: Optional (for API integrations and updates)
 
 ## License 📄
 
-kasl is open-source software licensed under the MIT license. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support 📞
+
+- 📧 Email: lahtachev@gmail.com
+- 🐛 Issues: [GitHub Issues](https://github.com/lacodda/kasl/issues)
+- 📖 Documentation: [kasl.lacodda.com](https://kasl.lacodda.com)
+
+---
+
+Made with ❤️ by [Kirill Lakhtachev](https://lacodda.com)
