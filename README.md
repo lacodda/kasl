@@ -303,6 +303,11 @@ KASL_DEBUG=1 cargo run -- watch --foreground
 cargo build --release
 ```
 
+### Code Style
+
+We maintain consistent code documentation standards. Please refer to our style guide:
+- [Documentation Style Guide](https://kasl.lacodda.com/development/style-guide.html) - Complete guide for writing documentation
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
