@@ -1,5 +1,55 @@
 # Changelog
 
+## 🎉 [0.8.0] - 2025-08-20
+
+### ✨ Features
+
+- Add conditional structured logging with debug mode support
+- Implement Windows autostart via Task Scheduler
+- Add task delete command with confirmation
+- Add task edit command with interactive mode
+- Add short work intervals detection and removal
+- Add time adjustment command with preview
+- Add database migration system with automatic upgrades
+- Add report export to CSV, JSON and Excel formats
+- Add task templates for frequently used tasks
+- Add tagging system for task categorization
+
+### 🎨 Styling
+
+- Unify code comment formatting across all source files
+
+### 📖 Documentation
+
+- Update README
+- Add comprehensive rustdoc comments throughout the codebase
+- Add comprehensive comments to core project files
+- Add comprehensive comments to command module and core commands
+- Add comprehensive comments to monitoring and time adjustment commands
+- Add comprehensive comments to report and export commands
+- Add comprehensive comments to task management and template commands
+- Add comprehensive comments to tag management and migration commands
+- Add comprehensive comments to API integration modules
+- Add comprehensive comments to DB modules
+- Add detailed comments to several Libs modules
+- Add comprehensive comments to task lib module
+- Add detailed comments to several Libs modules
+- Add detailed comments to several Libs modules
+- Complete command documentation with real output examples
+
+### 🛠️ Bug Fixes
+
+- Fix task template format for submission
+- Fix errors in tests
+- Create base tables in migration v1 before indexes
+- Ensure that the configuration is completely written to disk
+- Make ensure_workday_started available for tests
+- Use correct field for task ID filtering
+
+### 🧪 Testing
+
+- Add comprehensive tests for new features and fix existing tests
+
 ## 🎉 [0.7.0] - 2025-07-24
 
 ### ✨ Features
@@ -36,6 +86,10 @@
 - Migrate entire codebase to anyhow for better error handling
 - Migrate api and commands to new messaging system
 - Migrate all messages to new messaging system
+
+### 🎲 Miscellaneous tasks
+
+- Update github "release" action
 
 ### 🛠️ Bug Fixes
 

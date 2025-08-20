@@ -154,6 +154,12 @@ kasl report --month             # Send monthly summary
 kasl report --clear-short-intervals  # Remove intervals < configured minimum
 ```
 
+#### `end` - Manual Workday End
+```bash
+# Manually end today's workday
+kasl end
+```
+
 #### `template` - Task Templates
 ```bash
 # Manage templates
@@ -216,6 +222,12 @@ kasl autostart status   # Check status
 #### `update` - Self-Update
 ```bash
 kasl update  # Check and install updates
+```
+
+#### `migrations` - Database Management (Debug Only)
+```bash
+kasl migrations status  # Check database version
+kasl migrations history # View migration history
 ```
 
 ## ⚙️ Configuration
