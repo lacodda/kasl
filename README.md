@@ -155,9 +155,6 @@ kasl report --last              # Yesterday's report
 # Submit reports
 kasl report --send              # Send daily report
 kasl report --month             # Send monthly summary
-
-# Handle short intervals
-kasl report --clear-short-intervals  # Remove intervals < configured minimum
 ```
 
 #### `end` - Manual Workday End

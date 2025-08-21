@@ -77,8 +77,8 @@ Controls activity monitoring behavior:
 - **Type**: `u64`
 - **Default**: `10`
 - **Unit**: Minutes
-- **Description**: Minimum work interval for merging
-- **Usage**: Short intervals are merged with adjacent ones
+- **Description**: Minimum work interval duration for report filtering
+- **Usage**: Intervals shorter than this duration are automatically filtered out from reports (display and API submission)
 
 ## SiServer Configuration
 

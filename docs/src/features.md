@@ -151,16 +151,21 @@ Calculate and track productivity:
 - **Productivity Percentage**: Net time / Gross time
 - **Break Analysis**: Break frequency and duration patterns
 
-### Short Interval Detection
+### Short Interval Filtering
 
-Identify and optimize fragmented work periods:
+Automatically filter out brief work periods for cleaner reporting:
+
+- **Automatic Detection**: Short intervals are filtered based on `min_work_interval` configuration
+- **Display-Level Filtering**: Original data remains intact in the database
+- **Consistent Behavior**: Same filtering applies to both display and API submission
+- **User Notification**: Information about filtered intervals is shown in reports
 
 ```bash
-# Detect short intervals
-kasl report --clear-short-intervals
+# Reports automatically filter short intervals
+kasl report
 
-# View interval analysis
-kasl report --last
+# Configuration controls the filtering threshold
+# (set via min_work_interval in monitor config)
 ```
 
 ## ⚙️ Advanced Features

@@ -26,10 +26,6 @@ kasl report [OPTIONS]
   - Contains summary statistics and total work hours
   - Typically used for organizational reporting requirements at month-end
 
-- `--clear-short-intervals`, `-c`: Automatically detect and remove short work intervals
-  - Analyzes work intervals and removes pauses that create inappropriately short work periods
-  - Merges adjacent intervals for cleaner reporting
-  - Helps eliminate noise from brief interruptions
 
 ## Examples
 
@@ -52,9 +48,6 @@ kasl report --send
 # Submit monthly summary report
 kasl report --month
 
-# Clean up short intervals and generate report
-kasl report --clear-short-intervals
-
 # Generate yesterday's report and send it
 kasl report --last --send
 ```
@@ -67,9 +60,6 @@ kasl report
 
 # Check yesterday's productivity
 kasl report --last
-
-# Clean up data and review
-kasl report --clear-short-intervals
 ```
 
 ## Report Components
@@ -95,9 +85,10 @@ The daily report includes:
    - Efficiency calculations
 
 4. **Time Intervals**
-   - Detailed work periods
+   - Detailed work periods (short intervals automatically filtered out)
    - Break periods
    - Activity patterns
+   - Information about filtered short intervals
 
 ### Monthly Report Structure
 
@@ -117,6 +108,38 @@ Monthly reports include:
    - Productivity trends
    - Work pattern analysis
    - Performance insights
+
+## Short Interval Filtering
+
+The report command automatically filters out work intervals that are shorter than the configured `min_work_interval` threshold. This filtering provides cleaner, more meaningful reports by removing brief interruptions that don't represent significant work periods.
+
+### How It Works
+
+1. **Automatic Detection**: Work intervals are analyzed based on the `min_work_interval` configuration setting
+2. **Display Filtering**: Short intervals are filtered at display time - no database modifications are made
+3. **Consistent Application**: Same filtering logic applies to both local display (`kasl report`) and API submission (`kasl report --send`)
+4. **User Notification**: When short intervals are filtered, users receive information about how many were filtered and their total duration
+
+### Configuration
+
+The filtering threshold is controlled by the `min_work_interval` setting in your configuration:
+
+```json
+{
+  "monitor": {
+    "min_work_interval": 30
+  }
+}
+```
+
+This setting defines the minimum duration (in minutes) for intervals to be included in reports.
+
+### Benefits
+
+- **Cleaner Reports**: Eliminates noise from brief interruptions
+- **Better Analytics**: Focus on meaningful work periods
+- **Preserved Data**: Original data remains intact in the database
+- **Consistent Behavior**: Same filtering for display and API submission
 
 ## Sample Output
 
@@ -145,6 +168,8 @@ Tasks
 | 3 | 3  | 0       | Bug fix          | Fix login issue  | 75%         | bug, urgent      |
 | 4 | 4  | 0       | Documentation    | Update API docs  | 25%         | docs             |
 +---+----+----------+------------------+------------------+-------------+------------------+
+
+Filtered out 2 short intervals (total: 0:15)
 ```
 
 ### Monthly Report
@@ -181,9 +206,6 @@ kasl report --send
 ```bash
 # Review yesterday's work before planning today
 kasl report --last
-
-# Clean up data for better analysis
-kasl report --clear-short-intervals
 ```
 
 ### Monthly Reporting
@@ -191,19 +213,6 @@ kasl report --clear-short-intervals
 ```bash
 # Generate monthly summary for management
 kasl report --month
-
-# Submit monthly report to HR system
-kasl report --month --send
-```
-
-### Data Quality Management
-
-```bash
-# Clean up short intervals for better reporting
-kasl report --clear-short-intervals
-
-# Review cleaned data
-kasl report
 ```
 
 ## Integration with Other Commands
@@ -221,13 +230,13 @@ The `report` command works with other kasl commands:
 
 1. **Review at end of day**: Generate report to review productivity
 2. **Submit promptly**: Send reports to maintain compliance
-3. **Clean data regularly**: Use short interval cleanup for accuracy
+3. **Monitor filtering**: Check filtered interval notifications for data quality
 4. **Monitor trends**: Track productivity patterns over time
 
 ### Report Quality
 
 1. **Verify data accuracy**: Check reports for unusual patterns
-2. **Clean up noise**: Remove short intervals that create confusion
+2. **Review filtering**: Note filtered short intervals for context
 3. **Document adjustments**: Note any manual time corrections
 4. **Review completeness**: Ensure all work is properly recorded
 
