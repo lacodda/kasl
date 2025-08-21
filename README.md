@@ -8,11 +8,14 @@
   <a href="https://github.com/lacodda/kasl/releases"><img src="https://img.shields.io/github/v/release/lacodda/kasl?style=flat-square" alt="Release"></a>
   <a href="https://github.com/lacodda/kasl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/lacodda/kasl?style=flat-square" alt="License"></a>
   <a href="https://github.com/lacodda/kasl/actions"><img src="https://img.shields.io/github/actions/workflow/status/lacodda/kasl/release.yml?style=flat-square" alt="Build Status"></a>
+  <a href="https://docs.rs/kasl"><img src="https://img.shields.io/docsrs/kasl?style=flat-square" alt="Documentation"></a>
 </p>
 
 ## Overview 📖
 
 kasl is a comprehensive command-line utility designed to streamline work activity tracking, task management, and productivity reporting. It automatically monitors your work sessions, tracks breaks, manages tasks, and generates detailed reports for better productivity insights.
+
+**Current Version:** 0.8.0
 
 ## ✨ Features
 
@@ -38,7 +41,7 @@ kasl is a comprehensive command-line utility designed to streamline work activit
 
 ### ⚙️ Advanced Features
 - **Time adjustment** - Correct work times with preview before applying
-- **Database migrations** - Safe schema updates when upgrading
+- **Database migrations** - Safe schema updates when upgrading (debug builds only)
 - **API integrations** - Connect with GitLab, Jira, and custom APIs
 - **Autostart support** - Start monitoring automatically on system boot
 - **Debug logging** - Detailed logs for troubleshooting
@@ -96,6 +99,9 @@ kasl task --edit 1
 
 # View today's report
 kasl report
+
+# Manually end workday (if needed)
+kasl end
 
 # Submit daily report
 kasl report --send
@@ -229,6 +235,7 @@ kasl update  # Check and install updates
 kasl migrations status  # Check database version
 kasl migrations history # View migration history
 ```
+**Note:** This command is only available in debug builds.
 
 ## ⚙️ Configuration
 
@@ -313,6 +320,9 @@ KASL_DEBUG=1 cargo run -- watch --foreground
 
 # Build for release
 cargo build --release
+
+# Debug build (enables migrations command)
+cargo build
 ```
 
 ### Code Style
