@@ -221,7 +221,6 @@ pub fn error(msg: Message) -> String {
 ///
 /// // Warning with follow-up guidance
 /// msg_warning!(Message::ShortIntervalsDetected(count, duration));
-/// msg_info!(Message::UseReportClearCommand);
 /// ```
 pub fn warning(msg: Message) -> String {
     format!("⚠️  {}", msg)

@@ -297,7 +297,6 @@ impl Display for Message {
             // === SHORT INTERVALS MESSAGES ===
             Message::ShortIntervalsDetected(count, duration) => format!("Found {} short work intervals (total: {})", count, duration),
             Message::NoShortIntervalsFound(min) => format!("No work intervals shorter than {} minutes found.", min),
-            Message::UseReportClearCommand => "Use 'kasl report --clear-short-intervals' to remove them.".to_string(),
             Message::ShortIntervalsToRemove(count) => format!("Found {} short intervals to remove:", count),
             Message::RemovingPauses(count) => format!("Removing {} pauses to merge intervals...", count),
             Message::ShortIntervalsCleared(count) => format!("Successfully removed {} pauses and merged intervals.", count),

@@ -145,6 +145,55 @@ impl View {
 
         // Generate work intervals using filtered breaks for clean display
         let intervals = report::calculate_work_intervals(workday, long_breaks);
+        Self::render_report_with_intervals(workday, &intervals, all_pauses, tasks, &net_duration, productivity)
+    }
+
+    /// Displays a formatted daily work report using pre-calculated intervals.
+    ///
+    /// This version accepts pre-filtered work intervals, allowing for custom 
+    /// filtering logic (e.g., removing short intervals) before display.
+    ///
+    /// # Arguments
+    ///
+    /// * `workday` - The workday record containing start/end times
+    /// * `intervals` - Pre-calculated and optionally filtered work intervals
+    /// * `all_pauses` - Complete pause record for accurate productivity analysis  
+    /// * `tasks` - Tasks completed during the workday for context
+    pub fn report_with_intervals(
+        workday: &Workday,
+        intervals: &[report::WorkInterval], 
+        all_pauses: &[Pause],
+        tasks: &[Task]
+    ) -> Result<()> {
+        // Calculate work time boundaries and productivity with given intervals
+        let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
+        let _gross_duration = end_time - workday.start;
+        
+        // Calculate filtered duration based on provided intervals
+        let filtered_duration = intervals.iter()
+            .fold(Duration::zero(), |acc, interval| acc + interval.duration);
+            
+        // Calculate all pause duration for productivity analysis
+        let total_pause_duration = all_pauses.iter()
+            .filter_map(|b| b.duration)
+            .fold(Duration::zero(), |acc, d| acc + d);
+            
+        let productivity = Self::calculate_productivity(&filtered_duration, &total_pause_duration);
+        
+        Self::render_report_with_intervals(workday, intervals, all_pauses, tasks, &filtered_duration, productivity)
+    }
+
+    /// Internal method to render the actual report table and content.
+    fn render_report_with_intervals(
+        workday: &Workday,
+        intervals: &[report::WorkInterval],
+        _all_pauses: &[Pause], 
+        tasks: &[Task],
+        net_duration: &Duration,
+        productivity: f64
+    ) -> Result<()> {
+        // Display formatted report header with readable date
+        msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
 
         // Create and populate the work intervals table
         let mut table = Table::new();

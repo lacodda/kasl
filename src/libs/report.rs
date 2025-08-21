@@ -8,13 +8,13 @@
 //! - **Work Interval Analysis**: Convert workday and pause data into continuous work periods
 //! - **Productivity Metrics**: Calculate efficiency ratios and work pattern analysis
 //! - **Short Interval Detection**: Identify and analyze brief work periods that may indicate interruptions
-//! - **Interval Optimization**: Provide suggestions for merging short intervals
+//! - **Interval Filtering**: Filter out short intervals for cleaner reporting (display-level, no database changes)
 //! - **Report Generation**: Comprehensive breakdown of workdays with productivity analysis
 //!
 //! ## Usage
 //!
 //! ```rust
-//! use kasl::libs::report::{calculate_work_intervals, WorkInterval};
+//! use kasl::libs::report::{calculate_work_intervals, filter_short_intervals, WorkInterval};
 //! use kasl::db::workdays::Workday;
 //! use kasl::libs::pause::Pause;
 //!
@@ -25,6 +25,9 @@
 //!
 //! let pauses = vec![/* pause data */];
 //! let intervals = calculate_work_intervals(&workday, &pauses);
+//!
+//! // Filter short intervals for cleaner reporting
+//! let (filtered_intervals, filter_info) = filter_short_intervals(&intervals, 30);
 //! ```
 
 use crate::db::workdays::Workday;
@@ -444,5 +447,158 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
             intervals: short_intervals,
             pauses_to_remove,
         })
+    }
+}
+
+/// Filters out short work intervals from the provided interval list.
+///
+/// This function removes work intervals that are shorter than the specified
+/// minimum duration, providing cleaner reporting by eliminating brief
+/// interruptions that don't represent meaningful work periods. This is the
+/// new approach for handling short intervals - filtering at display time
+/// instead of modifying the database.
+///
+/// ## Filtering Logic
+///
+/// - Intervals shorter than `min_minutes` are excluded from the result
+/// - Remaining intervals maintain their original timing and properties
+/// - No database changes are made - this is purely a display/API filter
+/// - Used by both `kasl report` (display) and `kasl report --send` (API submission)
+///
+/// ## Return Value
+///
+/// Returns a tuple containing:
+/// - **Filtered intervals**: Only intervals meeting the minimum duration
+/// - **Filtered intervals info**: Analysis of what was filtered out (if any)
+///
+/// # Arguments
+///
+/// * `intervals` - Original work intervals to filter
+/// * `min_minutes` - Minimum duration in minutes for intervals to keep
+///
+/// # Returns
+///
+/// Returns `(filtered_intervals, filtered_info)` where:
+/// - `filtered_intervals` contains only intervals >= min_minutes
+/// - `filtered_info` contains details about filtered intervals (None if nothing was filtered)
+///
+/// # Examples
+///
+/// ```rust
+/// use kasl::libs::report::filter_short_intervals;
+/// 
+/// let intervals = calculate_work_intervals(&workday, &pauses);
+/// let (filtered, info) = filter_short_intervals(&intervals, 30);
+/// 
+/// if let Some(info) = info {
+///     println!("Filtered {} short intervals", info.count);
+/// }
+/// ```
+pub fn filter_short_intervals(
+    intervals: &[WorkInterval], 
+    min_minutes: u64
+) -> (Vec<WorkInterval>, Option<ShortIntervalsInfo>) {
+    let mut filtered_intervals = Vec::new();
+    let mut short_intervals = Vec::new();
+    let mut total_duration = Duration::zero();
+
+    for (idx, interval) in intervals.iter().enumerate() {
+        if interval.is_short(min_minutes) {
+            // This is a short interval - add to filtered list
+            short_intervals.push((idx, interval.clone()));
+            total_duration = total_duration + interval.duration;
+        } else {
+            // This interval meets minimum duration - keep it
+            filtered_intervals.push(interval.clone());
+        }
+    }
+
+    let filtered_info = if short_intervals.is_empty() {
+        None
+    } else {
+        Some(ShortIntervalsInfo {
+            count: short_intervals.len(),
+            total_duration,
+            intervals: short_intervals,
+            pauses_to_remove: Vec::new(), // Not needed for display filtering
+        })
+    };
+
+    (filtered_intervals, filtered_info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+
+    #[test]
+    fn test_filter_short_intervals() {
+        // Create test intervals - some short, some long
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let intervals = vec![
+            WorkInterval {
+                start: NaiveDateTime::new(date, NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
+                end: NaiveDateTime::new(date, NaiveTime::from_hms_opt(9, 10, 0).unwrap()),
+                duration: Duration::minutes(10), // Short interval
+                pause_after: Some(0),
+            },
+            WorkInterval {
+                start: NaiveDateTime::new(date, NaiveTime::from_hms_opt(9, 15, 0).unwrap()),
+                end: NaiveDateTime::new(date, NaiveTime::from_hms_opt(10, 0, 0).unwrap()),
+                duration: Duration::minutes(45), // Long interval
+                pause_after: Some(1),
+            },
+            WorkInterval {
+                start: NaiveDateTime::new(date, NaiveTime::from_hms_opt(10, 5, 0).unwrap()),
+                end: NaiveDateTime::new(date, NaiveTime::from_hms_opt(10, 10, 0).unwrap()),
+                duration: Duration::minutes(5), // Very short interval
+                pause_after: None,
+            },
+        ];
+
+        // Filter with 30-minute minimum
+        let (filtered, info) = filter_short_intervals(&intervals, 30);
+
+        // Should keep only the 45-minute interval
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].duration, Duration::minutes(45));
+
+        // Should have info about filtered intervals
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.count, 2); // 10-minute and 5-minute intervals filtered
+        assert_eq!(info.total_duration, Duration::minutes(15)); // 10 + 5 minutes
+    }
+
+    #[test]
+    fn test_filter_short_intervals_none_filtered() {
+        // Create test intervals - all long enough
+        let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        let intervals = vec![
+            WorkInterval {
+                start: NaiveDateTime::new(date, NaiveTime::from_hms_opt(9, 0, 0).unwrap()),
+                end: NaiveDateTime::new(date, NaiveTime::from_hms_opt(9, 45, 0).unwrap()),
+                duration: Duration::minutes(45),
+                pause_after: Some(0),
+            },
+            WorkInterval {
+                start: NaiveDateTime::new(date, NaiveTime::from_hms_opt(10, 0, 0).unwrap()),
+                end: NaiveDateTime::new(date, NaiveTime::from_hms_opt(11, 0, 0).unwrap()),
+                duration: Duration::minutes(60),
+                pause_after: None,
+            },
+        ];
+
+        // Filter with 30-minute minimum
+        let (filtered, info) = filter_short_intervals(&intervals, 30);
+
+        // Should keep all intervals
+        assert_eq!(filtered.len(), 2);
+        assert_eq!(filtered[0].duration, Duration::minutes(45));
+        assert_eq!(filtered[1].duration, Duration::minutes(60));
+
+        // Should have no info about filtered intervals
+        assert!(info.is_none());
     }
 }

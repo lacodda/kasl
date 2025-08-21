@@ -1,7 +1,7 @@
 //! Daily and monthly report generation and submission command.
 //!
 //! Handles the core reporting functionality of kasl including generation of detailed
-//! daily work reports, automatic cleanup of short work intervals, integration with
+//! daily work reports, automatic filtering of short work intervals, integration with
 //! external APIs, and productivity analysis.
 
 use crate::{
@@ -15,12 +15,11 @@ use crate::{
         config::Config,
         formatter::format_duration,
         messages::Message,
-        pause::Pause,
-        report::{self, analyze_short_intervals},
+        report,
         task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
-    msg_error, msg_error_anyhow, msg_info, msg_print, msg_success, msg_warning,
+    msg_error, msg_error_anyhow, msg_info, msg_print,
 };
 use anyhow::Result;
 use chrono::{DateTime, Duration, Local};
@@ -58,14 +57,6 @@ pub struct ReportArgs {
     #[arg(long, help = "Submit monthly report")]
     month: bool,
 
-    /// Automatically detect and remove short work intervals
-    ///
-    /// Analyzes work intervals and removes pauses that create
-    /// inappropriately short work periods, merging adjacent
-    /// intervals for cleaner reporting. This helps eliminate
-    /// noise from brief interruptions.
-    #[arg(long, short, help = "Clear short work intervals automatically")]
-    clear_short_intervals: bool,
 }
 
 /// Main entry point for the report command.
@@ -96,15 +87,9 @@ pub struct ReportArgs {
 /// # Submit monthly summary
 /// kasl report --month
 ///
-/// # Clean up short intervals and show updated report
-/// kasl report --clear-short-intervals
 /// ```
 pub async fn cmd(args: ReportArgs) -> Result<()> {
     let date = determine_report_date(args.last);
-
-    if args.clear_short_intervals {
-        return handle_clear_short_intervals(date).await;
-    }
 
     if args.month {
         handle_monthly_report(date).await
@@ -192,110 +177,28 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     Ok(())
 }
 
-/// Handles automatic detection and cleanup of short work intervals.
-///
-/// This function analyzes work patterns to identify and remove inappropriately
-/// short work intervals that result from brief interruptions or system noise.
-/// It helps create cleaner, more accurate reports by merging adjacent work
-/// periods separated by very brief pauses.
-///
-/// ## Short Interval Detection
-///
-/// The algorithm:
-/// 1. **Interval Calculation**: Determines work periods between pauses
-/// 2. **Duration Analysis**: Identifies intervals shorter than configured minimum
-/// 3. **Pause Removal**: Removes pauses that create short intervals
-/// 4. **Interval Merging**: Combines adjacent work periods for cleaner reporting
-///
-/// ## Configuration
-///
-/// Short interval threshold is controlled by `min_work_interval` setting
-/// in the monitor configuration. Common values:
-/// - 5 minutes: Aggressive cleanup, removes most brief interruptions
-/// - 10 minutes: Moderate cleanup, preserves intentional short tasks
-/// - 15+ minutes: Conservative cleanup, only removes obvious noise
-///
-/// # Arguments
-///
-/// * `date` - Target date for interval analysis and cleanup
-///
-/// # Returns
-///
-/// Returns `Ok(())` after completing cleanup and displaying updated report.
-/// Shows detailed information about removed intervals and updated statistics.
-async fn handle_clear_short_intervals(date: DateTime<Local>) -> Result<()> {
-    let naive_date = date.date_naive();
-    let workday = match Workdays::new()?.fetch(naive_date)? {
-        Some(wd) => wd,
-        None => {
-            msg_error!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()));
-            return Ok(());
-        }
-    };
-
-    let config = Config::read()?;
-    let monitor_config = config.monitor.unwrap_or_default();
-
-    let pauses_db = Pauses::new()?;
-    let all_pauses = pauses_db.get_daily_pauses(naive_date, 0)?; // Fetch all pauses including short ones
-
-    // Calculate work intervals to analyze for short periods
-    let intervals = report::calculate_work_intervals(&workday, &all_pauses);
-
-    // Analyze intervals to identify short ones for removal
-    if let Some(short_info) = analyze_short_intervals(&intervals, monitor_config.min_work_interval) {
-        msg_print!(Message::ShortIntervalsToRemove(short_info.count), true);
-
-        // Display detailed information about intervals to be removed
-        for (_idx, interval) in &short_info.intervals {
-            println!(
-                "  • {} - {} ({})",
-                interval.start.format("%H:%M"),
-                interval.end.format("%H:%M"),
-                format_duration(&interval.duration)
-            );
-        }
-
-        // Extract pause IDs for database removal
-        let pause_ids: Vec<i32> = short_info
-            .pauses_to_remove
-            .iter()
-            .filter_map(|&idx| all_pauses.get(idx).and_then(|p| Some(p.id)))
-            .collect();
-
-        if !pause_ids.is_empty() {
-            msg_info!(Message::RemovingPauses(pause_ids.len()));
-            let deleted = pauses_db.delete_many(&pause_ids)?;
-            msg_success!(Message::ShortIntervalsCleared(deleted));
-
-            // Display updated report after cleanup
-            msg_print!(Message::UpdatedReport, true);
-            display_daily_report(date).await?;
-        } else {
-            msg_warning!(Message::NoRemovablePausesFound);
-        }
-    } else {
-        msg_info!(Message::NoShortIntervalsFound(monitor_config.min_work_interval));
-    }
-
-    Ok(())
-}
 
 /// Fetches data and displays a formatted daily report in the terminal.
 ///
 /// This function generates a comprehensive daily work report including:
-/// - Work intervals with start/end times and durations
+/// - Work intervals with start/end times and durations (filtered by min_work_interval)
 /// - Productivity calculations based on actual work vs. presence time
 /// - Task completion summary
 /// - Break analysis and total pause time
-/// - Short interval detection warnings
+/// - Information about filtered short intervals
 ///
 /// ## Report Components
 ///
-/// 1. **Work Intervals Table**: Shows continuous work periods with breaks
+/// 1. **Work Intervals Table**: Shows continuous work periods with breaks (short intervals filtered out)
 /// 2. **Summary Statistics**: Total hours, productivity percentage
 /// 3. **Task List**: Completed tasks with progress indicators
-/// 4. **Data Quality Warnings**: Alerts about short intervals or data issues
+/// 4. **Filter Information**: Details about intervals filtered due to being too short
+///
+/// ## Interval Filtering
+///
+/// Short intervals are automatically filtered from display based on the
+/// `min_work_interval` configuration setting. Users are informed about
+/// the number and total duration of filtered intervals.
 ///
 /// ## Productivity Calculation
 ///
@@ -337,14 +240,16 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     // Fetch ALL pauses for accurate productivity calculation
     let all_pauses = Pauses::new()?.get_daily_pauses(naive_date, 0)?;
 
-    // Display the formatted report with all components
-    View::report(&workday, &long_breaks, &all_pauses, &tasks)?;
-
-    // Analyze for short intervals and provide user guidance
+    // Calculate work intervals and apply filtering
     let intervals = report::calculate_work_intervals(&workday, &long_breaks);
-    if let Some(short_info) = analyze_short_intervals(&intervals, monitor_config.min_work_interval) {
-        msg_warning!(Message::ShortIntervalsDetected(short_info.count, format_duration(&short_info.total_duration)));
-        msg_info!(Message::UseReportClearCommand);
+    let (filtered_intervals, filtered_info) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
+
+    // Display the formatted report with filtered intervals
+    View::report_with_intervals(&workday, &filtered_intervals, &all_pauses, &tasks)?;
+
+    // Display information about filtered short intervals
+    if let Some(info) = filtered_info {
+        msg_info!(format!("Filtered out {} short intervals (total: {})", info.count, format_duration(&info.total_duration)));
     }
 
     Ok(())
@@ -355,17 +260,24 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
 /// This function manages the full workflow for daily report submission:
 /// 1. **Workday Finalization**: Ensures the workday is properly closed
 /// 2. **Data Validation**: Verifies required data is available
-/// 3. **Report Generation**: Creates JSON payload for API submission
-/// 4. **API Submission**: Sends report to configured external service
-/// 5. **Monthly Trigger**: Automatically submits monthly report if needed
+/// 3. **Interval Filtering**: Applies min_work_interval filtering to remove short intervals
+/// 4. **Report Generation**: Creates JSON payload for API submission using filtered intervals
+/// 5. **API Submission**: Sends report to configured external service
+/// 6. **Monthly Trigger**: Automatically submits monthly report if needed
 ///
 /// ## Report Payload Structure
 ///
 /// The generated JSON includes:
-/// - Work intervals with start/end times and durations
-/// - Task assignments distributed across intervals
+/// - Work intervals with start/end times and durations (short intervals filtered out)
+/// - Task assignments distributed across filtered intervals
 /// - Summary statistics and metadata
 /// - Formatted time strings for external system compatibility
+///
+/// ## Interval Filtering
+///
+/// Same filtering logic as display reports - short intervals are automatically
+/// removed based on the `min_work_interval` configuration setting before
+/// sending to the external API.
 ///
 /// ## Auto-Monthly Reporting
 ///
@@ -407,8 +319,12 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let monitor_config = config.monitor.unwrap_or_default();
     let pauses = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
 
-    // Generate JSON payload for API submission
-    let report_json = build_report_payload(&workday, &mut tasks, &pauses);
+    // Apply interval filtering for API submission
+    let intervals = report::calculate_work_intervals(&workday, &pauses);
+    let (filtered_intervals, _) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
+
+    // Generate JSON payload for API submission using filtered intervals
+    let report_json = build_report_payload(&workday, &mut tasks, &filtered_intervals);
     let events_json = serde_json::to_string(&report_json)?;
     let mut si = get_si_service()?;
 
@@ -467,17 +383,14 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 ///
 /// # Arguments
 ///
-/// * `workday` - The workday record with start/end times
 /// * `tasks` - Mutable reference to tasks for modification during processing
-/// * `pauses` - Pause records for interval calculation
+/// * `intervals` - Pre-calculated work intervals (potentially filtered)
 ///
 /// # Returns
 ///
 /// Returns a JSON value containing the structured report payload
 /// ready for API submission.
-fn build_report_payload(workday: &Workday, tasks: &mut Vec<Task>, pauses: &[Pause]) -> serde_json::Value {
-    // Calculate work intervals based on workday and pause data
-    let intervals = report::calculate_work_intervals(workday, pauses);
+fn build_report_payload(_workday: &Workday, tasks: &mut Vec<Task>, intervals: &[report::WorkInterval]) -> serde_json::Value {
 
     let num_tasks = tasks.len();
     let num_intervals = intervals.len();
@@ -549,6 +462,7 @@ fn build_report_payload(workday: &Workday, tasks: &mut Vec<Task>, pauses: &[Paus
 
     json!(report_items)
 }
+
 
 /// Reads configuration and returns an initialized Si service instance.
 ///

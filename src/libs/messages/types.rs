@@ -241,7 +241,6 @@ pub enum Message {
     // === SHORT INTERVALS MESSAGES ===
     ShortIntervalsDetected(usize, String), // count, total duration
     NoShortIntervalsFound(u64),            // min_minutes
-    UseReportClearCommand,
     ShortIntervalsToRemove(usize), // count
     RemovingPauses(usize),         // count
     ShortIntervalsCleared(usize),  // deleted count
