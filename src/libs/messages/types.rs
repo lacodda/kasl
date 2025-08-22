@@ -310,6 +310,8 @@ pub enum Message {
     },
     NoUpdateRequired,
     UpdateDownloadUrlNotSet,
+    WatcherStoppingForUpdate,
+    WatcherRestartingAfterUpdate,
     UpdateBinaryNotFoundInArchive,
 
     // === AUTHENTICATION MESSAGES ===
@@ -337,6 +339,7 @@ pub enum Message {
     DbConnectionFailed,
     DbQueryFailed,
     DbMigrationFailed,
+    DatabaseOperationFailed { operation: String, error: String },
     NoIdSet,
 
     // === FILE SYSTEM MESSAGES ===

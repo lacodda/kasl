@@ -5,7 +5,7 @@
 //! backup and rollback capabilities.
 
 use crate::{
-    libs::{messages::Message, update::Updater},
+    libs::{daemon, messages::Message, update::Updater},
     msg_info, msg_success,
 };
 use anyhow::Result;
@@ -20,6 +20,14 @@ use anyhow::Result;
 /// Returns `Ok(())` on successful update or if no update is needed.
 /// Returns an error if the update process fails.
 pub async fn cmd() -> Result<()> {
+    // Check if watcher is currently running before update
+    let watcher_was_running = daemon::is_running();
+    
+    if watcher_was_running {
+        msg_info!(Message::WatcherStoppingForUpdate);
+        daemon::stop()?;
+    }
+
     // Create a new Updater instance with GitHub API configuration
     let mut updater = Updater::new()?;
 
@@ -28,6 +36,13 @@ pub async fn cmd() -> Result<()> {
 
     if !needs_update {
         msg_info!(Message::NoUpdateRequired);
+        
+        // If watcher was running before update check, restart it
+        if watcher_was_running {
+            msg_info!(Message::WatcherRestartingAfterUpdate);
+            daemon::spawn()?;
+        }
+        
         return Ok(());
     }
 
@@ -35,6 +50,12 @@ pub async fn cmd() -> Result<()> {
     // This includes downloading the archive, extracting the binary,
     // backing up the current executable, and replacing it
     updater.perform_update().await?;
+
+    // Restart watcher if it was running before the update
+    if watcher_was_running {
+        msg_info!(Message::WatcherRestartingAfterUpdate);
+        daemon::spawn()?;
+    }
 
     // Confirm successful update with version information
     msg_success!(Message::UpdateCompleted {

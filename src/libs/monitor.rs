@@ -420,18 +420,34 @@ impl Monitor {
             let today = Local::now().date_naive();
 
             // State machine logic - handle state transitions based on current state and activity
+            // Use error handling to prevent database lock issues from crashing the watcher
             match self.state {
                 // Currently active, but no recent activity detected
                 State::Active if !activity_detected => {
-                    self.handle_inactivity()?;
+                    if let Err(e) = self.handle_inactivity() {
+                        msg_error!(Message::DatabaseOperationFailed { 
+                            operation: "handle_inactivity".to_string(),
+                            error: e.to_string()
+                        });
+                    }
                 }
                 // Currently in pause, but activity has resumed
                 State::InPause if activity_detected => {
-                    self.handle_return_from_pause()?;
+                    if let Err(e) = self.handle_return_from_pause() {
+                        msg_error!(Message::DatabaseOperationFailed {
+                            operation: "handle_return_from_pause".to_string(),
+                            error: e.to_string()
+                        });
+                    }
                 }
                 // Currently active with ongoing activity - ensure workday is tracked
                 State::Active if activity_detected => {
-                    self.ensure_workday_started(today)?;
+                    if let Err(e) = self.ensure_workday_started(today) {
+                        msg_error!(Message::DatabaseOperationFailed {
+                            operation: "ensure_workday_started".to_string(),
+                            error: e.to_string()
+                        });
+                    }
                 }
                 // No action needed for: InPause with no activity
                 _ => {}

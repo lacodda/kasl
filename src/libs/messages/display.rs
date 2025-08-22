@@ -372,6 +372,8 @@ impl Display for Message {
             }
             Message::NoUpdateRequired => "No update required. You are using the latest version!".to_string(),
             Message::UpdateDownloadUrlNotSet => "Download URL not set".to_string(),
+            Message::WatcherStoppingForUpdate => "Stopping watcher for update...".to_string(),
+            Message::WatcherRestartingAfterUpdate => "Restarting watcher after update...".to_string(),
             Message::UpdateBinaryNotFoundInArchive => "Binary not found in the release archive.".to_string(),
 
             // === AUTHENTICATION MESSAGES ===
@@ -399,6 +401,9 @@ impl Display for Message {
             Message::DbConnectionFailed => "Failed to connect to database".to_string(),
             Message::DbQueryFailed => "Database query failed".to_string(),
             Message::DbMigrationFailed => "Database migration failed".to_string(),
+            Message::DatabaseOperationFailed { operation, error } => {
+                format!("Database operation '{}' failed (continuing monitoring): {}", operation, error)
+            },
             Message::NoIdSet => "No ID set".to_string(),
 
             // === FILE SYSTEM MESSAGES ===

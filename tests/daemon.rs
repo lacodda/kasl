@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use kasl::libs::data_storage::DataStorage;
+    use kasl::libs::{daemon, data_storage::DataStorage};
     use std::process::Command;
     use std::thread;
     use std::time::Duration;
@@ -116,5 +116,37 @@ mod tests {
         let _ = child1.wait();
         let _ = child2.kill();
         let _ = child2.wait();
+    }
+
+    #[test_context(DaemonTestContext)]
+    #[test]
+    fn test_daemon_is_running_status(_ctx: &mut DaemonTestContext) {
+        // Initially no daemon should be running
+        assert!(!daemon::is_running(), "No daemon should be running initially");
+
+        let kasl_binary = std::env::current_dir()
+            .expect("Failed to get current directory")
+            .join("target")
+            .join("debug")
+            .join("kasl.exe");
+
+        // Start daemon
+        let _child = Command::new(&kasl_binary)
+            .args(&["watch"])
+            .spawn()
+            .expect("Failed to start daemon");
+
+        // Give daemon time to start
+        thread::sleep(Duration::from_millis(2000));
+
+        // Check if daemon is now running
+        assert!(daemon::is_running(), "Daemon should be running after start");
+
+        // Stop daemon
+        let _ = Command::new(&kasl_binary).args(&["watch", "--stop"]).output();
+        thread::sleep(Duration::from_millis(1000));
+
+        // Check if daemon is stopped
+        assert!(!daemon::is_running(), "Daemon should be stopped after stop command");
     }
 }

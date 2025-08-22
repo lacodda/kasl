@@ -440,6 +440,94 @@ pub fn spawn() -> Result<()> {
 /// This function is safe to call multiple times and will not produce
 /// errors if called when no daemon is running. This makes it suitable
 /// for use in cleanup scripts and automated scenarios.
+/// Checks if the daemon is currently running.
+///
+/// This function determines whether a daemon process is currently active by
+/// checking for the existence and validity of the PID file and verifying
+/// that the corresponding process is still running.
+///
+/// # Returns
+///
+/// Returns `true` if the daemon is running, `false` otherwise.
+/// This function does not return errors - it treats any failure to
+/// verify the daemon as "not running".
+pub fn is_running() -> bool {
+    let pid_path = match DataStorage::new().get_path(PID_FILE) {
+        Ok(path) => path,
+        Err(_) => return false,
+    };
+
+    // Check if PID file exists
+    if !pid_path.exists() {
+        return false;
+    }
+
+    // Read and parse the PID from the file
+    let pid_str = match std::fs::read_to_string(&pid_path) {
+        Ok(content) => content,
+        Err(_) => return false,
+    };
+
+    let pid: u32 = match pid_str.trim().parse() {
+        Ok(pid) => pid,
+        Err(_) => return false,
+    };
+
+    // Check if process is actually running
+    is_process_running(pid)
+}
+
+/// Checks if a process with the given PID is currently running.
+///
+/// This function uses platform-specific methods to verify if a process
+/// exists and is running. It's used internally by daemon management
+/// functions to validate process state.
+///
+/// # Arguments
+///
+/// * `pid` - The process ID to check
+///
+/// # Returns
+///
+/// Returns `true` if the process is running, `false` otherwise.
+fn is_process_running(pid: u32) -> bool {
+    #[cfg(windows)]
+    {
+        use winapi::um::errhandlingapi::GetLastError;
+        use winapi::um::handleapi::CloseHandle;
+        use winapi::um::processthreadsapi::OpenProcess;
+        use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
+
+        unsafe {
+            let handle = OpenProcess(PROCESS_QUERY_INFORMATION, 0, pid);
+            if handle.is_null() {
+                let error = GetLastError();
+                // ERROR_INVALID_PARAMETER (87) means process doesn't exist
+                return error != 87;
+            }
+            CloseHandle(handle);
+            true
+        }
+    }
+    
+    #[cfg(unix)]
+    {
+        use std::process::Command;
+        
+        // Use ps command to check if process exists
+        match Command::new("ps").arg("-p").arg(pid.to_string()).output() {
+            Ok(output) => output.status.success(),
+            Err(_) => false,
+        }
+    }
+    
+    #[cfg(not(any(unix, windows)))]
+    {
+        // For unsupported platforms, assume not running
+        false
+    }
+}
+
 pub fn stop() -> Result<()> {
     match stop_internal() {
         Ok(()) => Ok(()),
