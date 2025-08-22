@@ -134,6 +134,7 @@ mod tests {
             si: None,
             gitlab: None,
             jira: None,
+            productivity: None,
         };
         
         let save_result = config.save();

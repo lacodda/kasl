@@ -67,6 +67,7 @@ mod tests {
             si: None,
             gitlab: None,
             jira: None,
+            productivity: None,
         };
         
         // Save configuration

@@ -74,6 +74,7 @@ mod tests {
             si: None,
             gitlab: None,
             jira: None,
+            productivity: None,
         };
         config.save().unwrap();
         let read_config = Config::read().unwrap();
