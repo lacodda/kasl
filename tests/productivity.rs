@@ -140,8 +140,8 @@ mod tests {
         let needed_for_95 = report::calculate_needed_break_duration(
             &workday, &moderate_pauses, &no_breaks, 95.0
         );
-        // Test passes if function returns a reasonable number
-        assert!(needed_for_95 >= 0);
+        // Test passes if function returns a reasonable number (should be positive for high target)
+        assert!(needed_for_95 > 0);
     }
 
     #[test_context(ProductivityTestContext)]

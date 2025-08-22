@@ -7,15 +7,6 @@ mod tests {
     use tempfile::TempDir;
     use test_context::{AsyncTestContext, test_context};
 
-    // Create manual async trait implementation without async_trait macro
-    trait SessionAsync {
-        async fn login(&self) -> Result<String>;
-        fn set_credentials(&mut self, password: &str) -> Result<()>;
-        fn session_id_file(&self) -> &str;
-        fn secret(&self) -> Secret;
-        fn retry(&self) -> i32;
-        fn inc_retry(&mut self);
-    }
 
     struct ApiTestContext {
         _temp_dir: TempDir,
@@ -170,7 +161,7 @@ mod tests {
     #[tokio::test]
     async fn test_session_delete_functionality(ctx: &mut ApiTestContext) {
         let session_file = ".test_delete_session";
-        let session = MockSession::new(session_file, false);
+        let _session = MockSession::new(session_file, false);
         
         let session_path = kasl::libs::data_storage::DataStorage::new()
             .get_path(session_file)
@@ -196,7 +187,7 @@ mod tests {
     #[tokio::test]
     async fn test_session_get_or_create_with_cache(ctx: &mut ApiTestContext) {
         let session_file = ".test_cached_session";
-        let mut session = MockSession::new(session_file, false);
+        let _session = MockSession::new(session_file, false);
         
         let session_path = kasl::libs::data_storage::DataStorage::new()
             .get_path(session_file)
@@ -231,7 +222,7 @@ mod tests {
     #[tokio::test]
     async fn test_secret_integration(_ctx: &mut ApiTestContext) {
         let session = MockSession::new(".test_secret_session", false);
-        let secret = session.secret();
+        let _secret = session.secret();
         
         // Verify secret is properly initialized
         // Note: Full testing would require mocking user input

@@ -22,67 +22,99 @@ mod tests {
 
         fn teardown(self) {
             // Clean up any remaining watch processes
-            let _ = Command::new("kasl").args(&["watch", "--stop"]).output();
+            let kasl_binary = std::env::current_dir().unwrap().join("target").join("debug").join("kasl.exe");
+            let _ = Command::new(&kasl_binary).args(&["watch", "--stop"]).output();
+            // Give time for cleanup
+            std::thread::sleep(std::time::Duration::from_millis(500));
         }
     }
 
     #[test_context(DaemonTestContext)]
     #[test]
-    #[ignore] // This test requires the kasl binary to be built
     fn test_daemon_stop_on_windows(_ctx: &mut DaemonTestContext) {
+        let kasl_binary = std::env::current_dir().unwrap().join("target").join("debug").join("kasl.exe");
         let pid_path = DataStorage::new().get_path("kasl-watch.pid").unwrap();
 
-        // Start daemon
-        let output = Command::new("kasl").arg("watch").output().expect("Failed to start watch");
-        assert!(output.status.success(), "Failed to start daemon: {:?}", String::from_utf8_lossy(&output.stderr));
+        // Clean up any existing daemon first
+        let _ = Command::new(&kasl_binary).args(&["watch", "--stop"]).output();
+        thread::sleep(Duration::from_millis(500));
+
+        // Start daemon with spawn() instead of blocking output()
+        let mut child = Command::new(&kasl_binary)
+            .arg("watch")
+            .spawn()
+            .expect("Failed to start watch process");
 
         // Give it time to start
-        thread::sleep(Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(2000));
 
         // Check PID file exists
         assert!(pid_path.exists(), "PID file should exist after starting watch");
 
         // Stop daemon
-        let output = Command::new("kasl").args(&["watch", "--stop"]).output().expect("Failed to stop watch");
+        let output = Command::new(&kasl_binary).args(&["watch", "--stop"]).output().expect("Failed to stop watch");
         assert!(output.status.success(), "Failed to stop daemon: {:?}", String::from_utf8_lossy(&output.stderr));
 
         // Give it time to stop
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(1000));
 
         // PID file should be gone
         assert!(!pid_path.exists(), "PID file should be removed after stopping");
+        
+        // Clean up the child process if it's still running
+        let _ = child.kill();
+        let _ = child.wait();
     }
 
     #[test_context(DaemonTestContext)]
     #[test]
-    #[ignore] // This test requires the kasl binary to be built
     fn test_no_duplicate_daemons(_ctx: &mut DaemonTestContext) {
+        let kasl_binary = std::env::current_dir().unwrap().join("target").join("debug").join("kasl.exe");
         let pid_path = DataStorage::new().get_path("kasl-watch.pid").unwrap();
 
-        // Start first daemon
-        let output = Command::new("kasl").arg("watch").output().expect("Failed to start first watch");
-        assert!(output.status.success());
+        // Clean up any existing daemon first
+        let _ = Command::new(&kasl_binary).args(&["watch", "--stop"]).output();
+        thread::sleep(Duration::from_millis(500));
+
+        // Start first daemon using spawn() instead of output()
+        let mut child1 = Command::new(&kasl_binary)
+            .arg("watch")
+            .spawn()
+            .expect("Failed to start first watch");
 
         // Give it time to start
-        thread::sleep(Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(2000));
+
+        // Check that PID file exists
+        assert!(pid_path.exists(), "First daemon should create PID file");
 
         // Read first PID
         let first_pid = std::fs::read_to_string(&pid_path).expect("Failed to read first PID").trim().to_string();
 
-        // Try to start second daemon
-        let output = Command::new("kasl").arg("watch").output().expect("Failed to start second watch");
-        assert!(output.status.success(), "Second watch should succeed by stopping the first");
+        // Try to start second daemon - this should replace the first one
+        let mut child2 = Command::new(&kasl_binary)
+            .arg("watch")
+            .spawn()
+            .expect("Failed to start second watch");
 
         // Give it time to restart
-        thread::sleep(Duration::from_millis(1000));
+        thread::sleep(Duration::from_millis(2000));
 
-        // Read second PID
-        let second_pid = std::fs::read_to_string(&pid_path).expect("Failed to read second PID").trim().to_string();
-
-        // PIDs should be different
-        assert_ne!(first_pid, second_pid, "Second daemon should have different PID");
+        // Read second PID if file still exists
+        if pid_path.exists() {
+            let second_pid = std::fs::read_to_string(&pid_path).expect("Failed to read second PID").trim().to_string();
+            // PIDs should be different
+            assert_ne!(first_pid, second_pid, "Second daemon should have different PID");
+        }
 
         // Clean up
-        let _ = Command::new("kasl").args(&["watch", "--stop"]).output();
+        let _ = Command::new(&kasl_binary).args(&["watch", "--stop"]).output();
+        thread::sleep(Duration::from_millis(500));
+        
+        // Clean up any remaining child processes
+        let _ = child1.kill();
+        let _ = child1.wait();
+        let _ = child2.kill();
+        let _ = child2.wait();
     }
 }

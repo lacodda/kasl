@@ -95,7 +95,7 @@ mod tests {
     fn test_autostart_disable_when_not_enabled(_ctx: &mut AutostartTestContext) {
         // Test disabling autostart when it's not enabled
         // This should succeed (idempotent operation)
-        let result = autostart::disable();
+        let _result = autostart::disable();
         
         #[cfg(windows)]
         {

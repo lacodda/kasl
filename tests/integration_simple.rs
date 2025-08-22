@@ -87,7 +87,7 @@ mod tests {
         // Create workdays for 3 consecutive days
         for day in 0..3 {
             let day_start = base_date + Duration::days(day) + Duration::hours(9);
-            let day_end = day_start + Duration::hours(8);
+            let _day_end = day_start + Duration::hours(8);
             
             let day_date = (base_date + Duration::days(day)).date_naive();
             workdays.insert_start(day_date).unwrap();

@@ -212,7 +212,7 @@ mod tests {
                 .spawn()
                 .unwrap();
             
-            let pid = child.id();
+            let _pid = child.id();
             
             // Give process time to start
             thread::sleep(Duration::from_millis(100));
