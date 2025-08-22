@@ -374,3 +374,4 @@ This will show:
 - Loaded configuration values
 - Validation results
 - API connection attempts
+

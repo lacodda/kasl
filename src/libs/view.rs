@@ -16,17 +16,17 @@
 //! use kasl::libs::view::View;
 //!
 //! View::tasks(&tasks)?;
-//! View::report_with_intervals(&workday, &intervals, &all_pauses, &tasks)?;
+//! View::report_with_intervals(&workday, &intervals, &all_pauses, &breaks, &tasks)?;
 //! View::sum(&summary_data)?;
 //! ```
 
 use super::task::Task;
+use crate::db::breaks::Break;
 use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
 use crate::libs::messages::Message;
 use crate::libs::pause::Pause;
-use crate::libs::productivity;
 use crate::libs::report;
 use crate::msg_print;
 use anyhow::Result;
@@ -93,35 +93,35 @@ impl View {
     /// * `workday` - The workday record containing start/end times
     /// * `intervals` - Pre-calculated and optionally filtered work intervals
     /// * `all_pauses` - Complete pause record for accurate productivity analysis  
+    /// * `breaks` - Manual breaks for enhanced productivity calculation
     /// * `tasks` - Tasks completed during the workday for context
     pub fn report_with_intervals(
         workday: &Workday,
         intervals: &[report::WorkInterval], 
         all_pauses: &[Pause],
+        breaks: &[Break],
         tasks: &[Task]
     ) -> Result<()> {
-        // Calculate work time boundaries and productivity with given intervals
+        // Use the report module to process the data
+        let (filtered_duration, productivity, _pauses_in_intervals, _breaks_in_intervals) = 
+            report::report_with_intervals(workday, intervals, all_pauses, breaks);
         
-        // Calculate filtered duration based on provided intervals
-        let filtered_duration = intervals.iter()
-            .fold(Duration::zero(), |acc, interval| acc + interval.duration);
-            
-        // For intervals-based reports, we need to calculate productivity based on
-        // pauses that occur within the filtered intervals, not all pauses
-        let pauses_in_intervals = Self::filter_pauses_in_intervals(all_pauses, intervals);
-        
-        // Use the new productivity module for calculation
-        let productivity = productivity::calculate_productivity_for_intervals(
-            &filtered_duration,
-            &pauses_in_intervals,
-            &[] // No breaks data available in this context
-        );
-        
-        Self::render_report_with_intervals(workday, intervals, tasks, &filtered_duration, productivity)
+        Self::report(workday, intervals, tasks, &filtered_duration, productivity)
     }
 
-    /// Internal method to render the actual report table and content.
-    fn render_report_with_intervals(
+    /// Renders a formatted daily work report table.
+    ///
+    /// This method displays the core report data in a structured table format,
+    /// including work intervals, total time, productivity metrics, and associated tasks.
+    ///
+    /// # Arguments
+    ///
+    /// * `workday` - The workday record containing date and timing information
+    /// * `intervals` - Work intervals to display in the table
+    /// * `tasks` - Associated tasks completed during the workday
+    /// * `net_duration` - Total working time duration
+    /// * `productivity` - Calculated productivity percentage
+    pub fn report(
         workday: &Workday,
         intervals: &[report::WorkInterval],
         tasks: &[Task],
@@ -329,34 +329,6 @@ impl View {
     /// // Returns approximately 93.75% (7.5 hours / 8 hours)
     /// ```
     
-    /// Filter pauses that occur within the given work intervals.
-    ///
-    /// This helper method finds pauses that overlap with the specified work intervals,
-    /// allowing for accurate productivity calculation when working with filtered time periods.
-    ///
-    /// # Arguments
-    ///
-    /// * `all_pauses` - Complete list of pauses for the day
-    /// * `intervals` - Work intervals to check for pause overlaps
-    ///
-    /// # Returns
-    ///
-    /// Vector of pauses that occur within the specified intervals
-    fn filter_pauses_in_intervals(all_pauses: &[Pause], intervals: &[report::WorkInterval]) -> Vec<Pause> {
-        if intervals.is_empty() {
-            return vec![];
-        }
-        
-        all_pauses.iter()
-            .filter(|pause| {
-                // Check if this pause overlaps with any interval
-                intervals.iter().any(|interval| {
-                    pause.start >= interval.start && pause.start < interval.end
-                })
-            })
-            .cloned()
-            .collect()
-    }
 
     /// Displays a formatted table of task templates for reusable task creation.
     ///

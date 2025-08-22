@@ -488,3 +488,4 @@ const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
 ---
 
 *This document should be updated as the project evolves and documentation needs change.*
+

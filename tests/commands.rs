@@ -7,7 +7,7 @@ mod tests {
     use kasl::libs::config::Config;
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
-    use chrono::Utc;
+    use chrono::{Utc, Local};
 
     struct CommandTestContext {
         _temp_dir: TempDir,
@@ -112,7 +112,7 @@ mod tests {
         assert_eq!(all_tasks.len(), 2);
         
         // Test fetching today's tasks
-        let today = Utc::now().date_naive();
+        let today = Local::now().date_naive();
         let today_tasks = tasks.fetch(kasl::libs::task::TaskFilter::Date(today)).unwrap();
         assert_eq!(today_tasks.len(), 2);
     }

@@ -145,7 +145,7 @@ mod tests {
         let breaks = breaks_db.get_daily_breaks(date).unwrap();
 
         // Calculate productivity with breaks
-        let productivity = kasl::libs::report::calculate_productivity_with_breaks(
+        let productivity = kasl::libs::productivity::calculate_productivity(
             &workday, &pauses, &breaks
         );
 
@@ -195,13 +195,13 @@ mod tests {
         let breaks = vec![]; // No breaks initially
 
         // Initial productivity should be low (62.5%)
-        let initial_productivity = kasl::libs::report::calculate_productivity_with_breaks(
+        let initial_productivity = kasl::libs::productivity::calculate_productivity(
             &workday, &pauses, &breaks
         );
         assert!((initial_productivity - 62.5).abs() < 0.01);
 
         // Test needed break calculation for 75% threshold
-        let needed_break_minutes = kasl::libs::report::calculate_needed_break_duration(
+        let needed_break_minutes = kasl::libs::productivity::calculate_needed_break_duration(
             &workday, &pauses, &breaks, 75.0
         );
         
@@ -279,17 +279,17 @@ mod tests {
         };
 
         // Test with different fractions (using old date so current time >> workday start)
-        let always_suggest_zero = kasl::libs::report::should_suggest_productivity_improvements(
+        let always_suggest_zero = kasl::libs::productivity::should_suggest_productivity_improvements(
             &workday, 8.0, 0.0  // 0% - always suggest
         );
         assert!(always_suggest_zero);
 
-        let should_suggest_half = kasl::libs::report::should_suggest_productivity_improvements(
+        let should_suggest_half = kasl::libs::productivity::should_suggest_productivity_improvements(
             &workday, 8.0, 0.5  // 50% - should suggest for old workday
         );
         assert!(should_suggest_half);
 
-        let should_suggest_full = kasl::libs::report::should_suggest_productivity_improvements(
+        let should_suggest_full = kasl::libs::productivity::should_suggest_productivity_improvements(
             &workday, 8.0, 1.0  // 100% - should still suggest for old workday
         );
         assert!(should_suggest_full);

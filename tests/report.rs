@@ -65,7 +65,7 @@ mod tests {
 
         // Calculate intervals for the test
         let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
-        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &tasks);
+        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &[], &tasks);
         assert!(output.is_ok());
     }
 
@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(pauses_vec.len(), 0);
         // Calculate intervals for the test
         let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
-        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &tasks);
+        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &[], &tasks);
         assert!(output.is_ok());
     }
 }

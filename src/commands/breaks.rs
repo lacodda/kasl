@@ -5,7 +5,7 @@
 
 use crate::{
     db::{breaks::Breaks, pauses::Pauses, workdays::Workdays},
-    libs::{config::Config, formatter::format_duration, messages::Message, pause::Pause, report},
+    libs::{config::Config, formatter::format_duration, messages::Message, pause::Pause, productivity, report},
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -370,44 +370,9 @@ async fn show_updated_productivity(date: NaiveDate) -> Result<()> {
     let breaks = Breaks::new()?.get_daily_breaks(date)?;
     
     // Calculate new productivity (this would be implemented in report.rs)
-    let productivity = calculate_productivity_with_breaks(&workday, &pauses, &breaks)?;
+    let productivity = productivity::calculate_productivity(&workday, &pauses, &breaks);
     
     msg_info!(Message::ProductivityRecalculated(productivity));
     Ok(())
 }
 
-/// Calculates productivity including manual breaks.
-///
-/// Temporary implementation - this should be moved to report.rs module
-/// as part of the productivity calculation update.
-fn calculate_productivity_with_breaks(
-    workday: &crate::db::workdays::Workday,
-    pauses: &[Pause],
-    breaks: &[crate::db::breaks::Break],
-) -> Result<f64> {
-    let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
-    let gross_duration = end_time - workday.start;
-    
-    // Calculate total pause time
-    let pause_duration: Duration = pauses
-        .iter()
-        .filter_map(|p| p.duration)
-        .sum();
-    
-    // Calculate total break time
-    let break_duration: Duration = breaks
-        .iter()
-        .map(|b| b.duration)
-        .sum();
-    
-    let total_non_work_time = pause_duration + break_duration;
-    let net_work_time = gross_duration - total_non_work_time;
-    
-    let productivity = if gross_duration.num_seconds() > 0 {
-        (net_work_time.num_seconds() as f64 / gross_duration.num_seconds() as f64) * 100.0
-    } else {
-        0.0
-    };
-    
-    Ok(productivity.max(0.0).min(100.0))
-}
