@@ -39,6 +39,7 @@ pub mod formatter;
 pub mod messages;
 pub mod monitor;
 pub mod pause;
+pub mod productivity;
 pub mod report;
 pub mod secret;
 pub mod summary;

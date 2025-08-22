@@ -26,6 +26,7 @@ use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
 use crate::libs::messages::Message;
 use crate::libs::pause::Pause;
+use crate::libs::productivity;
 use crate::libs::report;
 use crate::msg_print;
 use anyhow::Result;
@@ -105,12 +106,16 @@ impl View {
         let filtered_duration = intervals.iter()
             .fold(Duration::zero(), |acc, interval| acc + interval.duration);
             
-        // Calculate all pause duration for productivity analysis
-        let total_pause_duration = all_pauses.iter()
-            .filter_map(|b| b.duration)
-            .fold(Duration::zero(), |acc, d| acc + d);
-            
-        let productivity = Self::calculate_productivity(&filtered_duration, &total_pause_duration);
+        // For intervals-based reports, we need to calculate productivity based on
+        // pauses that occur within the filtered intervals, not all pauses
+        let pauses_in_intervals = Self::filter_pauses_in_intervals(all_pauses, intervals);
+        
+        // Use the new productivity module for calculation
+        let productivity = productivity::calculate_productivity_for_intervals(
+            &filtered_duration,
+            &pauses_in_intervals,
+            &[] // No breaks data available in this context
+        );
         
         Self::render_report_with_intervals(workday, intervals, tasks, &filtered_duration, productivity)
     }
@@ -323,29 +328,34 @@ impl View {
     /// let productivity = View::calculate_productivity(&work_time, &short_pauses);
     /// // Returns approximately 93.75% (7.5 hours / 8 hours)
     /// ```
-    fn calculate_productivity(gross_work_time_minus_long_breaks: &Duration, daily_short_pause_duration: &Duration) -> f64 {
-        // Calculate the truly "net" working time by subtracting short pauses from
-        // the time already adjusted for long breaks.
-        // This represents the time exclusively dedicated to productive tasks.
-        let net_working_duration = gross_work_time_minus_long_breaks.checked_sub(&daily_short_pause_duration).unwrap_or_else(|| {
-            // Handle cases where subtraction might result in a negative duration (e.g., if short pauses > gross_work_time_minus_long_breaks).
-            // Returning Duration::zero() is a safe fallback to prevent panics and ensure a 0% productivity in such edge cases.
-            Duration::zero()
-        });
-
-        // If the base time for calculation (gross_work_time_minus_long_breaks) is zero,
-        // productivity is 0% to avoid division by zero.
-        if gross_work_time_minus_long_breaks.num_seconds() == 0 {
-            return 0.0;
+    
+    /// Filter pauses that occur within the given work intervals.
+    ///
+    /// This helper method finds pauses that overlap with the specified work intervals,
+    /// allowing for accurate productivity calculation when working with filtered time periods.
+    ///
+    /// # Arguments
+    ///
+    /// * `all_pauses` - Complete list of pauses for the day
+    /// * `intervals` - Work intervals to check for pause overlaps
+    ///
+    /// # Returns
+    ///
+    /// Vector of pauses that occur within the specified intervals
+    fn filter_pauses_in_intervals(all_pauses: &[Pause], intervals: &[report::WorkInterval]) -> Vec<Pause> {
+        if intervals.is_empty() {
+            return vec![];
         }
-
-        // Calculate productivity as (net working duration / gross work time minus long breaks) * 100.
-        // This gives the percentage of time truly spent productively out of the time "on duty"
-        // (excluding only major breaks).
-        let productivity = (net_working_duration.num_seconds() as f64 / gross_work_time_minus_long_breaks.num_seconds() as f64) * 100.0;
-
-        // Ensure the resulting percentage is within the valid range [0.0, 100.0]
-        productivity.max(0.0).min(100.0)
+        
+        all_pauses.iter()
+            .filter(|pause| {
+                // Check if this pause overlaps with any interval
+                intervals.iter().any(|interval| {
+                    pause.start >= interval.start && pause.start < interval.end
+                })
+            })
+            .cloned()
+            .collect()
     }
 
     /// Displays a formatted table of task templates for reusable task creation.

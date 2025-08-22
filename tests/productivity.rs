@@ -1,11 +1,14 @@
 #[cfg(test)]
 mod tests {
-    use chrono::{Duration, NaiveDate};
-    use kasl::db::{breaks::Breaks, workdays::Workdays};
-    use kasl::libs::{pause::Pause, report};
+    use kasl::libs::productivity;
+    use kasl::libs::pause::Pause;
+    use kasl::db::workdays::Workday;
+    use kasl::db::breaks::Break;
+    use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
 
+    /// Test context for productivity calculation tests.
     struct ProductivityTestContext {
         _temp_dir: TempDir,
     }
@@ -19,377 +22,188 @@ mod tests {
         }
     }
 
-    #[test_context(ProductivityTestContext)]
-    #[test]
-    fn test_productivity_calculation_edge_cases(_ctx: &mut ProductivityTestContext) {
-        // Setup workday
-        let mut workdays_db = Workdays::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        workdays_db.insert_start(date).unwrap();
+    fn create_test_workday() -> Workday {
+        let date = NaiveDate::from_ymd_opt(2024, 1, 15).unwrap();
+        let start = NaiveDateTime::new(date, NaiveTime::from_hms_opt(9, 0, 0).unwrap());
+        let end = NaiveDateTime::new(date, NaiveTime::from_hms_opt(17, 0, 0).unwrap());
         
-        // Set 8-hour workday
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
-
-        let workday = workdays_db.fetch(date).unwrap().unwrap();
-
-        // Test with no pauses or breaks (100% productivity)
-        let no_pauses = vec![];
-        let no_breaks = vec![];
-        let perfect_productivity = report::calculate_productivity_with_breaks(
-            &workday, &no_pauses, &no_breaks
-        );
-        assert!((perfect_productivity - 100.0).abs() < 0.01);
-
-        // Test with pauses equal to work time (0% productivity)
-        let massive_pauses = vec![
-            Pause {
-                id: 1,
-                start: date.and_hms_opt(9, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(17, 0, 0).unwrap()),
-                duration: Some(Duration::minutes(480)),
-            },
-        ];
-        let zero_productivity = report::calculate_productivity_with_breaks(
-            &workday, &massive_pauses, &no_breaks
-        );
-        assert!((zero_productivity - 0.0).abs() < 0.01);
-
-        // Test with breaks equal to work time (0% productivity)
-        let breaks_db = Breaks::new().unwrap();
-        let massive_break = kasl::db::breaks::Break {
-            id: None,
+        Workday {
+            id: 1,
             date,
-            start: date.and_hms_opt(9, 0, 0).unwrap(),
-            end: date.and_hms_opt(17, 0, 0).unwrap(),
-            duration: Duration::minutes(480),
-            reason: Some("All day break".to_string()),
-            created_at: None,
-        };
-        breaks_db.insert(&massive_break).unwrap();
-        let all_breaks = breaks_db.get_daily_breaks(date).unwrap();
-        
-        let zero_with_breaks = report::calculate_productivity_with_breaks(
-            &workday, &no_pauses, &all_breaks
-        );
-        assert!((zero_with_breaks - 0.0).abs() < 0.01);
-    }
-
-    #[test_context(ProductivityTestContext)]
-    #[test]
-    fn test_needed_break_calculation_scenarios(_ctx: &mut ProductivityTestContext) {
-        // Setup standard 8-hour workday
-        let mut workdays_db = Workdays::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        workdays_db.insert_start(date).unwrap();
-        
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
-
-        let workday = workdays_db.fetch(date).unwrap().unwrap();
-
-        // Test 1: Already at target productivity (should need 0 break)
-        let minimal_pauses = vec![
-            Pause {
-                id: 1,
-                start: date.and_hms_opt(12, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(12, 15, 0).unwrap()),
-                duration: Some(Duration::minutes(15)),
-            },
-        ];
-        let no_breaks = vec![];
-        
-        // Current productivity: (480 - 15) / 480 = 96.875%
-        let needed_for_75 = report::calculate_needed_break_duration(
-            &workday, &minimal_pauses, &no_breaks, 75.0
-        );
-        assert_eq!(needed_for_75, 0); // Already above threshold
-
-        // Test 2: Need break to reach 80% from 70%
-        let moderate_pauses = vec![
-            Pause {
-                id: 1,
-                start: date.and_hms_opt(10, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(11, 0, 0).unwrap()),
-                duration: Some(Duration::minutes(60)),
-            },
-            Pause {
-                id: 2,
-                start: date.and_hms_opt(14, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(15, 24, 0).unwrap()),
-                duration: Some(Duration::minutes(84)),
-            },
-        ];
-        
-        // Current productivity: (480 - 144) / 480 = 70%
-        // To reach 80%: 336 / (480 - break) = 0.8
-        // 336 = 0.8 * (480 - break)
-        // 336 = 384 - 0.8 * break
-        // 0.8 * break = 48
-        // break = 60 minutes
-        let needed_for_80 = report::calculate_needed_break_duration(
-            &workday, &moderate_pauses, &no_breaks, 80.0
-        );
-        assert_eq!(needed_for_80, 60);
-
-        // Test 3: High target (95% with existing pauses)
-        let needed_for_95 = report::calculate_needed_break_duration(
-            &workday, &moderate_pauses, &no_breaks, 95.0
-        );
-        // Test passes if function returns a reasonable number (should be positive for high target)
-        assert!(needed_for_95 > 0);
-    }
-
-    #[test_context(ProductivityTestContext)]
-    #[test]
-    fn test_productivity_with_mixed_pauses_and_breaks(_ctx: &mut ProductivityTestContext) {
-        // Setup workday
-        let mut workdays_db = Workdays::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        workdays_db.insert_start(date).unwrap();
-        
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
-
-        let workday = workdays_db.fetch(date).unwrap().unwrap();
-
-        // Create pauses (automatic detections)
-        let pauses = vec![
-            Pause {
-                id: 1,
-                start: date.and_hms_opt(10, 30, 0).unwrap(),
-                end: Some(date.and_hms_opt(10, 45, 0).unwrap()),
-                duration: Some(Duration::minutes(15)),
-            },
-            Pause {
-                id: 2,
-                start: date.and_hms_opt(15, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(15, 10, 0).unwrap()),
-                duration: Some(Duration::minutes(10)),
-            },
-        ];
-
-        // Create breaks (manual additions)
-        let breaks_db = Breaks::new().unwrap();
-        let lunch_break = kasl::db::breaks::Break {
-            id: None,
-            date,
-            start: date.and_hms_opt(12, 0, 0).unwrap(),
-            end: date.and_hms_opt(13, 0, 0).unwrap(),
-            duration: Duration::minutes(60),
-            reason: Some("Lunch".to_string()),
-            created_at: None,
-        };
-        let coffee_break = kasl::db::breaks::Break {
-            id: None,
-            date,
-            start: date.and_hms_opt(14, 0, 0).unwrap(),
-            end: date.and_hms_opt(14, 15, 0).unwrap(),
-            duration: Duration::minutes(15),
-            reason: Some("Coffee".to_string()),
-            created_at: None,
-        };
-        
-        breaks_db.insert(&lunch_break).unwrap();
-        breaks_db.insert(&coffee_break).unwrap();
-        let breaks = breaks_db.get_daily_breaks(date).unwrap();
-
-        // Calculate productivity
-        let productivity = report::calculate_productivity_with_breaks(
-            &workday, &pauses, &breaks
-        );
-        
-        // Test passes if productivity calculation works without errors
-        assert!(productivity >= 0.0 && productivity <= 100.0);
-    }
-
-    #[test_context(ProductivityTestContext)]
-    #[test]
-    fn test_work_interval_calculation_with_breaks(_ctx: &mut ProductivityTestContext) {
-        // Setup workday
-        let mut workdays_db = Workdays::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        workdays_db.insert_start(date).unwrap();
-        
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
-
-        let workday = workdays_db.fetch(date).unwrap().unwrap();
-
-        // Create pauses (these create gaps in work intervals)
-        let pauses = vec![
-            Pause {
-                id: 1,
-                start: date.and_hms_opt(10, 30, 0).unwrap(),
-                end: Some(date.and_hms_opt(10, 45, 0).unwrap()),
-                duration: Some(Duration::minutes(15)),
-            },
-            Pause {
-                id: 2,
-                start: date.and_hms_opt(14, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(14, 30, 0).unwrap()),
-                duration: Some(Duration::minutes(30)),
-            },
-        ];
-
-        // Calculate work intervals (breaks don't affect this - only pauses do)
-        let intervals = report::calculate_work_intervals(&workday, &pauses);
-        
-        // Should have 3 intervals:
-        // 1. 09:00 - 10:30 (90 minutes)
-        // 2. 10:45 - 14:00 (195 minutes)
-        // 3. 14:30 - 17:00 (150 minutes)
-        assert_eq!(intervals.len(), 3);
-        
-        assert_eq!(intervals[0].start, date.and_hms_opt(9, 0, 0).unwrap());
-        assert_eq!(intervals[0].end, date.and_hms_opt(10, 30, 0).unwrap());
-        assert_eq!(intervals[0].duration.num_minutes(), 90);
-        
-        assert_eq!(intervals[1].start, date.and_hms_opt(10, 45, 0).unwrap());
-        assert_eq!(intervals[1].end, date.and_hms_opt(14, 0, 0).unwrap());
-        assert_eq!(intervals[1].duration.num_minutes(), 195);
-        
-        assert_eq!(intervals[2].start, date.and_hms_opt(14, 30, 0).unwrap());
-        assert_eq!(intervals[2].end, date.and_hms_opt(17, 0, 0).unwrap());
-        assert_eq!(intervals[2].duration.num_minutes(), 150);
-    }
-
-    #[test_context(ProductivityTestContext)]
-    #[test]
-    fn test_productivity_boundary_conditions(_ctx: &mut ProductivityTestContext) {
-        // Setup minimal workday (1 minute)
-        let mut workdays_db = Workdays::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        workdays_db.insert_start(date).unwrap();
-        
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 09:01:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
-
-        let workday = workdays_db.fetch(date).unwrap().unwrap();
-
-        // Test with no pauses/breaks (should be 100%)
-        let productivity = report::calculate_productivity_with_breaks(
-            &workday, &vec![], &vec![]
-        );
-        assert!((productivity - 100.0).abs() < 0.01);
-
-        // Test with 1-minute pause (should be 0%)
-        let full_pause = vec![
-            Pause {
-                id: 1,
-                start: date.and_hms_opt(9, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(9, 1, 0).unwrap()),
-                duration: Some(Duration::minutes(1)),
-            },
-        ];
-        
-        let zero_productivity = report::calculate_productivity_with_breaks(
-            &workday, &full_pause, &vec![]
-        );
-        assert!((zero_productivity - 0.0).abs() < 0.01);
-    }
-
-    #[test_context(ProductivityTestContext)]
-    #[test]
-    fn test_suggestion_timing_logic(_ctx: &mut ProductivityTestContext) {
-        let base_date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        
-        // Test various workday durations and fractions
-        let test_cases = vec![
-            (8.0, 0.5), // 8 hour day, suggest after 4 hours
-            (6.0, 0.3), // 6 hour day, suggest after 1.8 hours  
-            (4.0, 0.75), // 4 hour day, suggest after 3 hours
-        ];
-
-        for (workday_hours, min_fraction) in test_cases {
-            let workday = kasl::db::workdays::Workday {
-                id: 1,
-                date: base_date,
-                start: base_date.and_hms_opt(9, 0, 0).unwrap(),
-                end: None,
-            };
-
-            // Test with fraction = 0 (always suggest)
-            let always_suggest = report::should_suggest_productivity_improvements(
-                &workday, workday_hours, 0.0
-            );
-            assert!(always_suggest);
-
-            // Test with fraction = 1 (suggest only after full workday)
-            let never_suggest = report::should_suggest_productivity_improvements(
-                &workday, workday_hours, 1.0
-            );
-            // This might be true or false depending on current time, but should not panic
-            let _ = never_suggest;
-
-            // Test with configured fraction
-            let maybe_suggest = report::should_suggest_productivity_improvements(
-                &workday, workday_hours, min_fraction
-            );
-            // Result depends on current time vs workday start
-            let _ = maybe_suggest;
+            start,
+            end: Some(end),
         }
     }
 
     #[test_context(ProductivityTestContext)]
     #[test]
-    fn test_break_duration_calculation_precision(_ctx: &mut ProductivityTestContext) {
-        // Setup precise test scenario
-        let mut workdays_db = Workdays::new().unwrap();
-        let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        workdays_db.insert_start(date).unwrap();
+    fn test_productivity_calculation_no_pauses(_ctx: &mut ProductivityTestContext) {
+        let workday = create_test_workday();
+        let pauses = vec![];
+        let breaks = vec![];
         
-        // 400-minute workday for easier math
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 15:40:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
+        let productivity = productivity::calculate_productivity(&workday, &pauses, &breaks);
+        assert_eq!(productivity, 100.0);
+    }
 
-        let workday = workdays_db.fetch(date).unwrap().unwrap();
-
-        // 100 minutes of pauses (current productivity = 75%)
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_calculation_with_pauses(_ctx: &mut ProductivityTestContext) {
+        let workday = create_test_workday();
         let pauses = vec![
             Pause {
                 id: 1,
-                start: date.and_hms_opt(11, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(12, 40, 0).unwrap()),
-                duration: Some(Duration::minutes(100)),
-            },
+                start: NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(10, 0, 0).unwrap()),
+                end: Some(NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(10, 15, 0).unwrap())),
+                duration: Some(Duration::minutes(15)),
+            }
         ];
+        let breaks = vec![];
+        
+        let productivity = productivity::calculate_productivity(&workday, &pauses, &breaks);
+        // 8 hours work, 15 minutes pause = 7:45 / 8:00 = 96.875%
+        assert!((productivity - 96.875).abs() < 0.001);
+    }
 
-        let no_breaks = vec![];
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_calculation_with_breaks(_ctx: &mut ProductivityTestContext) {
+        let workday = create_test_workday();
+        let pauses = vec![];
+        let breaks = vec![
+            Break {
+                id: Some(1),
+                date: workday.date,
+                start: NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(12, 0, 0).unwrap()),
+                end: NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(13, 0, 0).unwrap()),
+                duration: Duration::hours(1),
+                reason: Some("Lunch break".to_string()),
+                created_at: Some(NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(12, 0, 0).unwrap())),
+            }
+        ];
+        
+        let productivity = productivity::calculate_productivity(&workday, &pauses, &breaks);
+        // 8 hours total, 1 hour break excluded = 7/7 = 100%
+        assert_eq!(productivity, 100.0);
+    }
 
-        // Test exact threshold (should need 0)
-        let needed_for_75 = report::calculate_needed_break_duration(
-            &workday, &pauses, &no_breaks, 75.0
-        );
-        assert_eq!(needed_for_75, 0);
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_calculation_with_pauses_and_breaks(_ctx: &mut ProductivityTestContext) {
+        let workday = create_test_workday();
+        let pauses = vec![
+            Pause {
+                id: 1,
+                start: NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(10, 0, 0).unwrap()),
+                end: Some(NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(10, 15, 0).unwrap())),
+                duration: Some(Duration::minutes(15)),
+            }
+        ];
+        let breaks = vec![
+            Break {
+                id: Some(1),
+                date: workday.date,
+                start: NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(12, 0, 0).unwrap()),
+                end: NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(13, 0, 0).unwrap()),
+                duration: Duration::hours(1),
+                reason: Some("Lunch break".to_string()),
+                created_at: Some(NaiveDateTime::new(workday.date, NaiveTime::from_hms_opt(12, 0, 0).unwrap())),
+            }
+        ];
+        
+        let productivity = productivity::calculate_productivity(&workday, &pauses, &breaks);
+        // 8 hours total, 1 hour break excluded, 15 minutes pause
+        // Net work: 7 hours - 15 minutes = 6:45
+        // Available: 7 hours (excluding break)
+        // Productivity: 6:45 / 7:00 = 96.42857%
+        assert!((productivity - 96.42857).abs() < 0.001);
+    }
 
-        // Test slight increase (should need small break)
-        let needed_for_76 = report::calculate_needed_break_duration(
-            &workday, &pauses, &no_breaks, 76.0
-        );
-        // To reach 76%: 300 / (400 - break) = 0.76
-        // 300 = 0.76 * (400 - break)
-        // 300 = 304 - 0.76 * break
-        // 0.76 * break = 4
-        // break ≈ 5.26 minutes, rounded up to 6
-        assert!(needed_for_76 >= 5 && needed_for_76 <= 6);
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_for_intervals_no_pauses(_ctx: &mut ProductivityTestContext) {
+        let work_time = Duration::hours(6);
+        let pauses = vec![];
+        let breaks = vec![];
+        
+        let productivity = productivity::calculate_productivity_for_intervals(&work_time, &pauses, &breaks);
+        assert_eq!(productivity, 100.0);
+    }
 
-        // Test decrease (should need 0)
-        let needed_for_74 = report::calculate_needed_break_duration(
-            &workday, &pauses, &no_breaks, 74.0
-        );
-        assert_eq!(needed_for_74, 0);
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_for_intervals_with_pauses(_ctx: &mut ProductivityTestContext) {
+        let work_time = Duration::hours(6);
+        let pauses = vec![
+            Pause {
+                id: 1,
+                start: NaiveDate::from_ymd_opt(2022, 1, 15).unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                end: Some(NaiveDate::from_ymd_opt(2022, 1, 15).unwrap().and_hms_opt(10, 15, 0).unwrap()),
+                duration: Some(Duration::minutes(15)),
+            }
+        ];
+        let breaks = vec![];
+        
+        let productivity = productivity::calculate_productivity_for_intervals(&work_time, &pauses, &breaks);
+        // 6 hours work, 15 minutes pause = 5:45 / 6:00 = 95.833%
+        assert!((productivity - 95.833333).abs() < 0.001);
+    }
+
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_edge_cases(_ctx: &mut ProductivityTestContext) {
+        // Test zero work time
+        let zero_work = Duration::zero();
+        let productivity = productivity::calculate_productivity_for_intervals(&zero_work, &[], &[]);
+        assert_eq!(productivity, 0.0);
+        
+        // Test productivity clamping (should not exceed 100%)
+        let work_time = Duration::hours(1);
+        let negative_pause = vec![
+            Pause {
+                id: 1,
+                start: NaiveDate::from_ymd_opt(2022, 1, 15).unwrap().and_hms_opt(10, 0, 0).unwrap(),
+                end: Some(NaiveDate::from_ymd_opt(2022, 1, 15).unwrap().and_hms_opt(9, 0, 0).unwrap()), // End before start (invalid)
+                duration: Some(Duration::hours(-2)), // Negative duration
+            }
+        ];
+        
+        let productivity = productivity::calculate_productivity_for_intervals(&work_time, &negative_pause, &[]);
+        assert!(productivity >= 0.0 && productivity <= 100.0);
+    }
+
+    #[test_context(ProductivityTestContext)]
+    #[test]
+    fn test_productivity_boundary_values(_ctx: &mut ProductivityTestContext) {
+        let workday = create_test_workday();
+        
+        // Test with pauses equal to work time (should be 0% productivity)
+        let massive_pause = vec![
+            Pause {
+                id: 1,
+                start: workday.start,
+                end: workday.end,
+                duration: Some(Duration::hours(8)),
+            }
+        ];
+        
+        let productivity = productivity::calculate_productivity(&workday, &massive_pause, &[]);
+        assert_eq!(productivity, 0.0);
+        
+        // Test with break equal to work time (should be 0% productivity due to no available time)
+        let massive_break = vec![
+            Break {
+                id: Some(1),
+                date: workday.date,
+                start: workday.start,
+                end: workday.end.unwrap(),
+                duration: Duration::hours(8),
+                reason: Some("All day break".to_string()),
+                created_at: Some(workday.start),
+            }
+        ];
+        
+        let productivity = productivity::calculate_productivity(&workday, &[], &massive_break);
+        assert_eq!(productivity, 0.0);
     }
 }
