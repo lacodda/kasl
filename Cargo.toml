@@ -4,7 +4,7 @@
 
 [package]
 name = "kasl"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ⏸, and task completion"
 repository = "https://github.com/lacodda/kasl.git"

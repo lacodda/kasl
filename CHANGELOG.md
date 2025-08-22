@@ -1,5 +1,25 @@
 # Changelog
 
+## 🎉 [0.8.1] - 2025-08-22
+
+### ✨ Features
+
+- Implement productivity-focused breaks system to replace adjust command
+
+### 🎛️ Refactor
+
+- Replace short interval database cleanup with display filtering
+
+### 📖 Documentation
+
+- Update report command documentation for new interval filtering
+- Update documentation for new breaks command and productivity features
+
+### 🧪 Testing
+
+- Implement missing test coverage for critical components
+- Add comprehensive test suite for breaks functionality and productivity features
+
 ## 🎉 [0.8.0] - 2025-08-20
 
 ### ✨ Features
