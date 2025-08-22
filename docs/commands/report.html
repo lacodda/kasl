@@ -206,14 +206,6 @@
 <li>Typically used for organizational reporting requirements at month-end</li>
 </ul>
 </li>
-<li>
-<p><code>--clear-short-intervals</code>, <code>-c</code>: Automatically detect and remove short work intervals</p>
-<ul>
-<li>Analyzes work intervals and removes pauses that create inappropriately short work periods</li>
-<li>Merges adjacent intervals for cleaner reporting</li>
-<li>Helps eliminate noise from brief interruptions</li>
-</ul>
-</li>
 </ul>
 <h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
 <h3 id="basic-report-generation"><a class="header" href="#basic-report-generation">Basic Report Generation</a></h3>
@@ -230,9 +222,6 @@ kasl report --send
 <pre><code class="language-bash"># Submit monthly summary report
 kasl report --month
 
-# Clean up short intervals and generate report
-kasl report --clear-short-intervals
-
 # Generate yesterday's report and send it
 kasl report --last --send
 </code></pre>
@@ -242,9 +231,6 @@ kasl report
 
 # Check yesterday's productivity
 kasl report --last
-
-# Clean up data and review
-kasl report --clear-short-intervals
 </code></pre>
 <h2 id="report-components"><a class="header" href="#report-components">Report Components</a></h2>
 <h3 id="daily-report-structure"><a class="header" href="#daily-report-structure">Daily Report Structure</a></h3>
@@ -278,9 +264,10 @@ kasl report --clear-short-intervals
 <li>
 <p><strong>Time Intervals</strong></p>
 <ul>
-<li>Detailed work periods</li>
+<li>Detailed work periods (short intervals automatically filtered out)</li>
 <li>Break periods</li>
 <li>Activity patterns</li>
+<li>Information about filtered short intervals</li>
 </ul>
 </li>
 </ol>
@@ -312,6 +299,31 @@ kasl report --clear-short-intervals
 </ul>
 </li>
 </ol>
+<h2 id="short-interval-filtering"><a class="header" href="#short-interval-filtering">Short Interval Filtering</a></h2>
+<p>The report command automatically filters out work intervals that are shorter than the configured <code>min_work_interval</code> threshold. This filtering provides cleaner, more meaningful reports by removing brief interruptions that don't represent significant work periods.</p>
+<h3 id="how-it-works"><a class="header" href="#how-it-works">How It Works</a></h3>
+<ol>
+<li><strong>Automatic Detection</strong>: Work intervals are analyzed based on the <code>min_work_interval</code> configuration setting</li>
+<li><strong>Display Filtering</strong>: Short intervals are filtered at display time - no database modifications are made</li>
+<li><strong>Consistent Application</strong>: Same filtering logic applies to both local display (<code>kasl report</code>) and API submission (<code>kasl report --send</code>)</li>
+<li><strong>User Notification</strong>: When short intervals are filtered, users receive information about how many were filtered and their total duration</li>
+</ol>
+<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
+<p>The filtering threshold is controlled by the <code>min_work_interval</code> setting in your configuration:</p>
+<pre><code class="language-json">{
+  "monitor": {
+    "min_work_interval": 30
+  }
+}
+</code></pre>
+<p>This setting defines the minimum duration (in minutes) for intervals to be included in reports.</p>
+<h3 id="benefits"><a class="header" href="#benefits">Benefits</a></h3>
+<ul>
+<li><strong>Cleaner Reports</strong>: Eliminates noise from brief interruptions</li>
+<li><strong>Better Analytics</strong>: Focus on meaningful work periods</li>
+<li><strong>Preserved Data</strong>: Original data remains intact in the database</li>
+<li><strong>Consistent Behavior</strong>: Same filtering for display and API submission</li>
+</ul>
 <h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
 <h3 id="daily-report"><a class="header" href="#daily-report">Daily Report</a></h3>
 <pre><code>December 15, 2024
@@ -337,6 +349,8 @@ Tasks
 | 3 | 3  | 0       | Bug fix          | Fix login issue  | 75%         | bug, urgent      |
 | 4 | 4  | 0       | Documentation    | Update API docs  | 25%         | docs             |
 +---+----+----------+------------------+------------------+-------------+------------------+
+
+Filtered out 2 short intervals (total: 0:15)
 </code></pre>
 <h3 id="monthly-report"><a class="header" href="#monthly-report">Monthly Report</a></h3>
 <pre><code>December 2024
@@ -364,23 +378,10 @@ kasl report --send
 <h3 id="weekly-planning"><a class="header" href="#weekly-planning">Weekly Planning</a></h3>
 <pre><code class="language-bash"># Review yesterday's work before planning today
 kasl report --last
-
-# Clean up data for better analysis
-kasl report --clear-short-intervals
 </code></pre>
 <h3 id="monthly-reporting"><a class="header" href="#monthly-reporting">Monthly Reporting</a></h3>
 <pre><code class="language-bash"># Generate monthly summary for management
 kasl report --month
-
-# Submit monthly report to HR system
-kasl report --month --send
-</code></pre>
-<h3 id="data-quality-management"><a class="header" href="#data-quality-management">Data Quality Management</a></h3>
-<pre><code class="language-bash"># Clean up short intervals for better reporting
-kasl report --clear-short-intervals
-
-# Review cleaned data
-kasl report
 </code></pre>
 <h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
 <p>The <code>report</code> command works with other kasl commands:</p>
@@ -395,13 +396,13 @@ kasl report
 <ol>
 <li><strong>Review at end of day</strong>: Generate report to review productivity</li>
 <li><strong>Submit promptly</strong>: Send reports to maintain compliance</li>
-<li><strong>Clean data regularly</strong>: Use short interval cleanup for accuracy</li>
+<li><strong>Monitor filtering</strong>: Check filtered interval notifications for data quality</li>
 <li><strong>Monitor trends</strong>: Track productivity patterns over time</li>
 </ol>
 <h3 id="report-quality"><a class="header" href="#report-quality">Report Quality</a></h3>
 <ol>
 <li><strong>Verify data accuracy</strong>: Check reports for unusual patterns</li>
-<li><strong>Clean up noise</strong>: Remove short intervals that create confusion</li>
+<li><strong>Review filtering</strong>: Note filtered short intervals for context</li>
 <li><strong>Document adjustments</strong>: Note any manual time corrections</li>
 <li><strong>Review completeness</strong>: Ensure all work is properly recorded</li>
 </ol>

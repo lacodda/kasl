@@ -15,7 +15,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 ### Data Management
 
 - **[`export`](./export.md)** - Export data to various formats
-- **[`adjust`](./adjust.md)** - Adjust work times and add pauses
+- **[`breaks`](./breaks.md)** - Add manual breaks for productivity optimization
 - **[`pauses`](./pauses.md)** - View recorded breaks and pauses
 
 ### Organization
@@ -69,17 +69,17 @@ kasl task --delete 1 2 3
 kasl task --delete-today
 ```
 
-### Time Adjustments
+### Productivity Optimization
 
 ```bash
-# Adjust work start time
-kasl adjust --mode start --minutes 30
+# Add strategic break for productivity
+kasl breaks -m 30
 
-# Add a pause
-kasl adjust --mode pause --minutes 15
+# Interactive break placement
+kasl breaks
 
-# Adjust work end time
-kasl adjust --mode end --minutes 20
+# Force break creation
+kasl breaks -m 45 --force
 ```
 
 ### Data Export
@@ -128,8 +128,8 @@ kasl task --template "daily-standup"
 ### Activity Monitoring
 Commands for tracking work sessions and activity:
 - `watch` - Core monitoring functionality
-- `adjust` - Time corrections and adjustments
-- `pauses` - Break period management
+- `breaks` - Strategic break placement for productivity
+- `pauses` - View recorded breaks and pauses
 
 ### Task Management
 Commands for organizing and tracking work items:

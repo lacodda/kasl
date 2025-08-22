@@ -11,7 +11,7 @@
   - [`report`](./commands/report.md)
   - [`sum`](./commands/sum.md)
   - [`export`](./commands/export.md)
-  - [`adjust`](./commands/adjust.md)
+  - [`breaks`](./commands/breaks.md)
   - [`pauses`](./commands/pauses.md)
   - [`tag`](./commands/tag.md)
   - [`template`](./commands/template.md)

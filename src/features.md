@@ -34,6 +34,61 @@ Intelligent pause detection that adapts to your work patterns:
 }
 ```
 
+## 🎯 Productivity Optimization
+
+### Manual Break Management
+
+Strategic break placement for productivity improvement:
+
+- **Automatic Placement**: Optimal break positioning using intelligent algorithms
+- **Interactive Mode**: User-guided break creation with multiple placement options
+- **Productivity Validation**: Ensures breaks improve metrics effectively
+- **Conflict Prevention**: Avoids overlaps with existing pauses
+
+### Break Placement Strategies
+
+```bash
+# Automatic optimal placement
+kasl breaks -m 30
+
+# Interactive placement selection
+kasl breaks
+```
+
+**Placement Algorithms:**
+- **Middle of Longest Work Period**: Splits extended work sessions
+- **After Existing Pauses**: Extends natural break periods
+- **Before Existing Pauses**: Creates preparation time
+
+### Productivity Metrics
+
+Real-time productivity tracking and validation:
+
+- **Threshold Validation**: Configurable minimum productivity for report submission
+- **Break Recommendations**: Suggests break duration to reach targets
+- **Progress Tracking**: Shows productivity impact of added breaks
+- **Report Integration**: Blocks low-productivity report submission
+
+### Configuration
+
+```json
+{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+```
+
+**Key Features:**
+- **Smart Recommendations**: Only suggests breaks when meaningful
+- **Validation Safeguards**: Prevents invalid break placement
+- **Progress Feedback**: Shows real-time productivity improvements
+- **Report Quality**: Ensures only high-quality reports are submitted
+
 ## 📋 Task Management
 
 ### CRUD Operations
@@ -151,16 +206,21 @@ Calculate and track productivity:
 - **Productivity Percentage**: Net time / Gross time
 - **Break Analysis**: Break frequency and duration patterns
 
-### Short Interval Detection
+### Short Interval Filtering
 
-Identify and optimize fragmented work periods:
+Automatically filter out brief work periods for cleaner reporting:
+
+- **Automatic Detection**: Short intervals are filtered based on `min_work_interval` configuration
+- **Display-Level Filtering**: Original data remains intact in the database
+- **Consistent Behavior**: Same filtering applies to both display and API submission
+- **User Notification**: Information about filtered intervals is shown in reports
 
 ```bash
-# Detect short intervals
-kasl report --clear-short-intervals
+# Reports automatically filter short intervals
+kasl report
 
-# View interval analysis
-kasl report --last
+# Configuration controls the filtering threshold
+# (set via min_work_interval in monitor config)
 ```
 
 ## ⚙️ Advanced Features

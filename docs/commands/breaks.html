@@ -1,0 +1,517 @@
+<!DOCTYPE HTML>
+<html lang="en" class="light sidebar-visible" dir="ltr">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>breaks - kasl documentation</title>
+
+
+        <!-- Custom HTML head -->
+
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff">
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" id="highlight-css" href="../highlight.css">
+        <link rel="stylesheet" id="tomorrow-night-css" href="../tomorrow-night.css">
+        <link rel="stylesheet" id="ayu-highlight-css" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+
+
+        <!-- Provide site root and default themes to javascript -->
+        <script>
+            const path_to_root = "../";
+            const default_light_theme = "light";
+            const default_dark_theme = "navy";
+            window.path_to_searchindex_js = "../searchindex.js";
+        </script>
+        <!-- Start loading toc.js asap -->
+        <script src="../toc.js"></script>
+    </head>
+    <body>
+    <div id="mdbook-help-container">
+        <div id="mdbook-help-popup">
+            <h2 class="mdbook-help-title">Keyboard shortcuts</h2>
+            <div>
+                <p>Press <kbd>←</kbd> or <kbd>→</kbd> to navigate between chapters</p>
+                <p>Press <kbd>S</kbd> or <kbd>/</kbd> to search in the book</p>
+                <p>Press <kbd>?</kbd> to show this help</p>
+                <p>Press <kbd>Esc</kbd> to hide this help</p>
+            </div>
+        </div>
+    </div>
+    <div id="body-container">
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                let theme = localStorage.getItem('mdbook-theme');
+                let sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            const default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? default_dark_theme : default_light_theme;
+            let theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            const html = document.documentElement;
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add("js");
+        </script>
+
+        <input type="checkbox" id="sidebar-toggle-anchor" class="hidden">
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            let sidebar = null;
+            const sidebar_toggle = document.getElementById("sidebar-toggle-anchor");
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            } else {
+                sidebar = 'hidden';
+                sidebar_toggle.checked = false;
+            }
+            if (sidebar === 'visible') {
+                sidebar_toggle.checked = true;
+            } else {
+                html.classList.remove('sidebar-visible');
+            }
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <!-- populated by js -->
+            <mdbook-sidebar-scrollbox class="sidebar-scrollbox"></mdbook-sidebar-scrollbox>
+            <noscript>
+                <iframe class="sidebar-iframe-outer" src="../toc.html"></iframe>
+            </noscript>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle">
+                <div class="sidebar-resize-indicator"></div>
+            </div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky">
+                    <div class="left-buttons">
+                        <label id="sidebar-toggle" class="icon-button" for="sidebar-toggle-anchor" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </label>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="default_theme">Auto</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search (`/`)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="/ s" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">kasl documentation</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <div class="search-wrapper">
+                            <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                            <div class="spinner-wrapper">
+                                <i class="fa fa-spinner fa-spin"></i>
+                            </div>
+                        </div>
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="breaks-command"><a class="header" href="#breaks-command"><code>breaks</code> Command</a></h1>
+<p>The <code>breaks</code> command enables strategic placement of manual break periods to optimize productivity metrics and meet minimum thresholds for report submission. This productivity-focused feature helps users improve their work reports by adding intentional breaks that complement automatic pause detection.</p>
+<h2 id="usage"><a class="header" href="#usage">Usage</a></h2>
+<pre><code class="language-bash">kasl breaks [OPTIONS]
+</code></pre>
+<h2 id="options"><a class="header" href="#options">Options</a></h2>
+<ul>
+<li>
+<p><code>-m, --minutes &lt;MINUTES&gt;</code>: Duration of the break in minutes</p>
+<ul>
+<li>When specified, automatically finds optimal placement for the break</li>
+<li>If not specified, enters interactive mode for manual break configuration</li>
+<li>Must be within configured minimum and maximum break duration limits</li>
+</ul>
+</li>
+<li>
+<p><code>--force</code>: Force creation even if productivity validation fails</p>
+<ul>
+<li>Bypasses normal productivity threshold checks</li>
+<li>Creates the break regardless of current productivity levels</li>
+<li>Use with caution as this skips validation safeguards</li>
+</ul>
+</li>
+</ul>
+<h2 id="break-management-modes"><a class="header" href="#break-management-modes">Break Management Modes</a></h2>
+<h3 id="automatic-mode"><a class="header" href="#automatic-mode">Automatic Mode</a></h3>
+<p>Optimal break placement with specified duration:</p>
+<pre><code class="language-bash"># Add a 30-minute break with automatic optimal placement
+kasl breaks -m 30
+
+# Add a 60-minute break, bypassing productivity checks
+kasl breaks -m 60 --force
+</code></pre>
+<p><strong>How Automatic Placement Works:</strong></p>
+<ul>
+<li>Analyzes existing work intervals and pauses</li>
+<li>Finds optimal placement using multiple strategies</li>
+<li>Avoids conflicts with existing pauses</li>
+<li>Maintains minimum work intervals around breaks</li>
+</ul>
+<h3 id="interactive-mode"><a class="header" href="#interactive-mode">Interactive Mode</a></h3>
+<p>Guided break creation with user selection:</p>
+<pre><code class="language-bash"># Start interactive break creation
+kasl breaks
+
+# The command will prompt for:
+# 1. Break duration (within configured limits)
+# 2. Placement options with timing details
+# 3. Selection from available placement strategies
+</code></pre>
+<h2 id="break-placement-strategies"><a class="header" href="#break-placement-strategies">Break Placement Strategies</a></h2>
+<p>The system uses intelligent algorithms to suggest optimal break placement:</p>
+<h3 id="1-middle-of-longest-work-period"><a class="header" href="#1-middle-of-longest-work-period">1. Middle of Longest Work Period</a></h3>
+<p>Places the break in the center of the longest uninterrupted work interval:</p>
+<ul>
+<li><strong>Advantage</strong>: Splits long work sessions effectively</li>
+<li><strong>Best for</strong>: Improving focus and preventing fatigue</li>
+</ul>
+<h3 id="2-after-existing-pauses"><a class="header" href="#2-after-existing-pauses">2. After Existing Pauses</a></h3>
+<p>Places breaks immediately following detected pauses:</p>
+<ul>
+<li><strong>Advantage</strong>: Extends natural break periods</li>
+<li><strong>Best for</strong>: Consolidating rest time</li>
+</ul>
+<h3 id="3-before-existing-pauses"><a class="header" href="#3-before-existing-pauses">3. Before Existing Pauses</a></h3>
+<p>Places breaks just before detected pauses:</p>
+<ul>
+<li><strong>Advantage</strong>: Creates preparation time before natural breaks</li>
+<li><strong>Best for</strong>: Structuring work transitions</li>
+</ul>
+<h2 id="examples"><a class="header" href="#examples">Examples</a></h2>
+<h3 id="quick-break-addition"><a class="header" href="#quick-break-addition">Quick Break Addition</a></h3>
+<pre><code class="language-bash"># Add 30-minute break with optimal placement
+kasl breaks -m 30
+
+# Output:
+# ✅ Break created: 14:30 - 15:00 (30 minutes)
+# 📈 Productivity improved from 68% to 76%
+</code></pre>
+<h3 id="interactive-break-creation"><a class="header" href="#interactive-break-creation">Interactive Break Creation</a></h3>
+<pre><code class="language-bash"># Start interactive mode
+kasl breaks
+
+# Sample interaction:
+# Enter break duration (20-180 minutes): 45
+# 
+# Available break placement options:
+# 1. 12:15 - 13:00 (45 min) - Middle of longest work period
+# 2. 10:30 - 11:15 (45 min) - After morning pause
+# 3. 15:45 - 16:30 (45 min) - Before afternoon pause
+# 
+# Select break placement: 1
+# 
+# ✅ Break created: 12:15 - 13:00 (45 minutes)
+</code></pre>
+<h3 id="productivity-optimization"><a class="header" href="#productivity-optimization">Productivity Optimization</a></h3>
+<pre><code class="language-bash"># When productivity is too low for report submission:
+# ⚠️ Current productivity: 68% (below 75% threshold)
+# 💡 Add a 22-minute break to reach minimum productivity
+
+kasl breaks -m 22
+
+# ✅ Break created: 13:00 - 13:22 (22 minutes)
+# 📈 Productivity improved to 75% - report can now be submitted
+</code></pre>
+<h2 id="productivity-integration"><a class="header" href="#productivity-integration">Productivity Integration</a></h2>
+<h3 id="automatic-recommendations"><a class="header" href="#automatic-recommendations">Automatic Recommendations</a></h3>
+<p>The system provides productivity recommendations when:</p>
+<ul>
+<li>Current productivity is below configured threshold (default: 75%)</li>
+<li>Enough of the workday has passed to make meaningful suggestions</li>
+<li>Report submission is blocked due to low productivity</li>
+</ul>
+<h3 id="threshold-validation"><a class="header" href="#threshold-validation">Threshold Validation</a></h3>
+<p>Before creating breaks, the system:</p>
+<ol>
+<li><strong>Calculates current productivity</strong> including existing pauses and breaks</li>
+<li><strong>Validates duration limits</strong> based on configuration</li>
+<li><strong>Checks for conflicts</strong> with existing pauses</li>
+<li><strong>Ensures minimum work intervals</strong> are maintained</li>
+</ol>
+<h3 id="report-integration"><a class="header" href="#report-integration">Report Integration</a></h3>
+<p>Breaks directly impact report functionality:</p>
+<ul>
+<li><strong>Report display</strong> includes break information and productivity metrics</li>
+<li><strong>API submission</strong> validates productivity before sending reports</li>
+<li><strong>Productivity warnings</strong> suggest break creation when needed</li>
+</ul>
+<h2 id="configuration"><a class="header" href="#configuration">Configuration</a></h2>
+<p>Break behavior is controlled by configuration settings:</p>
+<pre><code class="language-json">{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+</code></pre>
+<h3 id="configuration-options"><a class="header" href="#configuration-options">Configuration Options</a></h3>
+<ul>
+<li><strong><code>min_productivity_threshold</code></strong>: Minimum productivity percentage for report submission</li>
+<li><strong><code>workday_hours</code></strong>: Expected daily work hours for calculations</li>
+<li><strong><code>min_break_duration</code></strong>: Minimum allowed break duration in minutes</li>
+<li><strong><code>max_break_duration</code></strong>: Maximum allowed break duration in minutes</li>
+<li><strong><code>min_workday_fraction_before_suggest</code></strong>: Fraction of workday before showing recommendations</li>
+</ul>
+<h2 id="sample-output"><a class="header" href="#sample-output">Sample Output</a></h2>
+<h3 id="successful-break-creation"><a class="header" href="#successful-break-creation">Successful Break Creation</a></h3>
+<pre><code>🔄 Analyzing workday and existing pauses...
+✅ Break created: 14:30 - 15:00 (30 minutes)
+📈 Productivity updated: 68% → 76%
+</code></pre>
+<h3 id="interactive-selection"><a class="header" href="#interactive-selection">Interactive Selection</a></h3>
+<pre><code>📋 Break duration: 45 minutes
+
+Available placement options:
+1. 12:15 - 13:00 (45 min) - Middle of longest work period
+2. 10:30 - 11:15 (45 min) - After 15-minute pause
+3. 15:45 - 16:30 (45 min) - Before 8-minute pause
+
+Select break placement: 2
+
+✅ Break created: 10:30 - 11:15 (45 minutes)
+📈 Productivity improved from 68% to 75%
+</code></pre>
+<h3 id="productivity-warning"><a class="header" href="#productivity-warning">Productivity Warning</a></h3>
+<pre><code>⚠️ Low productivity detected: 68% (threshold: 75%)
+💡 Consider adding a 22-minute break to reach minimum productivity
+📝 Use: kasl breaks -m 22
+</code></pre>
+<h2 id="use-cases"><a class="header" href="#use-cases">Use Cases</a></h2>
+<h3 id="meeting-productivity-thresholds"><a class="header" href="#meeting-productivity-thresholds">Meeting Productivity Thresholds</a></h3>
+<pre><code class="language-bash"># When report submission is blocked:
+kasl report
+# ❌ Productivity too low (68%) - minimum 75% required
+# 💡 Add 22-minute break to reach threshold
+
+kasl breaks -m 22
+# ✅ Break added - productivity now 75%
+
+kasl report
+# ✅ Report sent successfully
+</code></pre>
+<h3 id="improving-work-life-balance"><a class="header" href="#improving-work-life-balance">Improving Work-Life Balance</a></h3>
+<pre><code class="language-bash"># Add structured lunch break
+kasl breaks -m 60
+
+# Add afternoon rest period
+kasl breaks -m 30
+</code></pre>
+<h3 id="optimizing-long-work-sessions"><a class="header" href="#optimizing-long-work-sessions">Optimizing Long Work Sessions</a></h3>
+<pre><code class="language-bash"># Add break in middle of long work period
+kasl breaks
+# Select: "Middle of longest work period"
+</code></pre>
+<h2 id="validation-and-safety"><a class="header" href="#validation-and-safety">Validation and Safety</a></h2>
+<h3 id="pre-creation-checks"><a class="header" href="#pre-creation-checks">Pre-Creation Checks</a></h3>
+<p>The command performs several validations:</p>
+<ol>
+<li><strong>Workday Existence</strong>: Ensures a workday exists for today</li>
+<li><strong>Duration Limits</strong>: Validates break duration within configured bounds</li>
+<li><strong>Conflict Detection</strong>: Prevents overlaps with existing pauses</li>
+<li><strong>Work Interval Maintenance</strong>: Ensures minimum work time around breaks</li>
+</ol>
+<h3 id="smart-placement"><a class="header" href="#smart-placement">Smart Placement</a></h3>
+<p>The placement algorithm ensures:</p>
+<ol>
+<li><strong>No Overlaps</strong>: Breaks don't conflict with existing pauses</li>
+<li><strong>Minimum Work Time</strong>: Maintains required work intervals</li>
+<li><strong>Optimal Timing</strong>: Places breaks for maximum productivity benefit</li>
+<li><strong>Current Time Validation</strong>: Only places breaks in completed time periods</li>
+</ol>
+<h2 id="troubleshooting"><a class="header" href="#troubleshooting">Troubleshooting</a></h2>
+<h3 id="common-issues"><a class="header" href="#common-issues">Common Issues</a></h3>
+<p><strong>No valid break placement found</strong></p>
+<pre><code class="language-bash"># Check existing pauses and work intervals
+kasl pauses
+
+# Try shorter break duration
+kasl breaks -m 20
+
+# Check if enough work time has passed
+kasl report
+</code></pre>
+<p><strong>Break duration out of range</strong></p>
+<pre><code class="language-bash"># Check configured limits
+# Default: 20-180 minutes
+
+# Use duration within limits
+kasl breaks -m 45
+</code></pre>
+<p><strong>Productivity still too low after break</strong></p>
+<pre><code class="language-bash"># Check current productivity
+kasl report
+
+# Add additional break if needed
+kasl breaks -m 30
+</code></pre>
+<h3 id="data-validation"><a class="header" href="#data-validation">Data Validation</a></h3>
+<pre><code class="language-bash"># View current workday status
+kasl report
+
+# Check existing pauses
+kasl pauses
+
+# Review productivity metrics
+kasl report --productivity
+</code></pre>
+<h2 id="best-practices"><a class="header" href="#best-practices">Best Practices</a></h2>
+<h3 id="strategic-break-placement"><a class="header" href="#strategic-break-placement">Strategic Break Placement</a></h3>
+<ol>
+<li><strong>Target productivity thresholds</strong> rather than arbitrary break times</li>
+<li><strong>Use automatic mode</strong> for optimal placement</li>
+<li><strong>Add breaks gradually</strong> to see productivity impact</li>
+<li><strong>Monitor report feedback</strong> to understand effectiveness</li>
+</ol>
+<h3 id="productivity-optimization-1"><a class="header" href="#productivity-optimization-1">Productivity Optimization</a></h3>
+<ol>
+<li><strong>Check productivity early</strong> in the workday</li>
+<li><strong>Add breaks proactively</strong> before productivity drops too low</li>
+<li><strong>Use recommended durations</strong> from productivity warnings</li>
+<li><strong>Balance break time</strong> with actual work requirements</li>
+</ol>
+<h3 id="integration-workflow"><a class="header" href="#integration-workflow">Integration Workflow</a></h3>
+<ol>
+<li><strong>Monitor productivity</strong> throughout the day</li>
+<li><strong>Add breaks when warned</strong> by the system</li>
+<li><strong>Validate report submission</strong> after adding breaks</li>
+<li><strong>Review daily patterns</strong> to improve future planning</li>
+</ol>
+<h2 id="integration-with-other-commands"><a class="header" href="#integration-with-other-commands">Integration with Other Commands</a></h2>
+<p>The <code>breaks</code> command works seamlessly with other kasl commands:</p>
+<ul>
+<li><strong><code>report</code></strong>: Shows productivity metrics and break impact</li>
+<li><strong><code>pauses</code></strong>: Displays existing pauses to avoid conflicts</li>
+<li><strong><code>watch</code></strong>: Continues monitoring activity with breaks included</li>
+<li><strong><code>export</code></strong>: Includes break data in exported reports</li>
+</ul>
+<h2 id="related-commands"><a class="header" href="#related-commands">Related Commands</a></h2>
+<ul>
+<li><strong><a href="./report.html"><code>report</code></a></strong> - View productivity metrics and break impact</li>
+<li><strong><a href="./pauses.html"><code>pauses</code></a></strong> - View existing pauses and gaps</li>
+<li><strong><a href="./watch.html"><code>watch</code></a></strong> - Monitor activity including break periods</li>
+<li><strong><a href="./export.html"><code>export</code></a></strong> - Export data including break information</li>
+</ul>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../commands/export.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next prefetch" href="../commands/pauses.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../commands/export.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next prefetch" href="../commands/pauses.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+
+
+
+    </div>
+    </body>
+</html>

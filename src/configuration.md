@@ -37,6 +37,13 @@ Configuration files are stored in platform-specific locations:
   "server": {
     "api_url": "https://api.company.com/timetracking",
     "auth_token": "your-api-token"
+  },
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
   }
 }
 ```
@@ -77,8 +84,8 @@ Controls activity monitoring behavior:
 - **Type**: `u64`
 - **Default**: `10`
 - **Unit**: Minutes
-- **Description**: Minimum work interval for merging
-- **Usage**: Short intervals are merged with adjacent ones
+- **Description**: Minimum work interval duration for report filtering
+- **Usage**: Intervals shorter than this duration are automatically filtered out from reports (display and API submission)
 
 ## SiServer Configuration
 
@@ -145,6 +152,58 @@ External reporting API configuration:
 - **Type**: `String`
 - **Description**: Authentication token for API access
 - **Format**: Depends on API requirements (Bearer, API key, etc.)
+
+## Productivity Configuration
+
+Controls productivity tracking and break management:
+
+### `min_productivity_threshold`
+- **Type**: `f64`
+- **Default**: `75.0`
+- **Description**: Minimum productivity percentage required for report submission
+- **Range**: `0.0` to `100.0`
+- **Usage**: Reports with productivity below this threshold will be blocked until breaks are added
+
+### `workday_hours`
+- **Type**: `f64`
+- **Default**: `8.0`
+- **Description**: Expected daily work hours for productivity calculations
+- **Range**: `1.0` to `24.0`
+- **Usage**: Used to calculate available work time for productivity metrics
+
+### `min_break_duration`
+- **Type**: `u64`
+- **Default**: `20`
+- **Description**: Minimum allowed break duration in minutes
+- **Range**: `1` to `480`
+- **Usage**: Prevents creation of breaks shorter than this duration
+
+### `max_break_duration`
+- **Type**: `u64`
+- **Default**: `180`
+- **Description**: Maximum allowed break duration in minutes
+- **Range**: `1` to `480`
+- **Usage**: Prevents creation of breaks longer than this duration
+
+### `min_workday_fraction_before_suggest`
+- **Type**: `f64`
+- **Default**: `0.5`
+- **Description**: Fraction of workday that must pass before showing productivity suggestions
+- **Range**: `0.0` to `1.0`
+- **Usage**: Prevents early recommendations when insufficient work time has elapsed
+
+**Example Configuration:**
+```json
+{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+```
 
 ## Interactive Configuration
 

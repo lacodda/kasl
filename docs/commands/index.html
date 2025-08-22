@@ -189,7 +189,7 @@
 <h3 id="data-management"><a class="header" href="#data-management">Data Management</a></h3>
 <ul>
 <li><strong><a href="./export.html"><code>export</code></a></strong> - Export data to various formats</li>
-<li><strong><a href="./adjust.html"><code>adjust</code></a></strong> - Adjust work times and add pauses</li>
+<li><strong><a href="./breaks.html"><code>breaks</code></a></strong> - Add manual breaks for productivity optimization</li>
 <li><strong><a href="./pauses.html"><code>pauses</code></a></strong> - View recorded breaks and pauses</li>
 </ul>
 <h3 id="organization"><a class="header" href="#organization">Organization</a></h3>
@@ -236,15 +236,15 @@ kasl task --edit-interactive
 kasl task --delete 1 2 3
 kasl task --delete-today
 </code></pre>
-<h3 id="time-adjustments"><a class="header" href="#time-adjustments">Time Adjustments</a></h3>
-<pre><code class="language-bash"># Adjust work start time
-kasl adjust --mode start --minutes 30
+<h3 id="productivity-optimization"><a class="header" href="#productivity-optimization">Productivity Optimization</a></h3>
+<pre><code class="language-bash"># Add strategic break for productivity
+kasl breaks -m 30
 
-# Add a pause
-kasl adjust --mode pause --minutes 15
+# Interactive break placement
+kasl breaks
 
-# Adjust work end time
-kasl adjust --mode end --minutes 20
+# Force break creation
+kasl breaks -m 45 --force
 </code></pre>
 <h3 id="data-export"><a class="header" href="#data-export">Data Export</a></h3>
 <pre><code class="language-bash"># Export today's data
@@ -283,8 +283,8 @@ kasl task --template "daily-standup"
 <p>Commands for tracking work sessions and activity:</p>
 <ul>
 <li><code>watch</code> - Core monitoring functionality</li>
-<li><code>adjust</code> - Time corrections and adjustments</li>
-<li><code>pauses</code> - Break period management</li>
+<li><code>breaks</code> - Strategic break placement for productivity</li>
+<li><code>pauses</code> - View recorded breaks and pauses</li>
 </ul>
 <h3 id="task-management-1"><a class="header" href="#task-management-1">Task Management</a></h3>
 <p>Commands for organizing and tracking work items:</p>

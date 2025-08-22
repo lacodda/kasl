@@ -203,6 +203,54 @@
   }
 }
 </code></pre>
+<h2 id="-productivity-optimization"><a class="header" href="#-productivity-optimization">🎯 Productivity Optimization</a></h2>
+<h3 id="manual-break-management"><a class="header" href="#manual-break-management">Manual Break Management</a></h3>
+<p>Strategic break placement for productivity improvement:</p>
+<ul>
+<li><strong>Automatic Placement</strong>: Optimal break positioning using intelligent algorithms</li>
+<li><strong>Interactive Mode</strong>: User-guided break creation with multiple placement options</li>
+<li><strong>Productivity Validation</strong>: Ensures breaks improve metrics effectively</li>
+<li><strong>Conflict Prevention</strong>: Avoids overlaps with existing pauses</li>
+</ul>
+<h3 id="break-placement-strategies"><a class="header" href="#break-placement-strategies">Break Placement Strategies</a></h3>
+<pre><code class="language-bash"># Automatic optimal placement
+kasl breaks -m 30
+
+# Interactive placement selection
+kasl breaks
+</code></pre>
+<p><strong>Placement Algorithms:</strong></p>
+<ul>
+<li><strong>Middle of Longest Work Period</strong>: Splits extended work sessions</li>
+<li><strong>After Existing Pauses</strong>: Extends natural break periods</li>
+<li><strong>Before Existing Pauses</strong>: Creates preparation time</li>
+</ul>
+<h3 id="productivity-metrics"><a class="header" href="#productivity-metrics">Productivity Metrics</a></h3>
+<p>Real-time productivity tracking and validation:</p>
+<ul>
+<li><strong>Threshold Validation</strong>: Configurable minimum productivity for report submission</li>
+<li><strong>Break Recommendations</strong>: Suggests break duration to reach targets</li>
+<li><strong>Progress Tracking</strong>: Shows productivity impact of added breaks</li>
+<li><strong>Report Integration</strong>: Blocks low-productivity report submission</li>
+</ul>
+<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
+<pre><code class="language-json">{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+</code></pre>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li><strong>Smart Recommendations</strong>: Only suggests breaks when meaningful</li>
+<li><strong>Validation Safeguards</strong>: Prevents invalid break placement</li>
+<li><strong>Progress Feedback</strong>: Shows real-time productivity improvements</li>
+<li><strong>Report Quality</strong>: Ensures only high-quality reports are submitted</li>
+</ul>
 <h2 id="-task-management"><a class="header" href="#-task-management">📋 Task Management</a></h2>
 <h3 id="crud-operations"><a class="header" href="#crud-operations">CRUD Operations</a></h3>
 <p>Complete task lifecycle management:</p>
@@ -288,7 +336,7 @@ kasl sum --send
 <li>Working day count</li>
 <li>Rest day integration</li>
 </ul>
-<h3 id="productivity-metrics"><a class="header" href="#productivity-metrics">Productivity Metrics</a></h3>
+<h3 id="productivity-metrics-1"><a class="header" href="#productivity-metrics-1">Productivity Metrics</a></h3>
 <p>Calculate and track productivity:</p>
 <ul>
 <li><strong>Gross Time</strong>: Total time from start to end</li>
@@ -296,13 +344,19 @@ kasl sum --send
 <li><strong>Productivity Percentage</strong>: Net time / Gross time</li>
 <li><strong>Break Analysis</strong>: Break frequency and duration patterns</li>
 </ul>
-<h3 id="short-interval-detection"><a class="header" href="#short-interval-detection">Short Interval Detection</a></h3>
-<p>Identify and optimize fragmented work periods:</p>
-<pre><code class="language-bash"># Detect short intervals
-kasl report --clear-short-intervals
+<h3 id="short-interval-filtering"><a class="header" href="#short-interval-filtering">Short Interval Filtering</a></h3>
+<p>Automatically filter out brief work periods for cleaner reporting:</p>
+<ul>
+<li><strong>Automatic Detection</strong>: Short intervals are filtered based on <code>min_work_interval</code> configuration</li>
+<li><strong>Display-Level Filtering</strong>: Original data remains intact in the database</li>
+<li><strong>Consistent Behavior</strong>: Same filtering applies to both display and API submission</li>
+<li><strong>User Notification</strong>: Information about filtered intervals is shown in reports</li>
+</ul>
+<pre><code class="language-bash"># Reports automatically filter short intervals
+kasl report
 
-# View interval analysis
-kasl report --last
+# Configuration controls the filtering threshold
+# (set via min_work_interval in monitor config)
 </code></pre>
 <h2 id="-advanced-features"><a class="header" href="#-advanced-features">⚙️ Advanced Features</a></h2>
 <h3 id="time-adjustments"><a class="header" href="#time-adjustments">Time Adjustments</a></h3>

@@ -209,6 +209,13 @@
   "server": {
     "api_url": "https://api.company.com/timetracking",
     "auth_token": "your-api-token"
+  },
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
   }
 }
 </code></pre>
@@ -251,8 +258,8 @@
 <li><strong>Type</strong>: <code>u64</code></li>
 <li><strong>Default</strong>: <code>10</code></li>
 <li><strong>Unit</strong>: Minutes</li>
-<li><strong>Description</strong>: Minimum work interval for merging</li>
-<li><strong>Usage</strong>: Short intervals are merged with adjacent ones</li>
+<li><strong>Description</strong>: Minimum work interval duration for report filtering</li>
+<li><strong>Usage</strong>: Intervals shorter than this duration are automatically filtered out from reports (display and API submission)</li>
 </ul>
 <h2 id="siserver-configuration"><a class="header" href="#siserver-configuration">SiServer Configuration</a></h2>
 <p>Internal company API integration:</p>
@@ -327,6 +334,59 @@
 <li><strong>Description</strong>: Authentication token for API access</li>
 <li><strong>Format</strong>: Depends on API requirements (Bearer, API key, etc.)</li>
 </ul>
+<h2 id="productivity-configuration"><a class="header" href="#productivity-configuration">Productivity Configuration</a></h2>
+<p>Controls productivity tracking and break management:</p>
+<h3 id="min_productivity_threshold"><a class="header" href="#min_productivity_threshold"><code>min_productivity_threshold</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>f64</code></li>
+<li><strong>Default</strong>: <code>75.0</code></li>
+<li><strong>Description</strong>: Minimum productivity percentage required for report submission</li>
+<li><strong>Range</strong>: <code>0.0</code> to <code>100.0</code></li>
+<li><strong>Usage</strong>: Reports with productivity below this threshold will be blocked until breaks are added</li>
+</ul>
+<h3 id="workday_hours"><a class="header" href="#workday_hours"><code>workday_hours</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>f64</code></li>
+<li><strong>Default</strong>: <code>8.0</code></li>
+<li><strong>Description</strong>: Expected daily work hours for productivity calculations</li>
+<li><strong>Range</strong>: <code>1.0</code> to <code>24.0</code></li>
+<li><strong>Usage</strong>: Used to calculate available work time for productivity metrics</li>
+</ul>
+<h3 id="min_break_duration"><a class="header" href="#min_break_duration"><code>min_break_duration</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>u64</code></li>
+<li><strong>Default</strong>: <code>20</code></li>
+<li><strong>Description</strong>: Minimum allowed break duration in minutes</li>
+<li><strong>Range</strong>: <code>1</code> to <code>480</code></li>
+<li><strong>Usage</strong>: Prevents creation of breaks shorter than this duration</li>
+</ul>
+<h3 id="max_break_duration"><a class="header" href="#max_break_duration"><code>max_break_duration</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>u64</code></li>
+<li><strong>Default</strong>: <code>180</code></li>
+<li><strong>Description</strong>: Maximum allowed break duration in minutes</li>
+<li><strong>Range</strong>: <code>1</code> to <code>480</code></li>
+<li><strong>Usage</strong>: Prevents creation of breaks longer than this duration</li>
+</ul>
+<h3 id="min_workday_fraction_before_suggest"><a class="header" href="#min_workday_fraction_before_suggest"><code>min_workday_fraction_before_suggest</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>f64</code></li>
+<li><strong>Default</strong>: <code>0.5</code></li>
+<li><strong>Description</strong>: Fraction of workday that must pass before showing productivity suggestions</li>
+<li><strong>Range</strong>: <code>0.0</code> to <code>1.0</code></li>
+<li><strong>Usage</strong>: Prevents early recommendations when insufficient work time has elapsed</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-json">{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+</code></pre>
 <h2 id="interactive-configuration"><a class="header" href="#interactive-configuration">Interactive Configuration</a></h2>
 <h3 id="initial-setup"><a class="header" href="#initial-setup">Initial Setup</a></h3>
 <p>Run the interactive configuration wizard:</p>

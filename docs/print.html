@@ -499,6 +499,54 @@ kasl watch --foreground  # Start in foreground to see logs
   }
 }
 </code></pre>
+<h2 id="-productivity-optimization"><a class="header" href="#-productivity-optimization">🎯 Productivity Optimization</a></h2>
+<h3 id="manual-break-management"><a class="header" href="#manual-break-management">Manual Break Management</a></h3>
+<p>Strategic break placement for productivity improvement:</p>
+<ul>
+<li><strong>Automatic Placement</strong>: Optimal break positioning using intelligent algorithms</li>
+<li><strong>Interactive Mode</strong>: User-guided break creation with multiple placement options</li>
+<li><strong>Productivity Validation</strong>: Ensures breaks improve metrics effectively</li>
+<li><strong>Conflict Prevention</strong>: Avoids overlaps with existing pauses</li>
+</ul>
+<h3 id="break-placement-strategies"><a class="header" href="#break-placement-strategies">Break Placement Strategies</a></h3>
+<pre><code class="language-bash"># Automatic optimal placement
+kasl breaks -m 30
+
+# Interactive placement selection
+kasl breaks
+</code></pre>
+<p><strong>Placement Algorithms:</strong></p>
+<ul>
+<li><strong>Middle of Longest Work Period</strong>: Splits extended work sessions</li>
+<li><strong>After Existing Pauses</strong>: Extends natural break periods</li>
+<li><strong>Before Existing Pauses</strong>: Creates preparation time</li>
+</ul>
+<h3 id="productivity-metrics"><a class="header" href="#productivity-metrics">Productivity Metrics</a></h3>
+<p>Real-time productivity tracking and validation:</p>
+<ul>
+<li><strong>Threshold Validation</strong>: Configurable minimum productivity for report submission</li>
+<li><strong>Break Recommendations</strong>: Suggests break duration to reach targets</li>
+<li><strong>Progress Tracking</strong>: Shows productivity impact of added breaks</li>
+<li><strong>Report Integration</strong>: Blocks low-productivity report submission</li>
+</ul>
+<h3 id="configuration"><a class="header" href="#configuration">Configuration</a></h3>
+<pre><code class="language-json">{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+</code></pre>
+<p><strong>Key Features:</strong></p>
+<ul>
+<li><strong>Smart Recommendations</strong>: Only suggests breaks when meaningful</li>
+<li><strong>Validation Safeguards</strong>: Prevents invalid break placement</li>
+<li><strong>Progress Feedback</strong>: Shows real-time productivity improvements</li>
+<li><strong>Report Quality</strong>: Ensures only high-quality reports are submitted</li>
+</ul>
 <h2 id="-task-management-1"><a class="header" href="#-task-management-1">📋 Task Management</a></h2>
 <h3 id="crud-operations"><a class="header" href="#crud-operations">CRUD Operations</a></h3>
 <p>Complete task lifecycle management:</p>
@@ -584,7 +632,7 @@ kasl sum --send
 <li>Working day count</li>
 <li>Rest day integration</li>
 </ul>
-<h3 id="productivity-metrics"><a class="header" href="#productivity-metrics">Productivity Metrics</a></h3>
+<h3 id="productivity-metrics-1"><a class="header" href="#productivity-metrics-1">Productivity Metrics</a></h3>
 <p>Calculate and track productivity:</p>
 <ul>
 <li><strong>Gross Time</strong>: Total time from start to end</li>
@@ -592,13 +640,19 @@ kasl sum --send
 <li><strong>Productivity Percentage</strong>: Net time / Gross time</li>
 <li><strong>Break Analysis</strong>: Break frequency and duration patterns</li>
 </ul>
-<h3 id="short-interval-detection"><a class="header" href="#short-interval-detection">Short Interval Detection</a></h3>
-<p>Identify and optimize fragmented work periods:</p>
-<pre><code class="language-bash"># Detect short intervals
-kasl report --clear-short-intervals
+<h3 id="short-interval-filtering"><a class="header" href="#short-interval-filtering">Short Interval Filtering</a></h3>
+<p>Automatically filter out brief work periods for cleaner reporting:</p>
+<ul>
+<li><strong>Automatic Detection</strong>: Short intervals are filtered based on <code>min_work_interval</code> configuration</li>
+<li><strong>Display-Level Filtering</strong>: Original data remains intact in the database</li>
+<li><strong>Consistent Behavior</strong>: Same filtering applies to both display and API submission</li>
+<li><strong>User Notification</strong>: Information about filtered intervals is shown in reports</li>
+</ul>
+<pre><code class="language-bash"># Reports automatically filter short intervals
+kasl report
 
-# View interval analysis
-kasl report --last
+# Configuration controls the filtering threshold
+# (set via min_work_interval in monitor config)
 </code></pre>
 <h2 id="-advanced-features-1"><a class="header" href="#-advanced-features-1">⚙️ Advanced Features</a></h2>
 <h3 id="time-adjustments-1"><a class="header" href="#time-adjustments-1">Time Adjustments</a></h3>
@@ -806,7 +860,7 @@ RUST_LOG=kasl=trace kasl watch
 <li><strong>Memory management</strong>: Automatic cleanup and garbage collection</li>
 <li><strong>Background processing</strong>: Non-blocking operations</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="configuration"><a class="header" href="#configuration">Configuration</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h1>
 <p>kasl uses a JSON configuration file to store all application settings. This guide covers all configuration options and their usage.</p>
 <h2 id="configuration-file-location"><a class="header" href="#configuration-file-location">Configuration File Location</a></h2>
 <p>Configuration files are stored in platform-specific locations:</p>
@@ -840,6 +894,13 @@ RUST_LOG=kasl=trace kasl watch
   "server": {
     "api_url": "https://api.company.com/timetracking",
     "auth_token": "your-api-token"
+  },
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
   }
 }
 </code></pre>
@@ -882,8 +943,8 @@ RUST_LOG=kasl=trace kasl watch
 <li><strong>Type</strong>: <code>u64</code></li>
 <li><strong>Default</strong>: <code>10</code></li>
 <li><strong>Unit</strong>: Minutes</li>
-<li><strong>Description</strong>: Minimum work interval for merging</li>
-<li><strong>Usage</strong>: Short intervals are merged with adjacent ones</li>
+<li><strong>Description</strong>: Minimum work interval duration for report filtering</li>
+<li><strong>Usage</strong>: Intervals shorter than this duration are automatically filtered out from reports (display and API submission)</li>
 </ul>
 <h2 id="siserver-configuration"><a class="header" href="#siserver-configuration">SiServer Configuration</a></h2>
 <p>Internal company API integration:</p>
@@ -958,6 +1019,59 @@ RUST_LOG=kasl=trace kasl watch
 <li><strong>Description</strong>: Authentication token for API access</li>
 <li><strong>Format</strong>: Depends on API requirements (Bearer, API key, etc.)</li>
 </ul>
+<h2 id="productivity-configuration"><a class="header" href="#productivity-configuration">Productivity Configuration</a></h2>
+<p>Controls productivity tracking and break management:</p>
+<h3 id="min_productivity_threshold"><a class="header" href="#min_productivity_threshold"><code>min_productivity_threshold</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>f64</code></li>
+<li><strong>Default</strong>: <code>75.0</code></li>
+<li><strong>Description</strong>: Minimum productivity percentage required for report submission</li>
+<li><strong>Range</strong>: <code>0.0</code> to <code>100.0</code></li>
+<li><strong>Usage</strong>: Reports with productivity below this threshold will be blocked until breaks are added</li>
+</ul>
+<h3 id="workday_hours"><a class="header" href="#workday_hours"><code>workday_hours</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>f64</code></li>
+<li><strong>Default</strong>: <code>8.0</code></li>
+<li><strong>Description</strong>: Expected daily work hours for productivity calculations</li>
+<li><strong>Range</strong>: <code>1.0</code> to <code>24.0</code></li>
+<li><strong>Usage</strong>: Used to calculate available work time for productivity metrics</li>
+</ul>
+<h3 id="min_break_duration"><a class="header" href="#min_break_duration"><code>min_break_duration</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>u64</code></li>
+<li><strong>Default</strong>: <code>20</code></li>
+<li><strong>Description</strong>: Minimum allowed break duration in minutes</li>
+<li><strong>Range</strong>: <code>1</code> to <code>480</code></li>
+<li><strong>Usage</strong>: Prevents creation of breaks shorter than this duration</li>
+</ul>
+<h3 id="max_break_duration"><a class="header" href="#max_break_duration"><code>max_break_duration</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>u64</code></li>
+<li><strong>Default</strong>: <code>180</code></li>
+<li><strong>Description</strong>: Maximum allowed break duration in minutes</li>
+<li><strong>Range</strong>: <code>1</code> to <code>480</code></li>
+<li><strong>Usage</strong>: Prevents creation of breaks longer than this duration</li>
+</ul>
+<h3 id="min_workday_fraction_before_suggest"><a class="header" href="#min_workday_fraction_before_suggest"><code>min_workday_fraction_before_suggest</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>f64</code></li>
+<li><strong>Default</strong>: <code>0.5</code></li>
+<li><strong>Description</strong>: Fraction of workday that must pass before showing productivity suggestions</li>
+<li><strong>Range</strong>: <code>0.0</code> to <code>1.0</code></li>
+<li><strong>Usage</strong>: Prevents early recommendations when insufficient work time has elapsed</li>
+</ul>
+<p><strong>Example Configuration:</strong></p>
+<pre><code class="language-json">{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+</code></pre>
 <h2 id="interactive-configuration"><a class="header" href="#interactive-configuration">Interactive Configuration</a></h2>
 <h3 id="initial-setup-1"><a class="header" href="#initial-setup-1">Initial Setup</a></h3>
 <p>Run the interactive configuration wizard:</p>
@@ -1099,7 +1213,7 @@ ping api.company.com
 <h3 id="data-management"><a class="header" href="#data-management">Data Management</a></h3>
 <ul>
 <li><strong><a href="commands/./export.html"><code>export</code></a></strong> - Export data to various formats</li>
-<li><strong><a href="commands/./adjust.html"><code>adjust</code></a></strong> - Adjust work times and add pauses</li>
+<li><strong><a href="commands/./breaks.html"><code>breaks</code></a></strong> - Add manual breaks for productivity optimization</li>
 <li><strong><a href="commands/./pauses.html"><code>pauses</code></a></strong> - View recorded breaks and pauses</li>
 </ul>
 <h3 id="organization"><a class="header" href="#organization">Organization</a></h3>
@@ -1146,15 +1260,15 @@ kasl task --edit-interactive
 kasl task --delete 1 2 3
 kasl task --delete-today
 </code></pre>
-<h3 id="time-adjustments-2"><a class="header" href="#time-adjustments-2">Time Adjustments</a></h3>
-<pre><code class="language-bash"># Adjust work start time
-kasl adjust --mode start --minutes 30
+<h3 id="productivity-optimization"><a class="header" href="#productivity-optimization">Productivity Optimization</a></h3>
+<pre><code class="language-bash"># Add strategic break for productivity
+kasl breaks -m 30
 
-# Add a pause
-kasl adjust --mode pause --minutes 15
+# Interactive break placement
+kasl breaks
 
-# Adjust work end time
-kasl adjust --mode end --minutes 20
+# Force break creation
+kasl breaks -m 45 --force
 </code></pre>
 <h3 id="data-export-2"><a class="header" href="#data-export-2">Data Export</a></h3>
 <pre><code class="language-bash"># Export today's data
@@ -1193,8 +1307,8 @@ kasl task --template "daily-standup"
 <p>Commands for tracking work sessions and activity:</p>
 <ul>
 <li><code>watch</code> - Core monitoring functionality</li>
-<li><code>adjust</code> - Time corrections and adjustments</li>
-<li><code>pauses</code> - Break period management</li>
+<li><code>breaks</code> - Strategic break placement for productivity</li>
+<li><code>pauses</code> - View recorded breaks and pauses</li>
 </ul>
 <h3 id="task-management-2"><a class="header" href="#task-management-2">Task Management</a></h3>
 <p>Commands for organizing and tracking work items:</p>
@@ -1653,7 +1767,7 @@ pkill -f kasl
 <li><strong>Stop monitoring</strong> before system shutdown</li>
 <li><strong>Review data</strong> using <code>report</code> and <code>pauses</code> commands</li>
 </ol>
-<h3 id="configuration-1"><a class="header" href="#configuration-1">Configuration</a></h3>
+<h3 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h3>
 <ol>
 <li><strong>Adjust thresholds</strong> based on your work patterns</li>
 <li><strong>Test settings</strong> using foreground mode</li>
@@ -1968,14 +2082,6 @@ New comment (press Enter to keep current): Review completed
 <li>Typically used for organizational reporting requirements at month-end</li>
 </ul>
 </li>
-<li>
-<p><code>--clear-short-intervals</code>, <code>-c</code>: Automatically detect and remove short work intervals</p>
-<ul>
-<li>Analyzes work intervals and removes pauses that create inappropriately short work periods</li>
-<li>Merges adjacent intervals for cleaner reporting</li>
-<li>Helps eliminate noise from brief interruptions</li>
-</ul>
-</li>
 </ul>
 <h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
 <h3 id="basic-report-generation"><a class="header" href="#basic-report-generation">Basic Report Generation</a></h3>
@@ -1992,9 +2098,6 @@ kasl report --send
 <pre><code class="language-bash"># Submit monthly summary report
 kasl report --month
 
-# Clean up short intervals and generate report
-kasl report --clear-short-intervals
-
 # Generate yesterday's report and send it
 kasl report --last --send
 </code></pre>
@@ -2004,9 +2107,6 @@ kasl report
 
 # Check yesterday's productivity
 kasl report --last
-
-# Clean up data and review
-kasl report --clear-short-intervals
 </code></pre>
 <h2 id="report-components"><a class="header" href="#report-components">Report Components</a></h2>
 <h3 id="daily-report-structure"><a class="header" href="#daily-report-structure">Daily Report Structure</a></h3>
@@ -2040,9 +2140,10 @@ kasl report --clear-short-intervals
 <li>
 <p><strong>Time Intervals</strong></p>
 <ul>
-<li>Detailed work periods</li>
+<li>Detailed work periods (short intervals automatically filtered out)</li>
 <li>Break periods</li>
 <li>Activity patterns</li>
+<li>Information about filtered short intervals</li>
 </ul>
 </li>
 </ol>
@@ -2074,6 +2175,31 @@ kasl report --clear-short-intervals
 </ul>
 </li>
 </ol>
+<h2 id="short-interval-filtering-1"><a class="header" href="#short-interval-filtering-1">Short Interval Filtering</a></h2>
+<p>The report command automatically filters out work intervals that are shorter than the configured <code>min_work_interval</code> threshold. This filtering provides cleaner, more meaningful reports by removing brief interruptions that don't represent significant work periods.</p>
+<h3 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h3>
+<ol>
+<li><strong>Automatic Detection</strong>: Work intervals are analyzed based on the <code>min_work_interval</code> configuration setting</li>
+<li><strong>Display Filtering</strong>: Short intervals are filtered at display time - no database modifications are made</li>
+<li><strong>Consistent Application</strong>: Same filtering logic applies to both local display (<code>kasl report</code>) and API submission (<code>kasl report --send</code>)</li>
+<li><strong>User Notification</strong>: When short intervals are filtered, users receive information about how many were filtered and their total duration</li>
+</ol>
+<h3 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h3>
+<p>The filtering threshold is controlled by the <code>min_work_interval</code> setting in your configuration:</p>
+<pre><code class="language-json">{
+  "monitor": {
+    "min_work_interval": 30
+  }
+}
+</code></pre>
+<p>This setting defines the minimum duration (in minutes) for intervals to be included in reports.</p>
+<h3 id="benefits"><a class="header" href="#benefits">Benefits</a></h3>
+<ul>
+<li><strong>Cleaner Reports</strong>: Eliminates noise from brief interruptions</li>
+<li><strong>Better Analytics</strong>: Focus on meaningful work periods</li>
+<li><strong>Preserved Data</strong>: Original data remains intact in the database</li>
+<li><strong>Consistent Behavior</strong>: Same filtering for display and API submission</li>
+</ul>
 <h2 id="sample-output-1"><a class="header" href="#sample-output-1">Sample Output</a></h2>
 <h3 id="daily-report"><a class="header" href="#daily-report">Daily Report</a></h3>
 <pre><code>December 15, 2024
@@ -2099,6 +2225,8 @@ Tasks
 | 3 | 3  | 0       | Bug fix          | Fix login issue  | 75%         | bug, urgent      |
 | 4 | 4  | 0       | Documentation    | Update API docs  | 25%         | docs             |
 +---+----+----------+------------------+------------------+-------------+------------------+
+
+Filtered out 2 short intervals (total: 0:15)
 </code></pre>
 <h3 id="monthly-report"><a class="header" href="#monthly-report">Monthly Report</a></h3>
 <pre><code>December 2024
@@ -2126,23 +2254,10 @@ kasl report --send
 <h3 id="weekly-planning"><a class="header" href="#weekly-planning">Weekly Planning</a></h3>
 <pre><code class="language-bash"># Review yesterday's work before planning today
 kasl report --last
-
-# Clean up data for better analysis
-kasl report --clear-short-intervals
 </code></pre>
 <h3 id="monthly-reporting"><a class="header" href="#monthly-reporting">Monthly Reporting</a></h3>
 <pre><code class="language-bash"># Generate monthly summary for management
 kasl report --month
-
-# Submit monthly report to HR system
-kasl report --month --send
-</code></pre>
-<h3 id="data-quality-management"><a class="header" href="#data-quality-management">Data Quality Management</a></h3>
-<pre><code class="language-bash"># Clean up short intervals for better reporting
-kasl report --clear-short-intervals
-
-# Review cleaned data
-kasl report
 </code></pre>
 <h2 id="integration-with-other-commands-2"><a class="header" href="#integration-with-other-commands-2">Integration with Other Commands</a></h2>
 <p>The <code>report</code> command works with other kasl commands:</p>
@@ -2157,13 +2272,13 @@ kasl report
 <ol>
 <li><strong>Review at end of day</strong>: Generate report to review productivity</li>
 <li><strong>Submit promptly</strong>: Send reports to maintain compliance</li>
-<li><strong>Clean data regularly</strong>: Use short interval cleanup for accuracy</li>
+<li><strong>Monitor filtering</strong>: Check filtered interval notifications for data quality</li>
 <li><strong>Monitor trends</strong>: Track productivity patterns over time</li>
 </ol>
 <h3 id="report-quality"><a class="header" href="#report-quality">Report Quality</a></h3>
 <ol>
 <li><strong>Verify data accuracy</strong>: Check reports for unusual patterns</li>
-<li><strong>Clean up noise</strong>: Remove short intervals that create confusion</li>
+<li><strong>Review filtering</strong>: Note filtered short intervals for context</li>
 <li><strong>Document adjustments</strong>: Note any manual time corrections</li>
 <li><strong>Review completeness</strong>: Ensure all work is properly recorded</li>
 </ol>
@@ -2257,7 +2372,7 @@ kasl sum --send
 | TOTAL      | 79:15    | 92.5%       |
 +------------+----------+-------------+
 </code></pre>
-<h2 id="configuration-2"><a class="header" href="#configuration-2">Configuration</a></h2>
+<h2 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h2>
 <h3 id="siserver-integration-2"><a class="header" href="#siserver-integration-2">SiServer Integration</a></h3>
 <p>To enable rest day integration, configure SiServer in your settings:</p>
 <pre><code class="language-bash">kasl init --si-server-url "https://your-server.com" --si-server-token "your-token"
@@ -2607,256 +2722,292 @@ ls -la kasl_export_*.csv
 <li><strong><a href="commands/./task.html"><code>task</code></a></strong> - Manage tasks for export</li>
 <li><strong><a href="commands/./watch.html"><code>watch</code></a></strong> - Monitor activity for data collection</li>
 </ul>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="adjust-command"><a class="header" href="#adjust-command"><code>adjust</code> Command</a></h1>
-<p>The <code>adjust</code> command provides manual correction capabilities for automatically recorded work times. It supports removing time from the beginning or end of workdays and adding manual pauses that weren't detected by the monitoring system.</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="breaks-command"><a class="header" href="#breaks-command"><code>breaks</code> Command</a></h1>
+<p>The <code>breaks</code> command enables strategic placement of manual break periods to optimize productivity metrics and meet minimum thresholds for report submission. This productivity-focused feature helps users improve their work reports by adding intentional breaks that complement automatic pause detection.</p>
 <h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
-<pre><code class="language-bash">kasl adjust [OPTIONS]
+<pre><code class="language-bash">kasl breaks [OPTIONS]
 </code></pre>
 <h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
 <ul>
 <li>
-<p><code>-d, --date &lt;DATE&gt;</code>: Date to adjust workday for (default: <code>today</code>)</p>
+<p><code>-m, --minutes &lt;MINUTES&gt;</code>: Duration of the break in minutes</p>
 <ul>
-<li><code>today</code>: Current date</li>
-<li><code>YYYY-MM-DD</code>: Specific date in ISO format</li>
+<li>When specified, automatically finds optimal placement for the break</li>
+<li>If not specified, enters interactive mode for manual break configuration</li>
+<li>Must be within configured minimum and maximum break duration limits</li>
 </ul>
 </li>
 <li>
-<p><code>-m, --minutes &lt;MINUTES&gt;</code>: Minutes to subtract or pause duration to add</p>
+<p><code>--force</code>: Force creation even if productivity validation fails</p>
 <ul>
-<li><strong>Start/End modes</strong>: Minutes to remove from workday</li>
-<li><strong>Pause mode</strong>: Duration of the pause to add</li>
-<li>If not specified, the user will be prompted interactively</li>
-</ul>
-</li>
-<li>
-<p><code>--mode &lt;MODE&gt;</code>: Type of adjustment to perform</p>
-<ul>
-<li><code>start</code>: Remove time from the beginning of the workday</li>
-<li><code>end</code>: Remove time from the end of the workday</li>
-<li><code>pause</code>: Add a manual pause within the workday</li>
-<li>If not provided, the user will be prompted to select</li>
-</ul>
-</li>
-<li>
-<p><code>--force</code>: Skip confirmation prompt and apply changes immediately</p>
-<ul>
-<li>Changes will be applied without showing a preview</li>
-<li>Use with caution as adjustments modify the permanent work record</li>
+<li>Bypasses normal productivity threshold checks</li>
+<li>Creates the break regardless of current productivity levels</li>
+<li>Use with caution as this skips validation safeguards</li>
 </ul>
 </li>
 </ul>
-<h2 id="adjustment-modes"><a class="header" href="#adjustment-modes">Adjustment Modes</a></h2>
-<h3 id="start-mode"><a class="header" href="#start-mode">Start Mode</a></h3>
-<p>Remove time from the beginning of the workday:</p>
-<pre><code class="language-bash"># Remove 30 minutes from the start of today's workday
-kasl adjust --mode start --minutes 30
+<h2 id="break-management-modes"><a class="header" href="#break-management-modes">Break Management Modes</a></h2>
+<h3 id="automatic-mode"><a class="header" href="#automatic-mode">Automatic Mode</a></h3>
+<p>Optimal break placement with specified duration:</p>
+<pre><code class="language-bash"># Add a 30-minute break with automatic optimal placement
+kasl breaks -m 30
 
-# Remove 15 minutes from a specific date
-kasl adjust --mode start --minutes 15 --date 2024-12-15
+# Add a 60-minute break, bypassing productivity checks
+kasl breaks -m 60 --force
 </code></pre>
-<p><strong>Use Cases:</strong></p>
+<p><strong>How Automatic Placement Works:</strong></p>
 <ul>
-<li>Correcting early false starts from the monitor</li>
-<li>Accounting for personal time before actual work began</li>
-<li>Adjusting for system wake-up activity</li>
+<li>Analyzes existing work intervals and pauses</li>
+<li>Finds optimal placement using multiple strategies</li>
+<li>Avoids conflicts with existing pauses</li>
+<li>Maintains minimum work intervals around breaks</li>
 </ul>
-<h3 id="end-mode"><a class="header" href="#end-mode">End Mode</a></h3>
-<p>Remove time from the end of the workday:</p>
-<pre><code class="language-bash"># Remove 20 minutes from the end of today's workday
-kasl adjust --mode end --minutes 20
-
-# Remove 45 minutes from a specific date
-kasl adjust --mode end --minutes 45 --date 2024-12-15
-</code></pre>
-<p><strong>Use Cases:</strong></p>
-<ul>
-<li>Correcting late false activity from system processes</li>
-<li>Removing personal time after work ended</li>
-<li>Adjusting for shutdown activity</li>
-</ul>
-<h3 id="pause-mode"><a class="header" href="#pause-mode">Pause Mode</a></h3>
-<p>Add a manual pause in the middle of the workday:</p>
-<pre><code class="language-bash"># Add a 30-minute pause to today's workday
-kasl adjust --mode pause --minutes 30
-
-# Add a 60-minute pause to a specific date
-kasl adjust --mode pause --minutes 60 --date 2024-12-15
-</code></pre>
-<p><strong>Use Cases:</strong></p>
-<ul>
-<li>Adding breaks that weren't automatically detected</li>
-<li>Recording meetings or phone calls away from the computer</li>
-<li>Accounting for manual activities not detected by monitoring</li>
-</ul>
-<h2 id="examples-7"><a class="header" href="#examples-7">Examples</a></h2>
 <h3 id="interactive-mode-1"><a class="header" href="#interactive-mode-1">Interactive Mode</a></h3>
-<pre><code class="language-bash"># Start interactive adjustment
-kasl adjust
+<p>Guided break creation with user selection:</p>
+<pre><code class="language-bash"># Start interactive break creation
+kasl breaks
 
 # The command will prompt for:
-# 1. Adjustment mode (start/end/pause)
-# 2. Duration in minutes
-# 3. Confirmation of changes
+# 1. Break duration (within configured limits)
+# 2. Placement options with timing details
+# 3. Selection from available placement strategies
 </code></pre>
-<h3 id="non-interactive-mode"><a class="header" href="#non-interactive-mode">Non-Interactive Mode</a></h3>
-<pre><code class="language-bash"># Remove 30 minutes from start of today's workday
-kasl adjust --mode start --minutes 30
+<h2 id="break-placement-strategies-1"><a class="header" href="#break-placement-strategies-1">Break Placement Strategies</a></h2>
+<p>The system uses intelligent algorithms to suggest optimal break placement:</p>
+<h3 id="1-middle-of-longest-work-period"><a class="header" href="#1-middle-of-longest-work-period">1. Middle of Longest Work Period</a></h3>
+<p>Places the break in the center of the longest uninterrupted work interval:</p>
+<ul>
+<li><strong>Advantage</strong>: Splits long work sessions effectively</li>
+<li><strong>Best for</strong>: Improving focus and preventing fatigue</li>
+</ul>
+<h3 id="2-after-existing-pauses"><a class="header" href="#2-after-existing-pauses">2. After Existing Pauses</a></h3>
+<p>Places breaks immediately following detected pauses:</p>
+<ul>
+<li><strong>Advantage</strong>: Extends natural break periods</li>
+<li><strong>Best for</strong>: Consolidating rest time</li>
+</ul>
+<h3 id="3-before-existing-pauses"><a class="header" href="#3-before-existing-pauses">3. Before Existing Pauses</a></h3>
+<p>Places breaks just before detected pauses:</p>
+<ul>
+<li><strong>Advantage</strong>: Creates preparation time before natural breaks</li>
+<li><strong>Best for</strong>: Structuring work transitions</li>
+</ul>
+<h2 id="examples-7"><a class="header" href="#examples-7">Examples</a></h2>
+<h3 id="quick-break-addition"><a class="header" href="#quick-break-addition">Quick Break Addition</a></h3>
+<pre><code class="language-bash"># Add 30-minute break with optimal placement
+kasl breaks -m 30
 
-# Add 45-minute pause to yesterday's workday
-kasl adjust --mode pause --minutes 45 --date 2024-12-15
-
-# Remove 20 minutes from end of specific date
-kasl adjust --mode end --minutes 20 --date 2024-12-10
+# Output:
+# ✅ Break created: 14:30 - 15:00 (30 minutes)
+# 📈 Productivity improved from 68% to 76%
 </code></pre>
-<h3 id="force-mode"><a class="header" href="#force-mode">Force Mode</a></h3>
-<pre><code class="language-bash"># Apply changes without confirmation
-kasl adjust --mode start --minutes 30 --force
+<h3 id="interactive-break-creation"><a class="header" href="#interactive-break-creation">Interactive Break Creation</a></h3>
+<pre><code class="language-bash"># Start interactive mode
+kasl breaks
 
-# Useful for automated scripts
-kasl adjust --mode pause --minutes 15 --date 2024-12-15 --force
+# Sample interaction:
+# Enter break duration (20-180 minutes): 45
+# 
+# Available break placement options:
+# 1. 12:15 - 13:00 (45 min) - Middle of longest work period
+# 2. 10:30 - 11:15 (45 min) - After morning pause
+# 3. 15:45 - 16:30 (45 min) - Before afternoon pause
+# 
+# Select break placement: 1
+# 
+# ✅ Break created: 12:15 - 13:00 (45 minutes)
 </code></pre>
+<h3 id="productivity-optimization-1"><a class="header" href="#productivity-optimization-1">Productivity Optimization</a></h3>
+<pre><code class="language-bash"># When productivity is too low for report submission:
+# ⚠️ Current productivity: 68% (below 75% threshold)
+# 💡 Add a 22-minute break to reach minimum productivity
+
+kasl breaks -m 22
+
+# ✅ Break created: 13:00 - 13:22 (22 minutes)
+# 📈 Productivity improved to 75% - report can now be submitted
+</code></pre>
+<h2 id="productivity-integration"><a class="header" href="#productivity-integration">Productivity Integration</a></h2>
+<h3 id="automatic-recommendations"><a class="header" href="#automatic-recommendations">Automatic Recommendations</a></h3>
+<p>The system provides productivity recommendations when:</p>
+<ul>
+<li>Current productivity is below configured threshold (default: 75%)</li>
+<li>Enough of the workday has passed to make meaningful suggestions</li>
+<li>Report submission is blocked due to low productivity</li>
+</ul>
+<h3 id="threshold-validation"><a class="header" href="#threshold-validation">Threshold Validation</a></h3>
+<p>Before creating breaks, the system:</p>
+<ol>
+<li><strong>Calculates current productivity</strong> including existing pauses and breaks</li>
+<li><strong>Validates duration limits</strong> based on configuration</li>
+<li><strong>Checks for conflicts</strong> with existing pauses</li>
+<li><strong>Ensures minimum work intervals</strong> are maintained</li>
+</ol>
+<h3 id="report-integration"><a class="header" href="#report-integration">Report Integration</a></h3>
+<p>Breaks directly impact report functionality:</p>
+<ul>
+<li><strong>Report display</strong> includes break information and productivity metrics</li>
+<li><strong>API submission</strong> validates productivity before sending reports</li>
+<li><strong>Productivity warnings</strong> suggest break creation when needed</li>
+</ul>
+<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
+<p>Break behavior is controlled by configuration settings:</p>
+<pre><code class="language-json">{
+  "productivity": {
+    "min_productivity_threshold": 75.0,
+    "workday_hours": 8.0,
+    "min_break_duration": 20,
+    "max_break_duration": 180,
+    "min_workday_fraction_before_suggest": 0.5
+  }
+}
+</code></pre>
+<h3 id="configuration-options-1"><a class="header" href="#configuration-options-1">Configuration Options</a></h3>
+<ul>
+<li><strong><code>min_productivity_threshold</code></strong>: Minimum productivity percentage for report submission</li>
+<li><strong><code>workday_hours</code></strong>: Expected daily work hours for calculations</li>
+<li><strong><code>min_break_duration</code></strong>: Minimum allowed break duration in minutes</li>
+<li><strong><code>max_break_duration</code></strong>: Maximum allowed break duration in minutes</li>
+<li><strong><code>min_workday_fraction_before_suggest</code></strong>: Fraction of workday before showing recommendations</li>
+</ul>
 <h2 id="sample-output-4"><a class="header" href="#sample-output-4">Sample Output</a></h2>
-<h3 id="interactive-session"><a class="header" href="#interactive-session">Interactive Session</a></h3>
-<pre><code>Adjusting workday for 2024-12-15
-
-Current workday:
-├── Start: 09:00:00
-├── End: 17:30:00
-├── Duration: 8h 30m
-└── Pauses: 1h 15m
-
-Select adjustment mode:
-1. Start (remove time from beginning)
-2. End (remove time from end)
-3. Pause (add manual pause)
-
-Enter minutes: 30
-
-Proposed changes:
-├── Original duration: 8h 30m
-├── Adjustment: -30 minutes
-└── New duration: 8h 00m
-
-Apply changes? [y/N]: y
-
-✅ Workday adjusted successfully!
+<h3 id="successful-break-creation"><a class="header" href="#successful-break-creation">Successful Break Creation</a></h3>
+<pre><code>🔄 Analyzing workday and existing pauses...
+✅ Break created: 14:30 - 15:00 (30 minutes)
+📈 Productivity updated: 68% → 76%
 </code></pre>
-<h3 id="non-interactive-output"><a class="header" href="#non-interactive-output">Non-Interactive Output</a></h3>
-<pre><code>Adjusting workday for 2024-12-15
+<h3 id="interactive-selection"><a class="header" href="#interactive-selection">Interactive Selection</a></h3>
+<pre><code>📋 Break duration: 45 minutes
 
-Current workday:
-├── Start: 09:00:00
-├── End: 17:30:00
-├── Duration: 8h 30m
-└── Pauses: 1h 15m
+Available placement options:
+1. 12:15 - 13:00 (45 min) - Middle of longest work period
+2. 10:30 - 11:15 (45 min) - After 15-minute pause
+3. 15:45 - 16:30 (45 min) - Before 8-minute pause
 
-Removing 30 minutes from start...
+Select break placement: 2
 
-✅ Workday adjusted successfully!
-New duration: 8h 00m
+✅ Break created: 10:30 - 11:15 (45 minutes)
+📈 Productivity improved from 68% to 75%
+</code></pre>
+<h3 id="productivity-warning"><a class="header" href="#productivity-warning">Productivity Warning</a></h3>
+<pre><code>⚠️ Low productivity detected: 68% (threshold: 75%)
+💡 Consider adding a 22-minute break to reach minimum productivity
+📝 Use: kasl breaks -m 22
 </code></pre>
 <h2 id="use-cases-4"><a class="header" href="#use-cases-4">Use Cases</a></h2>
-<h3 id="correcting-false-starts"><a class="header" href="#correcting-false-starts">Correcting False Starts</a></h3>
-<pre><code class="language-bash"># Remove early morning activity that wasn't actual work
-kasl adjust --mode start --minutes 45 --date 2024-12-15
+<h3 id="meeting-productivity-thresholds"><a class="header" href="#meeting-productivity-thresholds">Meeting Productivity Thresholds</a></h3>
+<pre><code class="language-bash"># When report submission is blocked:
+kasl report
+# ❌ Productivity too low (68%) - minimum 75% required
+# 💡 Add 22-minute break to reach threshold
+
+kasl breaks -m 22
+# ✅ Break added - productivity now 75%
+
+kasl report
+# ✅ Report sent successfully
 </code></pre>
-<h3 id="adding-missed-breaks"><a class="header" href="#adding-missed-breaks">Adding Missed Breaks</a></h3>
-<pre><code class="language-bash"># Add lunch break that wasn't detected
-kasl adjust --mode pause --minutes 60 --date 2024-12-15
+<h3 id="improving-work-life-balance"><a class="header" href="#improving-work-life-balance">Improving Work-Life Balance</a></h3>
+<pre><code class="language-bash"># Add structured lunch break
+kasl breaks -m 60
+
+# Add afternoon rest period
+kasl breaks -m 30
 </code></pre>
-<h3 id="correcting-end-times"><a class="header" href="#correcting-end-times">Correcting End Times</a></h3>
-<pre><code class="language-bash"># Remove time spent on personal activities after work
-kasl adjust --mode end --minutes 30 --date 2024-12-15
-</code></pre>
-<h3 id="batch-adjustments"><a class="header" href="#batch-adjustments">Batch Adjustments</a></h3>
-<pre><code class="language-bash"># Adjust multiple days (using scripts)
-for date in 2024-12-15 2024-12-16 2024-12-17; do
-    kasl adjust --mode start --minutes 30 --date $date --force
-done
+<h3 id="optimizing-long-work-sessions"><a class="header" href="#optimizing-long-work-sessions">Optimizing Long Work Sessions</a></h3>
+<pre><code class="language-bash"># Add break in middle of long work period
+kasl breaks
+# Select: "Middle of longest work period"
 </code></pre>
 <h2 id="validation-and-safety"><a class="header" href="#validation-and-safety">Validation and Safety</a></h2>
-<h3 id="pre-adjustment-checks"><a class="header" href="#pre-adjustment-checks">Pre-Adjustment Checks</a></h3>
+<h3 id="pre-creation-checks"><a class="header" href="#pre-creation-checks">Pre-Creation Checks</a></h3>
 <p>The command performs several validations:</p>
 <ol>
-<li><strong>Workday Existence</strong>: Ensures a workday exists for the specified date</li>
-<li><strong>Time Validation</strong>: Checks that adjustments don't create invalid time ranges</li>
-<li><strong>Duration Limits</strong>: Prevents adjustments that would result in negative work time</li>
-<li><strong>Pause Overlap</strong>: Validates pause times don't conflict with existing pauses</li>
+<li><strong>Workday Existence</strong>: Ensures a workday exists for today</li>
+<li><strong>Duration Limits</strong>: Validates break duration within configured bounds</li>
+<li><strong>Conflict Detection</strong>: Prevents overlaps with existing pauses</li>
+<li><strong>Work Interval Maintenance</strong>: Ensures minimum work time around breaks</li>
 </ol>
-<h3 id="confirmation-process"><a class="header" href="#confirmation-process">Confirmation Process</a></h3>
-<p>Unless <code>--force</code> is used, the command will:</p>
+<h3 id="smart-placement"><a class="header" href="#smart-placement">Smart Placement</a></h3>
+<p>The placement algorithm ensures:</p>
 <ol>
-<li><strong>Show Current State</strong>: Display the current workday information</li>
-<li><strong>Preview Changes</strong>: Show what the adjustment will do</li>
-<li><strong>Request Confirmation</strong>: Ask for user approval before applying changes</li>
+<li><strong>No Overlaps</strong>: Breaks don't conflict with existing pauses</li>
+<li><strong>Minimum Work Time</strong>: Maintains required work intervals</li>
+<li><strong>Optimal Timing</strong>: Places breaks for maximum productivity benefit</li>
+<li><strong>Current Time Validation</strong>: Only places breaks in completed time periods</li>
 </ol>
 <h2 id="troubleshooting-7"><a class="header" href="#troubleshooting-7">Troubleshooting</a></h2>
 <h3 id="common-issues-3"><a class="header" href="#common-issues-3">Common Issues</a></h3>
-<p><strong>No workday found for date</strong></p>
-<pre><code class="language-bash"># Check if workday exists
-kasl report --date 2024-12-15
+<p><strong>No valid break placement found</strong></p>
+<pre><code class="language-bash"># Check existing pauses and work intervals
+kasl pauses
 
-# Create workday if needed
-kasl watch --foreground
+# Try shorter break duration
+kasl breaks -m 20
+
+# Check if enough work time has passed
+kasl report
 </code></pre>
-<p><strong>Invalid adjustment amount</strong></p>
-<pre><code class="language-bash"># Check current workday duration
-kasl report --date 2024-12-15
+<p><strong>Break duration out of range</strong></p>
+<pre><code class="language-bash"># Check configured limits
+# Default: 20-180 minutes
 
-# Use smaller adjustment amount
-kasl adjust --mode start --minutes 15
+# Use duration within limits
+kasl breaks -m 45
 </code></pre>
-<p><strong>Pause time conflicts</strong></p>
-<pre><code class="language-bash"># View existing pauses
-kasl pauses --date 2024-12-15
+<p><strong>Productivity still too low after break</strong></p>
+<pre><code class="language-bash"># Check current productivity
+kasl report
 
-# Choose different pause time
-kasl adjust --mode pause --minutes 30
+# Add additional break if needed
+kasl breaks -m 30
 </code></pre>
-<h3 id="data-recovery"><a class="header" href="#data-recovery">Data Recovery</a></h3>
-<pre><code class="language-bash"># View workday history
-kasl report --date 2024-12-15
+<h3 id="data-validation-2"><a class="header" href="#data-validation-2">Data Validation</a></h3>
+<pre><code class="language-bash"># View current workday status
+kasl report
 
-# Export data before making changes
-kasl export --date 2024-12-15 --output backup.csv
+# Check existing pauses
+kasl pauses
+
+# Review productivity metrics
+kasl report --productivity
 </code></pre>
 <h2 id="best-practices-6"><a class="header" href="#best-practices-6">Best Practices</a></h2>
-<h3 id="before-making-adjustments"><a class="header" href="#before-making-adjustments">Before Making Adjustments</a></h3>
+<h3 id="strategic-break-placement"><a class="header" href="#strategic-break-placement">Strategic Break Placement</a></h3>
 <ol>
-<li><strong>Review current data</strong> using <code>report</code> command</li>
-<li><strong>Export backup</strong> using <code>export</code> command</li>
-<li><strong>Understand the impact</strong> of the adjustment</li>
-<li><strong>Test with small amounts</strong> first</li>
+<li><strong>Target productivity thresholds</strong> rather than arbitrary break times</li>
+<li><strong>Use automatic mode</strong> for optimal placement</li>
+<li><strong>Add breaks gradually</strong> to see productivity impact</li>
+<li><strong>Monitor report feedback</strong> to understand effectiveness</li>
 </ol>
-<h3 id="adjustment-strategy"><a class="header" href="#adjustment-strategy">Adjustment Strategy</a></h3>
+<h3 id="productivity-optimization-2"><a class="header" href="#productivity-optimization-2">Productivity Optimization</a></h3>
 <ol>
-<li><strong>Use specific dates</strong> rather than 'today' for historical adjustments</li>
-<li><strong>Make incremental changes</strong> rather than large adjustments</li>
-<li><strong>Document reasons</strong> for adjustments</li>
-<li><strong>Verify results</strong> after making changes</li>
+<li><strong>Check productivity early</strong> in the workday</li>
+<li><strong>Add breaks proactively</strong> before productivity drops too low</li>
+<li><strong>Use recommended durations</strong> from productivity warnings</li>
+<li><strong>Balance break time</strong> with actual work requirements</li>
 </ol>
-<h3 id="data-integrity"><a class="header" href="#data-integrity">Data Integrity</a></h3>
+<h3 id="integration-workflow"><a class="header" href="#integration-workflow">Integration Workflow</a></h3>
 <ol>
-<li><strong>Avoid excessive adjustments</strong> that might indicate monitoring issues</li>
-<li><strong>Review patterns</strong> in adjustments to improve monitoring</li>
-<li><strong>Keep adjustments minimal</strong> and well-documented</li>
-<li><strong>Validate final results</strong> with report command</li>
+<li><strong>Monitor productivity</strong> throughout the day</li>
+<li><strong>Add breaks when warned</strong> by the system</li>
+<li><strong>Validate report submission</strong> after adding breaks</li>
+<li><strong>Review daily patterns</strong> to improve future planning</li>
 </ol>
 <h2 id="integration-with-other-commands-5"><a class="header" href="#integration-with-other-commands-5">Integration with Other Commands</a></h2>
-<p>The <code>adjust</code> command works with other kasl commands:</p>
+<p>The <code>breaks</code> command works seamlessly with other kasl commands:</p>
 <ul>
-<li><strong><code>report</code></strong>: Review workday data before and after adjustments</li>
-<li><strong><code>pauses</code></strong>: View existing pauses to avoid conflicts</li>
-<li><strong><code>watch</code></strong>: Improve monitoring to reduce need for adjustments</li>
-<li><strong><code>export</code></strong>: Backup data before making adjustments</li>
+<li><strong><code>report</code></strong>: Shows productivity metrics and break impact</li>
+<li><strong><code>pauses</code></strong>: Displays existing pauses to avoid conflicts</li>
+<li><strong><code>watch</code></strong>: Continues monitoring activity with breaks included</li>
+<li><strong><code>export</code></strong>: Includes break data in exported reports</li>
 </ul>
 <h2 id="related-commands-6"><a class="header" href="#related-commands-6">Related Commands</a></h2>
 <ul>
-<li><strong><a href="commands/./report.html"><code>report</code></a></strong> - Review workday data</li>
-<li><strong><a href="commands/./pauses.html"><code>pauses</code></a></strong> - View recorded breaks and pauses</li>
-<li><strong><a href="commands/./watch.html"><code>watch</code></a></strong> - Monitor activity (reduces need for adjustments)</li>
-<li><strong><a href="commands/./export.html"><code>export</code></a></strong> - Backup data before adjustments</li>
+<li><strong><a href="commands/./report.html"><code>report</code></a></strong> - View productivity metrics and break impact</li>
+<li><strong><a href="commands/./pauses.html"><code>pauses</code></a></strong> - View existing pauses and gaps</li>
+<li><strong><a href="commands/./watch.html"><code>watch</code></a></strong> - Monitor activity including break periods</li>
+<li><strong><a href="commands/./export.html"><code>export</code></a></strong> - Export data including break information</li>
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="pauses-command"><a class="header" href="#pauses-command"><code>pauses</code> Command</a></h1>
 <p>The <code>pauses</code> command provides detailed views of automatically detected and manually recorded breaks during work sessions. It helps users understand their break patterns and verify the accuracy of automatic pause detection.</p>
@@ -3046,7 +3197,7 @@ kasl adjust --mode pause --minutes 30 --date 2024-12-15
 # Verify the pause was added
 kasl pauses --date 2024-12-15
 </code></pre>
-<h3 id="data-validation-2"><a class="header" href="#data-validation-2">Data Validation</a></h3>
+<h3 id="data-validation-3"><a class="header" href="#data-validation-3">Data Validation</a></h3>
 <pre><code class="language-bash"># Cross-reference with workday report
 kasl report --date 2024-12-15
 kasl pauses --date 2024-12-15
@@ -3375,7 +3526,7 @@ kasl tag create "mytag" --color "red"
 # Or use hex color codes
 kasl tag create "mytag" --color "#FF0000"
 </code></pre>
-<h3 id="data-recovery-1"><a class="header" href="#data-recovery-1">Data Recovery</a></h3>
+<h3 id="data-recovery"><a class="header" href="#data-recovery">Data Recovery</a></h3>
 <pre><code class="language-bash"># Export tasks with tags before deletion
 kasl export tasks --format json
 
@@ -3725,7 +3876,7 @@ kasl template list
 # Check template name spelling
 kasl template search "template-name"
 </code></pre>
-<h3 id="data-recovery-2"><a class="header" href="#data-recovery-2">Data Recovery</a></h3>
+<h3 id="data-recovery-1"><a class="header" href="#data-recovery-1">Data Recovery</a></h3>
 <pre><code class="language-bash"># Export templates before deletion
 kasl export --format json
 
@@ -3992,7 +4143,7 @@ kasl watch --stop
 <h2 id="usage-11"><a class="header" href="#usage-11">Usage</a></h2>
 <pre><code class="language-bash">kasl update
 </code></pre>
-<h2 id="how-it-works-1"><a class="header" href="#how-it-works-1">How It Works</a></h2>
+<h2 id="how-it-works-2"><a class="header" href="#how-it-works-2">How It Works</a></h2>
 <p>The update process performs a complete workflow:</p>
 <ol>
 <li><strong>Version Check</strong>: Queries GitHub API for the latest release</li>
@@ -4219,7 +4370,7 @@ kasl --help
 </code></pre>
 </li>
 </ol>
-<h3 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h3>
+<h3 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h3>
 <pre><code class="language-json">{
   "gitlab": {
     "access_token": "glpat-XXXXXXXXXXXXXXXXXXXX",
@@ -4268,7 +4419,7 @@ kasl task --find
 </code></pre>
 </li>
 </ol>
-<h3 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h3>
+<h3 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h3>
 <pre><code class="language-json">{
   "jira": {
     "login": "john.doe",
@@ -4319,7 +4470,7 @@ kasl task --find
 </code></pre>
 </li>
 </ol>
-<h3 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h3>
+<h3 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h3>
 <pre><code class="language-json">{
   "si": {
     "login": "john.doe@company.com",
@@ -5423,7 +5574,7 @@ test: add comprehensive task management tests
 <li><strong>Rate Limiting</strong>: Respect API rate limits</li>
 <li><strong>Testing</strong>: Mock external APIs in tests</li>
 </ol>
-<h3 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h3>
+<h3 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h3>
 <ol>
 <li><strong>Backward Compatibility</strong>: Don't break existing configurations</li>
 <li><strong>Validation</strong>: Validate configuration on load</li>
