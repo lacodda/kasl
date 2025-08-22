@@ -178,6 +178,7 @@ pub enum Message {
     ConfigModuleSiServer,
     ConfigModuleMonitor,
     ConfigModuleServer,
+    ConfigModuleProductivity,
 
     // === REPORT MESSAGES ===
     DailyReportSent(String),   // date
@@ -411,6 +412,11 @@ pub enum Message {
     PromptPauseThreshold,
     PromptPollInterval,
     PromptActivityThreshold,
+    PromptMinProductivityThreshold,
+    PromptWorkdayHours,
+    PromptMinWorkdayFraction,
+    PromptMinBreakDuration,
+    PromptMaxBreakDuration,
     PromptServerApiUrl,
     PromptServerAuthToken,
     PromptConfirmDelete,

@@ -493,6 +493,10 @@ impl Config {
                 key: "server".to_string(),
                 name: "Server".to_string(),
             },
+            ConfigModule {
+                key: "productivity".to_string(),
+                name: "Productivity".to_string(),
+            },
         ];
 
         // Present multi-select interface for module selection
@@ -564,6 +568,43 @@ impl Config {
                         auth_token: Input::with_theme(&ColorfulTheme::default())
                             .with_prompt(Message::PromptServerAuthToken.to_string())
                             .default(default.auth_token)
+                            .interact_text()?,
+                    });
+                }
+
+                // Productivity configuration for break recommendations and reporting
+                "productivity" => {
+                    let default = config.productivity.clone().unwrap_or_default();
+                    msg_print!(Message::ConfigModuleProductivity);
+                    config.productivity = Some(ProductivityConfig {
+                        // Minimum productivity percentage threshold
+                        min_productivity_threshold: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(Message::PromptMinProductivityThreshold.to_string())
+                            .default(default.min_productivity_threshold)
+                            .interact_text()?,
+
+                        // Expected workday duration
+                        workday_hours: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(Message::PromptWorkdayHours.to_string())
+                            .default(default.workday_hours)
+                            .interact_text()?,
+
+                        // Minimum workday fraction before suggestions
+                        min_workday_fraction_before_suggest: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(Message::PromptMinWorkdayFraction.to_string())
+                            .default(default.min_workday_fraction_before_suggest)
+                            .interact_text()?,
+
+                        // Minimum break duration in minutes
+                        min_break_duration: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(Message::PromptMinBreakDuration.to_string())
+                            .default(default.min_break_duration)
+                            .interact_text()?,
+
+                        // Maximum break duration in minutes
+                        max_break_duration: Input::with_theme(&ColorfulTheme::default())
+                            .with_prompt(Message::PromptMaxBreakDuration.to_string())
+                            .default(default.max_break_duration)
                             .interact_text()?,
                     });
                 }

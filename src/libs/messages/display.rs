@@ -224,6 +224,7 @@ impl Display for Message {
             Message::ConfigModuleSiServer => "SiServer settings".to_string(),
             Message::ConfigModuleMonitor => "Monitor settings".to_string(),
             Message::ConfigModuleServer => "Server settings".to_string(),
+            Message::ConfigModuleProductivity => "Productivity settings".to_string(),
 
             // === REPORT MESSAGES ===
             Message::DailyReportSent(date) => {
@@ -472,6 +473,11 @@ impl Display for Message {
             Message::PromptPauseThreshold => "Enter pause threshold (seconds)".to_string(),
             Message::PromptPollInterval => "Enter poll interval (milliseconds)".to_string(),
             Message::PromptActivityThreshold => "Enter activity threshold (seconds)".to_string(),
+            Message::PromptMinProductivityThreshold => "Enter minimum productivity threshold (%)".to_string(),
+            Message::PromptWorkdayHours => "Enter expected workday duration (hours)".to_string(),
+            Message::PromptMinWorkdayFraction => "Enter minimum workday fraction before suggesting breaks (0.0-1.0)".to_string(),
+            Message::PromptMinBreakDuration => "Enter minimum break duration (minutes)".to_string(),
+            Message::PromptMaxBreakDuration => "Enter maximum break duration (minutes)".to_string(),
             Message::PromptServerApiUrl => "Enter server API URL".to_string(),
             Message::PromptServerAuthToken => "Enter server auth token".to_string(),
             Message::PromptConfirmDelete => "Are you sure you want to delete this item?".to_string(),

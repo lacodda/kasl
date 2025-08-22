@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use kasl::libs::config::{Config, MonitorConfig, ServerConfig};
+    use kasl::libs::config::{Config, MonitorConfig, ServerConfig, ProductivityConfig};
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
 
@@ -98,5 +98,15 @@ mod tests {
         assert_eq!(monitor_config.pause_threshold, ctx.pause_threshold);
         assert_eq!(monitor_config.poll_interval, ctx.poll_interval);
         assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
+    }
+
+    #[test]
+    fn test_default_productivity_config() {
+        let productivity_config = ProductivityConfig::default();
+        assert_eq!(productivity_config.min_productivity_threshold, 75.0);
+        assert_eq!(productivity_config.workday_hours, 8.0);
+        assert_eq!(productivity_config.min_workday_fraction_before_suggest, 0.5);
+        assert_eq!(productivity_config.min_break_duration, 20);
+        assert_eq!(productivity_config.max_break_duration, 180);
     }
 }
