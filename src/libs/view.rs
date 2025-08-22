@@ -16,7 +16,7 @@
 //! use kasl::libs::view::View;
 //!
 //! View::tasks(&tasks)?;
-//! View::report(&workday, &long_breaks, &all_pauses, &tasks)?;
+//! View::report_with_intervals(&workday, &intervals, &all_pauses, &tasks)?;
 //! View::sum(&summary_data)?;
 //! ```
 
@@ -81,72 +81,6 @@ impl View {
         Ok(())
     }
 
-    /// Displays a comprehensive daily work report with intervals, productivity, and tasks.
-    ///
-    /// Generates a detailed daily report that includes work time analysis, break patterns,
-    /// productivity calculations, and associated tasks.
-    ///
-    /// The productivity calculation uses a sophisticated algorithm that distinguishes
-    /// between different types of work interruptions:
-    ///
-    /// - **Long Breaks**: Significant interruptions (lunch, meetings) excluded from gross time
-    /// - **Short Pauses**: Brief interruptions (bathroom, coffee) used for productivity calculation
-    /// - **Net Duration**: Pure working time with all breaks excluded
-    /// - **Productivity**: Percentage of gross time spent in active work
-    ///
-    /// ## Data Integration
-    ///
-    /// The method integrates data from multiple sources:
-    /// - Workday records for start/end times
-    /// - Pause detection for break analysis
-    /// - Task records for completed work items
-    /// - Interval calculation for time block analysis
-    ///
-    /// # Arguments
-    ///
-    /// * `workday` - The `Workday` record containing start/end times for the day
-    /// * `long_breaks` - Filtered long breaks to display in the intervals table
-    /// * `all_pauses` - Complete pause data for accurate productivity calculation
-    /// * `tasks` - Slice of `Task` records completed during the day
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful report generation, or an error if
-    /// formatting or display operations fail.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use kasl::libs::view::View;
-    ///
-    /// View::report(&workday, &filtered_breaks, &all_pauses, &daily_tasks)?;
-    /// ```
-    pub fn report(workday: &Workday, long_breaks: &[Pause], all_pauses: &[Pause], tasks: &[Task]) -> Result<()> {
-        // Display formatted report header with readable date
-        msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
-
-        // Calculate work time boundaries, using current time if workday is still active
-        let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
-        let gross_duration = end_time - workday.start;
-
-        // Calculate total duration of long breaks for net time calculation
-        // Long breaks are major interruptions that are excluded from productive time
-        let daily_long_break_duration = long_breaks.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d);
-
-        // Net duration represents time available for work (excluding major breaks)
-        let net_duration = gross_duration - daily_long_break_duration;
-
-        // Calculate short pause duration for productivity analysis
-        // This includes all pauses minus the long breaks already excluded
-        let daily_short_pause_duration = all_pauses.iter().filter_map(|b| b.duration).fold(Duration::zero(), |acc, d| acc + d) - daily_long_break_duration;
-
-        // Calculate work productivity using sophisticated algorithm
-        let productivity = Self::calculate_productivity(&net_duration, &daily_short_pause_duration);
-
-        // Generate work intervals using filtered breaks for clean display
-        let intervals = report::calculate_work_intervals(workday, long_breaks);
-        Self::render_report_with_intervals(workday, &intervals, all_pauses, tasks, &net_duration, productivity)
-    }
 
     /// Displays a formatted daily work report using pre-calculated intervals.
     ///
@@ -166,8 +100,6 @@ impl View {
         tasks: &[Task]
     ) -> Result<()> {
         // Calculate work time boundaries and productivity with given intervals
-        let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
-        let _gross_duration = end_time - workday.start;
         
         // Calculate filtered duration based on provided intervals
         let filtered_duration = intervals.iter()
@@ -180,14 +112,13 @@ impl View {
             
         let productivity = Self::calculate_productivity(&filtered_duration, &total_pause_duration);
         
-        Self::render_report_with_intervals(workday, intervals, all_pauses, tasks, &filtered_duration, productivity)
+        Self::render_report_with_intervals(workday, intervals, tasks, &filtered_duration, productivity)
     }
 
     /// Internal method to render the actual report table and content.
     fn render_report_with_intervals(
         workday: &Workday,
         intervals: &[report::WorkInterval],
-        _all_pauses: &[Pause], 
         tasks: &[Task],
         net_duration: &Duration,
         productivity: f64

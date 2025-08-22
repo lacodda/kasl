@@ -63,8 +63,9 @@ mod tests {
         let pauses_vec = pauses_db.get_daily_pauses(date, 0).unwrap(); // min_duration = 0 to fetch all
         let tasks = vec![];
 
-        // Pass the same pauses for both long_breaks and all_pauses in tests
-        let output = View::report(&workday, &pauses_vec, &pauses_vec, &tasks);
+        // Calculate intervals for the test
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
+        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
 
@@ -93,8 +94,9 @@ mod tests {
         let tasks = vec![];
 
         assert_eq!(pauses_vec.len(), 0);
-        // Pass empty pauses for both parameters
-        let output = View::report(&workday, &pauses_vec, &pauses_vec, &tasks);
+        // Calculate intervals for the test
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
+        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &tasks);
         assert!(output.is_ok());
     }
 }

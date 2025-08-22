@@ -365,8 +365,6 @@ fn find_break_placement_options(
 async fn show_updated_productivity(date: NaiveDate) -> Result<()> {
     // Get all data for productivity calculation
     let workday = Workdays::new()?.fetch(date)?.expect("Workday should exist");
-    let config = Config::read()?;
-    let _monitor_config = config.monitor.unwrap_or_default();
     
     let pauses = Pauses::new()?.get_daily_pauses(date, 0)?; // All pauses for calculation
     let breaks = Breaks::new()?.get_daily_breaks(date)?;

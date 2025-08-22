@@ -2,7 +2,7 @@
 mod tests {
     use chrono::{Duration, NaiveDate};
     use kasl::db::{breaks::Breaks, workdays::Workdays};
-    use kasl::libs::{config::ProductivityConfig, pause::Pause, report};
+    use kasl::libs::{pause::Pause, report};
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
 
