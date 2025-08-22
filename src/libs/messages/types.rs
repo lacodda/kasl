@@ -360,6 +360,35 @@ pub enum Message {
 
     // === PRODUCTIVITY MESSAGES ===
     MonthlyProductivity(f64), // percentage
+    LowProductivityWarning {
+        current: f64,
+        threshold: f64,
+        needed_break_minutes: u64,
+    },
+    ProductivityTooLowToSend {
+        current: f64,
+        threshold: f64,
+        needed_break_minutes: u64,
+    },
+    BreakCreated {
+        start_time: String,
+        end_time: String,
+        duration_minutes: u64,
+    },
+    BreakCreateFailed(String),
+    BreakSuggestionCommand {
+        auto_minutes: u64,
+    },
+    BreakInteractivePrompt,
+    BreakDurationPrompt {
+        min_duration: u64,
+        max_duration: u64,
+    },
+    BreakPlacementOptions,
+    BreakOptionSelected(usize),
+    BreakConflictsWithPauses,
+    NoValidBreakPlacement,
+    ProductivityRecalculated(f64),
 
     // === ENCRYPTION/SECRET MESSAGES ===
     EncryptionKeyMustBeSet,

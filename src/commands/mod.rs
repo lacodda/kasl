@@ -18,7 +18,7 @@
 //! kasl export tasks --format csv # Export tasks to CSV
 //! ```
 
-pub mod adjust;
+pub mod breaks;
 pub mod autostart;
 pub mod export;
 pub mod init;
@@ -127,12 +127,12 @@ enum Commands {
     #[command(about = "Display pauses for a given date")]
     Pauses(pauses::PausesArgs),
 
-    /// Modify recorded work times and add manual pauses
+    /// Add manual breaks for productivity optimization
     ///
-    /// Allows correction of automatically detected work times and manual
-    /// addition of breaks that weren't captured by the monitoring system.
-    #[command(about = "Adjust workday time by removing time or adding pauses")]
-    Adjust(adjust::AdjustArgs),
+    /// Create strategically placed breaks to improve productivity metrics
+    /// and meet minimum thresholds for report submission.
+    #[command(about = "Add manual breaks for productivity optimization")]
+    Breaks(breaks::BreaksArgs),
 
     /// Database migration management utilities (debug builds only)
     ///
@@ -208,7 +208,7 @@ impl Cli {
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
-            Commands::Adjust(args) => adjust::cmd(args).await,
+            Commands::Breaks(args) => breaks::cmd(args).await,
 
             // Database migrations only available in debug builds
             #[cfg(debug_assertions)]

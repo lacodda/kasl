@@ -105,6 +105,48 @@ pub struct MonitorConfig {
     pub min_work_interval: u64,
 }
 
+/// Productivity management configuration settings.
+///
+/// Controls the behavior of productivity monitoring, break recommendations,
+/// and report validation based on productivity thresholds.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct ProductivityConfig {
+    /// Minimum acceptable productivity percentage.
+    ///
+    /// Productivity below this threshold triggers warnings in reports
+    /// and prevents report submission until breaks are added to reach
+    /// the minimum level. Should be set between 70-85% for most users.
+    pub min_productivity_threshold: f64,
+
+    /// Expected workday duration in hours.
+    ///
+    /// Used for calculating break recommendations and determining when
+    /// enough of the workday has passed to suggest productivity improvements.
+    /// Typical values are 7.5-8.5 hours for standard workdays.
+    pub workday_hours: f64,
+
+    /// Fraction of workday that must pass before suggesting breaks.
+    ///
+    /// Productivity warnings and break suggestions are only shown after
+    /// this portion of the expected workday has elapsed. This prevents
+    /// premature suggestions during normal workday startup.
+    /// Typical value: 0.5 (50% of workday)
+    pub min_workday_fraction_before_suggest: f64,
+
+    /// Minimum break duration in minutes.
+    ///
+    /// Manual breaks must be at least this long to be accepted.
+    /// Prevents creation of breaks that are too short to meaningfully
+    /// impact productivity calculations.
+    pub min_break_duration: u64,
+
+    /// Maximum break duration in minutes.
+    ///
+    /// Manual breaks cannot exceed this duration. Prevents creation
+    /// of breaks that extend beyond the current time or are unreasonably long.
+    pub max_break_duration: u64,
+}
+
 /// External server configuration for report submission.
 ///
 /// This structure contains the connection parameters for external reporting
@@ -194,6 +236,13 @@ pub struct Config {
     /// or project management systems.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerConfig>,
+
+    /// Productivity management configuration.
+    ///
+    /// Controls productivity thresholds, break recommendations,
+    /// and report validation based on productivity metrics.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub productivity: Option<ProductivityConfig>,
 }
 
 impl Default for MonitorConfig {
@@ -229,6 +278,31 @@ impl Default for MonitorConfig {
     }
 }
 
+impl Default for ProductivityConfig {
+    /// Provides sensible defaults for productivity configuration.
+    ///
+    /// These defaults are based on common productivity management practices
+    /// and provide a good starting point for most users. Values can be
+    /// adjusted through configuration to match individual work styles.
+    ///
+    /// ## Default Values Rationale
+    ///
+    /// - **75% minimum productivity**: Reasonable threshold allowing for breaks
+    /// - **8 hours workday**: Standard full-time work expectation
+    /// - **50% workday fraction**: Wait until mid-day before suggesting breaks
+    /// - **20 minutes minimum break**: Long enough to impact productivity meaningfully
+    /// - **180 minutes maximum break**: Prevents unreasonably long breaks
+    fn default() -> Self {
+        ProductivityConfig {
+            min_productivity_threshold: 75.0,
+            workday_hours: 8.0,
+            min_workday_fraction_before_suggest: 0.5,
+            min_break_duration: 20,
+            max_break_duration: 180,
+        }
+    }
+}
+
 impl Default for Config {
     /// Creates a default configuration with all modules disabled.
     ///
@@ -243,6 +317,7 @@ impl Default for Config {
             jira: None,
             monitor: None,
             server: None,
+            productivity: None,
         }
     }
 }

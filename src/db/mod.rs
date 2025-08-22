@@ -120,6 +120,12 @@ pub mod db;
 /// development-time migration management commands.
 pub mod migrations;
 
+/// Manual break period management.
+///
+/// Handles user-defined break periods for productivity optimization, allowing
+/// manual addition of intentional breaks to improve productivity calculations.
+pub mod breaks;
+
 /// Break and pause tracking operations.
 ///
 /// Manages records of user inactivity periods, break times, and interruptions

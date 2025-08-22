@@ -422,6 +422,34 @@ impl Display for Message {
 
             // === PRODUCTIVITY MESSAGES ===
             Message::MonthlyProductivity(percentage) => format!("Monthly work productivity: {:.1}%", percentage),
+            Message::LowProductivityWarning { current, threshold, needed_break_minutes } => {
+                format!(
+                    "🔴 LOW PRODUCTIVITY: {:.1}% (minimum: {:.1}%)\n   To reach minimum productivity, add a {} minute break\n   Commands: kasl breaks -m {} (automatic) or kasl breaks (choose time)",
+                    current, threshold, needed_break_minutes, needed_break_minutes
+                )
+            },
+            Message::ProductivityTooLowToSend { current, threshold, needed_break_minutes } => {
+                format!(
+                    "Cannot send report: productivity {:.1}% is below minimum {:.1}%\nAdd a break using: kasl breaks -m {}",
+                    current, threshold, needed_break_minutes
+                )
+            },
+            Message::BreakCreated { start_time, end_time, duration_minutes } => {
+                format!("Break created: {} - {} ({} minutes)", start_time, end_time, duration_minutes)
+            },
+            Message::BreakCreateFailed(error) => format!("Failed to create break: {}", error),
+            Message::BreakSuggestionCommand { auto_minutes } => {
+                format!("Run 'kasl breaks -m {}' to automatically place break", auto_minutes)
+            },
+            Message::BreakInteractivePrompt => "Choose break placement interactively".to_string(),
+            Message::BreakDurationPrompt { min_duration, max_duration } => {
+                format!("Enter break duration ({}-{} minutes):", min_duration, max_duration)
+            },
+            Message::BreakPlacementOptions => "Select break placement:".to_string(),
+            Message::BreakOptionSelected(option) => format!("Selected option {}", option),
+            Message::BreakConflictsWithPauses => "Break conflicts with existing pauses".to_string(),
+            Message::NoValidBreakPlacement => "No valid placement found for break".to_string(),
+            Message::ProductivityRecalculated(percentage) => format!("Productivity recalculated: {:.1}%", percentage),
 
             // === ENCRYPTION/SECRET MESSAGES ===
             Message::EncryptionKeyMustBeSet => "ENCRYPTION_KEY must be set".to_string(),

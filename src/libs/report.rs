@@ -602,3 +602,239 @@ mod tests {
         assert!(info.is_none());
     }
 }
+
+/// Calculates productivity including manual break periods.
+///
+/// This function provides an enhanced productivity calculation that considers
+/// both automatic pause detection and manually added break periods. Manual breaks
+/// are treated as intentional non-work time and are excluded from productivity
+/// calculations, allowing users to improve their productivity metrics.
+///
+/// ## Enhanced Productivity Algorithm
+///
+/// The calculation follows this improved formula:
+/// ```
+/// Productivity = (Net Work Time / (Gross Time - Manual Breaks)) * 100%
+/// ```
+///
+/// Where:
+/// - **Gross Time**: Total time from workday start to end
+/// - **Manual Breaks**: User-defined break periods for productivity optimization
+/// - **Net Work Time**: Gross time minus all pauses and breaks
+/// - **Productivity**: Percentage of available work time spent actively working
+///
+/// ## Break Integration
+///
+/// Manual breaks are handled differently from automatic pauses:
+/// - **Automatic Pauses**: Detected by the monitoring system, included in calculations
+/// - **Manual Breaks**: User-added periods, excluded from available work time
+/// - **Combined Effect**: Both types reduce net work time but manual breaks also reduce expected work time
+///
+/// # Arguments
+///
+/// * `workday` - The workday record with start/end times
+/// * `pauses` - Automatic pause periods detected by monitoring
+/// * `breaks` - Manual break periods added by user for productivity improvement
+///
+/// # Returns
+///
+/// Returns productivity as a percentage (0.0-100.0) accounting for all
+/// non-work periods appropriately.
+///
+/// # Examples
+///
+/// ```rust
+/// use kasl::libs::report::calculate_productivity_with_breaks;
+/// use kasl::db::breaks::Break;
+///
+/// let productivity = calculate_productivity_with_breaks(&workday, &pauses, &breaks)?;
+/// println!("Enhanced productivity: {:.1}%", productivity);
+/// ```
+pub fn calculate_productivity_with_breaks(
+    workday: &Workday,
+    pauses: &[Pause],
+    breaks: &[crate::db::breaks::Break],
+) -> f64 {
+    let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
+    let gross_duration = end_time - workday.start;
+    
+    // Calculate total pause time (automatic detection)
+    let pause_duration: Duration = pauses
+        .iter()
+        .filter_map(|p| p.duration)
+        .sum();
+    
+    // Calculate total manual break time
+    let break_duration: Duration = breaks
+        .iter()
+        .map(|b| b.duration)
+        .sum();
+    
+    // Net work time = gross time - all pauses - all manual breaks
+    let net_work_time = gross_duration - pause_duration - break_duration;
+    
+    // Available work time = gross time - manual breaks (pauses are considered interruptions)
+    let available_work_time = gross_duration - break_duration;
+    
+    let productivity = if available_work_time.num_seconds() > 0 {
+        (net_work_time.num_seconds() as f64 / available_work_time.num_seconds() as f64) * 100.0
+    } else {
+        0.0
+    };
+    
+    // Ensure productivity is within valid range
+    productivity.max(0.0).min(100.0)
+}
+
+/// Calculates the break duration needed to reach target productivity.
+///
+/// This function determines how many minutes of manual breaks need to be added
+/// to achieve a specific productivity threshold. This is used for generating
+/// break recommendations when productivity falls below acceptable levels.
+///
+/// ## Calculation Logic
+///
+/// The function works backwards from the target productivity:
+/// 1. Calculate current net work time and gross time
+/// 2. Determine required available work time for target productivity
+/// 3. Calculate needed break duration to achieve that available work time
+/// 4. Account for existing manual breaks in the calculation
+///
+/// ## Productivity Improvement Strategy
+///
+/// By adding manual breaks:
+/// - **Gross time**: Remains the same (workday boundaries unchanged)
+/// - **Available work time**: Decreases (manual breaks excluded)
+/// - **Net work time**: Decreases slightly (existing pauses unchanged)
+/// - **Productivity ratio**: Improves (net/available increases)
+///
+/// # Arguments
+///
+/// * `workday` - The workday record with current timing
+/// * `pauses` - Existing automatic pauses
+/// * `existing_breaks` - Manual breaks already added
+/// * `target_productivity` - Desired productivity percentage (0.0-100.0)
+///
+/// # Returns
+///
+/// Returns the number of minutes of breaks needed to reach the target,
+/// or 0 if the target is already achieved or impossible to reach.
+///
+/// # Examples
+///
+/// ```rust
+/// let needed_minutes = calculate_needed_break_duration(
+///     &workday, &pauses, &existing_breaks, 75.0
+/// );
+/// 
+/// if needed_minutes > 0 {
+///     println!("Add {} minutes of breaks to reach 75% productivity", needed_minutes);
+/// }
+/// ```
+pub fn calculate_needed_break_duration(
+    workday: &Workday,
+    pauses: &[Pause], 
+    existing_breaks: &[crate::db::breaks::Break],
+    target_productivity: f64,
+) -> u64 {
+    let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
+    let gross_duration = end_time - workday.start;
+    
+    // Calculate current state
+    let pause_duration: Duration = pauses
+        .iter()
+        .filter_map(|p| p.duration)
+        .sum();
+    
+    let existing_break_duration: Duration = existing_breaks
+        .iter()
+        .map(|b| b.duration)
+        .sum();
+    
+    let current_net_work_time = gross_duration - pause_duration - existing_break_duration;
+    
+    // If target is already achieved, no additional breaks needed
+    let current_available_time = gross_duration - existing_break_duration;
+    if current_available_time.num_seconds() > 0 {
+        let current_productivity = (current_net_work_time.num_seconds() as f64 / current_available_time.num_seconds() as f64) * 100.0;
+        if current_productivity >= target_productivity {
+            return 0;
+        }
+    }
+    
+    // Calculate needed available work time for target productivity
+    // target_productivity = (net_work_time / available_work_time) * 100
+    // available_work_time = net_work_time * 100 / target_productivity
+    
+    if target_productivity <= 0.0 || current_net_work_time.num_seconds() <= 0 {
+        return 0;
+    }
+    
+    let needed_available_seconds = (current_net_work_time.num_seconds() as f64 * 100.0 / target_productivity) as i64;
+    let needed_available_time = Duration::seconds(needed_available_seconds);
+    
+    // Calculate additional break duration needed
+    // available_work_time = gross_duration - total_break_duration
+    // needed_total_break_duration = gross_duration - needed_available_time
+    let needed_total_break_duration = gross_duration - needed_available_time;
+    let additional_break_duration = needed_total_break_duration - existing_break_duration;
+    
+    // Return minutes, ensuring non-negative result
+    additional_break_duration.num_minutes().max(0) as u64
+}
+
+/// Checks if enough of the workday has passed to suggest productivity improvements.
+///
+/// This function prevents premature productivity warnings by ensuring that
+/// a sufficient portion of the expected workday has elapsed before making
+/// break recommendations. This avoids suggesting breaks too early in the day
+/// when productivity patterns may still be developing.
+///
+/// ## Timing Logic
+///
+/// The function considers:
+/// - **Workday Start**: When active work tracking began
+/// - **Current Time**: Present moment for elapsed time calculation
+/// - **Expected Duration**: Configured full workday duration
+/// - **Minimum Fraction**: Threshold percentage before suggestions activate
+///
+/// ## Use Cases
+///
+/// - **Morning Period**: Prevents early suggestions when users are ramping up
+/// - **Mid-Day Check**: Allows suggestions once meaningful work time has elapsed
+/// - **End of Day**: Ensures suggestions remain relevant throughout work period
+///
+/// # Arguments
+///
+/// * `workday` - Current workday record
+/// * `workday_hours` - Expected full workday duration in hours
+/// * `min_fraction` - Minimum fraction of workday that must pass (0.0-1.0)
+///
+/// # Returns
+///
+/// Returns `true` if enough time has passed to make productivity suggestions,
+/// `false` if it's too early in the workday for meaningful recommendations.
+///
+/// # Examples
+///
+/// ```rust
+/// let can_suggest = should_suggest_productivity_improvements(
+///     &workday, 8.0, 0.5  // After 4 hours of 8-hour workday
+/// );
+/// 
+/// if can_suggest {
+///     // Show productivity warnings and break suggestions
+/// }
+/// ```
+pub fn should_suggest_productivity_improvements(
+    workday: &Workday,
+    workday_hours: f64,
+    min_fraction: f64,
+) -> bool {
+    let current_time = chrono::Local::now().naive_local();
+    let elapsed_duration = current_time - workday.start;
+    let expected_workday_duration = Duration::seconds((workday_hours * 3600.0) as i64);
+    let minimum_elapsed = Duration::seconds((expected_workday_duration.num_seconds() as f64 * min_fraction) as i64);
+    
+    elapsed_duration >= minimum_elapsed
+}

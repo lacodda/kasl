@@ -241,6 +241,27 @@ impl MigrationManager {
             tx.execute("ALTER TABLE workdays ADD COLUMN notes TEXT", [])?;
             Ok(())
         });
+
+        // Version 6: Manual breaks table for productivity management
+        // Enables users to add manual break periods to improve productivity calculations
+        self.add_migration(6, "add_breaks_table", |tx| {
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS breaks (
+                    id INTEGER PRIMARY KEY,
+                    date DATE NOT NULL,
+                    start_time DATETIME NOT NULL,
+                    end_time DATETIME NOT NULL,
+                    duration INTEGER NOT NULL,
+                    reason TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )",
+                [],
+            )?;
+            
+            // Create index for efficient daily break lookups
+            tx.execute("CREATE INDEX idx_breaks_date ON breaks(date)", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

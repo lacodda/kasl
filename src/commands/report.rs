@@ -233,13 +233,16 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
 
     let tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
     let config = Config::read()?;
-    let monitor_config = config.monitor.unwrap_or_default();
+    let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
 
     // Fetch filtered long breaks for display (removes noise from short interruptions)
     let long_breaks = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
     // Fetch ALL pauses for accurate productivity calculation
     let all_pauses = Pauses::new()?.get_daily_pauses(naive_date, 0)?;
 
+    // Get manual breaks for enhanced productivity calculation
+    let breaks = crate::db::breaks::Breaks::new()?.get_daily_breaks(naive_date)?;
+    
     // Calculate work intervals and apply filtering
     let intervals = report::calculate_work_intervals(&workday, &long_breaks);
     let (filtered_intervals, filtered_info) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
@@ -251,6 +254,9 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     if let Some(info) = filtered_info {
         msg_info!(format!("Filtered out {} short intervals (total: {})", info.count, format_duration(&info.total_duration)));
     }
+
+    // Check productivity and show recommendations if needed
+    check_and_show_productivity_recommendations(&workday, &all_pauses, &breaks, &config).await?;
 
     Ok(())
 }
@@ -316,8 +322,29 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     }
 
     let config = Config::read()?;
-    let monitor_config = config.monitor.unwrap_or_default();
+    let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
+    let productivity_config = config.productivity.as_ref().cloned().unwrap_or_default();
     let pauses = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
+    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date, 0)?; // All pauses for productivity calculation
+    let breaks = crate::db::breaks::Breaks::new()?.get_daily_breaks(naive_date)?;
+
+    // Check productivity before allowing report submission
+    let current_productivity = report::calculate_productivity_with_breaks(&workday, &all_pauses, &breaks);
+    if current_productivity < productivity_config.min_productivity_threshold {
+        let needed_minutes = report::calculate_needed_break_duration(
+            &workday,
+            &all_pauses,
+            &breaks,
+            productivity_config.min_productivity_threshold,
+        );
+        
+        msg_error!(Message::ProductivityTooLowToSend {
+            current: current_productivity,
+            threshold: productivity_config.min_productivity_threshold,
+            needed_break_minutes: needed_minutes,
+        });
+        return Ok(());
+    }
 
     // Apply interval filtering for API submission
     let intervals = report::calculate_work_intervals(&workday, &pauses);
@@ -485,4 +512,81 @@ fn get_si_service() -> Result<Si> {
         .si
         .map(|si_config| Si::new(&si_config))
         .ok_or_else(|| msg_error_anyhow!(Message::SiServerConfigNotFound))
+}
+
+/// Checks productivity and shows recommendations for improvement if needed.
+///
+/// This function implements the core productivity monitoring and recommendation
+/// system. It calculates enhanced productivity including manual breaks, compares
+/// it against configured thresholds, and provides actionable recommendations
+/// when productivity falls below acceptable levels.
+///
+/// ## Recommendation Logic
+///
+/// The function only shows recommendations when:
+/// 1. Sufficient time has elapsed in the workday (prevents early suggestions)
+/// 2. Productivity falls below the configured minimum threshold
+/// 3. A meaningful break duration can be calculated to reach the target
+///
+/// ## User Experience
+///
+/// Recommendations are displayed prominently with:
+/// - Red emoji and colored text for visibility
+/// - Specific break duration needed
+/// - Ready-to-use commands for quick action
+/// - Clear explanation of current vs. target productivity
+///
+/// # Arguments
+///
+/// * `workday` - Current workday record for timing analysis
+/// * `pauses` - All pause periods for productivity calculation
+/// * `breaks` - Existing manual breaks already added
+/// * `config` - Application configuration with productivity settings
+async fn check_and_show_productivity_recommendations(
+    workday: &crate::db::workdays::Workday,
+    pauses: &[crate::libs::pause::Pause],
+    breaks: &[crate::db::breaks::Break],
+    config: &crate::libs::config::Config,
+) -> Result<()> {
+    // Get productivity configuration with defaults
+    let productivity_config = config.productivity.as_ref().cloned().unwrap_or_default();
+    
+    // Check if enough of the workday has passed to make suggestions
+    if !report::should_suggest_productivity_improvements(
+        workday,
+        productivity_config.workday_hours,
+        productivity_config.min_workday_fraction_before_suggest,
+    ) {
+        return Ok(()); // Too early to suggest improvements
+    }
+    
+    // Calculate current productivity including manual breaks
+    let current_productivity = report::calculate_productivity_with_breaks(workday, pauses, breaks);
+    
+    // Check if productivity is below the minimum threshold
+    if current_productivity >= productivity_config.min_productivity_threshold {
+        return Ok(()); // Productivity is acceptable
+    }
+    
+    // Calculate needed break duration to reach minimum productivity
+    let needed_minutes = report::calculate_needed_break_duration(
+        workday,
+        pauses,
+        breaks,
+        productivity_config.min_productivity_threshold,
+    );
+    
+    // Only show recommendations if a meaningful break can help
+    if needed_minutes >= productivity_config.min_break_duration
+        && needed_minutes <= productivity_config.max_break_duration
+    {
+        // Show prominent productivity warning with colored text
+        msg_error!(Message::LowProductivityWarning {
+            current: current_productivity,
+            threshold: productivity_config.min_productivity_threshold,
+            needed_break_minutes: needed_minutes,
+        });
+    }
+    
+    Ok(())
 }
