@@ -124,6 +124,7 @@ pub enum Message {
 
     // === CONFIGURATION MESSAGES ===
     ConfigSaved,
+    ConfigDeleted,
     ConfigLoaded,
     ConfigFileNotFound,
     ConfigParseError,
@@ -267,6 +268,10 @@ pub enum Message {
     UpdateDownloadUrlNotSet,
     WatcherStoppingForUpdate,
     WatcherRestartingAfterUpdate,
+    WatcherStoppingForConfig,
+    WatcherRestartingAfterConfig,
+    WatcherRestarted,
+    WatcherRestartFailed { error: String },
     UpdateBinaryNotFoundInArchive,
 
     // === AUTHENTICATION MESSAGES ===

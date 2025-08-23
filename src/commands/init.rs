@@ -21,8 +21,8 @@
 //! ```
 
 use crate::{
-    libs::{config::Config, messages::Message},
-    msg_success, msg_warning,
+    libs::{config::Config, daemon, messages::Message},
+    msg_info, msg_success, msg_warning,
 };
 use anyhow::Result;
 use clap::Args;
@@ -55,6 +55,13 @@ pub struct InitArgs {
 ///
 /// Returns `Ok(())` on successful configuration, or an error if the setup fails.
 pub fn cmd(init_args: InitArgs) -> Result<()> {
+    // Check if watcher is currently running before making changes
+    let watcher_was_running = daemon::is_running();
+    if watcher_was_running {
+        msg_info!(Message::WatcherStoppingForConfig);
+        daemon::stop()?;
+    }
+
     // Set up global application PATH configuration
     // This ensures the 'kasl' command is available system-wide
     match Config::set_app_global() {
@@ -68,6 +75,8 @@ pub fn cmd(init_args: InitArgs) -> Result<()> {
 
     // Handle deletion mode - exit early after cleanup
     if init_args.delete {
+        // Don't restart watcher after deleting configuration
+        msg_info!(Message::ConfigDeleted);
         return Ok(());
     }
 
@@ -77,5 +86,19 @@ pub fn cmd(init_args: InitArgs) -> Result<()> {
 
     // Confirm successful configuration
     msg_success!(Message::ConfigSaved);
+
+    // Restart watcher if it was running before configuration changes
+    if watcher_was_running {
+        msg_info!(Message::WatcherRestartingAfterConfig);
+        match daemon::spawn() {
+            Ok(()) => {
+                msg_success!(Message::WatcherRestarted);
+            }
+            Err(e) => {
+                msg_warning!(Message::WatcherRestartFailed { error: e.to_string() });
+            }
+        }
+    }
+
     Ok(())
 }

@@ -164,6 +164,7 @@ impl Display for Message {
 
             // === CONFIGURATION MESSAGES ===
             Message::ConfigSaved => "Configuration saved successfully".to_string(),
+            Message::ConfigDeleted => "Configuration deleted successfully".to_string(),
             Message::ConfigLoaded => "Configuration loaded successfully".to_string(),
             Message::ConfigFileNotFound => "Configuration file not found".to_string(),
             Message::ConfigParseError => "Failed to parse configuration".to_string(),
@@ -323,6 +324,10 @@ impl Display for Message {
             Message::UpdateDownloadUrlNotSet => "Download URL not set".to_string(),
             Message::WatcherStoppingForUpdate => "Stopping watcher for update...".to_string(),
             Message::WatcherRestartingAfterUpdate => "Restarting watcher after update...".to_string(),
+            Message::WatcherStoppingForConfig => "Stopping watcher to apply new configuration...".to_string(),
+            Message::WatcherRestartingAfterConfig => "Restarting watcher with updated configuration...".to_string(),
+            Message::WatcherRestarted => "Watcher successfully restarted with new configuration".to_string(),
+            Message::WatcherRestartFailed { error } => format!("Warning: Failed to restart watcher: {}", error),
             Message::UpdateBinaryNotFoundInArchive => "Binary not found in the release archive.".to_string(),
 
             // === AUTHENTICATION MESSAGES ===
