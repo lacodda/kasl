@@ -249,7 +249,7 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let (filtered_intervals, filtered_info) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
 
     // Display the formatted report with filtered intervals
-    View::report_with_intervals(&workday, &filtered_intervals, &all_pauses, &breaks, &tasks)?;
+    View::report(&workday, &filtered_intervals, &all_pauses, &breaks, &tasks)?;
 
     // Display information about filtered short intervals
     if let Some(info) = filtered_info {

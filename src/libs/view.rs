@@ -16,7 +16,7 @@
 //! use kasl::libs::view::View;
 //!
 //! View::tasks(&tasks)?;
-//! View::report_with_intervals(&workday, &intervals, &all_pauses, &breaks, &tasks)?;
+//! View::report(&workday, &intervals, &all_pauses, &breaks, &tasks)?;
 //! View::sum(&summary_data)?;
 //! ```
 
@@ -82,11 +82,10 @@ impl View {
         Ok(())
     }
 
-
     /// Displays a formatted daily work report using pre-calculated intervals.
     ///
-    /// This version accepts pre-filtered work intervals, allowing for custom 
-    /// filtering logic (e.g., removing short intervals) before display.
+    /// This method displays the core report data in a structured table format,
+    /// including work intervals, total time, productivity metrics, and associated tasks.
     ///
     /// # Arguments
     ///
@@ -95,39 +94,11 @@ impl View {
     /// * `all_pauses` - Complete pause record for accurate productivity analysis  
     /// * `breaks` - Manual breaks for enhanced productivity calculation
     /// * `tasks` - Tasks completed during the workday for context
-    pub fn report_with_intervals(
-        workday: &Workday,
-        intervals: &[report::WorkInterval], 
-        all_pauses: &[Pause],
-        breaks: &[Break],
-        tasks: &[Task]
-    ) -> Result<()> {
+    pub fn report(workday: &Workday, intervals: &[report::WorkInterval], all_pauses: &[Pause], breaks: &[Break], tasks: &[Task]) -> Result<()> {
         // Use the report module to process the data
-        let (filtered_duration, productivity, _pauses_in_intervals, _breaks_in_intervals) = 
+        let (filtered_duration, productivity, _pauses_in_intervals, _breaks_in_intervals) =
             report::report_with_intervals(workday, intervals, all_pauses, breaks);
-        
-        Self::report(workday, intervals, tasks, &filtered_duration, productivity)
-    }
 
-    /// Renders a formatted daily work report table.
-    ///
-    /// This method displays the core report data in a structured table format,
-    /// including work intervals, total time, productivity metrics, and associated tasks.
-    ///
-    /// # Arguments
-    ///
-    /// * `workday` - The workday record containing date and timing information
-    /// * `intervals` - Work intervals to display in the table
-    /// * `tasks` - Associated tasks completed during the workday
-    /// * `net_duration` - Total working time duration
-    /// * `productivity` - Calculated productivity percentage
-    pub fn report(
-        workday: &Workday,
-        intervals: &[report::WorkInterval],
-        tasks: &[Task],
-        net_duration: &Duration,
-        productivity: f64
-    ) -> Result<()> {
         // Display formatted report header with readable date
         msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
 
@@ -148,7 +119,7 @@ impl View {
 
         // Add summary rows with total time and productivity metrics
         table.add_empty_row(); // Visual separator before summary
-        table.add_row(row!["TOTAL", "", "", format_duration(&net_duration)]);
+        table.add_row(row!["TOTAL", "", "", format_duration(&filtered_duration)]);
         table.add_row(row!["PRODUCTIVITY", "", "", format!("{:.1}%", productivity)]);
 
         // Render the intervals table to console
@@ -328,7 +299,6 @@ impl View {
     /// let productivity = View::calculate_productivity(&work_time, &short_pauses);
     /// // Returns approximately 93.75% (7.5 hours / 8 hours)
     /// ```
-    
 
     /// Displays a formatted table of task templates for reusable task creation.
     ///
