@@ -7,6 +7,7 @@
 //!
 //! - **Core Infrastructure**: Configuration, data storage, messaging
 //! - **Activity Monitoring**: Real-time tracking, daemon management, pause analysis
+//! - **Productivity Analysis**: Centralized calculation engine with comprehensive metrics
 //! - **Data Management**: Task lifecycle, reporting, summaries
 //! - **User Interface**: Console rendering, data export, formatting
 //! - **System Integration**: Autostart, updates, secure storage

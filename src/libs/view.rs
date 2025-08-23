@@ -84,14 +84,25 @@ impl View {
     /// Displays a formatted daily work report using pre-calculated intervals.
     ///
     /// This method displays the core report data in a structured table format,
-    /// including work intervals, total time, productivity metrics, and associated tasks.
+    /// including work intervals, total time, and productivity metrics calculated
+    /// using the centralized Productivity module.
+    ///
+    /// ## Display Components
+    ///
+    /// 1. **Work Intervals**: Detailed breakdown of focused work periods
+    /// 2. **Total Duration**: Sum of all work intervals (may be filtered)
+    /// 3. **Productivity Percentage**: Calculated using comprehensive Productivity logic
+    /// 4. **Associated Tasks**: Tasks completed during the workday for context
+    ///
+    /// The productivity value displayed here is calculated using the same centralized
+    /// logic used throughout the application for consistency.
     ///
     /// # Arguments
     ///
     /// * `workday` - The workday record containing start/end times
-    /// * `intervals` - Pre-calculated and optionally filtered work intervals
-    /// * `all_pauses` - Complete pause record for accurate productivity analysis  
-    /// * `breaks` - Manual breaks for enhanced productivity calculation
+    /// * `intervals` - Pre-calculated and optionally filtered work intervals for display
+    /// * `filtered_duration` - Sum of displayed interval durations
+    /// * `productivity` - Productivity percentage from centralized Productivity calculation
     /// * `tasks` - Tasks completed during the workday for context
     pub fn report(workday: &Workday, intervals: &[report::WorkInterval], filtered_duration: &TimeDelta, productivity: &f64, tasks: &[Task]) -> Result<()> {
         // Display formatted report header with readable date

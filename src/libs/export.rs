@@ -559,14 +559,17 @@ impl Exporter {
     ///
     /// ## Productivity Calculation
     ///
-    /// Productivity is calculated as:
+    /// For export purposes, a simplified productivity calculation is used:
     /// ```text
-    /// Productivity = (Net Work Time / Gross Work Time) × 100
+    /// Export Productivity = (Net Work Time / Gross Work Time) × 100
     ///
     /// Where:
     /// - Net Work Time = Total Time - Pause Duration
     /// - Gross Work Time = End Time - Start Time
     /// ```
+    /// 
+    /// Note: This differs from the comprehensive calculation in `libs::productivity::Productivity`
+    /// which handles breaks, different pause types, and overlap scenarios.
     ///
     /// # Arguments
     ///
@@ -605,7 +608,9 @@ impl Exporter {
         let gross_duration = end_time - workday.start;
         let net_duration = gross_duration - total_pause_duration;
 
-        // Calculate productivity percentage with bounds checking
+        // Calculate simplified productivity percentage for export
+        // Note: This is a simplified calculation for export purposes only
+        // For comprehensive productivity analysis, use libs::productivity::Productivity
         let productivity = if gross_duration.num_seconds() > 0 {
             (net_duration.num_seconds() as f64 / gross_duration.num_seconds() as f64) * 100.0
         } else {

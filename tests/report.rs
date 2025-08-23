@@ -2,7 +2,6 @@
 mod tests {
     use chrono::NaiveDate;
     use kasl::db::{pauses::Pauses, workdays::Workdays};
-    use kasl::libs::view::View;
     use tempfile::TempDir;
     use test_context::{test_context, TestContext};
 
@@ -60,12 +59,12 @@ mod tests {
         drop(conn);
 
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let pauses_vec = pauses_db.get_daily_pauses(date, 0).unwrap(); // min_duration = 0 to fetch all
-        let tasks = vec![];
+        let pauses_vec = pauses_db.get_daily_pauses(date).unwrap(); // Fetch all pauses
+        // tasks variable removed as it's no longer needed with new API
 
         // Calculate intervals for the test
         let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
-        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &[], &tasks);
+        let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
         assert!(output.is_ok());
     }
 
@@ -90,13 +89,13 @@ mod tests {
         let pauses_db = Pauses::new().unwrap();
 
         let workday = workdays.fetch(date).unwrap().unwrap();
-        let pauses_vec = pauses_db.get_daily_pauses(date, 0).unwrap(); // min_duration = 0 to fetch all
-        let tasks = vec![];
+        let pauses_vec = pauses_db.get_daily_pauses(date).unwrap(); // Fetch all pauses
+        // tasks variable removed as it's no longer needed with new API
 
         assert_eq!(pauses_vec.len(), 0);
         // Calculate intervals for the test
         let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
-        let output = View::report_with_intervals(&workday, &intervals, &pauses_vec, &[], &tasks);
+        let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
         assert!(output.is_ok());
     }
 }

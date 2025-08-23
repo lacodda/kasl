@@ -354,13 +354,27 @@ fn find_break_placement_options(
 
 /// Shows updated productivity after break creation.
 ///
-/// Recalculates productivity including the new break and displays
-/// the improved productivity percentage to the user.
+/// Recalculates productivity using the centralized `Productivity` module and displays
+/// the updated productivity percentage to the user. This provides immediate feedback
+/// on how the newly added break affects overall productivity metrics.
+///
+/// ## Calculation Process
+///
+/// 1. **Data Loading**: Fetches the current workday record
+/// 2. **Comprehensive Analysis**: Uses `Productivity::new()` to automatically load:
+///    - All manual breaks (including the just-created break)
+///    - Short pauses (< min_pause_duration)  
+///    - Long pauses (>= min_pause_duration)
+/// 3. **Unified Calculation**: Applies the same productivity logic used throughout the app
+/// 4. **User Feedback**: Displays the recalculated productivity percentage
+///
+/// This ensures the user sees exactly how their break addition impacts the productivity
+/// metric that will be used in reports and other application features.
 async fn show_updated_productivity(date: NaiveDate) -> Result<()> {
-    // Get all data for productivity calculation
+    // Get workday data for the specified date
     let workday = Workdays::new()?.fetch(date)?.expect("Workday should exist");
 
-    // Calculate new productivity (this would be implemented in report.rs)
+    // Use centralized productivity module for consistent calculation
     let productivity = Productivity::new(&workday)?.calculate_productivity();
 
     msg_info!(Message::ProductivityRecalculated(productivity));

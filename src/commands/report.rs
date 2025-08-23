@@ -2,7 +2,16 @@
 //!
 //! Handles the core reporting functionality of kasl including generation of detailed
 //! daily work reports, automatic filtering of short work intervals, integration with
-//! external APIs, and productivity analysis.
+//! external APIs, and comprehensive productivity analysis using the centralized 
+//! Productivity module.
+//!
+//! ## Productivity Integration
+//!
+//! This module leverages the centralized `libs::productivity::Productivity` module for:
+//! - Consistent productivity calculations across display and submission
+//! - Break recommendations based on productivity thresholds  
+//! - Validation before report submission to external APIs
+//! - Real-time productivity feedback during report generation
 
 use crate::{
     api::si::Si,
@@ -238,11 +247,7 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let long_breaks = Pauses::new()?
         .set_min_duration(monitor_config.min_pause_duration)
         .get_daily_pauses(naive_date)?;
-    // Fetch ALL pauses for accurate productivity calculation
-    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date)?;
-
-    // Get manual breaks for enhanced productivity calculation
-    let breaks = crate::db::breaks::Breaks::new()?.get_daily_breaks(naive_date)?;
+    // Note: Pauses and breaks are now loaded automatically by Productivity::new()
 
     // Calculate work intervals and apply filtering
     let intervals = report::calculate_work_intervals(&workday, &long_breaks);
@@ -263,11 +268,13 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
         ));
     }
 
-    // Check productivity and show recommendations if needed
-    if let Some(needed_minutes) = Productivity::new(&workday)?.check_productivity_recommendations(&all_pauses, &breaks, &config) {
+    // Check productivity and show break recommendations if needed
+    // Uses centralized productivity module with self-contained logic
+    let productivity = Productivity::new(&workday)?;
+    if let Some(needed_minutes) = productivity.check_productivity_recommendations() {
         msg_error!(Message::LowProductivityWarning {
-            current: Productivity::new(&workday)?.calculate_productivity(),
-            threshold: config.productivity.as_ref().map(|p| p.min_productivity_threshold).unwrap_or(70.0),
+            current: productivity.calculate_productivity(),
+            threshold: productivity.config.min_productivity_threshold,
             needed_break_minutes: needed_minutes,
         });
     }
@@ -337,21 +344,23 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 
     let config = Config::read()?;
     let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
-    let productivity_config = config.productivity.as_ref().cloned().unwrap_or_default();
     let pauses = Pauses::new()?
         .set_min_duration(monitor_config.min_pause_duration)
         .get_daily_pauses(naive_date)?;
-    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date)?; // All pauses for productivity calculation
-    let breaks = crate::db::breaks::Breaks::new()?.get_daily_breaks(naive_date)?;
+    
+    // Note: Productivity data (all pauses, breaks, config) now loaded automatically by Productivity::new()
 
-    // Check productivity before allowing report submission
-    let current_productivity = Productivity::new(&workday)?.calculate_productivity();
-    if current_productivity < productivity_config.min_productivity_threshold {
-        let needed_minutes = Productivity::new(&workday)?.calculate_needed_break_duration(&all_pauses, &breaks, productivity_config.min_productivity_threshold);
+    // Validate productivity before allowing report submission
+    // Uses centralized Productivity module for consistent threshold checking
+    let productivity = Productivity::new(&workday)?;
+    let current_productivity = productivity.calculate_productivity();
+    if current_productivity < productivity.config.min_productivity_threshold {
+        // Calculate break recommendations using the same comprehensive logic
+        let needed_minutes = productivity.calculate_needed_break_duration(None);
 
         msg_error!(Message::ProductivityTooLowToSend {
             current: current_productivity,
-            threshold: productivity_config.min_productivity_threshold,
+            threshold: productivity.config.min_productivity_threshold,
             needed_break_minutes: needed_minutes,
         });
         return Ok(());

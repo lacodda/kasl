@@ -528,31 +528,51 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
 /// Process daily work report data using pre-calculated intervals.
 ///
 /// This function handles the data processing for daily work reports, calculating
-/// productivity and filtering data for display. It separates the data processing
-/// logic from the view rendering logic.
+/// productivity metrics and work durations. It leverages the centralized `Productivity`
+/// module for consistent calculations across the application.
+///
+/// ## Calculation Method
+///
+/// The function uses two different approaches for different metrics:
+/// - **Filtered Duration**: Summed directly from provided intervals (for display purposes)
+/// - **Productivity**: Calculated using the comprehensive `Productivity::calculate_productivity()` 
+///   method which properly handles all pause types, breaks, and overlaps
+///
+/// This separation allows for interval-based filtering (for clean reports) while maintaining
+/// accurate productivity calculations that account for all time categories.
+///
+/// ## Data Consistency
+///
+/// By using `Productivity::new()`, this function automatically:
+/// - Loads the same data used throughout the application
+/// - Applies consistent calculation logic
+/// - Handles all edge cases and data integrity issues
 ///
 /// # Arguments
 ///
 /// * `workday` - The workday record containing start/end times
-/// * `intervals` - Pre-calculated and optionally filtered work intervals
-/// * `all_pauses` - Complete pause record for accurate productivity analysis  
-/// * `breaks` - Manual breaks for enhanced productivity calculation
+/// * `intervals` - Pre-calculated and optionally filtered work intervals for duration calculation
 ///
 /// # Returns
 ///
 /// Returns a tuple containing:
-/// - Filtered duration (Duration)
-/// - Productivity percentage (f64)
-/// - Pauses within intervals (Vec<Pause>)
-/// - Breaks within intervals (Vec<Break>)
+/// - **Filtered Duration**: Sum of provided work intervals (may exclude short intervals)
+/// - **Productivity**: Comprehensive productivity percentage using centralized calculation
+///
+/// # Examples
+///
+/// ```rust
+/// let (duration, productivity) = report_with_intervals(&workday, &filtered_intervals)?;
+/// println!("Work time: {}, Productivity: {:.1}%", format_duration(duration), productivity);
+/// ```
 pub fn report_with_intervals(
     workday: &Workday,
     intervals: &[WorkInterval]
 ) -> Result<(Duration, f64)> {
-    // Calculate filtered duration based on provided intervals
+    // Calculate filtered duration based on provided intervals (for display purposes)
     let filtered_duration = intervals.iter().fold(Duration::zero(), |acc, interval| acc + interval.duration);
 
-    // Use the productivity module for calculation
+    // Use centralized productivity module for consistent, comprehensive calculation
     let productivity = Productivity::new(&workday)?.calculate_productivity();
 
     Ok((filtered_duration, productivity))

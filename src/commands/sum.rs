@@ -1,8 +1,9 @@
 //! Monthly working hours summary command.
 //!
 //! This command generates comprehensive monthly reports showing daily work hours,
-//! productivity metrics, and calendar integration with company rest days. It provides
-//! both detailed daily breakdowns and aggregate statistics for the current month.
+//! productivity metrics using the centralized Productivity module, and calendar 
+//! integration with company rest days. It provides both detailed daily breakdowns 
+//! and aggregate statistics for the current month.
 
 use crate::{
     api::si::Si,
@@ -86,12 +87,7 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
         let gross_duration = end_time.signed_duration_since(workday.start);
 
-        // Fetch all pauses (including micro-breaks) for accurate productivity calculation
-        let all_pauses_duration = Pauses::new()?
-            .get_daily_pauses(workday.date)? // min_duration = 0 to include all pauses
-            .iter()
-            .filter_map(|b| b.duration)
-            .fold(Duration::zero(), |acc, d| acc + d);
+        // Note: All pauses data now handled by Productivity module
 
         // Fetch filtered long breaks for display purposes
         let long_breaks_duration = Pauses::new()?
@@ -104,12 +100,13 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
         // Calculate display duration (gross time minus long breaks only)
         let gross_work_time_minus_long_breaks = gross_duration - long_breaks_duration;
 
-        // Calculate net working duration (gross time minus ALL pauses)
-        let net_working_duration = gross_duration - all_pauses_duration;
+        // Note: Net working duration calculation now handled by Productivity module
 
-        // Calculate productivity percentage
-        // This shows how much of the "on duty" time was spent in actual productive work
-        let productivity = (net_working_duration.num_seconds() as f64 / gross_work_time_minus_long_breaks.num_seconds() as f64) * 100.0;
+        // Calculate productivity using centralized module for consistency
+        // This uses the same comprehensive calculation logic used throughout the app
+        let productivity = crate::libs::productivity::Productivity::new(&workday)
+            .map(|p| p.calculate_productivity())
+            .unwrap_or(0.0);
 
         // Accumulate productivity for monthly average calculation
         total_productivity += productivity;
