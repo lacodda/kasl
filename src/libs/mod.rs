@@ -22,14 +22,6 @@
 //! let mut tasks_db = Tasks::new()?;
 //! tasks_db.insert(&task)?;
 //! ```
-//! rich error context and easy error propagation. Errors are typically
-//! logged and displayed to users through the messaging system.
-//!
-//! ## Thread Safety
-//!
-//! Components that require concurrent access use appropriate synchronization
-//! primitives. The monitor module uses `Arc<Mutex<T>>` for shared state,
-//! while database operations are designed to be safe across threads.
 
 pub mod autostart;
 pub mod config;

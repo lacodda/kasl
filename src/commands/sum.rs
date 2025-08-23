@@ -1,9 +1,24 @@
 //! Monthly working hours summary command.
 //!
-//! This command generates comprehensive monthly reports showing daily work hours,
-//! productivity metrics using the centralized Productivity module, and calendar 
-//! integration with company rest days. It provides both detailed daily breakdowns 
-//! and aggregate statistics for the current month.
+//! Generates comprehensive monthly reports showing daily work hours, productivity metrics, and calendar integration with company rest days.
+//!
+//! ## Features
+//!
+//! - **Monthly Overview**: Detailed daily breakdowns with productivity metrics
+//! - **Calendar Integration**: Automatic handling of company rest days and weekends
+//! - **Productivity Analysis**: Per-day productivity calculations using centralized engine
+//! - **Report Submission**: Optional submission to external reporting systems
+//! - **Aggregate Statistics**: Total hours, working days, and average calculations
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Generate current month summary
+//! kasl sum
+//!
+//! # Submit monthly report to external API
+//! kasl sum --send
+//! ```
 
 use crate::{
     api::si::Si,

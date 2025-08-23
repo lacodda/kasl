@@ -1,8 +1,21 @@
 //! Application self-update command.
 //!
-//! This command handles checking for and installing newer versions of kasl
-//! from GitHub releases. It provides automatic binary replacement with
-//! backup and rollback capabilities.
+//! Handles checking for and installing newer versions of kasl from GitHub releases with automatic binary replacement and backup capabilities.
+//!
+//! ## Features
+//!
+//! - **GitHub Integration**: Checks latest releases via GitHub API
+//! - **Cross-Platform Support**: Works on Windows, macOS, and Linux
+//! - **Safe Updates**: Creates backups before replacing binaries
+//! - **Watcher Management**: Automatically stops and restarts monitoring daemon
+//! - **Version Detection**: Compares current version with latest available
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Check for and install updates
+//! kasl update
+//! ```
 
 use crate::{
     libs::{daemon, messages::Message, update::Updater},

@@ -1,7 +1,13 @@
 //! Main entry point for the kasl application.
 //!
-//! Handles initialization of the tracing system, command-line argument parsing,
-//! daemon mode execution, and update notifications.
+//! Handles initialization of the tracing system, command-line argument parsing, daemon mode execution, and update notifications.
+//!
+//! ## Features
+//!
+//! - **Daemon Mode**: Background process spawning for activity monitoring
+//! - **Debug Logging**: Configurable tracing system for development
+//! - **Update Notifications**: Automatic checking for application updates
+//! - **CLI Dispatching**: Routes commands to appropriate handlers
 
 use anyhow::Result;
 use kasl::commands::Cli;

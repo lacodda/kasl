@@ -1,8 +1,26 @@
 //! System autostart management command.
 //!
-//! This command provides cross-platform functionality for managing whether
-//! kasl automatically starts monitoring when the system boots. It supports
-//! different autostart mechanisms depending on the operating system.
+//! Provides cross-platform functionality for managing whether kasl automatically starts monitoring when the system boots.
+//!
+//! ## Features
+//!
+//! - **Cross-Platform Support**: Windows Task Scheduler, Linux systemd, macOS Launch Agents
+//! - **Enable/Disable Toggle**: Simple on/off control for autostart functionality
+//! - **Status Checking**: Query current autostart configuration
+//! - **Privilege Management**: Handles different privilege levels appropriately
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Enable autostart on boot
+//! kasl autostart enable
+//!
+//! # Disable autostart
+//! kasl autostart disable
+//!
+//! # Check current status
+//! kasl autostart status
+//! ```
 
 use crate::libs::{autostart, messages::Message};
 use crate::msg_print;

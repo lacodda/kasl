@@ -1,16 +1,30 @@
 //! Task management command.
 //!
-//! Provides core task management functionality for creating, editing, deleting, and organizing tasks.
-//! Integrates with external services like GitLab and Jira to automatically import work items,
-//! and supports advanced features like templates, tags, and batch operations.
+//! Provides comprehensive task management functionality for creating, editing, deleting, and organizing tasks.
 //!
 //! ## Features
 //!
 //! - **CRUD Operations**: Create, read, update, and delete individual tasks
 //! - **Batch Operations**: Mass editing and deletion of multiple tasks
-//! - **Filtering**: View tasks by date, completion status, tags, or IDs
-//! - **Search Integration**: Find and update incomplete tasks across date ranges
-//! - **Tag Management**: Organize tasks with custom categorization
+//! - **External Integration**: Import tasks from GitLab commits and Jira issues
+//! - **Advanced Filtering**: View tasks by date, completion status, tags, or IDs
+//! - **Template System**: Create tasks from predefined templates
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Create a new task
+//! kasl task --name "Review code" --comment "Check PR #123"
+//!
+//! # List tasks with different filters
+//! kasl task --list                    # Show all tasks
+//! kasl task --today                   # Show today's tasks
+//! kasl task --incomplete              # Show incomplete tasks
+//!
+//! # Import from external services
+//! kasl task --find                    # Find tasks from GitLab/Jira
+//! kasl task --template "bug-fix"      # Create from template
+//! ```
 
 use crate::{
     api::{gitlab::GitLab, jira::Jira},

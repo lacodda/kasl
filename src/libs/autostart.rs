@@ -15,10 +15,9 @@
 //! ```rust
 //! use kasl::libs::autostart;
 //!
-//! autostart::enable()?;           // Enable autostart
+//! autostart::enable()?;              // Enable autostart
 //! let status = autostart::status()?; // Check current status
-//! autostart::disable()?;          // Disable autostart
-//! ```
+//! autostart::disable()?;             // Disable autostart
 //!
 //! match autostart::is_enabled()? {
 //!     true => println!("Autostart is enabled"),

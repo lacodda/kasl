@@ -1,101 +1,28 @@
 //! Convenient macros for application messaging and logging.
 //!
-//! This module provides a comprehensive set of macros that simplify message
-//! display and logging throughout the application. The macros automatically
-//! handle the distinction between debug mode (with structured logging) and
-//! normal mode (with simple console output), providing a unified interface
-//! for all message display needs.
+//! Provides a comprehensive set of macros that simplify message display and logging throughout the application with automatic debug mode detection.
 //!
-//! ## Core Features
+//! ## Features
 //!
 //! - **Dual Output Mode**: Automatic switching between tracing and console output
 //! - **Debug Detection**: Runtime detection of debug mode configuration
 //! - **Message Categorization**: Different macros for different message types
 //! - **Performance Optimization**: Cached debug mode detection for efficiency
 //! - **Error Handling**: Specialized macros for error creation and handling
-//! - **Flexible Formatting**: Support for both simple and formatted message display
 //!
-//! ## Debug Mode Detection
+//! ## Usage
 //!
-//! The system automatically detects debug mode based on environment variables:
-//! - **`KASL_DEBUG`**: Explicit debug mode enablement
-//! - **`RUST_LOG`**: Standard Rust logging configuration
-//! - **Caching**: Debug mode detection is cached for performance
-//!
-//! ## Output Routing
-//!
-//! ```text
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │   Macro Call    │    │   Debug Mode    │    │   Output        │
-//! │   msg_info!()   │───▶│   Detection     │───▶│   Routing       │
-//! │                 │    │                 │    │                 │
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//!          │                       │                       │
-//!          ▼                       ▼                       ▼
-//! ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-//! │ Message Content │    │ KASL_DEBUG or   │    │ tracing::info!  │
-//! │ + Level Info    │    │ RUST_LOG Set?   │    │ OR println!     │
-//! └─────────────────┘    └─────────────────┘    └─────────────────┘
-//! ```
-//!
-//! ## Macro Categories
-//!
-//! ### Display Macros
-//! - **`msg_print!`**: General message display
-//! - **`msg_success!`**: Success notifications with ✅ prefix
-//! - **`msg_info!`**: Informational messages with ℹ️ prefix
-//! - **`msg_warning!`**: Warning messages with ⚠️ prefix
-//!
-//! ### Error Handling Macros
-//! - **`msg_error!`**: Error messages with ❌ prefix
-//! - **`msg_error_anyhow!`**: Create anyhow::Error from messages
-//! - **`msg_bail_anyhow!`**: Early return with error
-//!
-//! ### Debug Macros
-//! - **`msg_debug!`**: Debug-only messages with 🔍 prefix
-//!
-//! ## Performance Considerations
-//!
-//! - **Lazy Evaluation**: Debug mode detection is cached on first use
-//! - **Conditional Compilation**: Debug messages can be conditionally compiled
-//! - **Minimal Overhead**: Fast path for production mode with simple println!
-//! - **Efficient Caching**: Environment variable checks are cached using OnceLock
-//!
-//! ## Usage Examples
-//!
-//! ### Basic Message Display
 //! ```rust
-//! use kasl::{msg_info, msg_success, msg_error};
-//! use kasl::libs::messages::Message;
+//! use kasl::{msg_info, msg_error, msg_success, msg_warning};
+//! use kasl::libs::messages::types::Message;
 //!
-//! // Simple success message
-//! msg_success!(Message::TaskCreated);
+//! // Basic message display
+//! msg_info!(Message::TaskCreated);
+//! msg_success!(Message::ReportSent("2025-01-15".to_string()));
+//! msg_error!(Message::ConfigSaveError);
 //!
-//! // Informational message with line breaks
-//! msg_info!(Message::ConfigSaved, true);
-//!
-//! // Error message
-//! msg_error!(Message::TaskNotFound);
-//! ```
-//!
-//! ### Error Handling
-//! ```rust
-//! use kasl::{msg_error_anyhow, msg_bail_anyhow};
-//! use kasl::libs::messages::Message;
-//!
-//! // Create an error for propagation
-//! let error = msg_error_anyhow!(Message::ConfigParseError);
-//!
-//! // Early return with error
-//! msg_bail_anyhow!(Message::PermissionDenied);
-//! ```
-//!
-//! ### Debug Logging
-//! ```rust
-//! use kasl::msg_debug;
-//!
-//! // Debug message (only shown when KASL_DEBUG is set)
-//! msg_debug!("Processing task with ID: {}", task_id);
+//! // Custom formatted messages
+//! msg_info!(format!("Processing {} items", count));
 //! ```
 
 /// Convenience macros for common message operations with conditional tracing support

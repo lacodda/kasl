@@ -7,7 +7,7 @@
 //!
 //! - **Structured Data Display**: Converts complex data structures into readable tables
 //! - **Consistent Formatting**: Maintains uniform appearance across all table types
-//! - **Productivity Analysis**: Calculates and displays work efficiency metrics
+//! - **Report Visualization**: Displays pre-calculated productivity and work metrics
 //! - **Duration Formatting**: Handles time duration display in human-readable formats
 //!
 //! ## Usage
@@ -16,7 +16,7 @@
 //! use kasl::libs::view::View;
 //!
 //! View::tasks(&tasks)?;
-//! View::report(&workday, &intervals, &all_pauses, &breaks, &tasks)?;
+//! View::report(&workday, &intervals, &filtered_duration, &productivity, &tasks)?;
 //! View::sum(&summary_data)?;
 //! ```
 
@@ -246,65 +246,6 @@ impl View {
         table.printstd();
         Ok(())
     }
-
-    /// Calculates work productivity based on net working time and pause duration.
-    ///
-    /// This method implements a sophisticated productivity calculation that provides
-    /// meaningful insights into work efficiency. It distinguishes between time spent
-    /// actively working and time spent on brief interruptions or non-productive activities.
-    ///
-    /// ## Calculation Methodology
-    ///
-    /// The productivity calculation uses the following approach:
-    ///
-    /// 1. **Base Time**: Gross work time with long breaks already excluded
-    /// 2. **Active Time**: Base time minus short pauses and brief interruptions
-    /// 3. **Productivity**: Percentage of base time spent in active work
-    ///
-    /// ## Mathematical Formula
-    ///
-    /// ```
-    /// Productivity = (Net Working Time / Gross Working Time) × 100%
-    /// ```
-    ///
-    /// Where:
-    /// - **Net Working Time** = Gross Time - Short Pauses
-    /// - **Gross Working Time** = Total Presence - Long Breaks
-    ///
-    /// ## Edge Case Handling
-    ///
-    /// The method handles several edge cases gracefully:
-    /// - **Zero Base Time**: Returns 0% productivity to avoid division by zero
-    /// - **Negative Net Time**: Uses safe subtraction with zero fallback
-    /// - **Invalid Ranges**: Clamps results to valid 0-100% range
-    ///
-    /// ## Productivity Insights
-    ///
-    /// This metric determines the proportion of time truly spent on active work
-    /// relative to the total time available for work, where only long breaks are excluded
-    /// from the overall presence time.
-    ///
-    /// # Arguments
-    ///
-    /// * `gross_work_time_minus_long_breaks` - The total time spent at work, with only long breaks already excluded.
-    ///                                         This duration still includes short, minor pauses.
-    /// * `daily_short_pause_duration` - The total duration of short, minor pauses (e.g., quick coffee breaks, brief distractions).
-    ///
-    /// # Returns
-    ///
-    /// The percentage of time spent in actual productive work (0.0 - 100.0).
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use chrono::Duration;
-    /// use kasl::libs::view::View;
-    ///
-    /// let work_time = Duration::hours(8);
-    /// let short_pauses = Duration::minutes(30);
-    /// let productivity = View::calculate_productivity(&work_time, &short_pauses);
-    /// // Returns approximately 93.75% (7.5 hours / 8 hours)
-    /// ```
 
     /// Displays a formatted table of task templates for reusable task creation.
     ///

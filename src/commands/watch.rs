@@ -1,8 +1,27 @@
 //! Activity monitoring and daemon management command.
 //!
-//! Handles the core functionality of kasl - monitoring user activity to automatically
-//! detect work sessions, breaks, and workday boundaries. Supports both foreground
-//! debugging mode and background daemon operation.
+//! Handles the core functionality of kasl - monitoring user activity to automatically detect work sessions, breaks, and workday boundaries.
+//!
+//! ## Features
+//!
+//! - **Background Monitoring**: Runs as daemon to track activity automatically
+//! - **Real-time Detection**: Immediate response to keyboard and mouse activity
+//! - **Workday Management**: Automatic start/end detection for work sessions
+//! - **Pause Tracking**: Records breaks and inactive periods
+//! - **Foreground Debugging**: Debug mode with enhanced logging
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Start background monitoring
+//! kasl watch
+//!
+//! # Run in foreground for debugging
+//! kasl watch --foreground
+//!
+//! # Stop background monitoring
+//! kasl watch --stop
+//! ```
 
 use crate::libs::{config::Config, daemon, messages::Message, monitor::Monitor};
 use crate::msg_print;

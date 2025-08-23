@@ -1,7 +1,27 @@
 //! Manual break management command for productivity optimization.
 //!
-//! Provides functionality to add manual break periods to improve productivity
-//! calculations and help users reach minimum productivity thresholds for report submission.
+//! Provides functionality to add manual break periods to improve productivity calculations and help users reach minimum productivity thresholds for report submission.
+//!
+//! ## Features
+//!
+//! - **Automatic Placement**: Intelligent break placement in longest work intervals
+//! - **Interactive Mode**: Manual selection of break timing and duration
+//! - **Productivity Integration**: Immediate impact on productivity calculations
+//! - **Smart Recommendations**: Suggests optimal break durations and placement
+//! - **Validation**: Ensures breaks don't overlap with existing pauses
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Add break with automatic placement
+//! kasl breaks --minutes 30
+//!
+//! # Interactive break creation
+//! kasl breaks
+//!
+//! # Force break creation ignoring validation
+//! kasl breaks --minutes 60 --force
+//! ```
 
 use crate::{
     db::{breaks::Breaks, pauses::Pauses, workdays::Workdays},

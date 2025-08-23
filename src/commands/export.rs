@@ -1,12 +1,26 @@
 //! Data export command for external analysis and backup.
 //!
-//! Provides comprehensive data export functionality supporting multiple output
-//! formats and data types for external analysis, backup, and integration.
+//! Provides comprehensive data export functionality supporting multiple output formats and data types for external analysis, backup, and integration.
 //!
 //! ## Features
 //!
 //! - **Export Formats**: CSV, JSON, Excel with formatting and multiple sheets
 //! - **Data Types**: Reports, tasks, summaries, and complete data export
+//! - **Flexible Output**: Custom file paths and automatic naming
+//! - **Date Filtering**: Export data for specific date ranges
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Export tasks to CSV
+//! kasl export tasks --format csv
+//!
+//! # Export today's report to Excel
+//! kasl export report --format xlsx
+//!
+//! # Export with custom filename
+//! kasl export tasks --format json --output my_tasks.json
+//! ```
 
 use crate::{
     libs::{

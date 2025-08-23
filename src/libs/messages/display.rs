@@ -1,81 +1,30 @@
 //! Display implementation for kasl application messages.
 //!
-//! This module provides the core `Display` trait implementation for the `Message`
-//! enum, enabling automatic conversion of structured message data into human-readable
-//! text suitable for terminal output. It serves as the central localization and
-//! text formatting system for all user-facing messages in the kasl application.
+//! Provides the core `Display` trait implementation for the `Message` enum, enabling automatic conversion of structured message data into human-readable text.
 //!
-//! ## Architecture Overview
+//! ## Features
 //!
-//! The display system follows a centralized message management approach:
 //! - **Single Source of Truth**: All message text is defined in one location
 //! - **Type Safety**: Compile-time verification of message parameter usage
 //! - **Internationalization Ready**: Structured for future localization support
 //! - **Consistent Formatting**: Uniform message presentation across the application
 //! - **Parameter Interpolation**: Safe string formatting with typed parameters
 //!
-//! ## Message Categories
+//! ## Usage
 //!
-//! The implementation handles these message categories:
-//! - **Autostart Messages**: System boot integration status and operations
-//! - **Task Messages**: Work item management, creation, updates, and deletion
-//! - **Workday Messages**: Daily work session lifecycle and management
-//! - **Configuration Messages**: Setup, validation, and module configuration
-//! - **Report Messages**: Daily and monthly report generation and submission
-//! - **Export Messages**: Data export operations and format handling
-//! - **Template Messages**: Task template management and operations
-//! - **Tag Messages**: Organizational tag management and assignment
-//! - **Monitor Messages**: Activity monitoring and daemon process management
-//! - **Pause Messages**: Break detection and timing management
-//! - **Update Messages**: Application update checking and installation
-//! - **Error Messages**: Comprehensive error reporting and troubleshooting
-//!
-//! ## Text Formatting Standards
-//!
-//! All message text follows consistent formatting guidelines:
-//! - **Sentence Case**: Natural capitalization for readability
-//! - **Active Voice**: Clear, direct communication style
-//! - **Specific Details**: Include relevant context and parameters
-//! - **Professional Tone**: Appropriate for business and personal use
-//! - **Action Guidance**: Clear next steps when applicable
-//!
-//! ## Parameter Interpolation
-//!
-//! Messages with dynamic content use safe parameter interpolation:
 //! ```rust
-//! // Type-safe parameter usage
-//! Message::TaskCreated(name) => format!("Task '{}' created successfully", name)
-//! Message::WorkdayStarting(date) => format!("Starting workday for {}", date)
-//! Message::ExportCompleted(path) => format!("Export completed: {}", path)
+//! use kasl::libs::messages::types::Message;
+//!
+//! let message = Message::TaskCreated;
+//! println!("{}", message);
+//!
+//! let parameterized = Message::MonitorStarted {
+//!     pause_threshold: 60,
+//!     poll_interval: 500,
+//!     activity_threshold: 30,
+//! };
+//! println!("{}", parameterized);
 //! ```
-//!
-//! ## Error Message Design
-//!
-//! Error messages follow specific principles:
-//! - **Problem Description**: Clear explanation of what went wrong
-//! - **Context Information**: Relevant details for troubleshooting
-//! - **Resolution Guidance**: Suggested actions when possible
-//! - **Technical Details**: Specific error codes or system information
-//!
-//! ## Usage Integration
-//!
-//! The display system integrates with kasl's messaging macros:
-//! ```rust
-//! use kasl::{msg_info, msg_error, msg_success};
-//!
-//! // Automatic message formatting
-//! msg_info!(Message::TaskCreated);
-//! msg_error!(Message::ConfigSaveError);
-//! msg_success!(Message::ReportSent(date));
-//! ```
-//!
-//! ## Future Extensibility
-//!
-//! The centralized design supports future enhancements:
-//! - **Internationalization**: Replace text with locale-specific versions
-//! - **Rich Formatting**: Add terminal colors, bold, and other styling
-//! - **Context Awareness**: Modify messages based on user preferences
-//! - **Help Integration**: Link messages to relevant documentation
 
 use super::types::Message;
 use std::fmt::{Display, Formatter, Result};

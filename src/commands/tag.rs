@@ -1,7 +1,6 @@
 //! Tag management command for task organization and categorization.
 //!
-//! Provides comprehensive tag management functionality, enabling users to create,
-//! organize, and utilize tags for better task categorization.
+//! Provides comprehensive tag management functionality, enabling users to create, organize, and utilize tags for better task categorization.
 //!
 //! ## Features
 //!
@@ -10,7 +9,22 @@
 //! - **Task Association**: Link tags to tasks for categorization
 //! - **Filtering**: Find tasks by tag assignments
 //! - **Auto-Creation**: Automatically create tags when assigned to tasks
-//! - **Usage Analytics**: View which tasks are associated with each tag
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # List all tags
+//! kasl tag list
+//!
+//! # Create new tag with color
+//! kasl tag create --name "urgent" --color "red"
+//!
+//! # Delete tag
+//! kasl tag delete "old-tag"
+//!
+//! # Show tag usage statistics
+//! kasl tag stats
+//! ```
 
 use crate::{
     db::tags::{Tag, Tags},

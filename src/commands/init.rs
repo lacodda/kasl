@@ -1,8 +1,24 @@
 //! Application configuration initialization command.
 //!
-//! This command provides an interactive setup wizard that guides users through
-//! configuring kasl for first-time use. It handles API credentials, monitoring
-//! settings, and other essential configuration options.
+//! Provides an interactive setup wizard that guides users through configuring kasl for first-time use.
+//!
+//! ## Features
+//!
+//! - **Interactive Setup**: Guided configuration wizard for all settings
+//! - **API Integration**: Configure GitLab, Jira, and custom API credentials
+//! - **Monitoring Settings**: Set up activity thresholds and productivity parameters
+//! - **PATH Integration**: Automatically adds kasl to system PATH
+//! - **Reset Capability**: Remove existing configuration for troubleshooting
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Run interactive setup wizard
+//! kasl init
+//!
+//! # Reset configuration (remove existing settings)
+//! kasl init --delete
+//! ```
 
 use crate::{
     libs::{config::Config, messages::Message},

@@ -1,24 +1,24 @@
 //! Database migration management command (debug builds only).
 //!
-//! This module provides database schema management utilities for development
-//! and debugging purposes. It allows developers to inspect migration status,
-//! view migration history, and manage database schema versions during
-//! development and testing phases.
+//! Provides database schema management utilities for development and debugging purposes.
 //!
-//! ## Security Note
+//! ## Features
 //!
-//! This command is only available in debug builds to prevent accidental
-//! schema modifications in production environments. Release builds will
-//! not include this functionality, ensuring production database safety.
-//!
-//! ## Migration System
-//!
-//! The kasl migration system provides:
 //! - **Version Tracking**: Maintains current database schema version
 //! - **Migration History**: Records all applied migrations with timestamps
-//! - **Automatic Application**: Runs pending migrations during application startup
-//! - **Rollback Support**: Development-time rollback capabilities (debug only)
+//! - **Debug Only**: Available only in debug builds for production safety
+//! - **Status Inspection**: View current migration status and history
 //! - **Integrity Checking**: Validates database schema consistency
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Check migration status (debug builds only)
+//! kasl migrations status
+//!
+//! # View migration history (debug builds only)
+//! kasl migrations history
+//! ```
 
 #[cfg(debug_assertions)]
 use crate::{

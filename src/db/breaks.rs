@@ -1,8 +1,6 @@
 //! Manual break periods management for productivity optimization.
 //!
-//! This module handles user-defined break periods that complement automatic pause detection.
-//! Manual breaks allow users to improve their productivity metrics by marking specific
-//! time periods as intentional breaks.
+//! Handles user-defined break periods that complement automatic pause detection for improved productivity metrics.
 //!
 //! ## Features
 //!
@@ -10,6 +8,28 @@
 //! - **Smart Placement**: Avoid conflicts with existing pauses and maintain minimum work intervals
 //! - **Daily Management**: Retrieve and manage breaks for specific dates
 //! - **Productivity Integration**: Seamlessly integrate with productivity calculations
+//!
+//! ## Usage
+//!
+//! ```rust
+//! use kasl::db::breaks::{Breaks, Break};
+//! use chrono::{NaiveDate, Duration};
+//!
+//! let breaks_db = Breaks::new()?;
+//! let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
+//! 
+//! let break_record = Break {
+//!     id: None,
+//!     date,
+//!     start: date.and_hms_opt(12, 0, 0).unwrap(),
+//!     end: date.and_hms_opt(12, 30, 0).unwrap(),
+//!     duration: Duration::minutes(30),
+//!     reason: Some("Lunch break".to_string()),
+//!     created_at: None,
+//! };
+//!
+//! breaks_db.insert(&break_record)?;
+//! ```
 
 use crate::db::db::Db;
 use anyhow::Result;

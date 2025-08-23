@@ -1,74 +1,29 @@
 //! Message type definitions for the kasl application.
 //!
-//! This module defines the central `Message` enum that represents all user-facing
-//! messages in the kasl application. It serves as a type-safe, centralized system
-//! for managing application communication, ensuring consistent messaging across
-//! all components while providing compile-time verification of message parameters.
+//! Defines the central `Message` enum that represents all user-facing messages with type safety and compile-time verification.
 //!
-//! ## Design Philosophy
+//! ## Features
 //!
-//! The message system is built around several core principles:
 //! - **Type Safety**: All messages are strongly typed with appropriate parameters
-//! - **Centralization**: Single enum captures all application messaging needs
+//! - **Centralization**: Single enum captures all application messaging needs  
 //! - **Extensibility**: Easy addition of new message types and categories
-//! - **Maintainability**: Clear organization and documentation of message purposes
+//! - **Organization**: Logical grouping by functional categories
 //! - **Internationalization**: Structure supports future localization efforts
 //!
-//! ## Message Organization
-//!
-//! Messages are logically organized into functional categories:
-//! - **System Integration**: Autostart, path management, and OS interaction
-//! - **Core Operations**: Tasks, workdays, and primary application functions
-//! - **Configuration**: Setup, validation, and module configuration
-//! - **Reporting**: Daily reports, monthly summaries, and data export
-//! - **Process Management**: Daemon control, monitoring, and lifecycle
-//! - **User Interaction**: Prompts, confirmations, and interface elements
-//! - **Error Handling**: Comprehensive error reporting and diagnostics
-//!
-//! ## Parameter Strategy
-//!
-//! Message variants use different parameter strategies based on their needs:
-//! - **Unit Variants**: Simple messages without dynamic content
-//! - **Single Parameters**: Messages with one piece of dynamic information
-//! - **Multiple Parameters**: Complex messages requiring several data points
-//! - **Structured Parameters**: Named fields for complex message data
-//!
-//! ## Usage Examples
+//! ## Usage
 //!
 //! ```rust
-//! use kasl::libs::messages::Message;
+//! use kasl::libs::messages::types::Message;
+//! use kasl::{msg_info, msg_error, msg_success};
 //!
-//! // Simple status messages
-//! let success = Message::TaskCreated;
-//! let failure = Message::TaskCreateFailed;
-//!
-//! // Messages with parameters
-//! let with_name = Message::TaskCreated("My Task".to_string());
-//! let with_count = Message::TasksDeletedCount(5);
-//!
-//! // Complex structured messages
-//! let monitor_status = Message::MonitorStarted {
+//! msg_success!(Message::TaskCreated);
+//! msg_error!(Message::ConfigSaveError);
+//! msg_info!(Message::MonitorStarted {
 //!     pause_threshold: 60,
-//!     poll_interval: 500,
+//!     poll_interval: 500, 
 //!     activity_threshold: 30,
-//! };
+//! });
 //! ```
-//!
-//! ## Integration Points
-//!
-//! The `Message` enum integrates with several application systems:
-//! - **Display System**: Automatic text conversion via `Display` trait
-//! - **Logging System**: Integration with application logging and tracing
-//! - **Macro System**: Convenient usage through messaging macros
-//! - **Error Handling**: Rich error context and user-friendly error messages
-//!
-//! ## Future Considerations
-//!
-//! The message system is designed to support future enhancements:
-//! - **Localization**: Replace English text with locale-specific versions
-//! - **Message Metadata**: Additional fields for context, severity, or categorization
-//! - **Rich Content**: Support for formatted text, links, or embedded data
-//! - **Message Queuing**: Batched message delivery for performance optimization
 
 /// Comprehensive message enumeration for all user-facing communication.
 ///

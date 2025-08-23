@@ -1,8 +1,24 @@
 //! Display recorded breaks and pauses command.
 //!
-//! This command provides detailed views of automatically detected and manually
-//! recorded breaks during work sessions. It helps users understand their break
-//! patterns and verify the accuracy of automatic pause detection.
+//! Provides detailed views of automatically detected and manually recorded breaks during work sessions.
+//!
+//! ## Features
+//!
+//! - **Break Analysis**: View all recorded pauses and their durations
+//! - **Date Filtering**: Show breaks for specific dates or today
+//! - **Duration Thresholds**: Filter out short interruptions using configurable thresholds
+//! - **Pattern Recognition**: Understand break patterns and timing
+//! - **Verification Tool**: Validate automatic pause detection accuracy
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # Show today's pauses
+//! kasl pauses today
+//!
+//! # Show pauses for specific date
+//! kasl pauses 2025-01-15
+//! ```
 
 use crate::db::pauses::Pauses;
 use crate::libs::config::Config;

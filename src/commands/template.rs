@@ -1,7 +1,6 @@
 //! Task template management command.
 //!
-//! Provides comprehensive template management functionality for kasl, enabling
-//! users to create, edit, delete, and search reusable task templates.
+//! Provides comprehensive template management functionality for kasl, enabling users to create, edit, delete, and search reusable task templates.
 //!
 //! ## Features
 //!
@@ -10,6 +9,22 @@
 //! - **Interactive Management**: User-friendly interfaces for all operations
 //! - **Validation**: Ensures template data integrity and uniqueness
 //! - **Integration**: Seamless integration with task creation workflows
+//!
+//! ## Usage
+//!
+//! ```bash
+//! # List all templates
+//! kasl template list
+//!
+//! # Create new template
+//! kasl template create --name "bug-fix"
+//!
+//! # Search templates
+//! kasl template search "development"
+//!
+//! # Delete template
+//! kasl template delete "old-template"
+//! ```
 
 use crate::{
     db::templates::{TaskTemplate, Templates},

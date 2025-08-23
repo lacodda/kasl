@@ -27,9 +27,6 @@
 //!     Ok(())
 //! }
 //! ```
-//! - **Current Version**: Application version string
-//! - **API Endpoints**: GitHub releases API URLs
-//! - **Check Intervals**: Throttling and caching configuration
 
 use crate::libs::data_storage::DataStorage;
 use crate::libs::messages::Message;
