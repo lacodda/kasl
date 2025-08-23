@@ -22,7 +22,7 @@
 
 use crate::{
     libs::{config::Config, messages::Message},
-    msg_success,
+    msg_success, msg_warning,
 };
 use anyhow::Result;
 use clap::Args;
@@ -57,7 +57,14 @@ pub struct InitArgs {
 pub fn cmd(init_args: InitArgs) -> Result<()> {
     // Set up global application PATH configuration
     // This ensures the 'kasl' command is available system-wide
-    let _ = Config::set_app_global();
+    match Config::set_app_global() {
+        Ok(()) => {
+            msg_success!(Message::PathConfigured);
+        }
+        Err(e) => {
+            msg_warning!(Message::PathConfigWarning { error: e.to_string() });
+        }
+    }
 
     // Handle deletion mode - exit early after cleanup
     if init_args.delete {

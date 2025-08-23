@@ -363,8 +363,18 @@ impl Display for Message {
             Message::DataStoragePathError => "DataStorage get_path error".to_string(),
 
             // === SYSTEM/PATH MESSAGES ===
+            Message::PathConfigured => "PATH successfully configured for system-wide access".to_string(),
+            Message::PathConfigWarning { error } => format!("Warning: Could not configure PATH automatically. {}\nYou may need to run as administrator or manually add kasl to your PATH.", error),
             Message::PathQueryFailed(status) => format!("Failed to query PATH from registry: {:?}", status),
             Message::PathSetFailed => "Failed to set PATH in registry".to_string(),
+            Message::PathRegistryQueryError { status } => format!("Registry query failed (exit code: {})", status),
+            Message::PathRegistryUpdateError { status, stderr } => {
+                if stderr.trim().is_empty() {
+                    format!("Registry update failed (exit code: {})", status)
+                } else {
+                    format!("Registry update failed (exit code: {}): {}", status, stderr.trim())
+                }
+            },
             Message::FailedToJoinPaths => "Failed to join paths".to_string(),
             Message::FailedToExecuteRegQuery => "Failed to execute reg query".to_string(),
             Message::FailedToParseRegOutput => "Failed to parse reg query output".to_string(),

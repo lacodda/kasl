@@ -305,8 +305,12 @@ pub enum Message {
     DataStoragePathError,
 
     // === SYSTEM/PATH MESSAGES ===
+    PathConfigured,
+    PathConfigWarning { error: String },
     PathQueryFailed(String), // status
     PathSetFailed,
+    PathRegistryQueryError { status: String },
+    PathRegistryUpdateError { status: String, stderr: String },
     FailedToJoinPaths,
     FailedToExecuteRegQuery,
     FailedToParseRegOutput,

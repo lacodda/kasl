@@ -699,8 +699,9 @@ impl Config {
 
         // Handle registry query failures gracefully
         if !reg_query_output.status.success() {
-            msg_error!(Message::PathQueryFailed(reg_query_output.status.to_string()));
-            return Ok(());
+            let status = reg_query_output.status.to_string();
+            msg_error!(Message::PathRegistryQueryError { status: status.clone() });
+            return Err(anyhow::anyhow!("{}", Message::PathRegistryQueryError { status }));
         }
 
         // Parse the current PATH value from registry output
@@ -726,8 +727,10 @@ impl Config {
 
         // Check if the registry update was successful
         if !reg_set_output.status.success() {
-            msg_error!(Message::PathSetFailed);
-            return Ok(());
+            let status = reg_set_output.status.to_string();
+            let stderr = String::from_utf8_lossy(&reg_set_output.stderr).to_string();
+            msg_error!(Message::PathRegistryUpdateError { status: status.clone(), stderr: stderr.clone() });
+            return Err(anyhow::anyhow!("{}", Message::PathRegistryUpdateError { status, stderr }));
         }
 
         Ok(())
