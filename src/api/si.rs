@@ -341,6 +341,14 @@ impl Session for Si {
     fn inc_retry(&mut self) {
         self.retries += 1;
     }
+
+    /// Resets the authentication retry counter to zero.
+    ///
+    /// Called after successful authentication to ensure future session
+    /// requests start with a clean slate.
+    fn reset_retry(&mut self) {
+        self.retries = 0;
+    }
 }
 
 impl Si {
@@ -434,6 +442,7 @@ impl Si {
     /// # }
     /// ```
     pub async fn send(&mut self, data: &String, date: &NaiveDate) -> Result<StatusCode> {
+        let mut local_retries = 0;
         loop {
             // Get valid session for API request
             let session_id = self.get_session_id().await?;
@@ -461,11 +470,11 @@ impl Si {
 
             // Handle response and potential session expiration
             match res.status() {
-                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
                     // Session expired - clear cache and retry
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::seconds(1).to_std()?).await;
-                    self.retries += 1;
+                    local_retries += 1;
                     continue;
                 }
                 _ => return Ok(res.status()),
@@ -520,6 +529,7 @@ impl Si {
     /// # }
     /// ```
     pub async fn send_monthly(&mut self, date: &NaiveDate) -> Result<StatusCode> {
+        let mut local_retries = 0;
         loop {
             // Get valid session for API request
             let session_id = self.get_session_id().await?;
@@ -541,11 +551,11 @@ impl Si {
 
             // Handle response and potential session expiration
             match res.status() {
-                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
                     // Session expired - clear cache and retry
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::seconds(1).to_std()?).await;
-                    self.retries += 1;
+                    local_retries += 1;
                     continue;
                 }
                 _ => return Ok(res.status()),
@@ -610,6 +620,7 @@ impl Si {
     /// # }
     /// ```
     pub async fn rest_dates(&mut self, year: NaiveDate) -> Result<HashSet<NaiveDate>> {
+        let mut local_retries = 0;
         loop {
             // Get valid session for API request
             let session_id = match self.get_session_id().await {
@@ -637,10 +648,10 @@ impl Si {
 
             // Handle response and potential session expiration
             match res.status() {
-                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
                     // Session expired - clear cache and retry
                     self.delete_session_id()?;
-                    self.retries += 1;
+                    local_retries += 1;
                     continue;
                 }
                 _ => {

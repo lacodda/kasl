@@ -79,6 +79,10 @@ mod tests {
         fn inc_retry(&mut self) {
             self.retry_count += 1;
         }
+
+        fn reset_retry(&mut self) {
+            self.retry_count = 0;
+        }
     }
 
     #[test_context(ApiTestContext)]
@@ -226,5 +230,25 @@ mod tests {
         
         // Verify secret is properly initialized
         // Note: Full testing would require mocking user input
+    }
+
+    #[test_context(ApiTestContext)]
+    #[tokio::test]
+    async fn test_retry_counter_reset_after_success(_ctx: &mut ApiTestContext) {
+        // Test that retry counter is reset after successful authentication
+        let mut session = MockSession::new(".test_retry_reset", false);
+        
+        // Setup: increment retry counter to simulate previous failures
+        session.inc_retry();
+        session.inc_retry();
+        assert_eq!(session.retry(), 2, "Setup: retry count should be 2");
+        
+        // Test: call reset_retry directly (as would be done in successful auth)
+        session.reset_retry();
+        assert_eq!(session.retry(), 0, "Retry count should be reset to 0 after reset_retry()");
+        
+        // Verify inc_retry still works after reset
+        session.inc_retry();
+        assert_eq!(session.retry(), 1, "Should be able to increment after reset");
     }
 }

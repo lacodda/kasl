@@ -104,6 +104,12 @@ pub trait Session {
     /// toward the maximum retry limit.
     fn inc_retry(&mut self);
 
+    /// Resets the retry counter to zero.
+    ///
+    /// Called after successful authentication to ensure future sessions
+    /// don't inherit retry state from previous attempts.
+    fn reset_retry(&mut self);
+
     /// Retrieves or establishes a valid session ID.
     ///
     /// This is the main entry point for session management. It handles the complete
@@ -149,8 +155,9 @@ pub trait Session {
                 let session_id = self.login().await;
                 match session_id {
                     Ok(session_id) => {
-                        // Success - cache the session and return
+                        // Success - cache the session and reset retry counter
                         let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
+                        self.reset_retry(); // Reset retry counter after successful authentication
                         return Ok(session_id);
                     }
                     Err(_) => {

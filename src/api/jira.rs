@@ -300,6 +300,14 @@ impl Session for Jira {
     fn inc_retry(&mut self) {
         self.retries += 1;
     }
+
+    /// Resets the authentication retry counter to zero.
+    ///
+    /// Called after successful authentication to ensure future session
+    /// requests start with a clean slate.
+    fn reset_retry(&mut self) {
+        self.retries = 0;
+    }
 }
 
 impl Jira {
@@ -415,6 +423,7 @@ impl Jira {
     /// # }
     /// ```
     pub async fn get_completed_issues(&mut self, date: &NaiveDate) -> Result<Vec<JiraIssue>> {
+        let mut local_retries = 0;
         loop {
             // Step 1: Ensure we have a valid session token
             let session_id = match self.get_session_id().await {
@@ -442,10 +451,10 @@ impl Jira {
 
             // Step 5: Handle response and potential session expiration
             match res.status() {
-                StatusCode::UNAUTHORIZED if self.retries < MAX_RETRY_COUNT => {
+                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
                     // Session expired - clear cache and retry
                     self.delete_session_id()?;
-                    self.inc_retry();
+                    local_retries += 1;
                     // Brief delay before retry to avoid hammering the server
                     tokio::time::sleep(Duration::from_secs(1)).await;
                     continue;
