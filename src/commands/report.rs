@@ -16,6 +16,7 @@
 use crate::{
     api::si::Si,
     db::{
+        breaks::Breaks,
         pauses::Pauses,
         tasks::Tasks,
         workdays::{Workday, Workdays},
@@ -212,7 +213,8 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 ///
 /// Productivity is calculated as:
 /// ```
-/// Productivity = (Net Work Time / Gross Work Time - Long Breaks) * 100%
+/// Productivity = (Net Work Time / Available Work Time) * 100%
+/// Where Available Work Time = Gross Work Time - Manual Breaks - Long Pauses
 /// ```
 ///
 /// This provides insight into work efficiency while accounting for
@@ -243,14 +245,18 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let config = Config::read()?;
     let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
 
-    // Fetch filtered long breaks for display (removes noise from short interruptions)
-    let long_breaks = Pauses::new()?
+    // Load both manual breaks and automatic pauses for comprehensive work interval calculation
+    let manual_breaks = Breaks::new()?.get_daily_breaks(naive_date)?;
+    let long_pauses = Pauses::new()?
         .set_min_duration(monitor_config.min_pause_duration)
         .get_daily_pauses(naive_date)?;
-    // Note: Pauses and breaks are now loaded automatically by Productivity::new()
+    
+    // Combine breaks and pauses for accurate work interval calculation
+    // This ensures both manual breaks and automatic pauses are considered when calculating work periods
+    let combined_interruptions = report::combine_breaks_and_pauses(&manual_breaks, &long_pauses);
 
     // Calculate work intervals and apply filtering
-    let intervals = report::calculate_work_intervals(&workday, &long_breaks);
+    let intervals = report::calculate_work_intervals(&workday, &combined_interruptions);
     let (filtered_intervals, filtered_info) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
 
     // Use the report module to process the data
@@ -344,11 +350,15 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 
     let config = Config::read()?;
     let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
-    let pauses = Pauses::new()?
+    
+    // Load both manual breaks and automatic pauses for comprehensive report submission
+    let manual_breaks = Breaks::new()?.get_daily_breaks(naive_date)?;
+    let long_pauses = Pauses::new()?
         .set_min_duration(monitor_config.min_pause_duration)
         .get_daily_pauses(naive_date)?;
     
-    // Note: Productivity data (all pauses, breaks, config) now loaded automatically by Productivity::new()
+    // Combine breaks and pauses for accurate work interval calculation in API submission
+    let combined_interruptions = report::combine_breaks_and_pauses(&manual_breaks, &long_pauses);
 
     // Validate productivity before allowing report submission
     // Uses centralized Productivity module for consistent threshold checking
@@ -367,7 +377,7 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     }
 
     // Apply interval filtering for API submission
-    let intervals = report::calculate_work_intervals(&workday, &pauses);
+    let intervals = report::calculate_work_intervals(&workday, &combined_interruptions);
     let (filtered_intervals, _) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
 
     // Generate JSON payload for API submission using filtered intervals

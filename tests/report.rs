@@ -98,4 +98,83 @@ mod tests {
         let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
         assert!(output.is_ok());
     }
+
+    /// Tests report generation with both breaks and pauses.
+    ///
+    /// Verifies that manual breaks created with the breaks command are properly
+    /// integrated into work interval calculations for reports.
+    #[test_context(ReportTestContext)]
+    #[test]
+    fn test_report_with_breaks_and_pauses(_ctx: &mut ReportTestContext) {
+        let date = NaiveDate::from_ymd_opt(2025, 6, 26).unwrap();
+
+        // Setup workday
+        let mut workdays = Workdays::new().unwrap();
+        workdays.insert_start(date).unwrap();
+        workdays
+            .conn
+            .execute(
+                "UPDATE workdays SET start = '2025-06-26 09:00:00', end = '2025-06-26 17:00:00' WHERE date = ?",
+                [&date.to_string()],
+            )
+            .unwrap();
+
+        // Insert a pause: 10:30-11:00
+        let pauses_db = Pauses::new().unwrap();
+        let conn = pauses_db.conn.lock();
+        conn.execute(
+            "INSERT INTO pauses (start, end, duration) VALUES ('2025-06-26 10:30:00', '2025-06-26 11:00:00', ?)",
+            [(30 * 60).to_string()],
+        )
+        .unwrap();
+        drop(conn);
+
+        // Insert a manual break: 12:00-13:00 (lunch)
+        let breaks_db = kasl::db::breaks::Breaks::new().unwrap();
+        let break_record = kasl::db::breaks::Break {
+            id: None,
+            date,
+            start: date.and_hms_opt(12, 0, 0).unwrap(),
+            end: date.and_hms_opt(13, 0, 0).unwrap(),
+            duration: chrono::Duration::hours(1),
+            reason: Some("Lunch break".to_string()),
+            created_at: None,
+        };
+        breaks_db.insert(&break_record).unwrap();
+
+        let workday = workdays.fetch(date).unwrap().unwrap();
+        let pauses_vec = pauses_db.get_daily_pauses(date).unwrap();
+        let breaks_vec = breaks_db.get_daily_breaks(date).unwrap();
+
+        // Test that the combined calculation includes both breaks and pauses
+        let combined_interruptions = kasl::libs::report::combine_breaks_and_pauses(&breaks_vec, &pauses_vec);
+        assert_eq!(combined_interruptions.len(), 2); // Should have both pause and break
+
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &combined_interruptions);
+        
+        // Should create 3 work intervals:
+        // 1. 09:00 - 10:30 (before pause)
+        // 2. 11:00 - 12:00 (between pause and break)
+        // 3. 13:00 - 17:00 (after break)
+        assert_eq!(intervals.len(), 3);
+        
+        // Verify the intervals are correctly calculated
+        assert_eq!(intervals[0].start, date.and_hms_opt(9, 0, 0).unwrap());
+        assert_eq!(intervals[0].end, date.and_hms_opt(10, 30, 0).unwrap());
+        
+        assert_eq!(intervals[1].start, date.and_hms_opt(11, 0, 0).unwrap());
+        assert_eq!(intervals[1].end, date.and_hms_opt(12, 0, 0).unwrap());
+        
+        assert_eq!(intervals[2].start, date.and_hms_opt(13, 0, 0).unwrap());
+        assert_eq!(intervals[2].end, date.and_hms_opt(17, 0, 0).unwrap());
+
+        let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
+        assert!(output.is_ok());
+        
+        // Verify that productivity calculation includes the break
+        let (_, productivity) = output.unwrap();
+        // The productivity should be calculated considering both the 30-minute pause 
+        // and the 60-minute break, so total work time should be reduced accordingly
+        assert!(productivity > 0.0 && productivity <= 100.0);
+    }
 }

@@ -577,3 +577,70 @@ pub fn report_with_intervals(
 
     Ok((filtered_duration, productivity))
 }
+
+/// Combines breaks and pauses into a unified collection for work interval calculation.
+///
+/// This function creates a combined list of all work interruptions (both manual breaks
+/// and automatic pauses) to ensure that work intervals are calculated accurately,
+/// accounting for all types of non-work time.
+///
+/// ## Data Integration
+///
+/// - **Manual Breaks**: User-defined break periods from the breaks table
+/// - **Automatic Pauses**: System-detected pauses from the pauses table
+/// - **Unified Format**: Both are converted to a common Pause-like structure
+///
+/// ## Temporal Ordering
+///
+/// The combined collection is sorted chronologically to ensure proper
+/// work interval calculation when multiple types of interruptions occur
+/// throughout the workday.
+///
+/// # Arguments
+///
+/// * `breaks` - Manual breaks from the breaks database table
+/// * `pauses` - Automatic pauses from the pauses database table
+///
+/// # Returns
+///
+/// A vector of Pause objects representing all work interruptions,
+/// sorted chronologically by start time.
+///
+/// # Examples
+///
+/// ```rust
+/// use kasl::libs::report::combine_breaks_and_pauses;
+/// 
+/// let breaks = breaks_db.get_daily_breaks(date)?;
+/// let pauses = pauses_db.get_daily_pauses(date)?;
+/// let combined = combine_breaks_and_pauses(&breaks, &pauses);
+/// 
+/// let intervals = calculate_work_intervals(&workday, &combined);
+/// ```
+pub fn combine_breaks_and_pauses(
+    breaks: &[crate::db::breaks::Break], 
+    pauses: &[crate::libs::pause::Pause]
+) -> Vec<crate::libs::pause::Pause> {
+    let mut combined = Vec::new();
+    
+    // Add existing pauses
+    combined.extend_from_slice(pauses);
+    
+    // Convert breaks to pause format and add them
+    let mut next_id = pauses.iter().map(|p| p.id).max().unwrap_or(0) + 1000; // Use high IDs to avoid conflicts
+    
+    for break_record in breaks {
+        combined.push(crate::libs::pause::Pause {
+            id: next_id,
+            start: break_record.start,
+            end: Some(break_record.end),
+            duration: Some(break_record.duration),
+        });
+        next_id += 1;
+    }
+    
+    // Sort by start time for proper interval calculation
+    combined.sort_by_key(|item| item.start);
+    
+    combined
+}
