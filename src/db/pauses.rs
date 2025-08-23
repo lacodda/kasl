@@ -71,14 +71,19 @@ const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL 
 ///
 /// Retrieves completed pauses for a given date that meet the minimum
 /// duration threshold. Used for daily reporting and analysis.
-const SELECT_DAILY_PAUSES: &str =
-    "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND (duration IS NULL OR duration >= ?2)";
+const SELECT_DAILY_PAUSES_WITH_LONG_DURATION: &str = "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND duration >= ?2";
+const SELECT_DAILY_PAUSES_WITH_SHORT_DURATION: &str = "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND duration < ?2";
 
 /// Delete a single pause record by ID.
 ///
 /// Removes a pause record from the database, typically used for
 /// correcting incorrectly recorded pauses or data cleanup.
 const DELETE_PAUSE: &str = "DELETE FROM pauses WHERE id = ?";
+
+struct Operation {
+    sql_query: String,
+    duration: String,
+}
 
 /// Database manager for pause/break tracking operations.
 ///
@@ -103,6 +108,8 @@ pub struct Pauses {
     /// when multiple threads attempt to record or query pause data
     /// simultaneously.
     pub conn: Arc<Mutex<Connection>>,
+    pub min_duration: Option<String>,
+    pub max_duration: Option<String>,
 }
 
 impl Pauses {
@@ -143,7 +150,45 @@ impl Pauses {
         // Wrap connection for thread-safe access
         Ok(Pauses {
             conn: Arc::new(Mutex::new(db_conn)),
+            min_duration: None,
+            max_duration: None,
         })
+    }
+
+    pub fn set_min_duration(&self, min_duration: u64) -> Self {
+        let min_duration_secs = (min_duration * 60) as i64; // Convert minutes to seconds
+        Self {
+            conn: self.conn.clone(),
+            min_duration: Some(min_duration_secs.to_string()),
+            max_duration: None,
+        }
+    }
+
+    pub fn set_max_duration(&self, max_duration: u64) -> Self {
+        let max_duration_secs = (max_duration * 60) as i64; // Convert minutes to second
+        Self {
+            conn: self.conn.clone(),
+            min_duration: None,
+            max_duration: Some(max_duration_secs.to_string()),
+        }
+    }
+
+    fn get_operation(&self) -> Operation {
+        if self.min_duration.is_some() {
+            return Operation {
+                sql_query: String::from(SELECT_DAILY_PAUSES_WITH_LONG_DURATION),
+                duration: self.min_duration.clone().unwrap(),
+            };
+        } else if self.max_duration.is_some() {
+            return Operation {
+                sql_query: String::from(SELECT_DAILY_PAUSES_WITH_SHORT_DURATION),
+                duration: self.max_duration.clone().unwrap(),
+            };
+        }
+        Operation {
+            sql_query: String::from(SELECT_DAILY_PAUSES_WITH_LONG_DURATION),
+            duration: String::from("0"),
+        }
     }
 
     /// Records the start of a new pause with the current timestamp.
@@ -306,16 +351,14 @@ impl Pauses {
     ///
     /// This query uses date functions and may be slower on large datasets.
     /// Consider adding indices on the start column for better performance.
-    pub fn get_daily_pauses(&self, date: NaiveDate, min_duration: u64) -> Result<Vec<Pause>> {
+    pub fn get_daily_pauses(&self, date: NaiveDate) -> Result<Vec<Pause>> {
         let date_str = date.format("%Y-%m-%d").to_string();
-        let min_duration_secs = (min_duration * 60) as i64; // Convert minutes to seconds
-
         let conn_guard = self.conn.lock();
+        let operation = self.get_operation();
         // Prepare statement for parameterized query
-        let mut stmt = conn_guard.prepare(SELECT_DAILY_PAUSES)?;
-
+        let mut stmt = conn_guard.prepare(&operation.sql_query)?;
         // Execute query with date and duration filter
-        let pause_iter = stmt.query_map([&date_str, &min_duration_secs.to_string()], |row| {
+        let pause_iter = stmt.query_map([&date_str, &operation.duration], |row| {
             // Parse timestamps from database strings
             let start_str: String = row.get(1)?;
             let end_str: Option<String> = row.get(2)?;

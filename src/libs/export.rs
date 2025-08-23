@@ -590,7 +590,7 @@ impl Exporter {
 
         // Collect associated tasks and pause data
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
-        let pauses = Pauses::new()?.get_daily_pauses(date, 0)?;
+        let pauses = Pauses::new()?.get_daily_pauses(date)?;
 
         // Determine end time (use current time if workday is still active)
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());

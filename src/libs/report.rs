@@ -30,8 +30,9 @@
 //! let (filtered_intervals, filter_info) = filter_short_intervals(&intervals, 30);
 //! ```
 
-use crate::db::workdays::Workday;
 use crate::libs::pause::Pause;
+use crate::{db::workdays::Workday, libs::productivity::Productivity};
+use anyhow::Result;
 use chrono::{Duration, NaiveDateTime};
 
 /// Represents a single continuous work interval between breaks.
@@ -486,18 +487,15 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
 ///
 /// ```rust
 /// use kasl::libs::report::filter_short_intervals;
-/// 
+///
 /// let intervals = calculate_work_intervals(&workday, &pauses);
 /// let (filtered, info) = filter_short_intervals(&intervals, 30);
-/// 
+///
 /// if let Some(info) = info {
 ///     println!("Filtered {} short intervals", info.count);
 /// }
 /// ```
-pub fn filter_short_intervals(
-    intervals: &[WorkInterval], 
-    min_minutes: u64
-) -> (Vec<WorkInterval>, Option<ShortIntervalsInfo>) {
+pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (Vec<WorkInterval>, Option<ShortIntervalsInfo>) {
     let mut filtered_intervals = Vec::new();
     let mut short_intervals = Vec::new();
     let mut total_duration = Duration::zero();
@@ -527,66 +525,6 @@ pub fn filter_short_intervals(
     (filtered_intervals, filtered_info)
 }
 
-/// Filter pauses that occur within the given work intervals.
-///
-/// This helper method finds pauses that overlap with the specified work intervals,
-/// allowing for accurate productivity calculation when working with filtered time periods.
-///
-/// # Arguments
-///
-/// * `all_pauses` - Complete list of pauses for the day
-/// * `intervals` - Work intervals to check for pause overlaps
-///
-/// # Returns
-///
-/// Vector of pauses that occur within the specified intervals
-pub fn filter_pauses_in_intervals(all_pauses: &[Pause], intervals: &[WorkInterval]) -> Vec<Pause> {
-    if intervals.is_empty() {
-        return vec![];
-    }
-    
-    all_pauses.iter()
-        .filter(|pause| {
-            // Check if this pause overlaps with any interval
-            intervals.iter().any(|interval| {
-                pause.start >= interval.start && pause.start < interval.end
-            })
-        })
-        .cloned()
-        .collect()
-}
-
-/// Filter breaks that occur within the given work intervals.
-///
-/// This helper method finds breaks that overlap with the specified work intervals,
-/// allowing for accurate productivity calculation when working with filtered time periods.
-///
-/// # Arguments
-///
-/// * `all_breaks` - Complete list of breaks for the day
-/// * `intervals` - Work intervals to check for break overlaps
-///
-/// # Returns
-///
-/// Vector of breaks that occur within the specified intervals
-pub fn filter_breaks_in_intervals(all_breaks: &[crate::db::breaks::Break], intervals: &[WorkInterval]) -> Vec<crate::db::breaks::Break> {
-    if intervals.is_empty() {
-        return vec![];
-    }
-    
-    all_breaks.iter()
-        .filter(|break_item| {
-            // Check if this break overlaps with any interval
-            intervals.iter().any(|interval| {
-                let break_end = break_item.start + break_item.duration;
-                // Break overlaps if it starts before interval ends and ends after interval starts
-                break_item.start < interval.end && break_end > interval.start
-            })
-        })
-        .cloned()
-        .collect()
-}
-
 /// Process daily work report data using pre-calculated intervals.
 ///
 /// This function handles the data processing for daily work reports, calculating
@@ -608,29 +546,14 @@ pub fn filter_breaks_in_intervals(all_breaks: &[crate::db::breaks::Break], inter
 /// - Pauses within intervals (Vec<Pause>)
 /// - Breaks within intervals (Vec<Break>)
 pub fn report_with_intervals(
-    _workday: &Workday,
-    intervals: &[WorkInterval], 
-    all_pauses: &[Pause],
-    breaks: &[crate::db::breaks::Break],
-) -> (Duration, f64, Vec<Pause>, Vec<crate::db::breaks::Break>) {
+    workday: &Workday,
+    intervals: &[WorkInterval]
+) -> Result<(Duration, f64)> {
     // Calculate filtered duration based on provided intervals
-    let filtered_duration = intervals.iter()
-        .fold(Duration::zero(), |acc, interval| acc + interval.duration);
-        
-    // For intervals-based reports, we need to calculate productivity based on
-    // pauses and breaks that occur within the filtered intervals
-    let pauses_in_intervals = filter_pauses_in_intervals(all_pauses, intervals);
-    let breaks_in_intervals = filter_breaks_in_intervals(breaks, intervals);
-    
+    let filtered_duration = intervals.iter().fold(Duration::zero(), |acc, interval| acc + interval.duration);
+
     // Use the productivity module for calculation
-    let productivity = crate::libs::productivity::calculate_productivity_for_intervals(
-        &filtered_duration,
-        &pauses_in_intervals,
-        &breaks_in_intervals
-    );
-    
-    (filtered_duration, productivity, pauses_in_intervals, breaks_in_intervals)
+    let productivity = Productivity::new(&workday)?.calculate_productivity();
+
+    Ok((filtered_duration, productivity))
 }
-
-
-

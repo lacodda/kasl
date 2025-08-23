@@ -5,7 +5,7 @@
 
 use crate::{
     db::{breaks::Breaks, pauses::Pauses, workdays::Workdays},
-    libs::{config::Config, formatter::format_duration, messages::Message, pause::Pause, productivity, report},
+    libs::{config::Config, formatter::format_duration, messages::Message, pause::Pause, productivity::Productivity, report},
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -66,11 +66,11 @@ pub struct BreakOption {
 /// validation fails or database operations encounter issues.
 pub async fn cmd(args: BreaksArgs) -> Result<()> {
     let today = Local::now().date_naive();
-    
+
     // Validate that we can only create breaks for today
     let config = Config::read()?;
     let productivity_config = config.productivity.unwrap_or_default();
-    
+
     if let Some(minutes) = args.minutes {
         handle_automatic_break_placement(today, minutes, &productivity_config, args.force).await
     } else {
@@ -117,11 +117,11 @@ async fn handle_automatic_break_placement(
 
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let pauses = Pauses::new()?.get_daily_pauses(date, monitor_config.min_pause_duration)?;
+    let pauses = Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_daily_pauses(date)?;
 
     // Find optimal break placement
     let break_options = find_break_placement_options(&workday, &pauses, minutes, monitor_config.min_work_interval)?;
-    
+
     if break_options.is_empty() {
         msg_error!(Message::NoValidBreakPlacement);
         return Ok(());
@@ -129,7 +129,7 @@ async fn handle_automatic_break_placement(
 
     // Use the first (optimal) option
     let break_option = &break_options[0];
-    
+
     // Create the break record
     let break_record = crate::db::breaks::Break {
         id: None,
@@ -152,7 +152,7 @@ async fn handle_automatic_break_placement(
 
     // Recalculate and show productivity
     show_updated_productivity(date).await?;
-    
+
     Ok(())
 }
 
@@ -160,17 +160,16 @@ async fn handle_automatic_break_placement(
 ///
 /// Prompts user for break duration and presents placement options
 /// for selection. Provides full control over break timing and placement.
-async fn handle_interactive_break_creation(
-    date: NaiveDate,
-    productivity_config: &crate::libs::config::ProductivityConfig,
-    _force: bool,
-) -> Result<()> {
+async fn handle_interactive_break_creation(date: NaiveDate, productivity_config: &crate::libs::config::ProductivityConfig, _force: bool) -> Result<()> {
     msg_print!(Message::BreakInteractivePrompt);
 
     // Prompt for break duration
     let theme = ColorfulTheme::default();
     let duration_input: String = Input::with_theme(&theme)
-        .with_prompt(&format!("Enter break duration ({}-{} minutes)", productivity_config.min_break_duration, productivity_config.max_break_duration))
+        .with_prompt(&format!(
+            "Enter break duration ({}-{} minutes)",
+            productivity_config.min_break_duration, productivity_config.max_break_duration
+        ))
         .interact_text()?;
 
     let minutes: u64 = match duration_input.parse() {
@@ -195,11 +194,11 @@ async fn handle_interactive_break_creation(
 
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let pauses = Pauses::new()?.get_daily_pauses(date, monitor_config.min_pause_duration)?;
+    let pauses = Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_daily_pauses(date)?;
 
     // Find break placement options
     let break_options = find_break_placement_options(&workday, &pauses, minutes, monitor_config.min_work_interval)?;
-    
+
     if break_options.is_empty() {
         msg_error!(Message::NoValidBreakPlacement);
         return Ok(());
@@ -269,22 +268,20 @@ fn find_break_placement_options(
     let mut options = Vec::new();
     let current_time = Local::now().naive_local();
     let workday_end = workday.end.unwrap_or(current_time);
-    
+
     // Calculate work intervals
     let intervals = report::calculate_work_intervals(workday, pauses);
-    
+
     // Find gaps between pauses that can accommodate the break
     let break_duration = Duration::minutes(duration_minutes as i64);
-    
+
     if intervals.is_empty() {
         return Ok(options);
     }
 
     // Strategy 1: Place break in the middle of the longest interval
-    let longest_interval = intervals
-        .iter()
-        .max_by_key(|interval| interval.duration.num_minutes());
-    
+    let longest_interval = intervals.iter().max_by_key(|interval| interval.duration.num_minutes());
+
     if let Some(interval) = longest_interval {
         // Check if the interval is long enough to accommodate the break plus minimum work time
         let required_time = break_duration + Duration::minutes(min_work_interval as i64 * 2);
@@ -292,7 +289,7 @@ fn find_break_placement_options(
             let interval_mid = interval.start + (interval.duration / 2);
             let break_start = interval_mid - (break_duration / 2);
             let break_end = break_start + break_duration;
-            
+
             options.push(BreakOption {
                 start: break_start,
                 end: break_end,
@@ -306,14 +303,11 @@ fn find_break_placement_options(
     for (i, pause) in pauses.iter().enumerate() {
         if let Some(pause_end) = pause.end {
             // Find the next pause or end of workday
-            let next_pause_start = pauses
-                .get(i + 1)
-                .map(|p| p.start)
-                .unwrap_or(workday_end.min(current_time));
-            
+            let next_pause_start = pauses.get(i + 1).map(|p| p.start).unwrap_or(workday_end.min(current_time));
+
             let available_time = next_pause_start - pause_end;
             let required_time = break_duration + Duration::minutes(min_work_interval as i64);
-            
+
             if available_time >= required_time && pause_end + break_duration <= current_time {
                 options.push(BreakOption {
                     start: pause_end,
@@ -330,11 +324,11 @@ fn find_break_placement_options(
         let work_start = workday.start;
         let available_time = pause.start - work_start;
         let required_time = break_duration + Duration::minutes(min_work_interval as i64);
-        
+
         if available_time >= required_time {
             let break_end = pause.start - Duration::minutes(min_work_interval as i64);
             let break_start = break_end - break_duration;
-            
+
             if break_start >= work_start && break_end <= current_time {
                 options.push(BreakOption {
                     start: break_start,
@@ -354,7 +348,7 @@ fn find_break_placement_options(
 
     // Limit to top 3 options
     options.truncate(3);
-    
+
     Ok(options)
 }
 
@@ -365,14 +359,10 @@ fn find_break_placement_options(
 async fn show_updated_productivity(date: NaiveDate) -> Result<()> {
     // Get all data for productivity calculation
     let workday = Workdays::new()?.fetch(date)?.expect("Workday should exist");
-    
-    let pauses = Pauses::new()?.get_daily_pauses(date, 0)?; // All pauses for calculation
-    let breaks = Breaks::new()?.get_daily_breaks(date)?;
-    
+
     // Calculate new productivity (this would be implemented in report.rs)
-    let productivity = productivity::calculate_productivity(&workday, &pauses, &breaks);
-    
+    let productivity = Productivity::new(&workday)?.calculate_productivity();
+
     msg_info!(Message::ProductivityRecalculated(productivity));
     Ok(())
 }
-

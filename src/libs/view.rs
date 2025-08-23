@@ -21,7 +21,6 @@
 //! ```
 
 use super::task::Task;
-use crate::db::breaks::Break;
 use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
 use crate::libs::formatter::format_duration;
@@ -94,11 +93,7 @@ impl View {
     /// * `all_pauses` - Complete pause record for accurate productivity analysis  
     /// * `breaks` - Manual breaks for enhanced productivity calculation
     /// * `tasks` - Tasks completed during the workday for context
-    pub fn report(workday: &Workday, intervals: &[report::WorkInterval], all_pauses: &[Pause], breaks: &[Break], tasks: &[Task]) -> Result<()> {
-        // Use the report module to process the data
-        let (filtered_duration, productivity, _pauses_in_intervals, _breaks_in_intervals) =
-            report::report_with_intervals(workday, intervals, all_pauses, breaks);
-
+    pub fn report(workday: &Workday, intervals: &[report::WorkInterval], filtered_duration: &TimeDelta, productivity: &f64, tasks: &[Task]) -> Result<()> {
         // Display formatted report header with readable date
         msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
 

@@ -75,7 +75,7 @@ pub async fn cmd(args: PausesArgs) -> Result<()> {
     let min_duration = args.min_duration.unwrap_or(config.monitor.unwrap_or_default().min_pause_duration);
 
     // Fetch pause records from database with duration filtering
-    let pauses = Pauses::new()?.get_daily_pauses(date, min_duration)?;
+    let pauses = Pauses::new()?.set_min_duration(min_duration).get_daily_pauses(date)?;
 
     // Calculate total pause time for summary statistics
     let total_pause_time = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);

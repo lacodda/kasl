@@ -15,7 +15,7 @@ use crate::{
         config::Config,
         formatter::format_duration,
         messages::Message,
-        productivity,
+        productivity::Productivity,
         report,
         task::{FormatTasks, Task, TaskFilter},
         view::View,
@@ -57,7 +57,6 @@ pub struct ReportArgs {
     /// organizational reporting requirements at month-end.
     #[arg(long, help = "Submit monthly report")]
     month: bool,
-
 }
 
 /// Main entry point for the report command.
@@ -178,7 +177,6 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     Ok(())
 }
 
-
 /// Fetches data and displays a formatted daily report in the terminal.
 ///
 /// This function generates a comprehensive daily work report including:
@@ -237,29 +235,38 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
 
     // Fetch filtered long breaks for display (removes noise from short interruptions)
-    let long_breaks = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
+    let long_breaks = Pauses::new()?
+        .set_min_duration(monitor_config.min_pause_duration)
+        .get_daily_pauses(naive_date)?;
     // Fetch ALL pauses for accurate productivity calculation
-    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date, 0)?;
+    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date)?;
 
     // Get manual breaks for enhanced productivity calculation
     let breaks = crate::db::breaks::Breaks::new()?.get_daily_breaks(naive_date)?;
-    
+
     // Calculate work intervals and apply filtering
     let intervals = report::calculate_work_intervals(&workday, &long_breaks);
     let (filtered_intervals, filtered_info) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
 
+    // Use the report module to process the data
+    let (filtered_duration, productivity) = report::report_with_intervals(&workday, &intervals)?;
+
     // Display the formatted report with filtered intervals
-    View::report(&workday, &filtered_intervals, &all_pauses, &breaks, &tasks)?;
+    View::report(&workday, &filtered_intervals, &filtered_duration, &productivity, &tasks)?;
 
     // Display information about filtered short intervals
     if let Some(info) = filtered_info {
-        msg_info!(format!("Filtered out {} short intervals (total: {})", info.count, format_duration(&info.total_duration)));
+        msg_info!(format!(
+            "Filtered out {} short intervals (total: {})",
+            info.count,
+            format_duration(&info.total_duration)
+        ));
     }
 
     // Check productivity and show recommendations if needed
-    if let Some(needed_minutes) = productivity::check_productivity_recommendations(&workday, &all_pauses, &breaks, &config) {
+    if let Some(needed_minutes) = Productivity::new(&workday)?.check_productivity_recommendations(&all_pauses, &breaks, &config) {
         msg_error!(Message::LowProductivityWarning {
-            current: productivity::calculate_productivity(&workday, &all_pauses, &breaks),
+            current: Productivity::new(&workday)?.calculate_productivity(),
             threshold: config.productivity.as_ref().map(|p| p.min_productivity_threshold).unwrap_or(70.0),
             needed_break_minutes: needed_minutes,
         });
@@ -331,20 +338,17 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let config = Config::read()?;
     let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
     let productivity_config = config.productivity.as_ref().cloned().unwrap_or_default();
-    let pauses = Pauses::new()?.get_daily_pauses(naive_date, monitor_config.min_pause_duration)?;
-    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date, 0)?; // All pauses for productivity calculation
+    let pauses = Pauses::new()?
+        .set_min_duration(monitor_config.min_pause_duration)
+        .get_daily_pauses(naive_date)?;
+    let all_pauses = Pauses::new()?.get_daily_pauses(naive_date)?; // All pauses for productivity calculation
     let breaks = crate::db::breaks::Breaks::new()?.get_daily_breaks(naive_date)?;
 
     // Check productivity before allowing report submission
-    let current_productivity = productivity::calculate_productivity(&workday, &all_pauses, &breaks);
+    let current_productivity = Productivity::new(&workday)?.calculate_productivity();
     if current_productivity < productivity_config.min_productivity_threshold {
-        let needed_minutes = productivity::calculate_needed_break_duration(
-            &workday,
-            &all_pauses,
-            &breaks,
-            productivity_config.min_productivity_threshold,
-        );
-        
+        let needed_minutes = Productivity::new(&workday)?.calculate_needed_break_duration(&all_pauses, &breaks, productivity_config.min_productivity_threshold);
+
         msg_error!(Message::ProductivityTooLowToSend {
             current: current_productivity,
             threshold: productivity_config.min_productivity_threshold,
@@ -425,7 +429,6 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 /// Returns a JSON value containing the structured report payload
 /// ready for API submission.
 fn build_report_payload(_workday: &Workday, tasks: &mut Vec<Task>, intervals: &[report::WorkInterval]) -> serde_json::Value {
-
     let num_tasks = tasks.len();
     let num_intervals = intervals.len();
 
@@ -497,7 +500,6 @@ fn build_report_payload(_workday: &Workday, tasks: &mut Vec<Task>, intervals: &[
     json!(report_items)
 }
 
-
 /// Reads configuration and returns an initialized Si service instance.
 ///
 /// This helper function encapsulates the configuration loading and service
@@ -520,4 +522,3 @@ fn get_si_service() -> Result<Si> {
         .map(|si_config| Si::new(&si_config))
         .ok_or_else(|| msg_error_anyhow!(Message::SiServerConfigNotFound))
 }
-
