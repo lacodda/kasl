@@ -1,5 +1,37 @@
 # Changelog
 
+## 🎉 [0.8.2] - 2025-08-23
+
+### ✨ Features
+
+- Add ProductivityConfig setup to init command
+- Improve reliability and update handling
+- Auto-restart watcher after configuration changes in init
+
+### 🎛️ Refactor
+
+- Remove dead code including PauseGroup trait and associated
+- Fix productivity calculation and improve daemon tests
+- Consolidate productivity calculations and improve breaks integration
+- The logic of the report_with_intervals and report methods in the View module have been combined into a single report method
+- Productivity module refactoring
+- Remove all compatibility functions, pure struct API
+
+### 📖 Documentation
+
+- Standardize documentation across entire codebase
+
+### 🛠️ Bug Fixes
+
+- Reset retry counter after successful API authentication
+- Integrate breaks into report calculations and API submissions
+- Improve PATH configuration error handling and messaging
+
+### 🧪 Testing
+
+- Move inline tests from src/libs/report.rs to tests/report_functions.rs
+- Re-enable tests and fix related warnings
+
 ## 🎉 [0.8.1] - 2025-08-22
 
 ### ✨ Features
