@@ -608,3 +608,4 @@ When reporting issues, include:
 - **GitHub Issues**: [https://github.com/lacodda/kasl/issues](https://github.com/lacodda/kasl/issues)
 - **Email**: lahtachev@gmail.com
 - **Documentation**: [https://kasl.lacodda.com](https://kasl.lacodda.com)
+

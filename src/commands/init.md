@@ -253,3 +253,4 @@ After running `init`:
 - [`task`](./task.md) - Manage tasks
 - [`report`](./report.md) - Generate reports
 - [`autostart`](./autostart.md) - Configure automatic startup
+
