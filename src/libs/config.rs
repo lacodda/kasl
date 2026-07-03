@@ -147,6 +147,48 @@ pub struct ProductivityConfig {
     pub max_break_duration: u64,
 }
 
+/// Daily report export configuration.
+///
+/// Controls where generated report files are stored by default and how their
+/// file names are constructed when an explicit `--output` path is not provided.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct ReportConfig {
+    /// Directory where generated report files are saved by default.
+    ///
+    /// When set, report exports without an explicit `--output` path are written
+    /// into this directory (created automatically if missing). When unset, the
+    /// legacy behavior is used (a timestamped file in the current directory).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_dir: Option<String>,
+
+    /// File name template (without extension) for generated reports.
+    ///
+    /// Supported placeholders:
+    /// - `{date}` — the report date in `YYYY-MM-DD` format
+    /// - `{seq}`  — a per-day sequence suffix: empty for the first report of the
+    ///   day, then `_2`, `_3`, … for subsequent reports on the same date
+    ///
+    /// The file extension is appended automatically based on the export format.
+    /// Defaults to `daily_report_{date}{seq}` when unset.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filename_template: Option<String>,
+
+    /// Language code for localizing report labels, month and weekday names.
+    ///
+    /// Supported built-in values: `ru` (default) and `en`. Unknown or unset
+    /// values fall back to `ru`, preserving the original report wording.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+
+    /// Name of the design template controlling the report's visual style.
+    ///
+    /// Corresponds to a file `<data>/report_templates/<name>.json`. When unset
+    /// or missing on disk, the built-in `siserver` template is used. The
+    /// `siserver` template reproduces the original SiServer look.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub template: Option<String>,
+}
+
 /// External server configuration for report submission.
 ///
 /// This structure contains the connection parameters for external reporting
@@ -243,6 +285,13 @@ pub struct Config {
     /// and report validation based on productivity metrics.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub productivity: Option<ProductivityConfig>,
+
+    /// Daily report export configuration.
+    ///
+    /// Controls the default output directory and file name template used when
+    /// exporting reports without an explicit output path.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub report: Option<ReportConfig>,
 }
 
 impl Default for MonitorConfig {
@@ -318,6 +367,7 @@ impl Default for Config {
             monitor: None,
             server: None,
             productivity: None,
+            report: None,
         }
     }
 }
@@ -497,6 +547,10 @@ impl Config {
                 key: "productivity".to_string(),
                 name: "Productivity".to_string(),
             },
+            ConfigModule {
+                key: "report".to_string(),
+                name: "Report".to_string(),
+            },
         ];
 
         // Present multi-select interface for module selection
@@ -606,6 +660,42 @@ impl Config {
                             .with_prompt(Message::PromptMaxBreakDuration.to_string())
                             .default(default.max_break_duration)
                             .interact_text()?,
+                    });
+                }
+
+                // Report export configuration: default output directory and file name template
+                "report" => {
+                    let default = config.report.clone().unwrap_or(ReportConfig {
+                        output_dir: None,
+                        filename_template: None,
+                        language: None,
+                        template: None,
+                    });
+                    let output_dir: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Reports output directory")
+                        .default(default.output_dir.unwrap_or_default())
+                        .allow_empty(true)
+                        .interact_text()?;
+                    let filename_template: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Report file name template (placeholders: {date}, {seq})")
+                        .default(default.filename_template.unwrap_or_else(|| "daily_report_{date}{seq}".to_string()))
+                        .allow_empty(true)
+                        .interact_text()?;
+                    let language: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Report language (ru, en)")
+                        .default(default.language.unwrap_or_else(|| "ru".to_string()))
+                        .allow_empty(true)
+                        .interact_text()?;
+                    let template: String = Input::with_theme(&ColorfulTheme::default())
+                        .with_prompt("Report design template name")
+                        .default(default.template.unwrap_or_else(|| "siserver".to_string()))
+                        .allow_empty(true)
+                        .interact_text()?;
+                    config.report = Some(ReportConfig {
+                        output_dir: if output_dir.trim().is_empty() { None } else { Some(output_dir) },
+                        filename_template: if filename_template.trim().is_empty() { None } else { Some(filename_template) },
+                        language: if language.trim().is_empty() { None } else { Some(language) },
+                        template: if template.trim().is_empty() { None } else { Some(template) },
                     });
                 }
                 _ => {} // Unknown module keys are safely ignored

@@ -22,13 +22,21 @@
 //! ```
 
 use crate::{
-    db::{pauses::Pauses, tasks::Tasks, workdays::Workdays},
-    libs::{formatter::format_duration, messages::Message, report, task::TaskFilter},
+    db::{breaks::Breaks, pauses::Pauses, tasks::Tasks, workdays::Workdays},
+    libs::{
+        config::Config,
+        formatter::format_duration,
+        locale::{Language, Locale},
+        messages::Message,
+        report::{self, WorkInterval},
+        report_template::{FontSpec, ReportTemplate},
+        task::{Task, TaskFilter},
+    },
     msg_error_anyhow, msg_info, msg_success,
 };
 use anyhow::Result;
-use chrono::{Duration, Local, NaiveDate};
-use rust_xlsxwriter::{Format, Workbook};
+use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, Timelike};
+use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Workbook};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
@@ -198,6 +206,13 @@ pub struct Exporter {
     format: ExportFormat,
     /// The destination path for the exported file
     output_path: PathBuf,
+    /// Whether to render the daily report as an hourly (SiServer-style) breakdown.
+    ///
+    /// When enabled (and the format is Excel), the report is rendered as a
+    /// per-hour grid where each row represents one hour of the workday with a
+    /// description of the work performed, and "Перерыв" is written for hours
+    /// (or parts of hours) that fall within a break/pause.
+    hourly: bool,
 }
 
 impl Exporter {
@@ -262,7 +277,29 @@ impl Exporter {
         // Use custom path or generate default with appropriate extension
         let output_path = output_path.unwrap_or_else(|| PathBuf::from(format!("{}.{}", default_name, extension)));
 
-        Self { format, output_path }
+        Self {
+            format,
+            output_path,
+            hourly: false,
+        }
+    }
+
+    /// Enables or disables the hourly (SiServer-style) daily report layout.
+    ///
+    /// This builder-style method toggles the hourly breakdown rendering for
+    /// daily reports. It only affects Excel report exports; other formats and
+    /// data types ignore this flag.
+    ///
+    /// # Arguments
+    ///
+    /// * `hourly` - Whether to render the report as an hourly grid
+    ///
+    /// # Returns
+    ///
+    /// Returns the modified `Exporter` for method chaining.
+    pub fn hourly(mut self, hourly: bool) -> Self {
+        self.hourly = hourly;
+        self
     }
 
     /// Main export dispatcher that routes to appropriate export handlers based on data type.
@@ -345,6 +382,17 @@ impl Exporter {
     /// - File system errors during report generation
     /// - Data formatting or serialization errors
     async fn export_report(&self, date: NaiveDate) -> Result<()> {
+        // Hourly (SiServer-style) layout is only meaningful for Excel output.
+        // When requested, delegate to the dedicated renderer and skip the
+        // generic report layout entirely.
+        if self.hourly {
+            if let ExportFormat::Excel = self.format {
+                self.export_report_excel_hourly(date)?;
+                msg_success!(Message::ExportCompleted(self.output_path.display().to_string()));
+                return Ok(());
+            }
+        }
+
         // Gather comprehensive report data from multiple database sources
         let report_data = self.gather_report_data(date)?;
 
@@ -1028,4 +1076,401 @@ impl Exporter {
         workbook.save(&self.output_path)?;
         Ok(())
     }
+
+    /// Gathers the data required to render an hourly (SiServer-style) daily report.
+    ///
+    /// Unlike [`Exporter::gather_report_data`], this method combines both manual
+    /// breaks and automatic pauses (respecting the configured minimum pause
+    /// duration) so that the resulting hourly grid accurately reflects every
+    /// interruption. Tasks are distributed across work intervals using the same
+    /// algorithm employed for API submission, ensuring the descriptions match
+    /// what is sent to SiServer.
+    ///
+    /// # Arguments
+    ///
+    /// * `date` - The target date for which to build the hourly report
+    ///
+    /// # Returns
+    ///
+    /// Returns an [`HourlyReport`] describing the workday header and one row per
+    /// hour of work, or an error if no workday exists for the date.
+    fn gather_hourly_data(&self, date: NaiveDate, locale: &Locale) -> Result<HourlyReport> {
+        let workday = Workdays::new()?
+            .fetch(date)?
+            .ok_or_else(|| msg_error_anyhow!(Message::WorkdayNotFoundForDate(date.to_string())))?;
+
+        // Respect the same interruption sources and thresholds as report submission.
+        let config = Config::read()?;
+        let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
+        let breaks = Breaks::new()?.get_daily_breaks(date)?;
+        let pauses = Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_daily_pauses(date)?;
+        let interruptions = report::combine_breaks_and_pauses(&breaks, &pauses);
+
+        let intervals = report::calculate_work_intervals(&workday, &interruptions);
+        let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
+
+        // End of the workday (fall back to "now" if the session is still open).
+        let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
+
+        // Assign a human-readable work description to every interval.
+        let interval_texts = assign_interval_texts(&tasks, &intervals, locale);
+
+        // Build a chronological timeline of work and break segments covering the day.
+        let mut segments: Vec<TimelineSegment> = Vec::new();
+        for (i, interval) in intervals.iter().enumerate() {
+            segments.push(TimelineSegment {
+                start: interval.start,
+                end: interval.end,
+                text: Some(interval_texts[i].clone()),
+            });
+        }
+        for pause in &interruptions {
+            if let Some(pause_end) = pause.end {
+                let start = pause.start.max(workday.start);
+                let end = pause_end.min(end_time);
+                if start < end {
+                    segments.push(TimelineSegment { start, end, text: None });
+                }
+            }
+        }
+        segments.sort_by_key(|s| s.start);
+
+        // Slice the workday into hour-aligned slots and describe each one.
+        let rows = build_hourly_rows(workday.start, end_time, &segments, locale.break_label);
+
+        // Total net worked time is the sum of all work intervals.
+        let worked = intervals.iter().fold(Duration::zero(), |acc, i| acc + i.duration);
+
+        // Localized weekday/month names (Monday = index 0, January = index 0).
+        let weekday_idx = date.weekday().num_days_from_monday() as usize;
+        let month_idx = (date.month().saturating_sub(1)) as usize;
+
+        Ok(HourlyReport {
+            date,
+            weekday: locale.weekdays[weekday_idx].to_string(),
+            month: locale.months[month_idx].to_string(),
+            day_hours: worked.num_hours().max(0),
+            worked: format_duration(&worked),
+            rows,
+        })
+    }
+
+    /// Renders the hourly daily report to an Excel workbook mirroring the SiServer layout.
+    ///
+    /// The generated sheet contains a header block (title, date, weekday, workday
+    /// length), an hourly table with start/end times and per-hour descriptions,
+    /// a total worked-hours row, and an empty comment area.
+    ///
+    /// # Arguments
+    ///
+    /// * `date` - The target date for the report
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on successful workbook creation, or an error if data
+    /// gathering or file writing fails.
+    fn export_report_excel_hourly(&self, date: NaiveDate) -> Result<()> {
+        // Resolve localization and design template from the report config.
+        let config = Config::read()?;
+        let report_config = config.report.clone().unwrap_or_default();
+        let language = Language::from_code(report_config.language.as_deref().unwrap_or("ru"));
+        let locale = Locale::for_language(language);
+        let template = ReportTemplate::load(report_config.template.as_deref().unwrap_or("siserver"));
+
+        let data = self.gather_hourly_data(date, locale)?;
+
+        let mut workbook = Workbook::new();
+        let worksheet = workbook.add_worksheet();
+
+        // Palette parsed from the template (hex → xlsx Color).
+        let border_color = template.border();
+        let header_fill = template.fill();
+
+        // Builds a base format carrying the given font specification.
+        let font_base = |spec: &FontSpec| -> Format {
+            let mut fmt = Format::new().set_font_name(spec.name.as_str()).set_font_size(spec.size);
+            if spec.bold {
+                fmt = fmt.set_bold();
+            }
+            fmt
+        };
+
+        // Title / header-block formats.
+        let fmt_title = font_base(&template.fonts.title)
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter);
+        let fmt_month = font_base(&template.fonts.month).set_align(FormatAlign::Center);
+        let fmt_date = font_base(&template.fonts.date)
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Center);
+        let fmt_center = Format::new().set_align(FormatAlign::Center);
+        let fmt_right = Format::new().set_align(FormatAlign::Right);
+
+        // Table formats.
+        let fmt_header = font_base(&template.fonts.header)
+            .set_background_color(header_fill)
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter);
+        let fmt_time = font_base(&template.fonts.time)
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter);
+        let fmt_desc = Format::new()
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter)
+            .set_text_wrap();
+        let fmt_empty = Format::new()
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Center)
+            .set_align(FormatAlign::VerticalCenter)
+            .set_text_wrap();
+
+        // Footer formats.
+        let fmt_total_label = Format::new()
+            .set_background_color(header_fill)
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::Right);
+        let fmt_comment_label = font_base(&template.fonts.header);
+        let fmt_comment_box = Format::new()
+            .set_border(FormatBorder::Thin)
+            .set_border_color(border_color)
+            .set_align(FormatAlign::VerticalCenter);
+
+        // Column widths (columns B..F, i.e. 1..5) from the template.
+        worksheet.set_column_width(1, template.col_widths[0])?;
+        worksheet.set_column_width(2, template.col_widths[1])?;
+        worksheet.set_column_width(3, template.col_widths[2])?;
+        if template.show_hours_column {
+            worksheet.set_column_width(4, template.col_widths[3])?;
+        }
+        if template.show_result_column {
+            worksheet.set_column_width(5, template.col_widths[4])?;
+        }
+
+        // Header block.
+        worksheet.set_row_height(1, template.title_row_height)?;
+        worksheet.merge_range(1, 1, 1, 2, locale.report_title, &fmt_title)?;
+        worksheet.write_string_with_format(1, 3, &data.month, &fmt_month)?;
+        worksheet.merge_range(2, 1, 2, 2, &data.date.format(locale.date_format).to_string(), &fmt_date)?;
+
+        worksheet.write_string_with_format(4, 1, &data.weekday, &fmt_center)?;
+        worksheet.write_string_with_format(4, 2, locale.day_type_working, &fmt_center)?;
+        worksheet.write_string_with_format(4, 3, locale.workday_length, &fmt_right)?;
+        worksheet.write_number(4, 4, data.day_hours as f64)?;
+
+        // Table header (two rows: day span over start/end, plus per-column headers).
+        worksheet.merge_range(6, 1, 6, 2, locale.header_day, &fmt_header)?;
+        worksheet.write_string_with_format(7, 1, locale.header_start, &fmt_header)?;
+        worksheet.write_string_with_format(7, 2, locale.header_end, &fmt_header)?;
+        worksheet.merge_range(6, 3, 7, 3, "", &fmt_header)?;
+        if template.show_hours_column {
+            worksheet.merge_range(6, 4, 7, 4, locale.header_hours, &fmt_header)?;
+        }
+        if template.show_result_column {
+            worksheet.merge_range(6, 5, 7, 5, locale.header_result, &fmt_header)?;
+        }
+
+        // Hourly data rows.
+        let mut row: u32 = 8;
+        for item in &data.rows {
+            worksheet.set_row_height(row, template.data_row_height)?;
+            worksheet.write_string_with_format(row, 1, &item.start, &fmt_time)?;
+            worksheet.write_string_with_format(row, 2, &item.end, &fmt_time)?;
+            worksheet.write_string_with_format(row, 3, &item.description, &fmt_desc)?;
+            if template.show_hours_column {
+                worksheet.write_string_with_format(row, 4, "", &fmt_empty)?;
+            }
+            if template.show_result_column {
+                worksheet.write_string_with_format(row, 5, "", &fmt_empty)?;
+            }
+            row += 1;
+        }
+        let last_data_row = row.saturating_sub(1);
+
+        // Total worked-hours row (two blank rows below the table, as in the template).
+        let total_row = last_data_row + 3;
+        worksheet.merge_range(total_row, 1, total_row, 3, locale.total_worked, &fmt_total_label)?;
+        worksheet.write_string_with_format(total_row, 4, &data.worked, &fmt_time)?;
+
+        // Comment label and empty comment box.
+        if template.show_comment {
+            let comment_row = total_row + 2;
+            worksheet.write_string_with_format(comment_row, 1, locale.comment, &fmt_comment_label)?;
+            let box_top = comment_row + 1;
+            let box_bottom = box_top + template.comment_rows.saturating_sub(1);
+            worksheet.merge_range(box_top, 1, box_bottom, 5, "", &fmt_comment_box)?;
+        }
+
+        workbook.save(&self.output_path)?;
+        Ok(())
+    }
+}
+
+/// A single work or break segment on the daily timeline.
+///
+/// Segments are used as an intermediate representation between raw work
+/// intervals/pauses and the final hour-by-hour grid. A segment with `text`
+/// set to `Some` represents work; `None` represents a break/pause.
+struct TimelineSegment {
+    /// Segment start timestamp.
+    start: NaiveDateTime,
+    /// Segment end timestamp.
+    end: NaiveDateTime,
+    /// Work description, or `None` for a break/pause.
+    text: Option<String>,
+}
+
+/// A single rendered row of the hourly report (one hour of the workday).
+struct HourlyRow {
+    /// Hour slot start in "HH:MM" format.
+    start: String,
+    /// Hour slot end in "HH:MM" format.
+    end: String,
+    /// Description of what happened during the hour ("Перерыв" for breaks).
+    description: String,
+}
+
+/// Aggregated data required to render an hourly daily report.
+struct HourlyReport {
+    /// Report date.
+    date: NaiveDate,
+    /// Localized weekday name.
+    weekday: String,
+    /// Localized month name.
+    month: String,
+    /// Whole worked hours, used for the "workday length" header cell.
+    day_hours: i64,
+    /// Total net worked time formatted as "HH:MM".
+    worked: String,
+    /// Hour-by-hour rows.
+    rows: Vec<HourlyRow>,
+}
+
+/// Distributes tasks across work intervals and returns a description per interval.
+///
+/// This mirrors the distribution logic used when submitting reports to the API:
+/// when there are more tasks than intervals, multiple tasks are combined into a
+/// single interval; otherwise a task may span several consecutive intervals.
+/// When there are no tasks, the locale's generic work label is used.
+fn assign_interval_texts(tasks: &[Task], intervals: &[WorkInterval], locale: &Locale) -> Vec<String> {
+    let num_intervals = intervals.len();
+    let num_tasks = tasks.len();
+    let mut texts = vec![locale.work_generic.to_string(); num_intervals];
+
+    if num_intervals == 0 || num_tasks == 0 {
+        return texts;
+    }
+
+    if num_tasks >= num_intervals {
+        let base = num_tasks / num_intervals;
+        let mut extra = num_tasks % num_intervals;
+        let mut iter = tasks.iter();
+
+        for slot in texts.iter_mut() {
+            let count = base + if extra > 0 { 1 } else { 0 };
+            if extra > 0 {
+                extra -= 1;
+            }
+            let parts: Vec<String> = iter.by_ref().take(count).map(|t| locale.work_text(&t.name)).collect();
+            if !parts.is_empty() {
+                *slot = parts.join(". ");
+            }
+        }
+    } else {
+        let base = num_intervals / num_tasks;
+        let mut extra = num_intervals % num_tasks;
+        let mut idx = 0;
+
+        for task in tasks {
+            let count = base + if extra > 0 { 1 } else { 0 };
+            if extra > 0 {
+                extra -= 1;
+            }
+            let text = locale.work_text(&task.name);
+            for _ in 0..count {
+                if idx < num_intervals {
+                    texts[idx] = text.clone();
+                    idx += 1;
+                }
+            }
+        }
+    }
+
+    texts
+}
+
+/// Truncates a timestamp down to the start of its hour (zeroing minutes/seconds).
+fn floor_to_hour(dt: NaiveDateTime) -> NaiveDateTime {
+    dt.with_minute(0).and_then(|d| d.with_second(0)).and_then(|d| d.with_nanosecond(0)).unwrap_or(dt)
+}
+
+/// Removes duplicate description parts anywhere in the slot, preserving order.
+///
+/// Unlike a consecutive-only dedup, this collapses identical entries even when
+/// they are separated by other parts. For example:
+/// - "Работа по задаче X. Перерыв. Работа по задаче X" → "Работа по задаче X. Перерыв"
+/// - "Перерыв. Работа по задаче X. Перерыв" → "Перерыв. Работа по задаче X"
+///
+/// The first occurrence of each unique part is kept in its original position.
+fn dedup_preserve_order(parts: &mut Vec<String>) {
+    let mut seen = std::collections::HashSet::new();
+    parts.retain(|part| seen.insert(part.clone()));
+}
+
+/// Slices the workday into hour-aligned slots and describes each slot.
+///
+/// The grid starts at the top of the hour containing `work_start` and advances
+/// in one-hour steps until `work_end`. For each slot the overlapping timeline
+/// segments are collected in chronological order; work segments contribute their
+/// task description and break segments contribute `break_label`. Slots that
+/// contain no work at all are labelled with `break_label`.
+fn build_hourly_rows(work_start: NaiveDateTime, work_end: NaiveDateTime, segments: &[TimelineSegment], break_label: &str) -> Vec<HourlyRow> {
+    let mut rows = Vec::new();
+    if work_end <= work_start {
+        return rows;
+    }
+
+    let mut slot_start = floor_to_hour(work_start);
+    while slot_start < work_end {
+        let slot_grid_end = slot_start + Duration::hours(1);
+        let slot_end = slot_grid_end.min(work_end);
+
+        // Only consider the portion of the slot within the actual workday.
+        let window_start = slot_start.max(work_start);
+
+        let mut parts: Vec<String> = Vec::new();
+        for segment in segments {
+            let overlap_start = segment.start.max(window_start);
+            let overlap_end = segment.end.min(slot_end);
+            if overlap_start < overlap_end {
+                match &segment.text {
+                    Some(text) => parts.push(text.clone()),
+                    None => parts.push(break_label.to_string()),
+                }
+            }
+        }
+        dedup_preserve_order(&mut parts);
+
+        let description = if parts.is_empty() { break_label.to_string() } else { parts.join(". ") };
+
+        rows.push(HourlyRow {
+            start: slot_start.format("%H:%M").to_string(),
+            end: slot_end.format("%H:%M").to_string(),
+            description,
+        });
+
+        slot_start = slot_grid_end;
+    }
+
+    rows
 }
