@@ -24,6 +24,7 @@
 //! ```
 
 use crate::db::db::Db;
+use crate::libs::config::Config;
 use crate::libs::pause::Pause;
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeDelta};
@@ -67,23 +68,19 @@ const UPDATE_PAUSE: &str = "UPDATE pauses SET end = (datetime(CURRENT_TIMESTAMP,
 /// indicating an ongoing pause that needs to be completed.
 const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL ORDER BY id DESC LIMIT 1";
 
-/// Select all pauses for a specific date with duration filtering.
+/// Select all completed pauses for a specific date.
 ///
-/// Retrieves completed pauses for a given date that meet the minimum
-/// duration threshold. Used for daily reporting and analysis.
-const SELECT_DAILY_PAUSES_WITH_LONG_DURATION: &str = "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND duration >= ?2";
-const SELECT_DAILY_PAUSES_WITH_SHORT_DURATION: &str = "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND duration < ?2";
+/// Retrieves every completed pause (end IS NOT NULL) for the given date
+/// ordered chronologically. Duration filtering is performed in Rust after
+/// merging consecutive pauses, so no threshold is applied here.
+const SELECT_DAILY_PAUSES: &str =
+    "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND end IS NOT NULL ORDER BY start ASC, id ASC";
 
 /// Delete a single pause record by ID.
 ///
 /// Removes a pause record from the database, typically used for
 /// correcting incorrectly recorded pauses or data cleanup.
 const DELETE_PAUSE: &str = "DELETE FROM pauses WHERE id = ?";
-
-struct Operation {
-    sql_query: String,
-    duration: String,
-}
 
 /// Database manager for pause/break tracking operations.
 ///
@@ -173,22 +170,59 @@ impl Pauses {
         }
     }
 
-    fn get_operation(&self) -> Operation {
-        if self.min_duration.is_some() {
-            return Operation {
-                sql_query: String::from(SELECT_DAILY_PAUSES_WITH_LONG_DURATION),
-                duration: self.min_duration.clone().unwrap(),
-            };
-        } else if self.max_duration.is_some() {
-            return Operation {
-                sql_query: String::from(SELECT_DAILY_PAUSES_WITH_SHORT_DURATION),
-                duration: self.max_duration.clone().unwrap(),
-            };
+    /// Merges consecutive pauses separated only by an insignificant work gap.
+    ///
+    /// The activity monitor can split a single, effectively continuous break into
+    /// several adjacent pause records separated by brief bursts of activity (a
+    /// stray mouse move, a few seconds of typing). Because a duration threshold is
+    /// applied per-record, some of these segments may individually fall below the
+    /// threshold and be discarded, even though together they form one long pause.
+    /// Merging such chains before filtering ensures they are treated as a single
+    /// pause.
+    ///
+    /// Two pauses are merged when the gap between the end of one and the start of
+    /// the next does not exceed `max_gap_secs` (a work interval shorter than this
+    /// is not considered meaningful work). The merged pause keeps the earliest
+    /// start, the latest end, and its duration is recomputed as `end - start`.
+    ///
+    /// The input is expected to be sorted chronologically by start time.
+    fn merge_consecutive_pauses(pauses: Vec<Pause>, max_gap_secs: i64) -> Vec<Pause> {
+        let mut merged: Vec<Pause> = Vec::with_capacity(pauses.len());
+
+        for pause in pauses {
+            if let Some(last) = merged.last_mut() {
+                if let Some(last_end) = last.end {
+                    // Merge when the work gap between the pauses is small enough
+                    // (contiguous, overlapping, or a negligible burst of activity).
+                    let gap = (pause.start - last_end).num_seconds();
+                    if gap <= max_gap_secs {
+                        let new_end = match pause.end {
+                            Some(end) => Some(end.max(last_end)),
+                            None => Some(last_end),
+                        };
+                        last.end = new_end;
+                        if let Some(end) = last.end {
+                            last.duration = Some(TimeDelta::seconds((end - last.start).num_seconds()));
+                        }
+                        continue;
+                    }
+                }
+            }
+            merged.push(pause);
         }
-        Operation {
-            sql_query: String::from(SELECT_DAILY_PAUSES_WITH_LONG_DURATION),
-            duration: String::from("0"),
-        }
+
+        merged
+    }
+
+    /// Returns the active duration threshold in seconds, if any is configured.
+    ///
+    /// Positive value with `min` semantics is expressed through `min_duration`,
+    /// `max` semantics through `max_duration`. Only one of them is ever set.
+    fn duration_threshold_seconds(&self) -> Option<i64> {
+        self.min_duration
+            .as_ref()
+            .or(self.max_duration.as_ref())
+            .and_then(|d| d.parse::<i64>().ok())
     }
 
     /// Records the start of a new pause with the current timestamp.
@@ -354,11 +388,9 @@ impl Pauses {
     pub fn get_daily_pauses(&self, date: NaiveDate) -> Result<Vec<Pause>> {
         let date_str = date.format("%Y-%m-%d").to_string();
         let conn_guard = self.conn.lock();
-        let operation = self.get_operation();
-        // Prepare statement for parameterized query
-        let mut stmt = conn_guard.prepare(&operation.sql_query)?;
-        // Execute query with date and duration filter
-        let pause_iter = stmt.query_map([&date_str, &operation.duration], |row| {
+        // Fetch all completed pauses for the date, ordered chronologically.
+        let mut stmt = conn_guard.prepare(SELECT_DAILY_PAUSES)?;
+        let pause_iter = stmt.query_map([&date_str], |row| {
             // Parse timestamps from database strings
             let start_str: String = row.get(1)?;
             let end_str: Option<String> = row.get(2)?;
@@ -378,6 +410,37 @@ impl Pauses {
         for pause_result in pause_iter {
             pauses.push(pause_result?);
         }
+
+        // Merge consecutive pauses separated only by an insignificant work gap so
+        // that a chain of adjacent pauses is treated as a single continuous pause
+        // before filtering. The gap tolerance is the configured minimum work
+        // interval: a work period shorter than this is not meaningful work and
+        // should not split a break into several sub-threshold pauses.
+        let max_gap_secs = Config::read()
+            .ok()
+            .and_then(|c| c.monitor)
+            .map(|m| (m.min_work_interval * 60) as i64)
+            .unwrap_or(0);
+        let pauses = Self::merge_consecutive_pauses(pauses, max_gap_secs);
+
+        // Apply the configured duration threshold to the merged pauses.
+        let pauses = match (&self.min_duration, &self.max_duration) {
+            (Some(_), _) => {
+                let min = self.duration_threshold_seconds().unwrap_or(0);
+                pauses
+                    .into_iter()
+                    .filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) >= min)
+                    .collect()
+            }
+            (_, Some(_)) => {
+                let max = self.duration_threshold_seconds().unwrap_or(0);
+                pauses
+                    .into_iter()
+                    .filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) < max)
+                    .collect()
+            }
+            _ => pauses,
+        };
 
         Ok(pauses)
     }
