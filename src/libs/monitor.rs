@@ -24,6 +24,7 @@
 //!     poll_interval: 1000,
 //!     min_pause_duration: 30,
 //!     min_work_interval: 15,
+//!     ..Default::default()
 //! };
 //!
 //! let monitor = Monitor::new(config)?;

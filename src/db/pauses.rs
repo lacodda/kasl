@@ -411,15 +411,15 @@ impl Pauses {
             pauses.push(pause_result?);
         }
 
-        // Merge consecutive pauses separated only by an insignificant work gap so
-        // that a chain of adjacent pauses is treated as a single continuous pause
-        // before filtering. The gap tolerance is the configured minimum work
-        // interval: a work period shorter than this is not meaningful work and
-        // should not split a break into several sub-threshold pauses.
+        // Merge consecutive pauses separated only by an insignificant gap so that
+        // a chain of adjacent pauses (split by a stray input) is treated as a
+        // single continuous pause before filtering. The tolerance is the small,
+        // dedicated `pause_merge_gap` setting (in seconds): genuine work periods
+        // between pauses are longer than this and remain separate.
         let max_gap_secs = Config::read()
             .ok()
             .and_then(|c| c.monitor)
-            .map(|m| (m.min_work_interval * 60) as i64)
+            .map(|m| m.pause_merge_gap as i64)
             .unwrap_or(0);
         let pauses = Self::merge_consecutive_pauses(pauses, max_gap_secs);
 

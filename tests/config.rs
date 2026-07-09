@@ -66,6 +66,7 @@ mod tests {
                 poll_interval: ctx.poll_interval,
                 activity_threshold: ctx.activity_threshold,
                 min_work_interval: ctx.min_work_interval,
+                ..Default::default()
             }),
             server: Some(ServerConfig {
                 api_url: ctx.api_url.clone(),

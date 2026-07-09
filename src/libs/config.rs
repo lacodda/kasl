@@ -103,6 +103,26 @@ pub struct MonitorConfig {
     /// fragmentation in work time reports caused by very brief pauses
     /// and helps present cleaner time tracking data.
     pub min_work_interval: u64,
+
+    /// Maximum gap in seconds between two consecutive pauses to merge them.
+    ///
+    /// When the activity monitor briefly registers a stray input between two
+    /// otherwise continuous inactivity periods, it splits a single break into
+    /// several adjacent pause records. Pauses separated by a gap no longer than
+    /// this value are treated as one continuous pause so that sub-threshold
+    /// segments are not dropped from calculations. The value should stay small
+    /// (a few tens of seconds) so that genuine short work periods between pauses
+    /// are preserved rather than swallowed into the break.
+    #[serde(default = "default_pause_merge_gap")]
+    pub pause_merge_gap: u64,
+}
+
+/// Default gap (in seconds) below which consecutive pauses are merged.
+///
+/// Used both by [`MonitorConfig::default`] and by serde when an existing
+/// configuration file predates the `pause_merge_gap` field.
+fn default_pause_merge_gap() -> u64 {
+    30
 }
 
 /// Productivity management configuration settings.
@@ -323,6 +343,7 @@ impl Default for MonitorConfig {
             poll_interval: 500,
             activity_threshold: 30,
             min_work_interval: 10,
+            pause_merge_gap: default_pause_merge_gap(),
         }
     }
 }
@@ -601,6 +622,9 @@ impl Config {
                             .with_prompt(Message::PromptMinWorkInterval.to_string())
                             .default(default.min_work_interval)
                             .interact_text()?,
+
+                        // Preserve the pause-merge gap (edited manually in config.json)
+                        pause_merge_gap: default.pause_merge_gap,
                     });
                 }
 

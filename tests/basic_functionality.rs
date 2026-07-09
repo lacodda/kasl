@@ -59,6 +59,7 @@ mod tests {
                 poll_interval: 1000,
                 activity_threshold: 30,
                 min_work_interval: 10,
+                ..Default::default()
             }),
             server: Some(kasl::libs::config::ServerConfig {
                 api_url: "https://test.example.com".to_string(),
