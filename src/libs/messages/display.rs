@@ -123,11 +123,31 @@ impl Display for Message {
             Message::TaskDeleteFailed => "Failed to delete task".to_string(),
             Message::TasksDeletedCount(count) => format!("Deleted {} task(s) successfully.", count),
             Message::TasksNotFoundForDate(date) => format!("Tasks not found for {}, report not sent.", date),
-            Message::TasksNotFoundSad => "Tasks not found((".to_string(),
+            Message::TasksNotFoundSad => "No tasks found.".to_string(),
             Message::TasksHeader => "Tasks:".to_string(),
             Message::TasksIncompleteHeader => "Incomplete tasks".to_string(),
             Message::TasksGitlabHeader => "Gitlab commits".to_string(),
             Message::TasksJiraHeader => "Jira issues".to_string(),
+            Message::TasksDiscoverySummary {
+                incomplete,
+                jira,
+                gitlab,
+            } => {
+                let mut parts = Vec::new();
+                if *incomplete > 0 {
+                    parts.push(format!("{} incomplete", incomplete));
+                }
+                if *jira > 0 {
+                    parts.push(format!("{} jira", jira));
+                }
+                if *gitlab > 0 {
+                    parts.push(format!("{} gitlab", gitlab));
+                }
+                format!("Found: {}", parts.join(", "))
+            }
+            Message::TasksDiscoverySeparator => "──────── other ────────".to_string(),
+            Message::TasksDiscoverySearchingIncomplete => "Looking for incomplete tasks...".to_string(),
+            Message::TasksDiscoveryFetchingExternal => "Fetching GitLab commits and Jira issues...".to_string(),
             Message::NoTaskIdsProvided => "No task IDs provided for deletion.".to_string(),
             Message::TasksNotFoundForIds(ids) => format!("No tasks found with IDs: {:?}", ids),
             Message::TasksToBeDeleted => "The following tasks will be deleted:".to_string(),
@@ -454,6 +474,7 @@ impl Display for Message {
             Message::PromptSelectModules => "Select nodes to configure".to_string(),
             Message::PromptSelectTasks => "Select tasks".to_string(),
             Message::PromptSelectTasksToEdit => "Select tasks to edit".to_string(),
+            Message::PromptSelectTasksToImport => "Select tasks to import".to_string(),
 
             // === GENERAL MESSAGES ===
             Message::OperationCompleted => "Operation completed successfully".to_string(),

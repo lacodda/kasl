@@ -85,11 +85,21 @@ pub enum Message {
     TaskDeleteFailed,
     TasksDeletedCount(usize),
     TasksNotFoundForDate(String),
-    TasksNotFoundSad, // "Tasks not found(("
+    TasksNotFoundSad,
     TasksHeader,
     TasksIncompleteHeader,
     TasksGitlabHeader,
     TasksJiraHeader,
+    /// Summary line before unified discovery MultiSelect
+    TasksDiscoverySummary {
+        incomplete: usize,
+        jira: usize,
+        gitlab: usize,
+    },
+    /// Non-selectable separator between incomplete and other items
+    TasksDiscoverySeparator,
+    TasksDiscoverySearchingIncomplete,
+    TasksDiscoveryFetchingExternal,
     NoTaskIdsProvided,
     TasksNotFoundForIds(Vec<i32>),
     TasksToBeDeleted,
@@ -391,6 +401,7 @@ pub enum Message {
     PromptSelectModules,
     PromptSelectTasks,
     PromptSelectTasksToEdit,
+    PromptSelectTasksToImport,
 
     // === GENERAL MESSAGES ===
     OperationCompleted,

@@ -42,13 +42,16 @@ use anyhow::Result;
 use chrono::Local;
 use clap::Args;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
+use indicatif::{ProgressBar, ProgressStyle};
+use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 /// Enumeration for identifying task suggestion sources.
 ///
 /// This enum helps distinguish between different sources of task suggestions
 /// during the interactive task finding process, allowing for appropriate
 /// handling and user feedback for each source type.
-#[derive(Debug, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum TaskSource {
     /// Previously created but incomplete local tasks
     Incomplete,
@@ -56,6 +59,96 @@ enum TaskSource {
     Gitlab,
     /// Completed issues from Jira for the current day
     Jira,
+}
+
+/// Candidate discovered from a single source before UI presentation.
+#[derive(Debug, Clone)]
+struct DiscoveryItem {
+    source: TaskSource,
+    task: Task,
+    /// Short GitLab commit SHA when available (display only)
+    short_sha: Option<String>,
+}
+
+impl TaskSource {
+    /// Lower value = higher priority when deduplicating by normalized name.
+    fn priority(self) -> u8 {
+        match self {
+            TaskSource::Incomplete => 0,
+            TaskSource::Jira => 1,
+            TaskSource::Gitlab => 2,
+        }
+    }
+}
+
+/// Normalizes a task/commit name for near-duplicate comparison.
+///
+/// Trims whitespace, collapses internal spaces, lowercases, and strips
+/// trailing punctuation so variants like `"New commit"`, `"New commit."`,
+/// and `" New commit"` map to the same key.
+fn normalize_task_name(name: &str) -> String {
+    let mut s = name.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+
+    loop {
+        let trimmed = s
+            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | '!' | '?' | ':' | '…'))
+            .trim_end();
+        if trimmed.len() == s.len() {
+            break;
+        }
+        s = trimmed.to_string();
+    }
+
+    s
+}
+
+/// Returns true for noisy GitLab commit messages that should not be offered.
+fn is_noise_commit(message: &str) -> bool {
+    let normalized = message.trim().to_lowercase();
+    normalized.starts_with("merge remote-tracking branch")
+        || normalized.starts_with("merge branch ")
+        || normalized == "update webui"
+}
+
+fn format_discovery_item(item: &DiscoveryItem) -> String {
+    match item.source {
+        TaskSource::Incomplete => {
+            format!(
+                "↻ {} — {}%",
+                item.task.name,
+                item.task.completeness.unwrap_or(0)
+            )
+        }
+        TaskSource::Jira => format!("◉ {}", item.task.name),
+        TaskSource::Gitlab => match &item.short_sha {
+            Some(sha) => format!("● {} ({})", item.task.name, sha),
+            None => format!("● {}", item.task.name),
+        },
+    }
+}
+
+/// Keeps one item per normalized name, preferring Incomplete > Jira > GitLab.
+fn dedup_discovery_items(items: Vec<DiscoveryItem>) -> Vec<DiscoveryItem> {
+    let mut best: HashMap<String, DiscoveryItem> = HashMap::new();
+
+    for item in items {
+        let key = normalize_task_name(&item.task.name);
+        match best.get(&key) {
+            Some(existing) if existing.source.priority() <= item.source.priority() => {}
+            _ => {
+                best.insert(key, item);
+            }
+        }
+    }
+
+    let mut result: Vec<DiscoveryItem> = best.into_values().collect();
+    result.sort_by(|a, b| {
+        a.source
+            .priority()
+            .cmp(&b.source.priority())
+            .then_with(|| a.task.name.cmp(&b.task.name))
+    });
+    result
 }
 
 /// Command-line arguments for comprehensive task management.
@@ -317,152 +410,234 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
 
 /// Handles intelligent task discovery from multiple sources.
 ///
-/// This function implements the sophisticated task discovery system that aggregates
-/// potential tasks from various sources and presents them in a unified interface
-/// for selection and import.
-///
-/// ## Discovery Sources
-///
-/// 1. **Incomplete Local Tasks**: Tasks with completion < 100% that haven't been
-///    worked on today, allowing users to continue previous work
-/// 2. **GitLab Commits**: Today's commits from configured repositories, imported
-///    as completed tasks with commit messages as task names
-/// 3. **Jira Issues**: Completed issues from today, imported with issue keys
-///    and summaries as task descriptions
-///
-/// ## Selection Interface
-///
-/// For each source with available tasks, the function:
-/// - Displays a categorized list with appropriate headers
-/// - Allows multi-selection of desired tasks
-/// - Shows task-specific information (completion %, commit messages, etc.)
-/// - Handles source-specific processing for selected items
-///
-/// ## Error Resilience
-///
-/// External API integrations are designed to be resilient:
-/// - Network errors don't crash the application
-/// - API failures are logged but don't prevent local task discovery
-/// - Missing configurations gracefully skip external sources
-/// - Users can still work with local tasks even if external services are down
+/// Aggregates incomplete local tasks, today's GitLab commits, and completed Jira
+/// issues into a single filtered MultiSelect. Shows a spinner while fetching,
+/// deduplicates near-identical names, and prioritizes incomplete tasks above
+/// external imports.
 ///
 /// # Arguments
 ///
 /// * `date` - Current date/time for filtering today's external content
 async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
-    let mut tasks: Vec<(&TaskSource, Vec<Task>)> = Vec::new();
-
-    // Discover incomplete local tasks
-    let incomplete_tasks = Tasks::new()?.fetch(TaskFilter::Incomplete)?;
-    if !incomplete_tasks.is_empty() {
-        tasks.push((&TaskSource::Incomplete, incomplete_tasks));
-    }
-
+    let date_naive = date.date_naive();
     let config = Config::read()?;
+    let gitlab_config = config.gitlab.clone();
+    let jira_config = config.jira.clone();
 
-    // Discover GitLab commits if configured
-    if config.gitlab.is_some() {
-        // Get existing tasks to avoid duplicates
-        let today_tasks = Tasks::new()?.fetch(TaskFilter::Date(date.date_naive()))?;
-        let commits = GitLab::new(&config.gitlab.unwrap()).get_today_commits().await.unwrap_or_default(); // Graceful fallback on error
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::with_template("{spinner:.cyan} {msg}")
+            .unwrap_or_else(|_| ProgressStyle::default_spinner())
+            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
+    );
+    spinner.enable_steady_tick(Duration::from_millis(80));
+    spinner.set_message(Message::TasksDiscoverySearchingIncomplete.to_string());
 
-        let mut gitlab_tasks: Vec<Task> = Vec::new();
-        commits.iter().for_each(|commit| {
-            // Only add commits that aren't already tasks
-            if today_tasks.iter().all(|task| task.name != commit.message) {
-                gitlab_tasks.push(Task::new(&commit.message, "", Some(100)));
+    let incomplete_tasks = Tasks::new()?.fetch(TaskFilter::Incomplete)?;
+    let today_tasks = Tasks::new()?.fetch(TaskFilter::Date(date_naive))?;
+    let today_names: HashSet<String> = today_tasks.iter().map(|t| normalize_task_name(&t.name)).collect();
+
+    spinner.set_message(Message::TasksDiscoveryFetchingExternal.to_string());
+
+    let (commits, jira_issues) = tokio::join!(
+        async {
+            match gitlab_config {
+                Some(cfg) => GitLab::new(&cfg).get_today_commits().await.unwrap_or_default(),
+                None => Vec::new(),
             }
-        });
+        },
+        async {
+            match jira_config {
+                Some(cfg) => {
+                    let mut jira = Jira::new(&cfg);
+                    jira.get_completed_issues(&date_naive).await.unwrap_or_default()
+                }
+                None => Vec::new(),
+            }
+        },
+    );
 
-        if !gitlab_tasks.is_empty() {
-            tasks.push((&TaskSource::Gitlab, gitlab_tasks));
+    spinner.finish_and_clear();
+
+    let mut candidates: Vec<DiscoveryItem> = Vec::new();
+
+    for task in incomplete_tasks {
+        if today_names.contains(&normalize_task_name(&task.name)) {
+            continue;
         }
+        candidates.push(DiscoveryItem {
+            source: TaskSource::Incomplete,
+            task,
+            short_sha: None,
+        });
     }
 
-    // Discover Jira issues if configured
-    if config.jira.is_some() {
-        let jira_issues = Jira::new(&config.jira.unwrap()).get_completed_issues(&date.date_naive()).await?; // Note: Jira errors are propagated unlike GitLab
-
-        let mut jira_tasks: Vec<Task> = Vec::new();
-        jira_issues.iter().for_each(|issue| {
-            let name = format!("{} {}", &issue.key, &issue.fields.summary);
-            jira_tasks.push(Task::new(&name, "", Some(100)));
-        });
-
-        if !jira_tasks.is_empty() {
-            tasks.push((&TaskSource::Jira, jira_tasks));
+    for issue in jira_issues {
+        let name = format!("{} {}", issue.key, issue.fields.summary);
+        if today_names.contains(&normalize_task_name(&name)) {
+            continue;
         }
+        candidates.push(DiscoveryItem {
+            source: TaskSource::Jira,
+            task: Task::new(&name, "", Some(100)),
+            short_sha: None,
+        });
     }
 
-    // Check if any tasks were discovered
-    if tasks.iter().all(|(_, task)| task.is_empty()) {
+    for commit in commits {
+        if is_noise_commit(&commit.message) {
+            continue;
+        }
+        if today_names.contains(&normalize_task_name(&commit.message)) {
+            continue;
+        }
+        let short_sha = if commit.sha.len() >= 7 {
+            Some(commit.sha[..7].to_string())
+        } else if commit.sha.is_empty() {
+            None
+        } else {
+            Some(commit.sha.clone())
+        };
+        candidates.push(DiscoveryItem {
+            source: TaskSource::Gitlab,
+            task: Task::new(&commit.message, "", Some(100)),
+            short_sha,
+        });
+    }
+
+    let items = dedup_discovery_items(candidates);
+
+    if items.is_empty() {
         msg_error!(Message::TasksNotFoundSad);
         return Ok(());
     }
 
-    // Present selection interface for each source
-    let mut selected_tasks: Vec<(&TaskSource, Vec<usize>)> = Vec::new();
-    for (task_source, tasks) in tasks.iter() {
-        // Configure display format based on source type
-        let mut name_format: Box<dyn Fn(&Task) -> String> = Box::new(|task: &Task| task.name.to_owned());
+    let incomplete_count = items.iter().filter(|i| i.source == TaskSource::Incomplete).count();
+    let jira_count = items.iter().filter(|i| i.source == TaskSource::Jira).count();
+    let gitlab_count = items.iter().filter(|i| i.source == TaskSource::Gitlab).count();
 
-        match task_source {
-            TaskSource::Incomplete => {
-                msg_print!(Message::TasksIncompleteHeader, true);
-                name_format = Box::new(|task: &Task| format!("{} - {}%", task.name, task.completeness.unwrap_or(0)));
-            }
-            TaskSource::Gitlab => msg_print!(Message::TasksGitlabHeader, true),
-            TaskSource::Jira => msg_print!(Message::TasksJiraHeader, true),
+    msg_print!(
+        Message::TasksDiscoverySummary {
+            incomplete: incomplete_count,
+            jira: jira_count,
+            gitlab: gitlab_count,
+        },
+        true
+    );
+
+    // Build one MultiSelect: incomplete first, optional separator, then the rest.
+    let mut labels: Vec<String> = Vec::new();
+    let mut index_map: Vec<Option<usize>> = Vec::new();
+
+    for (idx, item) in items.iter().enumerate() {
+        if item.source == TaskSource::Incomplete {
+            labels.push(format_discovery_item(item));
+            index_map.push(Some(idx));
         }
-
-        let task_names: Vec<String> = tasks.iter().map(name_format).collect();
-        selected_tasks.push((
-            task_source,
-            MultiSelect::with_theme(&ColorfulTheme::default())
-                .with_prompt(Message::PromptSelectOptions.to_string())
-                .items(&task_names)
-                .interact()
-                .unwrap(),
-        ));
     }
 
-    // Process selected tasks based on their source
-    for (task_source, selected_task_indexes) in selected_tasks {
-        for index in selected_task_indexes {
-            let mut task = tasks.iter().find(|(ts, _)| ts == &task_source).map_or(&vec![], |(_, tasks)| tasks)[index].clone();
+    let has_rest = items.iter().any(|i| i.source != TaskSource::Incomplete);
+    if incomplete_count > 0 && has_rest {
+        labels.push(Message::TasksDiscoverySeparator.to_string());
+        index_map.push(None);
+    }
 
-            match task_source {
-                TaskSource::Incomplete => {
-                    // Handle incomplete task continuation
-                    msg_print!(Message::SelectingTask(task.name.clone()));
+    for (idx, item) in items.iter().enumerate() {
+        if item.source != TaskSource::Incomplete {
+            labels.push(format_discovery_item(item));
+            index_map.push(Some(idx));
+        }
+    }
 
-                    // Ensure task_id is properly set for continuation
-                    if task.task_id.is_none() || task.task_id.is_some_and(|id| id == 0) {
-                        task.task_id = task.id;
-                    }
+    let selected = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptSelectTasksToImport.to_string())
+        .items(&labels)
+        .interact()
+        .unwrap_or_default();
 
-                    // Prompt for updated completion percentage
-                    let default_completeness = (task.completeness.unwrap() + 1).min(100);
-                    task.completeness = Some(
-                        Input::with_theme(&ColorfulTheme::default())
-                            .allow_empty(true)
-                            .with_prompt(Message::PromptTaskCompleteness.to_string())
-                            .default(default_completeness)
-                            .interact_text()
-                            .unwrap(),
-                    );
-                }
-                _ => {
-                    // GitLab and Jira tasks are imported as-is (already complete)
-                }
+    for sel in selected {
+        let Some(item_idx) = index_map.get(sel).copied().flatten() else {
+            continue; // separator or out of range
+        };
+        let Some(item) = items.get(item_idx) else {
+            continue;
+        };
+
+        let mut task = item.task.clone();
+
+        if item.source == TaskSource::Incomplete {
+            msg_print!(Message::SelectingTask(task.name.clone()));
+
+            if task.task_id.is_none() || task.task_id.is_some_and(|id| id == 0) {
+                task.task_id = task.id;
             }
 
-            // Insert the task into the database
-            let _ = Tasks::new()?.insert(&task);
+            let default_completeness = (task.completeness.unwrap_or(0) + 1).min(100);
+            task.completeness = Some(
+                Input::with_theme(&ColorfulTheme::default())
+                    .allow_empty(true)
+                    .with_prompt(Message::PromptTaskCompleteness.to_string())
+                    .default(default_completeness)
+                    .interact_text()
+                    .unwrap(),
+            );
         }
+
+        let _ = Tasks::new()?.insert(&task);
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_collapses_whitespace_and_punctuation() {
+        assert_eq!(normalize_task_name("New commit"), "new commit");
+        assert_eq!(normalize_task_name("New commit "), "new commit");
+        assert_eq!(normalize_task_name("New commit."), "new commit");
+        assert_eq!(normalize_task_name(" New commit"), "new commit");
+        assert_eq!(normalize_task_name("New  commit..."), "new commit");
+    }
+
+    #[test]
+    fn noise_commit_filters_merge_and_update_webui() {
+        assert!(is_noise_commit(
+            "Merge remote-tracking branch 'origin/release/4.39.0' into feature/x"
+        ));
+        assert!(is_noise_commit("Merge branch 'main' into feature/x"));
+        assert!(is_noise_commit("update webui"));
+        assert!(is_noise_commit("  Update WebUI  "));
+        assert!(!is_noise_commit("Fix login validation"));
+    }
+
+    #[test]
+    fn dedup_prefers_incomplete_over_jira_over_gitlab() {
+        let items = vec![
+            DiscoveryItem {
+                source: TaskSource::Gitlab,
+                task: Task::new("New commit.", "", Some(100)),
+                short_sha: Some("abc1234".into()),
+            },
+            DiscoveryItem {
+                source: TaskSource::Jira,
+                task: Task::new("New commit", "", Some(100)),
+                short_sha: None,
+            },
+            DiscoveryItem {
+                source: TaskSource::Incomplete,
+                task: Task::new(" New commit", "", Some(40)),
+                short_sha: None,
+            },
+        ];
+
+        let deduped = dedup_discovery_items(items);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].source, TaskSource::Incomplete);
+        assert_eq!(deduped[0].task.name, " New commit");
+    }
 }
 
 /// Handles manual task creation with interactive prompts.
