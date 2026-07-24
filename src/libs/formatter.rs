@@ -23,6 +23,7 @@
 
 use chrono::Duration;
 use serde::{Deserialize, Serialize};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// Represents a formatted time-based event for display purposes.
 ///
@@ -172,4 +173,76 @@ pub fn format_duration(duration: &Duration) -> String {
     // Ensure we don't display negative durations by clamping to zero
     // This handles edge cases where calculations might result in negative values
     format!("{:02}:{:02}", hours.max(0), mins.max(0))
+}
+
+/// Returns the current terminal width in columns, or `100` when unknown.
+pub fn terminal_cols() -> usize {
+    terminal_size::terminal_size()
+        .map(|(w, _)| w.0 as usize)
+        .filter(|&cols| cols > 0)
+        .unwrap_or(100)
+}
+
+/// Truncates `s` to at most `max_width` display columns, appending `…` when cut.
+///
+/// Uses Unicode display width so Cyrillic and ASCII share the same budget.
+pub fn truncate_to_width(s: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    if s.width() <= max_width {
+        return s.to_string();
+    }
+
+    const ELLIPSIS: &str = "…";
+    let ellipsis_width = ELLIPSIS.width();
+    if max_width <= ellipsis_width {
+        return ELLIPSIS.chars().take(max_width).collect();
+    }
+
+    let target = max_width - ellipsis_width;
+    let mut used = 0;
+    let mut end = 0;
+    for (idx, ch) in s.char_indices() {
+        let ch_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if used + ch_width > target {
+            break;
+        }
+        used += ch_width;
+        end = idx + ch.len_utf8();
+    }
+
+    format!("{}{}", &s[..end], ELLIPSIS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_leaves_short_strings_unchanged() {
+        assert_eq!(truncate_to_width("hello", 10), "hello");
+        assert_eq!(truncate_to_width("task name", 20), "task name");
+    }
+
+    #[test]
+    fn truncate_ascii_adds_ellipsis_within_budget() {
+        let truncated = truncate_to_width("abcdefghij", 7);
+        assert_eq!(truncated, "abcdef…");
+        assert_eq!(truncated.width(), 7);
+    }
+
+    #[test]
+    fn truncate_fullwidth_respects_display_width() {
+        // Fullwidth letters have display width 2 each
+        let truncated = truncate_to_width("ＡＢＣＤＥＦ", 7);
+        assert_eq!(truncated, "ＡＢＣ…");
+        assert_eq!(truncated.width(), 7);
+    }
+
+    #[test]
+    fn truncate_zero_width_returns_empty() {
+        assert_eq!(truncate_to_width("hello", 0), "");
+    }
 }

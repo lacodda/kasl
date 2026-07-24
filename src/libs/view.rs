@@ -23,15 +23,16 @@
 use super::task::Task;
 use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
-use crate::libs::formatter::format_duration;
+use crate::libs::formatter::{format_duration, terminal_cols, truncate_to_width};
 use crate::libs::messages::Message;
 use crate::libs::pause::Pause;
 use crate::libs::report;
 use crate::msg_print;
 use anyhow::Result;
 use chrono::{Duration, NaiveDate, TimeDelta};
-use prettytable::{format, row, Table};
+use prettytable::{format, row, Cell, Row, Table};
 use std::collections::HashMap;
+use unicode_width::UnicodeWidthStr;
 
 /// A utility struct for rendering application data to the console.
 ///
@@ -54,30 +55,104 @@ impl View {
     /// Returns `Ok(())` on successful table rendering, or an error if
     /// the table cannot be displayed due to terminal or formatting issues.
     pub fn tasks(tasks: &[Task]) -> Result<()> {
-        // Initialize table with clean formatting suitable for task data
-        let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["#", "ID", "TASK ID", "NAME", "COMMENT", "COMPLETENESS", "TAGS"]);
+        let show_task_id = tasks.iter().any(|t| t.task_id.is_some_and(|id| id != 0));
+        let show_comment = tasks.iter().any(|t| !t.comment.trim().is_empty());
+        let show_tags = tasks.iter().any(|t| !t.tags.is_empty());
 
-        // Populate table with task data, adding sequential numbering
-        for (index, task) in tasks.iter().enumerate() {
-            // Format tags as a comma-separated string for compact display
-            let tags_str = task.tags.iter().map(|t| t.name.clone()).collect::<Vec<_>>().join(", ");
+        let idx_width = tasks.len().to_string().width().max("#".width());
+        let id_width = tasks
+            .iter()
+            .map(|t| t.id.unwrap_or(0).to_string().width())
+            .max()
+            .unwrap_or(1)
+            .max("ID".width());
+        let task_id_width = if show_task_id {
+            tasks
+                .iter()
+                .map(|t| t.task_id.unwrap_or(0).to_string().width())
+                .max()
+                .unwrap_or(1)
+                .max("TASK ID".width())
+        } else {
+            0
+        };
+        let done_width = "DONE".width().max("100%".width());
 
-            table.add_row(row![
-                index + 1,                                        // Human-friendly 1-based indexing for selection
-                task.id.unwrap_or(0),                             // Database ID, showing 0 for new tasks
-                task.task_id.unwrap_or(0),                        // External task ID (Jira, GitLab, etc.)
-                task.name,                                        // Task title or summary
-                task.comment,                                     // Additional notes or description
-                format!("{}%", task.completeness.unwrap_or(100)), // Completion percentage with % symbol
-                tags_str                                          // Formatted tag list
-            ]);
+        // prettytable cell format: `| content |` → 3 chars overhead per column + 1 outer border
+        let mut num_cols = 4; // #, ID, NAME, DONE
+        if show_task_id {
+            num_cols += 1;
+        }
+        if show_comment {
+            num_cols += 1;
+        }
+        if show_tags {
+            num_cols += 1;
         }
 
-        // Render the table to standard output
-        table.printstd();
+        let mut fixed_content = idx_width + id_width + done_width;
+        if show_task_id {
+            fixed_content += task_id_width;
+        }
 
+        let frame_overhead = 3 * num_cols + 1;
+        let mut flexible = terminal_cols().saturating_sub(frame_overhead + fixed_content);
+
+        // Reserve a modest slice for optional text columns; NAME gets the rest.
+        let tags_width = if show_tags {
+            let width = (flexible / 5).clamp(8, 20);
+            flexible = flexible.saturating_sub(width);
+            width
+        } else {
+            0
+        };
+        let comment_width = if show_comment {
+            let width = (flexible / 3).clamp(12, 40);
+            flexible = flexible.saturating_sub(width);
+            width
+        } else {
+            0
+        };
+        let name_width = flexible.max(12);
+
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+
+        let mut titles = vec![Cell::new("#"), Cell::new("ID")];
+        if show_task_id {
+            titles.push(Cell::new("TASK ID"));
+        }
+        titles.push(Cell::new("NAME"));
+        if show_comment {
+            titles.push(Cell::new("COMMENT"));
+        }
+        titles.push(Cell::new("DONE"));
+        if show_tags {
+            titles.push(Cell::new("TAGS"));
+        }
+        table.set_titles(Row::new(titles));
+
+        for (index, task) in tasks.iter().enumerate() {
+            let mut cells = vec![
+                Cell::new(&(index + 1).to_string()),
+                Cell::new(&task.id.unwrap_or(0).to_string()),
+            ];
+            if show_task_id {
+                cells.push(Cell::new(&task.task_id.unwrap_or(0).to_string()));
+            }
+            cells.push(Cell::new(&truncate_to_width(&task.name, name_width)));
+            if show_comment {
+                cells.push(Cell::new(&truncate_to_width(task.comment.trim(), comment_width)));
+            }
+            cells.push(Cell::new(&format!("{}%", task.completeness.unwrap_or(100))));
+            if show_tags {
+                let tags_str = task.tags.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ");
+                cells.push(Cell::new(&truncate_to_width(&tags_str, tags_width)));
+            }
+            table.add_row(Row::new(cells));
+        }
+
+        table.printstd();
         Ok(())
     }
 
