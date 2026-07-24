@@ -26,7 +26,8 @@ use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
 use crate::libs::messages::Message;
-use crate::{msg_error, msg_print};
+use crate::libs::task::normalize_task_name;
+use crate::{msg_error, msg_info, msg_print, msg_success};
 use anyhow::Result;
 use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
 use serde::{Deserialize, Serialize};
@@ -312,6 +313,41 @@ pub struct Config {
     /// exporting reports without an explicit output path.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub report: Option<ReportConfig>,
+
+    /// Task discovery settings for `kasl task --find`.
+    ///
+    /// Holds the ignore list used to filter out noisy commits and tasks.
+    /// When absent, built-in defaults are applied at runtime.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_discovery: Option<TaskDiscoveryConfig>,
+}
+
+/// Settings for intelligent task discovery (`kasl task --find`).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct TaskDiscoveryConfig {
+    /// Names/prefixes of tasks and commits to exclude from discovery.
+    ///
+    /// Matching is case-insensitive after normalization; a pattern matches
+    /// when the candidate name equals it or starts with it.
+    #[serde(default = "default_ignore_names")]
+    pub ignore_names: Vec<String>,
+}
+
+/// Built-in ignore patterns moved from the former hardcoded noise filter.
+pub fn default_ignore_names() -> Vec<String> {
+    vec![
+        "Merge remote-tracking branch".to_string(),
+        "Merge branch ".to_string(),
+        "update webui".to_string(),
+    ]
+}
+
+impl Default for TaskDiscoveryConfig {
+    fn default() -> Self {
+        Self {
+            ignore_names: default_ignore_names(),
+        }
+    }
 }
 
 impl Default for MonitorConfig {
@@ -389,6 +425,7 @@ impl Default for Config {
             server: None,
             productivity: None,
             report: None,
+            task_discovery: None,
         }
     }
 }
@@ -494,6 +531,45 @@ impl Config {
         Ok(())
     }
 
+    /// Returns the ignore list for task discovery.
+    ///
+    /// When `task_discovery` is not configured, returns the built-in defaults.
+    pub fn effective_ignore_names(&self) -> Vec<String> {
+        self.task_discovery
+            .as_ref()
+            .map(|c| c.ignore_names.clone())
+            .unwrap_or_else(default_ignore_names)
+    }
+
+    /// Appends unique names to the discovery ignore list and saves the config.
+    ///
+    /// Uniqueness is determined by [`normalize_task_name`]. Returns how many
+    /// new entries were added.
+    pub fn add_ignore_names(&mut self, names: &[String]) -> Result<usize> {
+        let mut discovery = self.task_discovery.clone().unwrap_or_default();
+        let mut added = 0;
+
+        for name in names {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let key = normalize_task_name(trimmed);
+            let exists = discovery
+                .ignore_names
+                .iter()
+                .any(|existing| normalize_task_name(existing) == key);
+            if !exists {
+                discovery.ignore_names.push(trimmed.to_string());
+                added += 1;
+            }
+        }
+
+        self.task_discovery = Some(discovery);
+        self.save()?;
+        Ok(added)
+    }
+
     /// Runs an interactive configuration setup wizard.
     ///
     /// This method provides a comprehensive guided setup experience that allows
@@ -571,6 +647,10 @@ impl Config {
             ConfigModule {
                 key: "report".to_string(),
                 name: "Report".to_string(),
+            },
+            ConfigModule {
+                key: "task_discovery".to_string(),
+                name: "Task discovery".to_string(),
             },
         ];
 
@@ -722,6 +802,13 @@ impl Config {
                         template: if template.trim().is_empty() { None } else { Some(template) },
                     });
                 }
+
+                "task_discovery" => {
+                    config.task_discovery = Some(configure_task_discovery(
+                        config.task_discovery.clone().unwrap_or_default(),
+                    )?);
+                }
+
                 _ => {} // Unknown module keys are safely ignored
             }
         }
@@ -849,4 +936,60 @@ impl Config {
 
         Ok(())
     }
+}
+
+/// Interactive editor for the task discovery ignore list.
+fn configure_task_discovery(mut discovery: TaskDiscoveryConfig) -> Result<TaskDiscoveryConfig> {
+    msg_print!(Message::ConfigModuleTaskDiscovery, true);
+
+    if discovery.ignore_names.is_empty() {
+        msg_info!(Message::TaskDiscoveryIgnoreListEmpty);
+    } else {
+        msg_print!(Message::TaskDiscoveryIgnoreListHeader, true);
+        for (idx, name) in discovery.ignore_names.iter().enumerate() {
+            println!("  {}. {}", idx + 1, name);
+        }
+        println!();
+
+        let remove = MultiSelect::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptSelectIgnoreNamesToRemove.to_string())
+            .items(&discovery.ignore_names)
+            .interact()?;
+
+        if !remove.is_empty() {
+            let mut keep = Vec::new();
+            for (idx, name) in discovery.ignore_names.iter().enumerate() {
+                if !remove.contains(&idx) {
+                    keep.push(name.clone());
+                }
+            }
+            discovery.ignore_names = keep;
+        }
+    }
+
+    loop {
+        let name: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptAddIgnoreName.to_string())
+            .allow_empty(true)
+            .interact_text()?;
+
+        let trimmed = name.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+
+        let key = normalize_task_name(trimmed);
+        let exists = discovery
+            .ignore_names
+            .iter()
+            .any(|existing| normalize_task_name(existing) == key);
+        if exists {
+            msg_info!(Message::TaskDiscoveryIgnoreNameExists(trimmed.to_string()));
+        } else {
+            discovery.ignore_names.push(trimmed.to_string());
+            msg_success!(Message::TaskDiscoveryIgnoreNameAdded(trimmed.to_string()));
+        }
+    }
+
+    Ok(discovery)
 }

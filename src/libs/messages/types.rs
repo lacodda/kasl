@@ -145,6 +145,12 @@ pub enum Message {
     ConfigModuleMonitor,
     ConfigModuleServer,
     ConfigModuleProductivity,
+    ConfigModuleTaskDiscovery,
+    TaskDiscoveryIgnoreListHeader,
+    TaskDiscoveryIgnoreListEmpty,
+    TaskDiscoveryIgnoreNameAdded(String),
+    TaskDiscoveryIgnoreNameExists(String),
+    TaskDiscoveryIgnoreNamesAdded(usize),
 
     // === REPORT MESSAGES ===
     DailyReportSent(String),   // date
@@ -402,6 +408,9 @@ pub enum Message {
     PromptSelectTasks,
     PromptSelectTasksToEdit,
     PromptSelectTasksToImport,
+    PromptSelectTasksToIgnore,
+    PromptSelectIgnoreNamesToRemove,
+    PromptAddIgnoreName,
 
     // === GENERAL MESSAGES ===
     OperationCompleted,

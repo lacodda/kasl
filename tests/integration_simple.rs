@@ -136,6 +136,8 @@ mod tests {
             gitlab: None,
             jira: None,
             productivity: None,
+            report: None,
+            task_discovery: None,
         };
         
         let save_result = config.save();

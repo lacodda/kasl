@@ -195,6 +195,14 @@ impl Display for Message {
             Message::ConfigModuleMonitor => "Monitor settings".to_string(),
             Message::ConfigModuleServer => "Server settings".to_string(),
             Message::ConfigModuleProductivity => "Productivity settings".to_string(),
+            Message::ConfigModuleTaskDiscovery => "Task discovery settings".to_string(),
+            Message::TaskDiscoveryIgnoreListHeader => "Current ignore list:".to_string(),
+            Message::TaskDiscoveryIgnoreListEmpty => "Ignore list is empty.".to_string(),
+            Message::TaskDiscoveryIgnoreNameAdded(name) => format!("Added '{}' to ignore list.", name),
+            Message::TaskDiscoveryIgnoreNameExists(name) => format!("'{}' is already in the ignore list.", name),
+            Message::TaskDiscoveryIgnoreNamesAdded(count) => {
+                format!("Added {} name(s) to the discovery ignore list.", count)
+            }
 
             // === REPORT MESSAGES ===
             Message::DailyReportSent(date) => {
@@ -475,6 +483,9 @@ impl Display for Message {
             Message::PromptSelectTasks => "Select tasks".to_string(),
             Message::PromptSelectTasksToEdit => "Select tasks to edit".to_string(),
             Message::PromptSelectTasksToImport => "Select tasks to import".to_string(),
+            Message::PromptSelectTasksToIgnore => "Select tasks to ignore (optional)".to_string(),
+            Message::PromptSelectIgnoreNamesToRemove => "Select ignore names to remove (optional)".to_string(),
+            Message::PromptAddIgnoreName => "Add ignore name (empty to finish)".to_string(),
 
             // === GENERAL MESSAGES ===
             Message::OperationCompleted => "Operation completed successfully".to_string(),

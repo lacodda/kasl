@@ -49,7 +49,8 @@ kasl task [OPTIONS]
 - `-f, --find`: Discovers and imports tasks from multiple sources in one screen
   - Shows a spinner while searching incomplete local tasks, today's Jira issues, and GitLab commits
   - Presents a single consolidated MultiSelect (incomplete tasks first, then a separator, then Jira/GitLab)
-  - Filters out tasks already logged today, noisy merge commits, `update webui`, and near-duplicate names
+  - Filters out tasks already logged today, near-duplicate names, and names from `task_discovery.ignore_names`
+  - After import selection, optionally add items to the persistent ignore list
   - Selected incomplete tasks prompt for an updated completeness percentage before insert
 
 - `--edit <ID>`: Edit a specific task by ID

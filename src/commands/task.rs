@@ -33,7 +33,7 @@ use crate::{
     libs::{
         config::Config,
         messages::Message,
-        task::{Task, TaskFilter},
+        task::{is_ignored_name, normalize_task_name, Task, TaskFilter},
         view::View,
     },
     msg_error, msg_info, msg_print, msg_success,
@@ -79,35 +79,6 @@ impl TaskSource {
             TaskSource::Gitlab => 2,
         }
     }
-}
-
-/// Normalizes a task/commit name for near-duplicate comparison.
-///
-/// Trims whitespace, collapses internal spaces, lowercases, and strips
-/// trailing punctuation so variants like `"New commit"`, `"New commit."`,
-/// and `" New commit"` map to the same key.
-fn normalize_task_name(name: &str) -> String {
-    let mut s = name.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
-
-    loop {
-        let trimmed = s
-            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | '!' | '?' | ':' | '…'))
-            .trim_end();
-        if trimmed.len() == s.len() {
-            break;
-        }
-        s = trimmed.to_string();
-    }
-
-    s
-}
-
-/// Returns true for noisy GitLab commit messages that should not be offered.
-fn is_noise_commit(message: &str) -> bool {
-    let normalized = message.trim().to_lowercase();
-    normalized.starts_with("merge remote-tracking branch")
-        || normalized.starts_with("merge branch ")
-        || normalized == "update webui"
 }
 
 fn format_discovery_item(item: &DiscoveryItem) -> String {
@@ -420,9 +391,10 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
 /// * `date` - Current date/time for filtering today's external content
 async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
     let date_naive = date.date_naive();
-    let config = Config::read()?;
+    let mut config = Config::read()?;
     let gitlab_config = config.gitlab.clone();
     let jira_config = config.jira.clone();
+    let ignore_names = config.effective_ignore_names();
 
     let spinner = ProgressBar::new_spinner();
     spinner.set_style(
@@ -462,6 +434,9 @@ async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
     let mut candidates: Vec<DiscoveryItem> = Vec::new();
 
     for task in incomplete_tasks {
+        if is_ignored_name(&task.name, &ignore_names) {
+            continue;
+        }
         if today_names.contains(&normalize_task_name(&task.name)) {
             continue;
         }
@@ -474,6 +449,9 @@ async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
 
     for issue in jira_issues {
         let name = format!("{} {}", issue.key, issue.fields.summary);
+        if is_ignored_name(&name, &ignore_names) {
+            continue;
+        }
         if today_names.contains(&normalize_task_name(&name)) {
             continue;
         }
@@ -485,7 +463,7 @@ async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
     }
 
     for commit in commits {
-        if is_noise_commit(&commit.message) {
+        if is_ignored_name(&commit.message, &ignore_names) {
             continue;
         }
         if today_names.contains(&normalize_task_name(&commit.message)) {
@@ -586,12 +564,39 @@ async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
         let _ = Tasks::new()?.insert(&task);
     }
 
+    // Optional: add selected discovery items to the persistent ignore list.
+    let ignore_selected = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptSelectTasksToIgnore.to_string())
+        .items(&labels)
+        .interact()
+        .unwrap_or_default();
+
+    if !ignore_selected.is_empty() {
+        let mut names_to_ignore = Vec::new();
+        for sel in ignore_selected {
+            let Some(item_idx) = index_map.get(sel).copied().flatten() else {
+                continue;
+            };
+            if let Some(item) = items.get(item_idx) {
+                names_to_ignore.push(item.task.name.clone());
+            }
+        }
+
+        if !names_to_ignore.is_empty() {
+            let added = config.add_ignore_names(&names_to_ignore)?;
+            if added > 0 {
+                msg_success!(Message::TaskDiscoveryIgnoreNamesAdded(added));
+            }
+        }
+    }
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::libs::config::default_ignore_names;
 
     #[test]
     fn normalize_collapses_whitespace_and_punctuation() {
@@ -603,14 +608,27 @@ mod tests {
     }
 
     #[test]
-    fn noise_commit_filters_merge_and_update_webui() {
-        assert!(is_noise_commit(
-            "Merge remote-tracking branch 'origin/release/4.39.0' into feature/x"
+    fn default_ignore_filters_merge_and_update_webui_but_not_update_alert() {
+        let ignore = default_ignore_names();
+        assert!(!ignore.iter().any(|n| normalize_task_name(n) == "update alert"));
+
+        assert!(is_ignored_name(
+            "Merge remote-tracking branch 'origin/release/4.39.0' into feature/x",
+            &ignore
         ));
-        assert!(is_noise_commit("Merge branch 'main' into feature/x"));
-        assert!(is_noise_commit("update webui"));
-        assert!(is_noise_commit("  Update WebUI  "));
-        assert!(!is_noise_commit("Fix login validation"));
+        assert!(is_ignored_name("Merge branch 'main' into feature/x", &ignore));
+        assert!(is_ignored_name("update webui", &ignore));
+        assert!(is_ignored_name("  Update WebUI  ", &ignore));
+        assert!(!is_ignored_name("update alert", &ignore));
+        assert!(!is_ignored_name("Fix login validation", &ignore));
+    }
+
+    #[test]
+    fn custom_ignore_list_filters_update_alert() {
+        let mut ignore = default_ignore_names();
+        ignore.push("update alert".to_string());
+        assert!(is_ignored_name("update alert", &ignore));
+        assert!(is_ignored_name("Update alert.", &ignore));
     }
 
     #[test]

@@ -886,3 +886,34 @@ impl FormatTasks for Vec<Task> {
             .join("\n")
     }
 }
+
+/// Normalizes a task/commit name for near-duplicate and ignore-list comparison.
+///
+/// Trims whitespace, collapses internal spaces, lowercases, and strips
+/// trailing punctuation so variants like `"New commit"`, `"New commit."`,
+/// and `" New commit"` map to the same key.
+pub fn normalize_task_name(name: &str) -> String {
+    let mut s = name.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+
+    loop {
+        let trimmed = s
+            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | '!' | '?' | ':' | '…'))
+            .trim_end();
+        if trimmed.len() == s.len() {
+            break;
+        }
+        s = trimmed.to_string();
+    }
+
+    s
+}
+
+/// Returns true when `name` matches an ignore pattern exactly or by prefix
+/// (after normalization). Used for task discovery filtering.
+pub fn is_ignored_name(name: &str, ignore_names: &[String]) -> bool {
+    let n = normalize_task_name(name);
+    ignore_names.iter().any(|pat| {
+        let p = normalize_task_name(pat);
+        !p.is_empty() && (n == p || n.starts_with(&p))
+    })
+}
