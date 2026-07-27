@@ -454,7 +454,8 @@ impl Display for Message {
             Message::EncryptionIvMustBeSet => "ENCRYPTION_IV must be set".to_string(),
 
             // === PROMPTS ===
-            Message::PromptTaskName => "Enter task name".to_string(),
+            Message::PromptTaskName => "Enter task name (multi-line paste OK)".to_string(),
+            Message::TaskNameMergedFromPaste => "Merged pasted lines into the task name.".to_string(),
             Message::PromptTaskComment => "Enter comment".to_string(),
             Message::PromptTaskCompleteness => "Enter completeness".to_string(),
             Message::PromptGitlabToken => "Enter your GitLab private token".to_string(),

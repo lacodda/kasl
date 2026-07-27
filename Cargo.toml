@@ -80,7 +80,7 @@ dotenv = "0.15.0" # Environment variables during build
 
 # Platform-specific dependencies for Unix systems
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.30.1", features = ["process"] }
+nix = { version = "0.30.1", features = ["process", "poll"] }
 
 # Platform-specific dependencies for Windows
 [target.'cfg(windows)'.dependencies]
@@ -90,6 +90,14 @@ winapi = { version = "0.3", features = [
     "handleapi",
     "errhandlingapi",
     "securitybaseapi",
+    "processenv",
+    "winbase",
+    "namedpipeapi",
+    "fileapi",
+    "minwindef",
+    "consoleapi",
+    "synchapi",
+    "wincontypes",
 ] }
 
 # Development dependencies for testing

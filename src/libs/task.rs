@@ -279,8 +279,8 @@ impl Task {
             id: None,
             task_id: None,
             timestamp: None,
-            name: name.to_string(),
-            comment: comment.to_string(),
+            name: collapse_whitespace(name),
+            comment: collapse_whitespace(comment),
             completeness,
             excluded_from_search: None,
             tags: Vec::new(),
@@ -887,13 +887,25 @@ impl FormatTasks for Vec<Task> {
     }
 }
 
+/// Replaces newlines and other whitespace runs with single spaces and trims.
+///
+/// Useful when pasting multi-line titles into `kasl task` prompts:
+/// ```text
+/// PROJ-42
+/// Fix login redirect
+/// ```
+/// becomes `PROJ-42 Fix login redirect`.
+pub fn collapse_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Normalizes a task/commit name for near-duplicate and ignore-list comparison.
 ///
 /// Trims whitespace, collapses internal spaces, lowercases, and strips
 /// trailing punctuation so variants like `"New commit"`, `"New commit."`,
 /// and `" New commit"` map to the same key.
 pub fn normalize_task_name(name: &str) -> String {
-    let mut s = name.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase();
+    let mut s = collapse_whitespace(name).to_lowercase();
 
     loop {
         let trimmed = s

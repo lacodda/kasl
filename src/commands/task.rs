@@ -33,7 +33,8 @@ use crate::{
     libs::{
         config::Config,
         messages::Message,
-        task::{is_ignored_name, normalize_task_name, Task, TaskFilter},
+        stdin_drain::drain_available_stdin_lines,
+        task::{collapse_whitespace, is_ignored_name, normalize_task_name, Task, TaskFilter},
         view::View,
     },
     msg_error, msg_info, msg_print, msg_success,
@@ -608,6 +609,25 @@ mod tests {
     }
 
     #[test]
+    fn collapse_whitespace_turns_newlines_into_spaces() {
+        let pasted = "PROJ-42\nFix login redirect for OAuth callback\r\n";
+        assert_eq!(
+            collapse_whitespace(pasted),
+            "PROJ-42 Fix login redirect for OAuth callback"
+        );
+        assert_eq!(collapse_whitespace("  spaced   out  "), "spaced out");
+    }
+
+    #[test]
+    fn looks_like_issue_key_detects_jira_keys() {
+        assert!(looks_like_issue_key("PROJ-42"));
+        assert!(looks_like_issue_key("ABC-1001"));
+        assert!(!looks_like_issue_key("PROJ-42 summary"));
+        assert!(!looks_like_issue_key("update alert"));
+        assert!(!looks_like_issue_key(""));
+    }
+
+    #[test]
     fn default_ignore_filters_merge_and_update_webui_but_not_update_alert() {
         let ignore = default_ignore_names();
         assert!(!ignore.iter().any(|n| normalize_task_name(n) == "update alert"));
@@ -654,8 +674,37 @@ mod tests {
         let deduped = dedup_discovery_items(items);
         assert_eq!(deduped.len(), 1);
         assert_eq!(deduped[0].source, TaskSource::Incomplete);
-        assert_eq!(deduped[0].task.name, " New commit");
+        assert_eq!(deduped[0].task.name, "New commit");
     }
+}
+
+/// Prompts for a task name and absorbs leftover multi-line paste from stdin.
+fn prompt_task_name_interactive() -> String {
+    let raw = crate::libs::stdin_drain::read_pastable_line(&Message::PromptTaskName.to_string())
+        .unwrap_or_default();
+    let name = collapse_whitespace(&raw);
+    if raw.lines().filter(|l| !l.trim().is_empty()).count() > 1 {
+        msg_info!(Message::TaskNameMergedFromPaste);
+    }
+    if !name.is_empty() {
+        println!("✔ {}", name);
+    }
+    name
+}
+
+/// Returns true for bare issue keys like `PROJ-42` (typical first line of a ticket paste).
+fn looks_like_issue_key(name: &str) -> bool {
+    let name = name.trim();
+    if name.is_empty() || name.chars().any(|c| c.is_whitespace()) {
+        return false;
+    }
+    let Some((prefix, rest)) = name.split_once('-') else {
+        return false;
+    };
+    !prefix.is_empty()
+        && prefix.chars().all(|c| c.is_ascii_alphanumeric())
+        && !rest.is_empty()
+        && rest.chars().all(|c| c.is_ascii_digit())
 }
 
 /// Handles manual task creation with interactive prompts.
@@ -670,20 +719,41 @@ mod tests {
 /// * `task_args` - Command-line arguments containing optional task information
 async fn handle_task_creation(task_args: TaskArgs) -> Result<()> {
     // Collect task information (from args or interactive prompts)
-    let name = task_args.name.unwrap_or_else(|| {
-        Input::with_theme(&ColorfulTheme::default())
-            .with_prompt(Message::PromptTaskName.to_string())
-            .interact_text()
-            .unwrap()
-    });
+    let name_from_args = task_args.name.is_some();
+    let comment_from_args = task_args.comment.is_some();
 
-    let comment = task_args.comment.unwrap_or_else(|| {
-        Input::with_theme(&ColorfulTheme::default())
+    let mut name = match task_args.name {
+        Some(n) => collapse_whitespace(&n),
+        None => prompt_task_name_interactive(),
+    };
+
+    let mut comment = match task_args.comment {
+        Some(c) => collapse_whitespace(&c),
+        None => {
+            let raw: String = Input::with_theme(&ColorfulTheme::default())
+                .allow_empty(true)
+                .with_prompt(Message::PromptTaskComment.to_string())
+                .interact_text()
+                .unwrap();
+            collapse_whitespace(&raw)
+        }
+    };
+
+    // Fallback: multi-line paste often lands as name=KEY + comment=summary when stdin
+    // drain is unavailable (native console). Rejoin and ask for a real comment again.
+    if !name_from_args && !comment_from_args && looks_like_issue_key(&name) && !comment.is_empty() {
+        name = collapse_whitespace(&format!("{} {}", name, comment));
+        msg_info!(Message::TaskNameMergedFromPaste);
+        let raw: String = Input::with_theme(&ColorfulTheme::default())
             .allow_empty(true)
             .with_prompt(Message::PromptTaskComment.to_string())
             .interact_text()
-            .unwrap()
-    });
+            .unwrap();
+        comment = collapse_whitespace(&raw);
+    }
+
+    // Discard any remaining paste leftovers before completeness.
+    let _ = drain_available_stdin_lines();
 
     let completeness = task_args.completeness.unwrap_or_else(|| {
         Input::with_theme(&ColorfulTheme::default())
@@ -959,16 +1029,20 @@ async fn handle_edit_interactive() -> Result<()> {
 ///
 /// Returns a new Task instance with updated values from user input.
 fn edit_task_interactive(task: &Task) -> Result<Task> {
-    let name = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTaskNameEdit.to_string())
-        .default(task.name.clone())
-        .interact_text()?;
+    let name = collapse_whitespace(
+        &Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTaskNameEdit.to_string())
+            .default(task.name.clone())
+            .interact_text()?,
+    );
 
-    let comment = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTaskCommentEdit.to_string())
-        .default(task.comment.clone())
-        .allow_empty(true)
-        .interact_text()?;
+    let comment = collapse_whitespace(
+        &Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTaskCommentEdit.to_string())
+            .default(task.comment.clone())
+            .allow_empty(true)
+            .interact_text()?,
+    );
 
     let completeness_range_msg = Message::TaskCompletenessRange.to_string();
     let completeness = Input::with_theme(&ColorfulTheme::default())

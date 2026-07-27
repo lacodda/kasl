@@ -380,6 +380,7 @@ pub enum Message {
 
     // === PROMPTS ===
     PromptTaskName,
+    TaskNameMergedFromPaste,
     PromptTaskComment,
     PromptTaskCompleteness,
     PromptGitlabToken,

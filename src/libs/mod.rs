@@ -37,6 +37,7 @@ pub mod productivity;
 pub mod report;
 pub mod report_template;
 pub mod secret;
+pub mod stdin_drain;
 pub mod summary;
 pub mod task;
 pub mod update;
