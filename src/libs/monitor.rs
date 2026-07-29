@@ -639,6 +639,13 @@ impl Monitor {
 
         // Only initiate pause if inactivity exceeds the configured threshold
         if idle_time >= Duration::from_secs(self.config.pause_threshold) {
+            let today = Local::now().date_naive();
+            // Do not record pauses before the workday has started — otherwise
+            // pre-work idle creates a pause that ends seconds before workdays.start.
+            if self.workdays.fetch(today)?.is_none() {
+                return Ok(());
+            }
+
             msg_info!(Message::PauseStarted);
 
             // Calculate the actual pause start time by subtracting the threshold

@@ -24,6 +24,7 @@
 //! ```
 
 use crate::db::db::Db;
+use crate::db::workdays::Workday;
 use crate::libs::config::Config;
 use crate::libs::pause::Pause;
 use anyhow::Result;
@@ -445,6 +446,15 @@ impl Pauses {
         Ok(pauses)
     }
 
+    /// Fetches daily pauses and keeps only the portions inside the workday bounds.
+    ///
+    /// Drops pauses entirely before `workday.start` or after `workday.end`, and
+    /// clips straddling pauses to `[workday.start, workday.end]`.
+    pub fn get_workday_pauses(&self, workday: &Workday) -> Result<Vec<Pause>> {
+        let pauses = self.get_daily_pauses(workday.date)?;
+        Ok(filter_pauses_to_workday(pauses, workday))
+    }
+
     /// Deletes a single pause record by its unique identifier.
     ///
     /// This method removes a specific pause record from the database,
@@ -538,5 +548,120 @@ impl Pauses {
         }
 
         Ok(deleted)
+    }
+}
+
+/// Keeps only pause portions that fall inside the workday time bounds.
+///
+/// - Drops pauses that end at or before `workday.start`
+/// - Drops open-ended pauses that start before `workday.start`
+/// - Drops pauses that start at or after `workday.end` (when end is set)
+/// - Clips straddling pauses to `[workday.start, workday.end]` and recomputes duration
+pub fn filter_pauses_to_workday(pauses: Vec<Pause>, workday: &Workday) -> Vec<Pause> {
+    let work_start = workday.start;
+    let work_end = workday.end;
+
+    pauses
+        .into_iter()
+        .filter_map(|mut pause| {
+            if let Some(end) = pause.end {
+                if end <= work_start {
+                    return None;
+                }
+            } else if pause.start < work_start {
+                return None;
+            }
+
+            if let Some(work_end) = work_end {
+                if pause.start >= work_end {
+                    return None;
+                }
+            }
+
+            if pause.start < work_start {
+                pause.start = work_start;
+            }
+            if let (Some(end), Some(work_end)) = (pause.end, work_end) {
+                if end > work_end {
+                    pause.end = Some(work_end);
+                }
+            }
+            if let Some(end) = pause.end {
+                if end <= pause.start {
+                    return None;
+                }
+                pause.duration = Some(end - pause.start);
+            }
+
+            Some(pause)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::NaiveDate;
+
+    fn workday(start: &str, end: Option<&str>) -> Workday {
+        Workday {
+            id: 1,
+            date: NaiveDate::from_ymd_opt(2026, 7, 29).unwrap(),
+            start: NaiveDateTime::parse_from_str(start, "%Y-%m-%d %H:%M:%S").unwrap(),
+            end: end.map(|e| NaiveDateTime::parse_from_str(e, "%Y-%m-%d %H:%M:%S").unwrap()),
+        }
+    }
+
+    fn pause(id: i32, start: &str, end: &str) -> Pause {
+        let start = NaiveDateTime::parse_from_str(start, "%Y-%m-%d %H:%M:%S").unwrap();
+        let end = NaiveDateTime::parse_from_str(end, "%Y-%m-%d %H:%M:%S").unwrap();
+        Pause {
+            id,
+            start,
+            end: Some(end),
+            duration: Some(end - start),
+        }
+    }
+
+    #[test]
+    fn drops_pauses_entirely_before_workday_start() {
+        let wd = workday("2026-07-29 10:04:30", None);
+        let pauses = vec![pause(1, "2026-07-29 10:02:23", "2026-07-29 10:04:26")];
+        let filtered = filter_pauses_to_workday(pauses, &wd);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn drops_pauses_entirely_after_workday_end() {
+        let wd = workday("2026-07-29 10:00:00", Some("2026-07-29 18:00:00"));
+        let pauses = vec![pause(1, "2026-07-29 18:30:00", "2026-07-29 18:45:00")];
+        let filtered = filter_pauses_to_workday(pauses, &wd);
+        assert!(filtered.is_empty());
+    }
+
+    #[test]
+    fn clips_pause_that_straddles_workday_start() {
+        let wd = workday("2026-07-29 10:00:00", Some("2026-07-29 18:00:00"));
+        let pauses = vec![pause(1, "2026-07-29 09:50:00", "2026-07-29 10:10:00")];
+        let filtered = filter_pauses_to_workday(pauses, &wd);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered[0].start,
+            NaiveDateTime::parse_from_str("2026-07-29 10:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+        );
+        assert_eq!(
+            filtered[0].end.unwrap(),
+            NaiveDateTime::parse_from_str("2026-07-29 10:10:00", "%Y-%m-%d %H:%M:%S").unwrap()
+        );
+        assert_eq!(filtered[0].duration.unwrap().num_minutes(), 10);
+    }
+
+    #[test]
+    fn keeps_pause_fully_inside_workday() {
+        let wd = workday("2026-07-29 10:00:00", Some("2026-07-29 18:00:00"));
+        let pauses = vec![pause(1, "2026-07-29 12:00:00", "2026-07-29 12:20:00")];
+        let filtered = filter_pauses_to_workday(pauses, &wd);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].duration.unwrap().num_minutes(), 20);
     }
 }

@@ -137,7 +137,9 @@ async fn handle_automatic_break_placement(
 
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let pauses = Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_daily_pauses(date)?;
+    let pauses = Pauses::new()?
+        .set_min_duration(monitor_config.min_pause_duration)
+        .get_workday_pauses(&workday)?;
 
     // Find optimal break placement
     let break_options = find_break_placement_options(&workday, &pauses, minutes, monitor_config.min_work_interval)?;
@@ -214,7 +216,9 @@ async fn handle_interactive_break_creation(date: NaiveDate, productivity_config:
 
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
-    let pauses = Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_daily_pauses(date)?;
+    let pauses = Pauses::new()?
+        .set_min_duration(monitor_config.min_pause_duration)
+        .get_workday_pauses(&workday)?;
 
     // Find break placement options
     let break_options = find_break_placement_options(&workday, &pauses, minutes, monitor_config.min_work_interval)?;

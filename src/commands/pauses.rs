@@ -21,6 +21,7 @@
 //! ```
 
 use crate::db::pauses::Pauses;
+use crate::db::workdays::Workdays;
 use crate::libs::config::Config;
 use crate::libs::messages::Message;
 use crate::libs::view::View;
@@ -90,8 +91,12 @@ pub async fn cmd(args: PausesArgs) -> Result<()> {
     let config = Config::read()?;
     let min_duration = args.min_duration.unwrap_or(config.monitor.unwrap_or_default().min_pause_duration);
 
-    // Fetch pause records from database with duration filtering
-    let pauses = Pauses::new()?.set_min_duration(min_duration).get_daily_pauses(date)?;
+    // Fetch pause records; when a workday exists, keep only in-bounds pauses.
+    let pauses_db = Pauses::new()?.set_min_duration(min_duration);
+    let pauses = match Workdays::new()?.fetch(date)? {
+        Some(workday) => pauses_db.get_workday_pauses(&workday)?,
+        None => pauses_db.get_daily_pauses(date)?,
+    };
 
     // Calculate total pause time for summary statistics
     let total_pause_time = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);

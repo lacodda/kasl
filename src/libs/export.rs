@@ -642,7 +642,7 @@ impl Exporter {
 
         // Collect associated tasks and pause data
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
-        let pauses = Pauses::new()?.get_daily_pauses(date)?;
+        let pauses = Pauses::new()?.get_workday_pauses(&workday)?;
 
         // Determine end time (use current time if workday is still active)
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
@@ -1104,7 +1104,9 @@ impl Exporter {
         let config = Config::read()?;
         let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
         let breaks = Breaks::new()?.get_daily_breaks(date)?;
-        let pauses = Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_daily_pauses(date)?;
+        let pauses = Pauses::new()?
+            .set_min_duration(monitor_config.min_pause_duration)
+            .get_workday_pauses(&workday)?;
         let interruptions = report::combine_breaks_and_pauses(&breaks, &pauses);
 
         let intervals = report::calculate_work_intervals(&workday, &interruptions);

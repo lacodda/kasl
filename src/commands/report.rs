@@ -249,8 +249,8 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let manual_breaks = Breaks::new()?.get_daily_breaks(naive_date)?;
     let long_pauses = Pauses::new()?
         .set_min_duration(monitor_config.min_pause_duration)
-        .get_daily_pauses(naive_date)?;
-    
+        .get_workday_pauses(&workday)?;
+
     // Combine breaks and pauses for accurate work interval calculation
     // This ensures both manual breaks and automatic pauses are considered when calculating work periods
     let combined_interruptions = report::combine_breaks_and_pauses(&manual_breaks, &long_pauses);
@@ -355,8 +355,8 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let manual_breaks = Breaks::new()?.get_daily_breaks(naive_date)?;
     let long_pauses = Pauses::new()?
         .set_min_duration(monitor_config.min_pause_duration)
-        .get_daily_pauses(naive_date)?;
-    
+        .get_workday_pauses(&workday)?;
+
     // Combine breaks and pauses for accurate work interval calculation in API submission
     let combined_interruptions = report::combine_breaks_and_pauses(&manual_breaks, &long_pauses);
 

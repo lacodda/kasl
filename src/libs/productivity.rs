@@ -106,10 +106,10 @@ impl Productivity {
             breaks: Breaks::new()?.get_daily_breaks(workday.date)?,
             short_pauses: Pauses::new()?
                 .set_max_duration(monitor_config.min_pause_duration)
-                .get_daily_pauses(workday.date)?,
+                .get_workday_pauses(workday)?,
             long_pauses: Pauses::new()?
                 .set_min_duration(monitor_config.min_pause_duration)
-                .get_daily_pauses(workday.date)?,
+                .get_workday_pauses(workday)?,
             config: productivity_config,
         })
     }

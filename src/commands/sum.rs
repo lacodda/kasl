@@ -107,7 +107,7 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
         // Fetch filtered long breaks for display purposes
         let long_breaks_duration = Pauses::new()?
             .set_min_duration(monitor_config.min_pause_duration)
-            .get_daily_pauses(workday.date)?
+            .get_workday_pauses(&workday)?
             .iter()
             .filter_map(|b| b.duration)
             .fold(Duration::zero(), |acc, d| acc + d);
