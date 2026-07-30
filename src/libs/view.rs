@@ -438,4 +438,25 @@ impl View {
         table.printstd();
         Ok(())
     }
+
+    /// Displays active Jira inbox items (pinned first, then by priority).
+    pub fn jira_inbox(items: &[crate::db::jira_inbox::JiraInboxItem]) -> Result<()> {
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
+
+        for item in items {
+            let pin = if item.pinned { "★" } else { "" };
+            table.add_row(row![
+                pin,
+                item.priority.as_deref().unwrap_or("—"),
+                item.issue_key,
+                item.status,
+                item.summary,
+            ]);
+        }
+
+        table.printstd();
+        Ok(())
+    }
 }

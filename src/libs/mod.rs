@@ -29,6 +29,7 @@ pub mod daemon;
 pub mod data_storage;
 pub mod export;
 pub mod formatter;
+pub mod jira_inbox;
 pub mod locale;
 pub mod messages;
 pub mod monitor;

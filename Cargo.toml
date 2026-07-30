@@ -92,8 +92,13 @@ dotenv = "0.15.0" # Environment variables during build
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.31.3", features = ["process", "poll"] }
 
+# Desktop toasts on Linux/macOS (XDG / NSUserNotification)
+[target.'cfg(not(windows))'.dependencies]
+notify-rust = "=4.11.0"
+
 # Platform-specific dependencies for Windows
 [target.'cfg(windows)'.dependencies]
+win-toast-notify = "0.1.6"
 winapi = { version = "0.3", features = [
     "processthreadsapi",
     "winnt",

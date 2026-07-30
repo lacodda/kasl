@@ -144,9 +144,14 @@ async fn run_monitor() -> Result<()> {
     // Initialize the activity monitor with configuration
     let mut monitor = Monitor::new(monitor_config)?;
 
-    // Start the main monitoring loop
-    // This will run indefinitely until stopped or an error occurs
-    monitor.run().await
+    // Sibling poller so foreground mode also keeps the Jira inbox warm
+    let inbox_handle = tokio::spawn(async move {
+        crate::libs::jira_inbox::run_poller().await;
+    });
+
+    let result = monitor.run().await;
+    inbox_handle.abort();
+    result
 }
 
 /// Entry point for daemon mode execution.

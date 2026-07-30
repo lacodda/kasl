@@ -123,11 +123,19 @@ pub struct JiraIssueFields {
     /// Issue title/summary (required field in Jira)
     pub summary: String,
     /// Detailed description (may be empty or contain rich text)
+    #[serde(default)]
     pub description: Option<String>,
     /// Current workflow status information
     pub status: JiraStatus,
     /// Date when the issue was resolved (ISO format if completed)
+    #[serde(default)]
     pub resolutiondate: Option<String>,
+    /// Issue priority (Highest / High / Medium / …)
+    #[serde(default)]
+    pub priority: Option<JiraPriority>,
+    /// Last update timestamp from Jira (ISO-8601)
+    #[serde(default)]
+    pub updated: Option<String>,
 }
 
 /// Jira issue status information.
@@ -139,6 +147,19 @@ pub struct JiraIssueFields {
 pub struct JiraStatus {
     /// Status name (e.g., "Done", "In Progress", "Решена" for Russian locale)
     pub name: String,
+}
+
+/// Jira issue priority.
+///
+/// Classic Jira uses numeric ids where lower means higher urgency
+/// (e.g. `"1"` = Highest). Used for inbox sorting.
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JiraPriority {
+    /// Priority display name (e.g. "High", "Highest")
+    pub name: String,
+    /// Numeric priority id as string (lower = more urgent in classic schemes)
+    #[serde(default)]
+    pub id: Option<String>,
 }
 
 /// Response structure for Jira issue search queries.
@@ -473,6 +494,148 @@ impl Jira {
                 }
             }
         }
+    }
+
+    /// Fetches open issues currently assigned to the authenticated user.
+    ///
+    /// Uses JQL `assignee = currentUser() AND resolution is EMPTY`, ordered by
+    /// priority then last update. Requests only the fields needed for the inbox.
+    ///
+    /// Auth failures and network errors return an empty list (same pattern as
+    /// [`get_completed_issues`]) so callers can keep polling safely.
+    pub async fn get_assigned_open_issues(&mut self) -> Result<Vec<JiraIssue>> {
+        let mut local_retries = 0;
+        loop {
+            let session_id = match self.get_session_id().await {
+                Ok(id) => id,
+                Err(_) => return Ok(Vec::new()),
+            };
+
+            let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
+            let mut headers = HeaderMap::new();
+            headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
+            let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+
+            let res = match self
+                .client
+                .get(&url)
+                .headers(headers)
+                .query(&[
+                    ("jql", jql),
+                    ("fields", "summary,status,priority,updated"),
+                    ("maxResults", "100"),
+                ])
+                .send()
+                .await
+            {
+                Ok(response) => response,
+                Err(_) => return Ok(Vec::new()),
+            };
+
+            match res.status() {
+                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
+                    self.delete_session_id()?;
+                    local_retries += 1;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+                status if !status.is_success() => {
+                    return Ok(Vec::new());
+                }
+                _ => {
+                    let search_results = res.json::<JiraSearchResults>().await?;
+                    return Ok(search_results.issues);
+                }
+            }
+        }
+    }
+
+    /// Like [`get_assigned_open_issues`], but never prompts for a password.
+    ///
+    /// Uses a cached session cookie and/or encrypted `.jira_secret`. Returns
+    /// `Ok(None)` when neither is available so background daemons can skip
+    /// the poll without blocking on stdin.
+    pub async fn get_assigned_open_issues_noninteractive(&mut self) -> Result<Option<Vec<JiraIssue>>> {
+        let mut local_retries = 0;
+        loop {
+            let Some(session_id) = self.session_id_noninteractive().await? else {
+                return Ok(None);
+            };
+
+            let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
+            let mut headers = HeaderMap::new();
+            headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
+            let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+
+            let res = match self
+                .client
+                .get(&url)
+                .headers(headers)
+                .query(&[
+                    ("jql", jql),
+                    ("fields", "summary,status,priority,updated"),
+                    ("maxResults", "100"),
+                ])
+                .send()
+                .await
+            {
+                Ok(response) => response,
+                Err(_) => return Ok(Some(Vec::new())),
+            };
+
+            match res.status() {
+                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
+                    let _ = self.delete_session_id();
+                    local_retries += 1;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    continue;
+                }
+                status if !status.is_success() => return Ok(Some(Vec::new())),
+                _ => {
+                    let search_results = res.json::<JiraSearchResults>().await?;
+                    return Ok(Some(search_results.issues));
+                }
+            }
+        }
+    }
+
+    /// Resolves a session from cache / secret without prompting.
+    async fn session_id_noninteractive(&mut self) -> Result<Option<String>> {
+        let session_id_file_path = crate::libs::data_storage::DataStorage::new().get_path(SESSION_ID_FILE)?;
+        let path_str = session_id_file_path.to_str().unwrap_or_default();
+
+        if let Ok(session_id) = Self::read_session_id(path_str) {
+            return Ok(Some(session_id));
+        }
+
+        let Some(password) = self.secret().try_get_cached() else {
+            return Ok(None);
+        };
+
+        self.set_credentials(&password)?;
+        match self.login().await {
+            Ok(session_id) => {
+                let _ = Self::write_session_id(path_str, &session_id);
+                self.reset_retry();
+                Ok(Some(session_id))
+            }
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Builds a browse URL for an issue key using this client's API base.
+    pub fn issue_browse_url(&self, key: &str) -> String {
+        let base = self.config.api_url.trim_end_matches('/');
+        format!("{}/browse/{}", base, key)
+    }
+
+    /// Maps a Jira priority id to a sortable rank (lower = more urgent).
+    pub fn priority_rank(priority: &Option<JiraPriority>) -> i32 {
+        priority
+            .as_ref()
+            .and_then(|p| p.id.as_ref())
+            .and_then(|id| id.parse::<i32>().ok())
+            .unwrap_or(999)
     }
 }
 

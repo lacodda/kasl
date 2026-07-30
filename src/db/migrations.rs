@@ -268,6 +268,34 @@ impl MigrationManager {
             tx.execute("CREATE INDEX idx_breaks_date ON breaks(date)", [])?;
             Ok(())
         });
+
+        // Version 7: Jira inbox for assigned open issues and toast notifications
+        self.add_migration(7, "add_jira_inbox_table", |tx| {
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS jira_inbox (
+                    issue_key TEXT PRIMARY KEY NOT NULL,
+                    issue_id TEXT NOT NULL,
+                    summary TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    priority TEXT,
+                    priority_rank INTEGER NOT NULL DEFAULT 999,
+                    url TEXT NOT NULL,
+                    first_seen TIMESTAMP NOT NULL,
+                    last_seen TIMESTAMP NOT NULL,
+                    notified INTEGER NOT NULL DEFAULT 0,
+                    pinned INTEGER NOT NULL DEFAULT 0,
+                    dismissed INTEGER NOT NULL DEFAULT 0,
+                    raw_updated TEXT
+                )",
+                [],
+            )?;
+            tx.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jira_inbox_active
+                 ON jira_inbox(dismissed, pinned DESC, priority_rank ASC, last_seen DESC)",
+                [],
+            )?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

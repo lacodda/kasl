@@ -146,6 +146,7 @@ pub enum Message {
     ConfigModuleServer,
     ConfigModuleProductivity,
     ConfigModuleTaskDiscovery,
+    ConfigModuleJiraInbox,
     TaskDiscoveryIgnoreListHeader,
     TaskDiscoveryIgnoreListEmpty,
     TaskDiscoveryIgnoreNameAdded(String),
@@ -442,6 +443,23 @@ pub enum Message {
     // === SPECIFIC UI MESSAGES ===
     SelectingTask(String),           // task name
     SelectedTaskFormat(String, i32), // task name, completeness
+
+    // === JIRA INBOX MESSAGES ===
+    JiraInboxRequiresJiraConfig,
+    JiraInboxEmpty,
+    JiraInboxListHeader,
+    JiraInboxSynced { fetched: usize, new_count: usize, updated: usize },
+    JiraInboxNewIssues(usize),
+    JiraInboxNotFound(String),
+    JiraInboxPinned(String),
+    JiraInboxUnpinned(String),
+    JiraInboxDismissed(String),
+    JiraInboxOpened(String),
+    JiraInboxTaken(String),
+    JiraInboxOpenFailed(String),
+    PromptJiraInboxEnabled,
+    PromptJiraInboxPollInterval,
+    PromptJiraInboxNotify,
 
     // === MIGRATION MESSAGES ===
     MigrationsFound(usize),        // count

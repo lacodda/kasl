@@ -127,6 +127,12 @@ pub mod migrations;
 /// manual addition of intentional breaks to improve productivity calculations.
 pub mod breaks;
 
+/// Local inbox of assigned open Jira issues.
+///
+/// Persists issues discovered by the background poller for toast notifications
+/// and CLI selection / import into tasks.
+pub mod jira_inbox;
+
 /// Break and pause tracking operations.
 ///
 /// Manages records of user inactivity periods, break times, and interruptions

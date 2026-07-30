@@ -256,6 +256,18 @@ impl Secret {
         self.prompt()
     }
 
+    /// Returns a cached password without prompting the user.
+    ///
+    /// Used by background daemons that must not block on stdin. Returns
+    /// `None` when the secret file is missing or cannot be decrypted.
+    pub fn try_get_cached(&self) -> Option<String> {
+        if fs::metadata(&self.secret_file_path).is_ok() {
+            self.decrypt().ok()
+        } else {
+            None
+        }
+    }
+
     /// Prompts user for password and stores it securely.
     ///
     /// This method handles the complete password input and storage workflow:

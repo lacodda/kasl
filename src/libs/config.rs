@@ -29,7 +29,7 @@ use crate::libs::messages::Message;
 use crate::libs::task::normalize_task_name;
 use crate::{msg_error, msg_info, msg_print, msg_success};
 use anyhow::Result;
-use dialoguer::{Input, MultiSelect, theme::ColorfulTheme};
+use dialoguer::{Confirm, Input, MultiSelect, theme::ColorfulTheme};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -320,6 +320,46 @@ pub struct Config {
     /// When absent, built-in defaults are applied at runtime.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_discovery: Option<TaskDiscoveryConfig>,
+
+    /// Background Jira inbox polling and toast notifications.
+    ///
+    /// Requires `jira` to be configured. When absent, inbox polling is disabled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jira_inbox: Option<JiraInboxConfig>,
+}
+
+/// Settings for polling assigned open Jira issues into the local inbox.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct JiraInboxConfig {
+    /// Whether the watcher should poll Jira for open assigned issues.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    /// Seconds between Jira inbox polls (default 300 = 5 minutes).
+    #[serde(default = "default_jira_inbox_poll_interval")]
+    pub poll_interval_secs: u64,
+
+    /// Whether to show a desktop toast when a new issue appears.
+    #[serde(default = "default_true")]
+    pub notify: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_jira_inbox_poll_interval() -> u64 {
+    300
+}
+
+impl Default for JiraInboxConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            poll_interval_secs: default_jira_inbox_poll_interval(),
+            notify: true,
+        }
+    }
 }
 
 /// Settings for intelligent task discovery (`kasl task --find`).
@@ -426,6 +466,7 @@ impl Default for Config {
             productivity: None,
             report: None,
             task_discovery: None,
+            jira_inbox: None,
         }
     }
 }
@@ -646,6 +687,10 @@ impl Config {
                 key: "task_discovery".to_string(),
                 name: "Task discovery".to_string(),
             },
+            ConfigModule {
+                key: "jira_inbox".to_string(),
+                name: "Jira inbox".to_string(),
+            },
         ];
 
         // Present multi-select interface for module selection
@@ -799,6 +844,12 @@ impl Config {
 
                 "task_discovery" => {
                     config.task_discovery = Some(configure_task_discovery(config.task_discovery.clone().unwrap_or_default())?);
+                }
+
+                "jira_inbox" => {
+                    config.jira_inbox = Some(configure_jira_inbox(
+                        config.jira_inbox.clone().unwrap_or_default(),
+                    )?);
                 }
 
                 _ => {} // Unknown module keys are safely ignored
@@ -984,4 +1035,30 @@ fn configure_task_discovery(mut discovery: TaskDiscoveryConfig) -> Result<TaskDi
     }
 
     Ok(discovery)
+}
+
+/// Interactive wizard for Jira inbox polling settings.
+fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
+    msg_print!(Message::ConfigModuleJiraInbox, true);
+
+    let enabled = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptJiraInboxEnabled.to_string())
+        .default(default.enabled)
+        .interact()?;
+
+    let poll_interval_secs: u64 = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptJiraInboxPollInterval.to_string())
+        .default(default.poll_interval_secs)
+        .interact_text()?;
+
+    let notify = Confirm::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptJiraInboxNotify.to_string())
+        .default(default.notify)
+        .interact()?;
+
+    Ok(JiraInboxConfig {
+        enabled,
+        poll_interval_secs: poll_interval_secs.max(30),
+        notify,
+    })
 }

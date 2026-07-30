@@ -192,6 +192,7 @@ impl Display for Message {
             Message::ConfigModuleServer => "Server settings".to_string(),
             Message::ConfigModuleProductivity => "Productivity settings".to_string(),
             Message::ConfigModuleTaskDiscovery => "Task discovery settings".to_string(),
+            Message::ConfigModuleJiraInbox => "Jira inbox settings".to_string(),
             Message::TaskDiscoveryIgnoreListHeader => "Current ignore list:".to_string(),
             Message::TaskDiscoveryIgnoreListEmpty => "Ignore list is empty.".to_string(),
             Message::TaskDiscoveryIgnoreNameAdded(name) => format!("Added '{}' to ignore list.", name),
@@ -516,6 +517,32 @@ impl Display for Message {
             // === SPECIFIC UI MESSAGES ===
             Message::SelectingTask(name) => format!("Selected task: {}", name),
             Message::SelectedTaskFormat(name, completeness) => format!("{} - {}%", name, completeness),
+
+            // === JIRA INBOX MESSAGES ===
+            Message::JiraInboxRequiresJiraConfig => {
+                "Jira inbox requires Jira to be configured. Run `kasl init` and select Jira.".to_string()
+            }
+            Message::JiraInboxEmpty => "Jira inbox is empty.".to_string(),
+            Message::JiraInboxListHeader => "Jira inbox:".to_string(),
+            Message::JiraInboxSynced {
+                fetched,
+                new_count,
+                updated,
+            } => format!(
+                "Jira inbox synced: {} fetched, {} new, {} updated.",
+                fetched, new_count, updated
+            ),
+            Message::JiraInboxNewIssues(count) => format!("Jira inbox: {} new issue(s).", count),
+            Message::JiraInboxNotFound(key) => format!("Issue '{}' not found in inbox.", key),
+            Message::JiraInboxPinned(key) => format!("Pinned {}.", key),
+            Message::JiraInboxUnpinned(key) => format!("Unpinned {}.", key),
+            Message::JiraInboxDismissed(key) => format!("Dismissed {}.", key),
+            Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
+            Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
+            Message::JiraInboxOpenFailed(err) => format!("Failed to open browser: {}", err),
+            Message::PromptJiraInboxEnabled => "Enable Jira inbox polling?".to_string(),
+            Message::PromptJiraInboxPollInterval => "Jira inbox poll interval (seconds)".to_string(),
+            Message::PromptJiraInboxNotify => "Show toast notifications for new issues?".to_string(),
 
             // === MIGRATION MESSAGES ===
             Message::MigrationsFound(count) => format!("Found {} pending database migrations", count),

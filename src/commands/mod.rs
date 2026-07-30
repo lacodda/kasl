@@ -21,6 +21,7 @@
 pub mod autostart;
 pub mod breaks;
 pub mod export;
+pub mod inbox;
 pub mod init;
 pub mod migrations;
 pub mod pauses;
@@ -134,6 +135,13 @@ enum Commands {
     #[command(about = "Add manual breaks for productivity optimization")]
     Breaks(breaks::BreaksArgs),
 
+    /// Jira inbox of assigned open issues
+    ///
+    /// Syncs assigned unresolved Jira issues into a local table, lists them
+    /// by priority, and supports pin / dismiss / open / import into tasks.
+    #[command(about = "Manage Jira inbox issues")]
+    Inbox(inbox::InboxArgs),
+
     /// Database migration management utilities (debug builds only)
     ///
     /// Provides tools for database schema management, migration history,
@@ -209,6 +217,7 @@ impl Cli {
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
             Commands::Breaks(args) => breaks::cmd(args).await,
+            Commands::Inbox(args) => inbox::cmd(args).await,
 
             // Database migrations only available in debug builds
             #[cfg(debug_assertions)]
