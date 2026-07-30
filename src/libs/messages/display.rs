@@ -543,6 +543,17 @@ impl Display for Message {
             Message::PromptJiraInboxEnabled => "Enable Jira inbox polling?".to_string(),
             Message::PromptJiraInboxPollInterval => "Jira inbox poll interval (seconds)".to_string(),
             Message::PromptJiraInboxNotify => "Show toast notifications for new issues?".to_string(),
+            Message::PromptJiraInboxSortFieldId => {
+                "Sort field id for ranking (e.g. customfield_12345 for Scoring; empty to skip)"
+                    .to_string()
+            }
+            Message::PromptJiraInboxSortFieldLabel => {
+                "Label for sort field (default Scoring)".to_string()
+            }
+            Message::PromptJiraInboxExtraFieldId => {
+                "Additional custom field id to fetch (empty to finish)".to_string()
+            }
+            Message::PromptJiraInboxExtraFieldLabel => "Label for this custom field".to_string(),
 
             // === MIGRATION MESSAGES ===
             Message::MigrationsFound(count) => format!("Found {} pending database migrations", count),

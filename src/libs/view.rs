@@ -439,19 +439,29 @@ impl View {
         Ok(())
     }
 
-    /// Displays active Jira inbox items (pinned first, then by priority).
+    /// Displays active Jira inbox items (pinned, score, then priority).
     pub fn jira_inbox(items: &[crate::db::jira_inbox::JiraInboxItem]) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
+        table.set_titles(row!["", "SCORE", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
 
         for item in items {
             let pin = if item.pinned { "★" } else { "" };
+            let score = item
+                .sort_value
+                .map(|v| format!("{}", v))
+                .unwrap_or_else(|| "—".to_string());
+            let status = if item.status_name.is_empty() {
+                item.status_id.as_deref().unwrap_or("—")
+            } else {
+                item.status_name.as_str()
+            };
             table.add_row(row![
                 pin,
+                score,
                 item.priority.as_deref().unwrap_or("—"),
                 item.issue_key,
-                item.status,
+                status,
                 item.summary,
             ]);
         }

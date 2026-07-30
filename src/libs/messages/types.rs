@@ -460,6 +460,10 @@ pub enum Message {
     PromptJiraInboxEnabled,
     PromptJiraInboxPollInterval,
     PromptJiraInboxNotify,
+    PromptJiraInboxSortFieldId,
+    PromptJiraInboxSortFieldLabel,
+    PromptJiraInboxExtraFieldId,
+    PromptJiraInboxExtraFieldLabel,
 
     // === MIGRATION MESSAGES ===
     MigrationsFound(usize),        // count

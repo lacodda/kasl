@@ -133,6 +133,9 @@ pub mod breaks;
 /// and CLI selection / import into tasks.
 pub mod jira_inbox;
 
+/// Catalog of Jira status id → name pairs synced from issues.
+pub mod jira_statuses;
+
 /// Break and pause tracking operations.
 ///
 /// Manages records of user inactivity periods, break times, and interruptions

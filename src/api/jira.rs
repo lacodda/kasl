@@ -36,12 +36,17 @@ use reqwest::{
     Client, StatusCode,
     header::{COOKIE, HeaderMap, HeaderValue},
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
 use std::time::Duration;
 
 /// Maximum number of authentication retries before giving up.
 /// This prevents infinite loops when credentials are consistently invalid.
 const MAX_RETRY_COUNT: i32 = 3;
+
+/// Page size for Jira issue search pagination.
+const SEARCH_PAGE_SIZE: u32 = 100;
 
 /// Filename for storing Jira session tokens in the user data directory.
 const SESSION_ID_FILE: &str = ".jira_session_id";
@@ -118,6 +123,7 @@ pub struct JiraIssue {
 /// Contains the descriptive and status information from issues that
 /// is relevant for task creation and tracking. This represents a subset
 /// of Jira's extensive field system, focusing on essential data.
+/// Unknown / custom fields are captured in [`extra`] via serde flatten.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JiraIssueFields {
     /// Issue title/summary (required field in Jira)
@@ -136,6 +142,9 @@ pub struct JiraIssueFields {
     /// Last update timestamp from Jira (ISO-8601)
     #[serde(default)]
     pub updated: Option<String>,
+    /// Custom and other fields keyed by Jira field id (e.g. `customfield_12345`).
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>,
 }
 
 /// Jira issue status information.
@@ -143,10 +152,26 @@ pub struct JiraIssueFields {
 /// Represents the current workflow status of an issue, used for filtering
 /// completed vs. in-progress work. Status names vary by Jira configuration
 /// and localization settings.
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct JiraStatus {
+    /// Stable status id from Jira (preferred for storage / joins)
+    #[serde(default, deserialize_with = "deserialize_jira_id")]
+    pub id: String,
     /// Status name (e.g., "Done", "In Progress", "Решена" for Russian locale)
     pub name: String,
+}
+
+/// Accepts Jira ids as JSON string or number (`"3"` / `3`).
+fn deserialize_jira_id<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<Value>::deserialize(deserializer)?;
+    Ok(match value {
+        Some(Value::String(s)) => s,
+        Some(Value::Number(n)) => n.to_string(),
+        _ => String::new(),
+    })
 }
 
 /// Jira issue priority.
@@ -166,9 +191,17 @@ pub struct JiraPriority {
 ///
 /// Contains the results of JQL (Jira Query Language) searches,
 /// including the matching issues and pagination information.
-/// For simplicity, only the issues array is currently used.
 #[derive(Serialize, Deserialize, Debug)]
 pub struct JiraSearchResults {
+    /// Index of the first issue in this page
+    #[serde(default, rename = "startAt")]
+    pub start_at: u32,
+    /// Requested page size
+    #[serde(default, rename = "maxResults")]
+    pub max_results: u32,
+    /// Total matching issues across all pages
+    #[serde(default)]
+    pub total: u32,
     /// Array of issues matching the search criteria
     pub issues: Vec<JiraIssue>,
 }
@@ -498,12 +531,13 @@ impl Jira {
 
     /// Fetches open issues currently assigned to the authenticated user.
     ///
-    /// Uses JQL `assignee = currentUser() AND resolution is EMPTY`, ordered by
-    /// priority then last update. Requests only the fields needed for the inbox.
+    /// Uses JQL `assignee = currentUser() AND resolution is EMPTY`. Paginates
+    /// through all matching issues (`startAt` / `total`). Extra field ids
+    /// (custom fields such as Scoring) are included in the `fields` query.
     ///
     /// Auth failures and network errors return an empty list (same pattern as
     /// [`get_completed_issues`]) so callers can keep polling safely.
-    pub async fn get_assigned_open_issues(&mut self) -> Result<Vec<JiraIssue>> {
+    pub async fn get_assigned_open_issues(&mut self, extra_field_ids: &[String]) -> Result<Vec<JiraIssue>> {
         let mut local_retries = 0;
         loop {
             let session_id = match self.get_session_id().await {
@@ -511,41 +545,14 @@ impl Jira {
                 Err(_) => return Ok(Vec::new()),
             };
 
-            let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
-            let mut headers = HeaderMap::new();
-            headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
-            let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
-
-            let res = match self
-                .client
-                .get(&url)
-                .headers(headers)
-                .query(&[
-                    ("jql", jql),
-                    ("fields", "summary,status,priority,updated"),
-                    ("maxResults", "100"),
-                ])
-                .send()
-                .await
-            {
-                Ok(response) => response,
-                Err(_) => return Ok(Vec::new()),
-            };
-
-            match res.status() {
-                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
-                    self.delete_session_id()?;
+            match self.fetch_assigned_open_pages(&session_id, extra_field_ids).await {
+                Ok(issues) => return Ok(issues),
+                Err(SearchPageError::Unauthorized) if local_retries < MAX_RETRY_COUNT => {
+                    let _ = self.delete_session_id();
                     local_retries += 1;
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
                 }
-                status if !status.is_success() => {
-                    return Ok(Vec::new());
-                }
-                _ => {
-                    let search_results = res.json::<JiraSearchResults>().await?;
-                    return Ok(search_results.issues);
-                }
+                Err(_) => return Ok(Vec::new()),
             }
         }
     }
@@ -555,48 +562,79 @@ impl Jira {
     /// Uses a cached session cookie and/or encrypted `.jira_secret`. Returns
     /// `Ok(None)` when neither is available so background daemons can skip
     /// the poll without blocking on stdin.
-    pub async fn get_assigned_open_issues_noninteractive(&mut self) -> Result<Option<Vec<JiraIssue>>> {
+    pub async fn get_assigned_open_issues_noninteractive(
+        &mut self,
+        extra_field_ids: &[String],
+    ) -> Result<Option<Vec<JiraIssue>>> {
         let mut local_retries = 0;
         loop {
             let Some(session_id) = self.session_id_noninteractive().await? else {
                 return Ok(None);
             };
 
-            let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
-            let mut headers = HeaderMap::new();
-            headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
-            let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+            match self.fetch_assigned_open_pages(&session_id, extra_field_ids).await {
+                Ok(issues) => return Ok(Some(issues)),
+                Err(SearchPageError::Unauthorized) if local_retries < MAX_RETRY_COUNT => {
+                    let _ = self.delete_session_id();
+                    local_retries += 1;
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+                Err(_) => return Ok(Some(Vec::new())),
+            }
+        }
+    }
 
-            let res = match self
+    /// Fetches all pages of assigned open issues for a valid session cookie.
+    async fn fetch_assigned_open_pages(
+        &self,
+        session_id: &str,
+        extra_field_ids: &[String],
+    ) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
+        let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
+        let fields = build_search_fields(extra_field_ids);
+        let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+
+        let mut all = Vec::new();
+        let mut start_at: u32 = 0;
+
+        loop {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                COOKIE,
+                HeaderValue::from_str(session_id).map_err(|_| SearchPageError::Other)?,
+            );
+
+            let res = self
                 .client
                 .get(&url)
                 .headers(headers)
                 .query(&[
                     ("jql", jql),
-                    ("fields", "summary,status,priority,updated"),
-                    ("maxResults", "100"),
+                    ("fields", fields.as_str()),
+                    ("startAt", &start_at.to_string()),
+                    ("maxResults", &SEARCH_PAGE_SIZE.to_string()),
                 ])
                 .send()
                 .await
-            {
-                Ok(response) => response,
-                Err(_) => return Ok(Some(Vec::new())),
-            };
+                .map_err(|_| SearchPageError::Other)?;
 
             match res.status() {
-                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
-                    let _ = self.delete_session_id();
-                    local_retries += 1;
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
-                }
-                status if !status.is_success() => return Ok(Some(Vec::new())),
-                _ => {
-                    let search_results = res.json::<JiraSearchResults>().await?;
-                    return Ok(Some(search_results.issues));
-                }
+                StatusCode::UNAUTHORIZED => return Err(SearchPageError::Unauthorized),
+                status if !status.is_success() => return Err(SearchPageError::Other),
+                _ => {}
+            }
+
+            let page: JiraSearchResults = res.json().await.map_err(|_| SearchPageError::Other)?;
+            let batch_len = page.issues.len() as u32;
+            all.extend(page.issues);
+
+            start_at += batch_len;
+            if batch_len == 0 || start_at >= page.total {
+                break;
             }
         }
+
+        Ok(all)
     }
 
     /// Resolves a session from cache / secret without prompting.
@@ -636,6 +674,74 @@ impl Jira {
             .and_then(|p| p.id.as_ref())
             .and_then(|id| id.parse::<i32>().ok())
             .unwrap_or(999)
+    }
+
+    /// Extracts a numeric value from a Jira custom-field JSON value.
+    ///
+    /// Supports bare numbers, numeric strings, and objects with `value` / `amount`.
+    pub fn extract_number(value: &Value) -> Option<f64> {
+        match value {
+            Value::Number(n) => n.as_f64(),
+            Value::String(s) => s.trim().parse().ok(),
+            Value::Object(map) => map
+                .get("value")
+                .and_then(Self::extract_number)
+                .or_else(|| map.get("amount").and_then(Self::extract_number)),
+            _ => None,
+        }
+    }
+
+    /// Reads a numeric custom field from issue extras by field id.
+    pub fn sort_value_from_issue(issue: &JiraIssue, field_id: &str) -> Option<f64> {
+        issue.fields.extra.get(field_id).and_then(Self::extract_number)
+    }
+}
+
+/// Internal error for paginated search (auth vs other failures).
+enum SearchPageError {
+    Unauthorized,
+    Other,
+}
+
+fn build_search_fields(extra_field_ids: &[String]) -> String {
+    let mut fields = vec![
+        "summary".to_string(),
+        "status".to_string(),
+        "priority".to_string(),
+        "updated".to_string(),
+    ];
+    for id in extra_field_ids {
+        let trimmed = id.trim();
+        if !trimmed.is_empty() && !fields.iter().any(|f| f == trimmed) {
+            fields.push(trimmed.to_string());
+        }
+    }
+    fields.join(",")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn extract_number_from_primitives_and_objects() {
+        assert_eq!(Jira::extract_number(&json!(12.5)), Some(12.5));
+        assert_eq!(Jira::extract_number(&json!("42")), Some(42.0));
+        assert_eq!(Jira::extract_number(&json!({"value": 7})), Some(7.0));
+        assert_eq!(Jira::extract_number(&json!({"amount": "3.5"})), Some(3.5));
+        assert_eq!(Jira::extract_number(&json!(null)), None);
+    }
+
+    #[test]
+    fn build_search_fields_includes_custom_ids() {
+        let fields = build_search_fields(&[
+            "customfield_10001".to_string(),
+            "summary".to_string(),
+        ]);
+        assert!(fields.contains("summary"));
+        assert!(fields.contains("customfield_10001"));
+        assert_eq!(fields.matches("summary").count(), 1);
     }
 }
 

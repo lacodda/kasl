@@ -342,6 +342,23 @@ pub struct JiraInboxConfig {
     /// Whether to show a desktop toast when a new issue appears.
     #[serde(default = "default_true")]
     pub notify: bool,
+
+    /// Extra Jira fields to fetch (custom fields such as Scoring).
+    #[serde(default)]
+    pub custom_fields: Vec<JiraCustomField>,
+
+    /// Field id used for ranking (DESC), typically Scoring (`customfield_…`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sort_by_field: Option<String>,
+}
+
+/// A user-configured Jira custom field for inbox sync / display.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct JiraCustomField {
+    /// Jira field id, e.g. `customfield_12345`.
+    pub id: String,
+    /// Human-readable label, e.g. `Scoring`.
+    pub label: String,
 }
 
 fn default_true() -> bool {
@@ -358,7 +375,28 @@ impl Default for JiraInboxConfig {
             enabled: true,
             poll_interval_secs: default_jira_inbox_poll_interval(),
             notify: true,
+            custom_fields: Vec::new(),
+            sort_by_field: None,
         }
+    }
+}
+
+impl JiraInboxConfig {
+    /// Field ids to request from Jira search (custom fields only).
+    pub fn extra_field_ids(&self) -> Vec<String> {
+        let mut ids: Vec<String> = self
+            .custom_fields
+            .iter()
+            .map(|f| f.id.trim().to_string())
+            .filter(|id| !id.is_empty())
+            .collect();
+        if let Some(sort_id) = &self.sort_by_field {
+            let trimmed = sort_id.trim();
+            if !trimmed.is_empty() && !ids.iter().any(|id| id == trimmed) {
+                ids.push(trimmed.to_string());
+            }
+        }
+        ids
     }
 }
 
@@ -1056,9 +1094,79 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
         .default(default.notify)
         .interact()?;
 
+    let default_sort_id = default.sort_by_field.clone().unwrap_or_default();
+    let sort_field_id: String = Input::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptJiraInboxSortFieldId.to_string())
+        .with_initial_text(&default_sort_id)
+        .allow_empty(true)
+        .interact_text()?;
+
+    let mut custom_fields = Vec::new();
+    let mut sort_by_field = None;
+
+    let sort_trimmed = sort_field_id.trim();
+    if !sort_trimmed.is_empty() {
+        let default_label = default
+            .custom_fields
+            .iter()
+            .find(|f| f.id == sort_trimmed)
+            .map(|f| f.label.clone())
+            .unwrap_or_else(|| "Scoring".to_string());
+
+        let sort_label: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptJiraInboxSortFieldLabel.to_string())
+            .default(default_label)
+            .interact_text()?;
+
+        let label = {
+            let t = sort_label.trim();
+            if t.is_empty() {
+                "Scoring".to_string()
+            } else {
+                t.to_string()
+            }
+        };
+        custom_fields.push(JiraCustomField {
+            id: sort_trimmed.to_string(),
+            label,
+        });
+        sort_by_field = Some(sort_trimmed.to_string());
+    }
+
+    loop {
+        let extra_id: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptJiraInboxExtraFieldId.to_string())
+            .allow_empty(true)
+            .interact_text()?;
+        let trimmed = extra_id.trim();
+        if trimmed.is_empty() {
+            break;
+        }
+        if custom_fields.iter().any(|f| f.id == trimmed) {
+            continue;
+        }
+        let extra_label: String = Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptJiraInboxExtraFieldLabel.to_string())
+            .default(trimmed.to_string())
+            .interact_text()?;
+        custom_fields.push(JiraCustomField {
+            id: trimmed.to_string(),
+            label: {
+                let t = extra_label.trim();
+                if t.is_empty() {
+                    trimmed.to_string()
+                } else {
+                    t.to_string()
+                }
+            },
+        });
+    }
+
     Ok(JiraInboxConfig {
         enabled,
         poll_interval_secs: poll_interval_secs.max(30),
         notify,
+        custom_fields,
+        sort_by_field,
     })
 }

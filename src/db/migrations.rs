@@ -296,6 +296,37 @@ impl MigrationManager {
             )?;
             Ok(())
         });
+
+        // Version 8: status catalog + scoring/sort_value for inbox ranking
+        self.add_migration(8, "jira_inbox_status_id_and_sort_value", |tx| {
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS jira_statuses (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL
+                )",
+                [],
+            )?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN status_id TEXT", [])?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN sort_value REAL", [])?;
+            tx.execute(
+                "CREATE INDEX IF NOT EXISTS idx_jira_inbox_sort
+                 ON jira_inbox(dismissed, pinned DESC, sort_value DESC, priority_rank ASC)",
+                [],
+            )?;
+            Ok(())
+        });
+
+        // Version 9: wipe legacy status name strings; use status_id + jira_statuses only
+        self.add_migration(9, "clear_jira_inbox_legacy_status_text", |tx| {
+            tx.execute("UPDATE jira_inbox SET status = ''", [])?;
+            Ok(())
+        });
+
+        // Version 10: drop unused legacy status text column (canonical: status_id)
+        self.add_migration(10, "drop_jira_inbox_legacy_status_column", |tx| {
+            tx.execute("ALTER TABLE jira_inbox DROP COLUMN status", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

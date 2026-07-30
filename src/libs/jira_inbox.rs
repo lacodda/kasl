@@ -7,6 +7,7 @@
 
 use crate::api::jira::Jira;
 use crate::db::jira_inbox::{JiraInbox, JiraInboxItem, JiraInboxUpsert, UpsertBatchResult};
+use crate::db::jira_statuses::JiraStatuses;
 use crate::libs::config::{Config, JiraInboxConfig};
 use crate::libs::messages::Message;
 use crate::{msg_info, msg_warning};
@@ -39,16 +40,14 @@ pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
         });
     };
 
-    let allow_toast = notify
-        && config
-            .jira_inbox
-            .as_ref()
-            .map(|c| c.notify)
-            .unwrap_or(true);
+    let inbox_cfg = config.jira_inbox.clone().unwrap_or_default();
+    let allow_toast = notify && inbox_cfg.notify;
 
     let mut jira = Jira::new(&jira_config);
-    let issues = jira.get_assigned_open_issues().await?;
-    apply_issues(&jira, &issues, allow_toast).await
+    let issues = jira
+        .get_assigned_open_issues(&inbox_cfg.extra_field_ids())
+        .await?;
+    apply_issues(&jira, &issues, &inbox_cfg, allow_toast).await
 }
 
 /// Runs one non-interactive sync for the background watcher.
@@ -69,7 +68,10 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig) -> Result<SyncOutc
     };
 
     let mut jira = Jira::new(&jira_config);
-    let Some(issues) = jira.get_assigned_open_issues_noninteractive().await? else {
+    let Some(issues) = jira
+        .get_assigned_open_issues_noninteractive(&inbox_cfg.extra_field_ids())
+        .await?
+    else {
         warn!("Jira inbox poll skipped: no cached session or secret");
         return Ok(SyncOutcome {
             skipped: true,
@@ -77,23 +79,48 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig) -> Result<SyncOutc
         });
     };
 
-    apply_issues(&jira, &issues, inbox_cfg.notify).await
+    apply_issues(&jira, &issues, inbox_cfg, inbox_cfg.notify).await
 }
 
-async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], notify: bool) -> Result<SyncOutcome> {
-    let upserts: Vec<JiraInboxUpsert> = issues
-        .iter()
-        .map(|issue| JiraInboxUpsert {
+async fn apply_issues(
+    jira: &Jira,
+    issues: &[crate::api::jira::JiraIssue],
+    inbox_cfg: &JiraInboxConfig,
+    notify: bool,
+) -> Result<SyncOutcome> {
+    let statuses = JiraStatuses::new()?;
+    let sort_field = inbox_cfg
+        .sort_by_field
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+
+    let mut upserts = Vec::with_capacity(issues.len());
+    for issue in issues {
+        if !issue.fields.status.id.is_empty() {
+            statuses.upsert(&issue.fields.status.id, &issue.fields.status.name)?;
+        }
+
+        let status_id = if issue.fields.status.id.is_empty() {
+            None
+        } else {
+            Some(issue.fields.status.id.clone())
+        };
+
+        let sort_value = sort_field.and_then(|id| Jira::sort_value_from_issue(issue, id));
+
+        upserts.push(JiraInboxUpsert {
             issue_key: issue.key.clone(),
             issue_id: issue.id.clone(),
             summary: issue.fields.summary.clone(),
-            status: issue.fields.status.name.clone(),
+            status_id,
             priority: issue.fields.priority.as_ref().map(|p| p.name.clone()),
             priority_rank: Jira::priority_rank(&issue.fields.priority),
+            sort_value,
             url: jira.issue_browse_url(&issue.key),
             raw_updated: issue.fields.updated.clone(),
-        })
-        .collect();
+        });
+    }
 
     let db = JiraInbox::new()?;
     let UpsertBatchResult { new_keys, updated } = db.upsert_batch(&upserts)?;
@@ -133,11 +160,18 @@ pub fn show_toast(item: &JiraInboxItem) -> bool {
     }
 }
 
+fn toast_body(item: &JiraInboxItem) -> String {
+    let priority = item.priority.as_deref().unwrap_or("—");
+    match item.sort_value {
+        Some(score) => format!("[score {score}] [{priority}] {}", item.summary),
+        None => format!("[{priority}] {}", item.summary),
+    }
+}
+
 #[cfg(windows)]
 fn show_toast_windows(item: &JiraInboxItem) -> bool {
     let title = format!("Jira {}", item.issue_key);
-    let priority = item.priority.as_deref().unwrap_or("—");
-    let body = format!("[{}] {}", priority, item.summary);
+    let body = toast_body(item);
 
     match win_toast_notify::WinToastNotify::new()
         .set_title(&title)
@@ -159,8 +193,7 @@ fn show_toast_windows(item: &JiraInboxItem) -> bool {
 #[cfg(not(windows))]
 fn show_toast_other(item: &JiraInboxItem) -> bool {
     let title = format!("Jira {}", item.issue_key);
-    let priority = item.priority.as_deref().unwrap_or("—");
-    let body = format!("[{}] {}", priority, item.summary);
+    let body = toast_body(item);
     let url = item.url.clone();
     let key = item.issue_key.clone();
 

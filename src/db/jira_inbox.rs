@@ -14,9 +14,13 @@ pub struct JiraInboxItem {
     pub issue_key: String,
     pub issue_id: String,
     pub summary: String,
-    pub status: String,
+    pub status_id: Option<String>,
+    /// Resolved status name (from `jira_statuses` join), may be empty.
+    pub status_name: String,
     pub priority: Option<String>,
     pub priority_rank: i32,
+    /// Numeric ranking value from configured sort custom field (e.g. Scoring).
+    pub sort_value: Option<f64>,
     pub url: String,
     pub first_seen: NaiveDateTime,
     pub last_seen: NaiveDateTime,
@@ -32,9 +36,10 @@ pub struct JiraInboxUpsert {
     pub issue_key: String,
     pub issue_id: String,
     pub summary: String,
-    pub status: String,
+    pub status_id: Option<String>,
     pub priority: Option<String>,
     pub priority_rank: i32,
+    pub sort_value: Option<f64>,
     pub url: String,
     pub raw_updated: Option<String>,
 }
@@ -79,19 +84,21 @@ impl JiraInbox {
                     "UPDATE jira_inbox SET
                         issue_id = ?1,
                         summary = ?2,
-                        status = ?3,
+                        status_id = ?3,
                         priority = ?4,
                         priority_rank = ?5,
-                        url = ?6,
-                        last_seen = ?7,
-                        raw_updated = ?8
-                     WHERE issue_key = ?9",
+                        sort_value = ?6,
+                        url = ?7,
+                        last_seen = ?8,
+                        raw_updated = ?9
+                     WHERE issue_key = ?10",
                     params![
                         item.issue_id,
                         item.summary,
-                        item.status,
+                        item.status_id,
                         item.priority,
                         item.priority_rank,
+                        item.sort_value,
                         item.url,
                         now,
                         item.raw_updated,
@@ -102,16 +109,17 @@ impl JiraInbox {
             } else {
                 self.db.conn.execute(
                     "INSERT INTO jira_inbox (
-                        issue_key, issue_id, summary, status, priority, priority_rank,
-                        url, first_seen, last_seen, notified, pinned, dismissed, raw_updated
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, 0, 0, 0, ?10)",
+                        issue_key, issue_id, summary, status_id, priority, priority_rank,
+                        sort_value, url, first_seen, last_seen, notified, pinned, dismissed, raw_updated
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, 0, ?11)",
                     params![
                         item.issue_key,
                         item.issue_id,
                         item.summary,
-                        item.status,
+                        item.status_id,
                         item.priority,
                         item.priority_rank,
+                        item.sort_value,
                         item.url,
                         now,
                         now,
@@ -125,14 +133,17 @@ impl JiraInbox {
         Ok(result)
     }
 
-    /// Active (non-dismissed) items, pinned first then by priority and recency.
+    /// Active (non-dismissed) items: pinned, then sort_value DESC, then priority.
     pub fn list_active(&self) -> Result<Vec<JiraInboxItem>> {
         let mut stmt = self.db.conn.prepare(
-            "SELECT issue_key, issue_id, summary, status, priority, priority_rank, url,
-                    first_seen, last_seen, notified, pinned, dismissed, raw_updated
-             FROM jira_inbox
-             WHERE dismissed = 0
-             ORDER BY pinned DESC, priority_rank ASC, last_seen DESC",
+            "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
+                    i.priority, i.priority_rank, i.sort_value, i.url,
+                    i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated
+             FROM jira_inbox i
+             LEFT JOIN jira_statuses s ON s.id = i.status_id
+             WHERE i.dismissed = 0
+             ORDER BY i.pinned DESC, i.sort_value IS NULL, i.sort_value DESC,
+                      i.priority_rank ASC, i.last_seen DESC",
         )?;
 
         let rows = stmt.query_map([], map_row)?;
@@ -143,9 +154,12 @@ impl JiraInbox {
         self.db
             .conn
             .query_row(
-                "SELECT issue_key, issue_id, summary, status, priority, priority_rank, url,
-                        first_seen, last_seen, notified, pinned, dismissed, raw_updated
-                 FROM jira_inbox WHERE issue_key = ?1",
+                "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
+                        i.priority, i.priority_rank, i.sort_value, i.url,
+                        i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated
+                 FROM jira_inbox i
+                 LEFT JOIN jira_statuses s ON s.id = i.status_id
+                 WHERE i.issue_key = ?1",
                 params![key],
                 map_row,
             )
@@ -198,15 +212,17 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
         issue_key: row.get(0)?,
         issue_id: row.get(1)?,
         summary: row.get(2)?,
-        status: row.get(3)?,
-        priority: row.get(4)?,
-        priority_rank: row.get(5)?,
-        url: row.get(6)?,
-        first_seen: row.get(7)?,
-        last_seen: row.get(8)?,
-        notified: row.get::<_, i32>(9)? != 0,
-        pinned: row.get::<_, i32>(10)? != 0,
-        dismissed: row.get::<_, i32>(11)? != 0,
-        raw_updated: row.get(12)?,
+        status_id: row.get(3)?,
+        status_name: row.get(4)?,
+        priority: row.get(5)?,
+        priority_rank: row.get(6)?,
+        sort_value: row.get(7)?,
+        url: row.get(8)?,
+        first_seen: row.get(9)?,
+        last_seen: row.get(10)?,
+        notified: row.get::<_, i32>(11)? != 0,
+        pinned: row.get::<_, i32>(12)? != 0,
+        dismissed: row.get::<_, i32>(13)? != 0,
+        raw_updated: row.get(14)?,
     })
 }
