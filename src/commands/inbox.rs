@@ -19,6 +19,10 @@ pub struct InboxArgs {
     #[arg(long, short = 'l', help = "List active inbox issues")]
     list: bool,
 
+    /// Show only the top N issues (already sorted by pin / score / priority)
+    #[arg(long, short = 'n', value_name = "N", help = "Limit list to top N issues")]
+    limit: Option<usize>,
+
     /// Sync assigned open issues from Jira now
     #[arg(long, help = "Sync inbox from Jira")]
     sync: bool,
@@ -81,19 +85,22 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
         take_issue(key)?;
     }
 
-    // Default action (or explicit --list): show the table.
-    if args.list || !did_something {
-        list_inbox()?;
+    // Default action, explicit --list, or --limit: show the table.
+    if args.list || args.limit.is_some() || !did_something {
+        list_inbox(args.limit)?;
     }
 
     Ok(())
 }
 
-fn list_inbox() -> Result<()> {
-    let items = JiraInbox::new()?.list_active()?;
+fn list_inbox(limit: Option<usize>) -> Result<()> {
+    let mut items = JiraInbox::new()?.list_active()?;
     if items.is_empty() {
         msg_info!(Message::JiraInboxEmpty);
         return Ok(());
+    }
+    if let Some(n) = limit {
+        items.truncate(n);
     }
     msg_print!(Message::JiraInboxListHeader, true);
     View::jira_inbox(&items)

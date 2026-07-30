@@ -440,7 +440,55 @@ impl View {
     }
 
     /// Displays active Jira inbox items (pinned, score, then priority).
+    ///
+    /// SUMMARY is truncated to fit the terminal width (same approach as [`View::tasks`]).
     pub fn jira_inbox(items: &[crate::db::jira_inbox::JiraInboxItem]) -> Result<()> {
+        let pin_width = "★".width().max(1);
+        let score_width = items
+            .iter()
+            .map(|i| {
+                i.sort_value
+                    .map(|v| format!("{}", v).width())
+                    .unwrap_or_else(|| "—".width())
+            })
+            .max()
+            .unwrap_or(1)
+            .max("SCORE".width());
+        let priority_width = items
+            .iter()
+            .map(|i| i.priority.as_deref().unwrap_or("—").width())
+            .max()
+            .unwrap_or(1)
+            .max("PRIORITY".width());
+        let key_width = items
+            .iter()
+            .map(|i| i.issue_key.width())
+            .max()
+            .unwrap_or(1)
+            .max("KEY".width());
+        let status_width = items
+            .iter()
+            .map(|i| {
+                if i.status_name.is_empty() {
+                    i.status_id.as_deref().unwrap_or("—").width()
+                } else {
+                    i.status_name.width()
+                }
+            })
+            .max()
+            .unwrap_or(1)
+            .max("STATUS".width())
+            .min(18);
+
+        // "", SCORE, PRIORITY, KEY, STATUS, SUMMARY
+        let num_cols = 6;
+        let frame_overhead = 3 * num_cols + 1;
+        let fixed =
+            pin_width + score_width + priority_width + key_width + status_width;
+        let summary_width = terminal_cols()
+            .saturating_sub(frame_overhead + fixed)
+            .max(12);
+
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
         table.set_titles(row!["", "SCORE", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
@@ -451,7 +499,7 @@ impl View {
                 .sort_value
                 .map(|v| format!("{}", v))
                 .unwrap_or_else(|| "—".to_string());
-            let status = if item.status_name.is_empty() {
+            let status_raw = if item.status_name.is_empty() {
                 item.status_id.as_deref().unwrap_or("—")
             } else {
                 item.status_name.as_str()
@@ -461,8 +509,8 @@ impl View {
                 score,
                 item.priority.as_deref().unwrap_or("—"),
                 item.issue_key,
-                status,
-                item.summary,
+                truncate_to_width(status_raw, status_width),
+                truncate_to_width(&item.summary, summary_width),
             ]);
         }
 
