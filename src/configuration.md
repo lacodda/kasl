@@ -44,9 +44,27 @@ Configuration files are stored in platform-specific locations:
     "min_break_duration": 20,
     "max_break_duration": 180,
     "min_workday_fraction_before_suggest": 0.5
+  },
+  "task_discovery": {
+    "ignore_names": [
+      "Merge remote-tracking branch",
+      "Merge branch ",
+      "update webui"
+    ]
   }
 }
 ```
+
+## Task Discovery Configuration
+
+Controls filtering for `kasl task --find`:
+
+### `ignore_names`
+- **Type**: `string[]`
+- **Default**: `["Merge remote-tracking branch", "Merge branch ", "update webui"]`
+- **Description**: Task/commit names (or prefixes) excluded from discovery
+- **Matching**: Case-insensitive after normalization; exact match or prefix
+- **UI**: Edit via `kasl init` (Task discovery module) or add items from `kasl task -f`
 
 ## Monitor Configuration
 

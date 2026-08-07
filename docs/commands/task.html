@@ -243,9 +243,13 @@
 <h3 id="interactive-operations"><a class="header" href="#interactive-operations">Interactive Operations</a></h3>
 <ul>
 <li>
-<p><code>-f, --find</code>: Finds and allows the user to update incomplete tasks</p>
+<p><code>-f, --find</code>: Discovers and imports tasks from multiple sources in one screen</p>
 <ul>
-<li>Triggers a user interface for selecting incomplete tasks and updating their completeness</li>
+<li>Shows a spinner while searching incomplete local tasks, today's Jira issues, and GitLab commits</li>
+<li>Presents a single consolidated MultiSelect (incomplete tasks first, then a separator, then Jira/GitLab)</li>
+<li>Filters out tasks already logged today, near-duplicate names, and names from <code>task_discovery.ignore_names</code></li>
+<li>After import selection, optionally add items to the persistent ignore list</li>
+<li>Selected incomplete tasks prompt for an updated completeness percentage before insert</li>
 </ul>
 </li>
 <li>

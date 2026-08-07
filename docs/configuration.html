@@ -216,9 +216,26 @@
     "min_break_duration": 20,
     "max_break_duration": 180,
     "min_workday_fraction_before_suggest": 0.5
+  },
+  "task_discovery": {
+    "ignore_names": [
+      "Merge remote-tracking branch",
+      "Merge branch ",
+      "update webui"
+    ]
   }
 }
 </code></pre>
+<h2 id="task-discovery-configuration"><a class="header" href="#task-discovery-configuration">Task Discovery Configuration</a></h2>
+<p>Controls filtering for <code>kasl task --find</code>:</p>
+<h3 id="ignore_names"><a class="header" href="#ignore_names"><code>ignore_names</code></a></h3>
+<ul>
+<li><strong>Type</strong>: <code>string[]</code></li>
+<li><strong>Default</strong>: <code>["Merge remote-tracking branch", "Merge branch ", "update webui"]</code></li>
+<li><strong>Description</strong>: Task/commit names (or prefixes) excluded from discovery</li>
+<li><strong>Matching</strong>: Case-insensitive after normalization; exact match or prefix</li>
+<li><strong>UI</strong>: Edit via <code>kasl init</code> (Task discovery module) or add items from <code>kasl task -f</code></li>
+</ul>
 <h2 id="monitor-configuration"><a class="header" href="#monitor-configuration">Monitor Configuration</a></h2>
 <p>Controls activity monitoring behavior:</p>
 <h3 id="min_pause_duration"><a class="header" href="#min_pause_duration"><code>min_pause_duration</code></a></h3>
