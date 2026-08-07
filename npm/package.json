@@ -1,6 +1,6 @@
 {
   "name": "kasl-cli",
-  "version": "0.10.1",
+  "version": "0.10.2",
   "kasl": {
     "binary": "v0.10.1"
   },
@@ -16,7 +16,7 @@
   "bin": {
     "kasl": "run.js"
   },
-  "files": ["install.js", "run.js"],
+  "files": ["download.js", "install.js", "run.js"],
   "scripts": {
     "postinstall": "node install.js"
   },
