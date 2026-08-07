@@ -2073,12 +2073,65 @@ New comment (press Enter to keep current): Review completed
 <li><strong><a href="commands/./report.html"><code>report</code></a></strong> - View tasks in work reports</li>
 <li><strong><a href="commands/./export.html"><code>export</code></a></strong> - Export task data for analysis</li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="inbox-command"><a class="header" href="#inbox-command"><code>inbox</code> Command</a></h1>
+<p>The <code>inbox</code> command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears. From the inbox you can pin, dismiss, open in the browser, or import issues into your local task list.</p>
+<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
+<pre><code class="language-bash">kasl inbox [OPTIONS]
+</code></pre>
+<p>Running <code>kasl inbox</code> without options lists the active (non-dismissed) issues.</p>
+<h2 id="options-3"><a class="header" href="#options-3">Options</a></h2>
+<ul>
+<li><code>-l, --list</code>: List active inbox issues (default action)</li>
+<li><code>-n, --limit &lt;N&gt;</code>: Show only the top N issues; the list is sorted by pin state, ranking field (e.g. Scoring), and priority</li>
+<li><code>--sync</code>: Poll Jira immediately instead of waiting for the background cadence</li>
+<li><code>--pin &lt;KEY&gt;</code>: Pin an issue (pinned issues stay on top)</li>
+<li><code>--unpin &lt;KEY&gt;</code>: Remove the pin</li>
+<li><code>--dismiss &lt;KEY&gt;</code>: Hide an issue from the list</li>
+<li><code>--open &lt;KEY&gt;</code>: Open the issue in the browser</li>
+<li><code>--take &lt;KEY&gt;</code>: Import the issue into local tasks (creates a task named <code>KEY summary</code> and dismisses the inbox entry)</li>
+</ul>
+<h2 id="background-polling"><a class="header" href="#background-polling">Background Polling</a></h2>
+<p>Polling runs inside <code>kasl watch</code> (both daemon and <code>--foreground</code> modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser (Windows). Each issue is notified about only once.</p>
+<h2 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h2>
+<p>Polling is enabled by adding the <code>jira_inbox</code> section to the config; the <code>jira</code> section must be configured as well.</p>
+<pre><code class="language-json">{
+  "jira_inbox": {
+    "enabled": true,
+    "poll_interval_secs": 300,
+    "notify": true,
+    "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
+    "sort_by_field": "customfield_12345"
+  }
+}
+</code></pre>
+<ul>
+<li><code>enabled</code>: Whether the watcher polls Jira (default <code>true</code> when the section is present)</li>
+<li><code>poll_interval_secs</code>: Seconds between polls (default <code>300</code>)</li>
+<li><code>notify</code>: Show desktop toasts for new issues (default <code>true</code>)</li>
+<li><code>custom_fields</code>: Extra Jira fields to fetch and display, such as a Scoring field</li>
+<li><code>sort_by_field</code>: Field id used to rank the list in descending order</li>
+</ul>
+<h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
+<pre><code class="language-bash"># Show the inbox
+kasl inbox
+
+# Top five issues by ranking
+kasl inbox -n 5
+
+# Sync now and show the result
+kasl inbox --sync --list
+
+# Work with a specific issue
+kasl inbox --pin PROJ-123
+kasl inbox --open PROJ-123
+kasl inbox --take PROJ-123
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="report-command"><a class="header" href="#report-command"><code>report</code> Command</a></h1>
 <p>The <code>report</code> command generates comprehensive daily work reports with detailed information about work sessions, breaks, productivity metrics, and completed tasks. It also supports automatic report submission to external systems and monthly summary generation.</p>
-<h2 id="usage-3"><a class="header" href="#usage-3">Usage</a></h2>
+<h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
 <pre><code class="language-bash">kasl report [OPTIONS]
 </code></pre>
-<h2 id="options-3"><a class="header" href="#options-3">Options</a></h2>
+<h2 id="options-4"><a class="header" href="#options-4">Options</a></h2>
 <ul>
 <li>
 <p><code>--send</code>: Submit the generated daily report to configured API</p>
@@ -2105,7 +2158,7 @@ New comment (press Enter to keep current): Review completed
 </ul>
 </li>
 </ul>
-<h2 id="examples-4"><a class="header" href="#examples-4">Examples</a></h2>
+<h2 id="examples-5"><a class="header" href="#examples-5">Examples</a></h2>
 <h3 id="basic-report-generation"><a class="header" href="#basic-report-generation">Basic Report Generation</a></h3>
 <pre><code class="language-bash"># Generate and display today's report
 kasl report
@@ -2206,7 +2259,7 @@ kasl report --last
 <li><strong>Consistent Application</strong>: Same filtering logic applies to both local display (<code>kasl report</code>) and API submission (<code>kasl report --send</code>)</li>
 <li><strong>User Notification</strong>: When short intervals are filtered, users receive information about how many were filtered and their total duration</li>
 </ol>
-<h3 id="configuration-3"><a class="header" href="#configuration-3">Configuration</a></h3>
+<h3 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h3>
 <p>The filtering threshold is controlled by the <code>min_work_interval</code> setting in your configuration:</p>
 <pre><code class="language-json">{
   "monitor": {
@@ -2321,10 +2374,10 @@ kasl report --month
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="sum-command"><a class="header" href="#sum-command"><code>sum</code> Command</a></h1>
 <p>The <code>sum</code> command generates comprehensive monthly reports showing daily work hours, productivity metrics, and calendar integration with company rest days. It provides both detailed daily breakdowns and aggregate statistics for the current month.</p>
-<h2 id="usage-4"><a class="header" href="#usage-4">Usage</a></h2>
+<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
 <pre><code class="language-bash">kasl sum [OPTIONS]
 </code></pre>
-<h2 id="options-4"><a class="header" href="#options-4">Options</a></h2>
+<h2 id="options-5"><a class="header" href="#options-5">Options</a></h2>
 <ul>
 <li><code>--send</code>: Submit the monthly summary report
 <ul>
@@ -2366,7 +2419,7 @@ kasl report --month
 <li>Include these dates with default 8-hour entries</li>
 <li>Distinguish between work days and rest days in the display</li>
 </ul>
-<h2 id="examples-5"><a class="header" href="#examples-5">Examples</a></h2>
+<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
 <h3 id="basic-monthly-summary"><a class="header" href="#basic-monthly-summary">Basic Monthly Summary</a></h3>
 <pre><code class="language-bash"># Display monthly summary for current month
 kasl sum
@@ -2394,7 +2447,7 @@ kasl sum --send
 | TOTAL      | 79:15    | 92.5%       |
 +------------+----------+-------------+
 </code></pre>
-<h2 id="configuration-4"><a class="header" href="#configuration-4">Configuration</a></h2>
+<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
 <h3 id="siserver-integration-2"><a class="header" href="#siserver-integration-2">SiServer Integration</a></h3>
 <p>To enable rest day integration, configure SiServer in your settings:</p>
 <pre><code class="language-bash">kasl init --si-server-url "https://your-server.com" --si-server-token "your-token"
@@ -2488,7 +2541,7 @@ kasl report --show-all
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="export-command"><a class="header" href="#export-command"><code>export</code> Command</a></h1>
 <p>The <code>export</code> command provides comprehensive data export functionality, supporting multiple output formats and data types. It enables users to extract their work data for external analysis, backup purposes, or integration with other tools and systems.</p>
-<h2 id="usage-5"><a class="header" href="#usage-5">Usage</a></h2>
+<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
 <pre><code class="language-bash">kasl export [DATA_TYPE] [OPTIONS]
 </code></pre>
 <h2 id="arguments"><a class="header" href="#arguments">Arguments</a></h2>
@@ -2502,7 +2555,7 @@ kasl report --show-all
 </ul>
 </li>
 </ul>
-<h2 id="options-5"><a class="header" href="#options-5">Options</a></h2>
+<h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
 <ul>
 <li>
 <p><code>-f, --format &lt;FORMAT&gt;</code>: Output format for the exported data (default: <code>csv</code>)</p>
@@ -2580,7 +2633,7 @@ kasl export all --format json
 # Export all data as Excel with custom filename
 kasl export all --format excel --output my_backup.xlsx
 </code></pre>
-<h2 id="examples-6"><a class="header" href="#examples-6">Examples</a></h2>
+<h2 id="examples-7"><a class="header" href="#examples-7">Examples</a></h2>
 <h3 id="basic-exports"><a class="header" href="#basic-exports">Basic Exports</a></h3>
 <pre><code class="language-bash"># Export today's report (default)
 kasl export
@@ -2746,10 +2799,10 @@ ls -la kasl_export_*.csv
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="breaks-command"><a class="header" href="#breaks-command"><code>breaks</code> Command</a></h1>
 <p>The <code>breaks</code> command enables strategic placement of manual break periods to optimize productivity metrics and meet minimum thresholds for report submission. This productivity-focused feature helps users improve their work reports by adding intentional breaks that complement automatic pause detection.</p>
-<h2 id="usage-6"><a class="header" href="#usage-6">Usage</a></h2>
+<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
 <pre><code class="language-bash">kasl breaks [OPTIONS]
 </code></pre>
-<h2 id="options-6"><a class="header" href="#options-6">Options</a></h2>
+<h2 id="options-7"><a class="header" href="#options-7">Options</a></h2>
 <ul>
 <li>
 <p><code>-m, --minutes &lt;MINUTES&gt;</code>: Duration of the break in minutes</p>
@@ -2814,7 +2867,7 @@ kasl breaks
 <li><strong>Advantage</strong>: Creates preparation time before natural breaks</li>
 <li><strong>Best for</strong>: Structuring work transitions</li>
 </ul>
-<h2 id="examples-7"><a class="header" href="#examples-7">Examples</a></h2>
+<h2 id="examples-8"><a class="header" href="#examples-8">Examples</a></h2>
 <h3 id="quick-break-addition"><a class="header" href="#quick-break-addition">Quick Break Addition</a></h3>
 <pre><code class="language-bash"># Add 30-minute break with optimal placement
 kasl breaks -m 30
@@ -2872,7 +2925,7 @@ kasl breaks -m 22
 <li><strong>API submission</strong> validates productivity before sending reports</li>
 <li><strong>Productivity warnings</strong> suggest break creation when needed</li>
 </ul>
-<h2 id="configuration-5"><a class="header" href="#configuration-5">Configuration</a></h2>
+<h2 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h2>
 <p>Break behavior is controlled by configuration settings:</p>
 <pre><code class="language-json">{
   "productivity": {
@@ -3033,10 +3086,10 @@ kasl report --productivity
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="pauses-command"><a class="header" href="#pauses-command"><code>pauses</code> Command</a></h1>
 <p>The <code>pauses</code> command provides detailed views of automatically detected and manually recorded breaks during work sessions. It helps users understand their break patterns and verify the accuracy of automatic pause detection.</p>
-<h2 id="usage-7"><a class="header" href="#usage-7">Usage</a></h2>
+<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
 <pre><code class="language-bash">kasl pauses [OPTIONS]
 </code></pre>
-<h2 id="options-7"><a class="header" href="#options-7">Options</a></h2>
+<h2 id="options-8"><a class="header" href="#options-8">Options</a></h2>
 <ul>
 <li>
 <p><code>-d, --date &lt;DATE&gt;</code>: Date to fetch pauses for (default: <code>today</code>)</p>
@@ -3069,7 +3122,7 @@ kasl report --productivity
 <li><strong>Manual Adjustments</strong>: User-added pauses via <code>adjust</code> command</li>
 <li><strong>Time Corrections</strong>: Modified pause times from manual adjustments</li>
 </ul>
-<h2 id="examples-8"><a class="header" href="#examples-8">Examples</a></h2>
+<h2 id="examples-9"><a class="header" href="#examples-9">Examples</a></h2>
 <h3 id="basic-usage"><a class="header" href="#basic-usage">Basic Usage</a></h3>
 <pre><code class="language-bash"># Show today's pauses
 kasl pauses
@@ -3258,7 +3311,7 @@ kasl export --date 2024-12-15 --format json
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="tag-command"><a class="header" href="#tag-command"><code>tag</code> Command</a></h1>
 <p>The <code>tag</code> command provides comprehensive tag management functionality, enabling users to create, organize, and utilize tags for better task categorization. Tags serve as a flexible labeling system that allows users to group and filter tasks by project, priority, type, or any custom criteria.</p>
-<h2 id="usage-8"><a class="header" href="#usage-8">Usage</a></h2>
+<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
 <pre><code class="language-bash">kasl tag [COMMAND] [OPTIONS]
 </code></pre>
 <h2 id="commands-1"><a class="header" href="#commands-1">Commands</a></h2>
@@ -3407,7 +3460,7 @@ kasl tag create "completed" --color "green"
 # Track task status
 kasl task --name "Code review" --tags "waiting-review,backend"
 </code></pre>
-<h2 id="examples-9"><a class="header" href="#examples-9">Examples</a></h2>
+<h2 id="examples-10"><a class="header" href="#examples-10">Examples</a></h2>
 <h3 id="complete-workflow"><a class="header" href="#complete-workflow">Complete Workflow</a></h3>
 <pre><code class="language-bash"># 1. Create tags for your project
 kasl tag create "frontend" --color "blue"
@@ -3564,7 +3617,7 @@ kasl task --show --tag "tag-to-delete"
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="template-command"><a class="header" href="#template-command"><code>template</code> Command</a></h1>
 <p>The <code>template</code> command provides comprehensive template management functionality for kasl, enabling users to create, edit, delete, and search reusable task templates. Templates streamline the creation of frequently used tasks by providing predefined values for name, comment, and completion status.</p>
-<h2 id="usage-9"><a class="header" href="#usage-9">Usage</a></h2>
+<h2 id="usage-10"><a class="header" href="#usage-10">Usage</a></h2>
 <pre><code class="language-bash">kasl template [COMMAND] [OPTIONS]
 </code></pre>
 <h2 id="commands-2"><a class="header" href="#commands-2">Commands</a></h2>
@@ -3721,7 +3774,7 @@ kasl template create --name "documentation"
 kasl template create --name "email"
 # Template: Task name: "Email correspondence", Comment: "Respond to emails", Completeness: 0
 </code></pre>
-<h2 id="examples-10"><a class="header" href="#examples-10">Examples</a></h2>
+<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
 <h3 id="complete-workflow-1"><a class="header" href="#complete-workflow-1">Complete Workflow</a></h3>
 <pre><code class="language-bash"># 1. Create templates for common tasks
 kasl template create --name "daily-standup"
@@ -3914,7 +3967,7 @@ kasl template list
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="autostart-command"><a class="header" href="#autostart-command"><code>autostart</code> Command</a></h1>
 <p>The <code>autostart</code> command provides cross-platform functionality for managing whether kasl automatically starts monitoring when the system boots. It supports different autostart mechanisms depending on the operating system.</p>
-<h2 id="usage-10"><a class="header" href="#usage-10">Usage</a></h2>
+<h2 id="usage-11"><a class="header" href="#usage-11">Usage</a></h2>
 <pre><code class="language-bash">kasl autostart [COMMAND]
 </code></pre>
 <h2 id="commands-3"><a class="header" href="#commands-3">Commands</a></h2>
@@ -3939,7 +3992,7 @@ kasl template list
 <pre><code class="language-bash">kasl autostart status
 </code></pre>
 <p>Checks and displays whether autostart is currently enabled or disabled on the system.</p>
-<h2 id="examples-11"><a class="header" href="#examples-11">Examples</a></h2>
+<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
 <h3 id="basic-usage-1"><a class="header" href="#basic-usage-1">Basic Usage</a></h3>
 <pre><code class="language-bash"># Enable autostart
 kasl autostart enable
@@ -4162,7 +4215,7 @@ kasl watch --stop
 </ul>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="update-command"><a class="header" href="#update-command"><code>update</code> Command</a></h1>
 <p>The <code>update</code> command handles checking for and installing newer versions of kasl from GitHub releases. It provides automatic binary replacement with backup and rollback capabilities.</p>
-<h2 id="usage-11"><a class="header" href="#usage-11">Usage</a></h2>
+<h2 id="usage-12"><a class="header" href="#usage-12">Usage</a></h2>
 <pre><code class="language-bash">kasl update
 </code></pre>
 <h2 id="how-it-works-2"><a class="header" href="#how-it-works-2">How It Works</a></h2>
@@ -4199,7 +4252,7 @@ kasl watch --stop
 <li><strong>Error Handling</strong>: Handles network errors and other issues gracefully</li>
 <li><strong>Rollback Capability</strong>: Can restore from backup if update fails</li>
 </ul>
-<h2 id="examples-12"><a class="header" href="#examples-12">Examples</a></h2>
+<h2 id="examples-13"><a class="header" href="#examples-13">Examples</a></h2>
 <h3 id="basic-update"><a class="header" href="#basic-update">Basic Update</a></h3>
 <pre><code class="language-bash"># Check for and install updates
 kasl update
@@ -4392,7 +4445,7 @@ kasl --help
 </code></pre>
 </li>
 </ol>
-<h3 id="configuration-6"><a class="header" href="#configuration-6">Configuration</a></h3>
+<h3 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h3>
 <pre><code class="language-json">{
   "gitlab": {
     "access_token": "glpat-XXXXXXXXXXXXXXXXXXXX",
@@ -4407,7 +4460,7 @@ kasl --help
 <li><strong>Repository Filtering</strong>: Support for multiple repositories</li>
 <li><strong>Commit Message Parsing</strong>: Extract meaningful task names from commit messages</li>
 </ul>
-<h3 id="usage-12"><a class="header" href="#usage-12">Usage</a></h3>
+<h3 id="usage-13"><a class="header" href="#usage-13">Usage</a></h3>
 <pre><code class="language-bash"># Find tasks from GitLab
 kasl task --find
 
@@ -4441,7 +4494,7 @@ kasl task --find
 </code></pre>
 </li>
 </ol>
-<h3 id="configuration-7"><a class="header" href="#configuration-7">Configuration</a></h3>
+<h3 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h3>
 <pre><code class="language-json">{
   "jira": {
     "login": "john.doe",
@@ -4456,7 +4509,7 @@ kasl task --find
 <li><strong>Project Support</strong>: Support for multiple projects</li>
 <li><strong>Field Mapping</strong>: Custom field support</li>
 </ul>
-<h3 id="usage-13"><a class="header" href="#usage-13">Usage</a></h3>
+<h3 id="usage-14"><a class="header" href="#usage-14">Usage</a></h3>
 <pre><code class="language-bash"># Find tasks from Jira
 kasl task --find
 
@@ -4492,7 +4545,7 @@ kasl task --find
 </code></pre>
 </li>
 </ol>
-<h3 id="configuration-8"><a class="header" href="#configuration-8">Configuration</a></h3>
+<h3 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h3>
 <pre><code class="language-json">{
   "si": {
     "login": "john.doe@company.com",
@@ -4508,7 +4561,7 @@ kasl task --find
 <li><strong>Rest Dates</strong>: Import company holidays and rest days</li>
 <li><strong>Secure Authentication</strong>: LDAP-based authentication</li>
 </ul>
-<h3 id="usage-14"><a class="header" href="#usage-14">Usage</a></h3>
+<h3 id="usage-15"><a class="header" href="#usage-15">Usage</a></h3>
 <pre><code class="language-bash"># Submit daily report
 kasl report --send
 
@@ -5034,7 +5087,7 @@ ORDER BY usage_count DESC;
 //! 
 //! [Architecture description, if applicable]
 <span class="boring">}</span></code></pre></pre>
-<h3 id="examples-13"><a class="header" href="#examples-13">Examples</a></h3>
+<h3 id="examples-14"><a class="header" href="#examples-14">Examples</a></h3>
 <p><strong>✅ Good:</strong></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5107,7 +5160,7 @@ ORDER BY usage_count DESC;
 /// [usage example]
 /// ```
 <span class="boring">}</span></code></pre></pre>
-<h3 id="examples-14"><a class="header" href="#examples-14">Examples</a></h3>
+<h3 id="examples-15"><a class="header" href="#examples-15">Examples</a></h3>
 <p><strong>✅ Good:</strong></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5163,7 +5216,7 @@ ORDER BY usage_count DESC;
 ///
 /// [usage examples]
 <span class="boring">}</span></code></pre></pre>
-<h3 id="examples-15"><a class="header" href="#examples-15">Examples</a></h3>
+<h3 id="examples-16"><a class="header" href="#examples-16">Examples</a></h3>
 <p><strong>✅ Good:</strong></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5196,7 +5249,7 @@ ORDER BY usage_count DESC;
 ///
 /// [usage examples]
 <span class="boring">}</span></code></pre></pre>
-<h3 id="examples-16"><a class="header" href="#examples-16">Examples</a></h3>
+<h3 id="examples-17"><a class="header" href="#examples-17">Examples</a></h3>
 <p><strong>✅ Good:</strong></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5257,7 +5310,7 @@ const SCHEMA_[TABLE]: &amp;str = "...";
 /// [Detailed description of purpose and usage]
 const [OPERATION]_[TABLE]: &amp;str = "...";
 <span class="boring">}</span></code></pre></pre>
-<h3 id="examples-17"><a class="header" href="#examples-17">Examples</a></h3>
+<h3 id="examples-18"><a class="header" href="#examples-18">Examples</a></h3>
 <p><strong>✅ Good:</strong></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5291,7 +5344,7 @@ const INSERT_TASK: &amp;str = "...";
 ///
 /// [assertions description]
 <span class="boring">}</span></code></pre></pre>
-<h3 id="examples-18"><a class="header" href="#examples-18">Examples</a></h3>
+<h3 id="examples-19"><a class="header" href="#examples-19">Examples</a></h3>
 <p><strong>✅ Good:</strong></p>
 <pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -5596,7 +5649,7 @@ test: add comprehensive task management tests
 <li><strong>Rate Limiting</strong>: Respect API rate limits</li>
 <li><strong>Testing</strong>: Mock external APIs in tests</li>
 </ol>
-<h3 id="configuration-9"><a class="header" href="#configuration-9">Configuration</a></h3>
+<h3 id="configuration-10"><a class="header" href="#configuration-10">Configuration</a></h3>
 <ol>
 <li><strong>Backward Compatibility</strong>: Don't break existing configurations</li>
 <li><strong>Validation</strong>: Validate configuration on load</li>
