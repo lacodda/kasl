@@ -604,13 +604,16 @@ pub fn stop() -> Result<()> {
 fn stop_internal() -> Result<()> {
     let pid_path = DataStorage::new().get_path(PID_FILE)?;
 
-    // Check if PID file exists
-    if !pid_path.exists() {
-        msg_bail_anyhow!(Message::WatcherNotRunningPidNotFound);
-    }
-
-    // Read and parse the PID from the file
-    let pid_str = std::fs::read_to_string(&pid_path)?;
+    // The daemon removes its own PID file on shutdown, so every file
+    // operation below can race with a dying daemon: a file that has
+    // disappeared at any step means the watcher is already stopped.
+    let pid_str = match std::fs::read_to_string(&pid_path) {
+        Ok(content) => content,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            msg_bail_anyhow!(Message::WatcherNotRunningPidNotFound);
+        }
+        Err(e) => return Err(e.into()),
+    };
     let pid: u32 = pid_str.trim().parse().map_err(|_| msg_error_anyhow!(Message::InvalidPidFileContent))?;
 
     // Attempt to terminate the process
@@ -618,7 +621,11 @@ fn stop_internal() -> Result<()> {
 
     // Clean up the PID file regardless of whether the process was found
     // This prevents stale PID files from interfering with future operations
-    std::fs::remove_file(pid_path)?;
+    if let Err(e) = std::fs::remove_file(&pid_path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        return Err(e.into());
+    }
 
     if killed {
         msg_info!(Message::WatcherStopped(pid));
