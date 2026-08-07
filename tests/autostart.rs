@@ -105,12 +105,12 @@ mod tests {
     fn test_autostart_disable_when_not_enabled(_ctx: &mut AutostartTestContext) {
         // Test disabling autostart when it's not enabled
         // This should succeed (idempotent operation)
-        let _result = autostart::disable();
+        let result = autostart::disable();
 
         #[cfg(windows)]
         {
-            // On Windows, this might succeed or fail depending on admin privileges
-            // but it shouldn't panic
+            // On Windows, success depends on admin privileges; it must not panic.
+            let _ = result;
         }
 
         #[cfg(unix)]
