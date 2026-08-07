@@ -622,10 +622,12 @@ fn stop_internal() -> Result<()> {
 
     if killed {
         msg_info!(Message::WatcherStopped(pid));
-        Ok(())
     } else {
-        msg_bail_anyhow!(Message::WatcherFailedToStop(pid));
+        // The process was already gone; removing the stale PID file is all
+        // that stopping requires, so this is a success, not an error.
+        msg_info!(Message::WatcherNotRunning);
     }
+    Ok(())
 }
 
 /// Cross-platform process termination for Windows systems.
