@@ -19,8 +19,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-    # Linux and macOS are untested until 1.0.0: report failures, don't block
-    continue-on-error: ${{ matrix.os != 'windows-latest' }}
     steps:
       - uses: actions/checkout@v7
       - name: Install Linux build deps (rdev X11 input monitoring)
