@@ -50,6 +50,18 @@ kasl is a comprehensive command-line utility designed to streamline work activit
 
 ### Quick Install (Recommended)
 
+Via npm (downloads the prebuilt binary; Windows x64 for now):
+```bash
+npm i -g kasl
+```
+
+Via cargo (builds from source on any platform; the crate is named `kasl-cli`, the binary stays `kasl`):
+```bash
+cargo install kasl-cli
+```
+
+### Install Script
+
 Install kasl using curl:
 ```bash
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"

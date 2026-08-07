@@ -64,3 +64,8 @@ docs/book
 # DBs
 *.db
 .env
+
+# npm wrapper artifacts (downloaded binary)
+npm/kasl.exe
+npm/kasl
+npm/archive.*
