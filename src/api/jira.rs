@@ -498,11 +498,7 @@ impl Jira {
     }
 
     /// Fetches all pages of completed issues for a valid session cookie.
-    async fn fetch_completed_pages(
-        &self,
-        session_id: &str,
-        date: &NaiveDate,
-    ) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
+    async fn fetch_completed_pages(&self, session_id: &str, date: &NaiveDate) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
         // Filter by resolution date only. Do not use `status in (...)` with English
         // defaults like "Done"/"Resolved": on localized Jira those names are invalid
         // and the whole JQL fails (HTTP 400), which used to look like "no issues".
@@ -511,7 +507,7 @@ impl Jira {
             "assignee = currentUser() AND resolved >= \"{}\" AND resolved <= \"{} 23:59\"",
             date_str, date_str
         );
-        let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+        let url = format!("{}/{}", self.config.api_url, SEARCH_URL);
 
         let mut all = Vec::new();
         let mut start_at: u32 = 0;
@@ -520,8 +516,7 @@ impl Jira {
             let mut headers = HeaderMap::new();
             headers.insert(
                 COOKIE,
-                HeaderValue::from_str(session_id)
-                    .map_err(|e| SearchPageError::Other(format!("invalid session cookie: {e}")))?,
+                HeaderValue::from_str(session_id).map_err(|e| SearchPageError::Other(format!("invalid session cookie: {e}")))?,
             );
 
             let res = self
@@ -542,17 +537,12 @@ impl Jira {
                 StatusCode::UNAUTHORIZED => return Err(SearchPageError::Unauthorized),
                 status if !status.is_success() => {
                     let body = res.text().await.unwrap_or_default();
-                    return Err(SearchPageError::Other(format!(
-                        "HTTP {status}: {body}"
-                    )));
+                    return Err(SearchPageError::Other(format!("HTTP {status}: {body}")));
                 }
                 _ => {}
             }
 
-            let page: JiraSearchResults = res
-                .json()
-                .await
-                .map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
+            let page: JiraSearchResults = res.json().await.map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
             let batch_len = page.issues.len() as u32;
             all.extend(page.issues);
 
@@ -630,8 +620,7 @@ impl Jira {
             let mut headers = HeaderMap::new();
             headers.insert(
                 COOKIE,
-                HeaderValue::from_str(session_id)
-                    .map_err(|e| SearchPageError::Other(format!("invalid session cookie: {e}")))?,
+                HeaderValue::from_str(session_id).map_err(|e| SearchPageError::Other(format!("invalid session cookie: {e}")))?,
             );
 
             let res = self
@@ -657,10 +646,7 @@ impl Jira {
                 _ => {}
             }
 
-            let page: JiraSearchResults = res
-                .json()
-                .await
-                .map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
+            let page: JiraSearchResults = res.json().await.map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
             let batch_len = page.issues.len() as u32;
             all.extend(page.issues);
 

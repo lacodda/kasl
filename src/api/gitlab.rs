@@ -181,12 +181,7 @@ impl GitLab {
     /// Fetches the authenticated GitLab user (`/user`).
     async fn get_current_user(&self) -> Result<User> {
         let url = format!("{}/api/v4/user", self.config.api_url);
-        let response = self
-            .client
-            .get(&url)
-            .header("PRIVATE-TOKEN", &self.config.access_token)
-            .send()
-            .await?;
+        let response = self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await?;
 
         Ok(response.json::<User>().await?)
     }
@@ -235,9 +230,8 @@ impl GitLab {
         let yesterday = (today - Duration::days(1)).format("%Y-%m-%d").to_string();
         let tomorrow = (today + Duration::days(1)).format("%Y-%m-%d").to_string();
 
-        let user = self.get_current_user().await.map_err(|e| {
+        let user = self.get_current_user().await.inspect_err(|e| {
             msg_error!(Message::GitlabUserIdFailed(e.to_string()));
-            e
         })?;
 
         let events = self.fetch_user_events(user.id, &yesterday, &tomorrow).await?;
@@ -269,12 +263,7 @@ impl GitLab {
                 if !seen_shas.insert(commit.id.clone()) {
                     continue;
                 }
-                let clean_message = commit
-                    .message
-                    .split_once('\n')
-                    .map(|(part, _)| part)
-                    .unwrap_or(&commit.message)
-                    .to_string();
+                let clean_message = commit.message.split_once('\n').map(|(part, _)| part).unwrap_or(&commit.message).to_string();
 
                 commits_info.push(CommitInfo {
                     sha: commit.id,
@@ -297,12 +286,7 @@ impl GitLab {
                 .client
                 .get(&url)
                 .header("PRIVATE-TOKEN", &self.config.access_token)
-                .query(&[
-                    ("after", after),
-                    ("before", before),
-                    ("per_page", "100"),
-                    ("page", &page.to_string()),
-                ])
+                .query(&[("after", after), ("before", before), ("per_page", "100"), ("page", &page.to_string())])
                 .send()
                 .await?;
 
@@ -352,10 +336,7 @@ impl GitLab {
 
     /// Fetches commits in `(from, to]` via the repository compare API.
     async fn compare_commits(&self, project_id: u32, from: &str, to: &str) -> Result<Vec<Commit>> {
-        let url = format!(
-            "{}/api/v4/projects/{}/repository/compare",
-            self.config.api_url, project_id
-        );
+        let url = format!("{}/api/v4/projects/{}/repository/compare", self.config.api_url, project_id);
         let response = self
             .client
             .get(&url)
@@ -400,16 +381,8 @@ impl GitLab {
     ///
     /// `GET /api/v4/projects/{project_id}/repository/commits/{commit_sha}`
     async fn get_commit_detail(&self, project_id: u32, commit_sha: &str) -> Result<Commit> {
-        let url = format!(
-            "{}/api/v4/projects/{}/repository/commits/{}",
-            self.config.api_url, project_id, commit_sha
-        );
-        let response = self
-            .client
-            .get(&url)
-            .header("PRIVATE-TOKEN", &self.config.access_token)
-            .send()
-            .await?;
+        let url = format!("{}/api/v4/projects/{}/repository/commits/{}", self.config.api_url, project_id, commit_sha);
+        let response = self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await?;
 
         Ok(response.json::<Commit>().await?)
     }
@@ -445,10 +418,7 @@ fn is_commit_by_user(commit: &Commit, user: &User) -> bool {
 ///
 /// Falls back to `committed_date` only when `authored_date` is missing.
 fn is_commit_on_date(commit: &Commit, date: NaiveDate) -> bool {
-    let raw = commit
-        .authored_date
-        .as_deref()
-        .or(commit.committed_date.as_deref());
+    let raw = commit.authored_date.as_deref().or(commit.committed_date.as_deref());
     let Some(raw) = raw else {
         return false;
     };
