@@ -37,7 +37,7 @@ use crate::{
         task::{Task, TaskFilter, collapse_whitespace, is_ignored_name, normalize_task_name},
         view::View,
     },
-    msg_error, msg_info, msg_print, msg_success,
+    msg_error, msg_info, msg_print, msg_success, msg_warning,
 };
 use anyhow::Result;
 use chrono::Local;
@@ -403,25 +403,40 @@ async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
 
     spinner.set_message(Message::TasksDiscoveryFetchingExternal.to_string());
 
-    let (commits, jira_issues) = tokio::join!(
+    let (commits_result, jira_result) = tokio::join!(
         async {
             match gitlab_config {
-                Some(cfg) => GitLab::new(&cfg).get_today_commits().await.unwrap_or_default(),
-                None => Vec::new(),
+                Some(cfg) => GitLab::new(&cfg).get_today_commits().await,
+                None => Ok(Vec::new()),
             }
         },
         async {
             match jira_config {
                 Some(cfg) => {
                     let mut jira = Jira::new(&cfg);
-                    jira.get_completed_issues(&date_naive).await.unwrap_or_default()
+                    jira.get_completed_issues(&date_naive).await
                 }
-                None => Vec::new(),
+                None => Ok(Vec::new()),
             }
         },
     );
 
     spinner.finish_and_clear();
+
+    let commits = match commits_result {
+        Ok(c) => c,
+        Err(e) => {
+            msg_warning!(Message::GitlabFetchFailed(e.to_string()));
+            Vec::new()
+        }
+    };
+    let jira_issues = match jira_result {
+        Ok(issues) => issues,
+        Err(e) => {
+            msg_warning!(Message::JiraFetchFailed(e.to_string()));
+            Vec::new()
+        }
+    };
 
     let mut candidates: Vec<DiscoveryItem> = Vec::new();
 

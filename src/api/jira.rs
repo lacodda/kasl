@@ -404,7 +404,6 @@ impl Jira {
     /// ## JQL Query Details
     ///
     /// The search uses the following criteria:
-    /// - **Status Filter**: statuses from the `completed_statuses` config (default: Done, Resolved)
     /// - **Resolution Date**: Issues resolved within the full day range (00:00 to 23:59)
     /// - **Assignee Filter**: Only issues assigned to the current user (`currentUser()`)
     ///
@@ -479,54 +478,91 @@ impl Jira {
     pub async fn get_completed_issues(&mut self, date: &NaiveDate) -> Result<Vec<JiraIssue>> {
         let mut local_retries = 0;
         loop {
-            // Step 1: Ensure we have a valid session token
-            let session_id = match self.get_session_id().await {
-                Ok(id) => id,
-                Err(_) => return Ok(Vec::new()), // Give up on persistent auth failures
-            };
+            let session_id = self.get_session_id().await?;
 
-            // Step 2: Build JQL query for completed issues on the specified date
-            let date_str = date.format("%Y-%m-%d").to_string();
-            let statuses = self
-                .config
-                .completed_statuses
-                .iter()
-                .map(|s| format!("\"{}\"", s))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let jql = format!(
-                "status in ({}) AND resolved >= \"{}\" AND resolved <= \"{} 23:59\" AND assignee in (currentUser())",
-                statuses, date_str, date_str
-            );
-
-            // Step 3: Prepare request with session authentication
-            let mut headers = HeaderMap::new();
-            headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
-            let url = format!("{}/{}?jql={}", self.config.api_url, SEARCH_URL, jql);
-
-            // Step 4: Execute the search request
-            let res = match self.client.get(&url).headers(headers).send().await {
-                Ok(response) => response,
-                Err(_) => return Ok(Vec::new()), // Network errors return empty results
-            };
-
-            // Step 5: Handle response and potential session expiration
-            match res.status() {
-                StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
-                    // Session expired - clear cache and retry
-                    self.delete_session_id()?;
+            match self.fetch_completed_pages(&session_id, date).await {
+                Ok(issues) => return Ok(issues),
+                Err(SearchPageError::Unauthorized) if local_retries < MAX_RETRY_COUNT => {
+                    let _ = self.delete_session_id();
                     local_retries += 1;
-                    // Brief delay before retry to avoid hammering the server
                     tokio::time::sleep(Duration::from_secs(1)).await;
-                    continue;
                 }
-                _ => {
-                    // Success or non-recoverable error - parse and return results
-                    let search_results = res.json::<JiraSearchResults>().await?;
-                    return Ok(search_results.issues);
+                Err(SearchPageError::Unauthorized) => {
+                    anyhow::bail!("Jira session unauthorized after retries")
+                }
+                Err(SearchPageError::Other(msg)) => {
+                    anyhow::bail!("Jira completed-issues search failed: {msg}")
                 }
             }
         }
+    }
+
+    /// Fetches all pages of completed issues for a valid session cookie.
+    async fn fetch_completed_pages(
+        &self,
+        session_id: &str,
+        date: &NaiveDate,
+    ) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
+        // Filter by resolution date only. Do not use `status in (...)` with English
+        // defaults like "Done"/"Resolved": on localized Jira those names are invalid
+        // and the whole JQL fails (HTTP 400), which used to look like "no issues".
+        let date_str = date.format("%Y-%m-%d").to_string();
+        let jql = format!(
+            "assignee = currentUser() AND resolved >= \"{}\" AND resolved <= \"{} 23:59\"",
+            date_str, date_str
+        );
+        let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+
+        let mut all = Vec::new();
+        let mut start_at: u32 = 0;
+
+        loop {
+            let mut headers = HeaderMap::new();
+            headers.insert(
+                COOKIE,
+                HeaderValue::from_str(session_id)
+                    .map_err(|e| SearchPageError::Other(format!("invalid session cookie: {e}")))?,
+            );
+
+            let res = self
+                .client
+                .get(&url)
+                .headers(headers)
+                .query(&[
+                    ("jql", jql.as_str()),
+                    ("fields", "summary,status,priority,updated,resolutiondate"),
+                    ("startAt", &start_at.to_string()),
+                    ("maxResults", &SEARCH_PAGE_SIZE.to_string()),
+                ])
+                .send()
+                .await
+                .map_err(|e| SearchPageError::Other(format!("request failed: {e}")))?;
+
+            match res.status() {
+                StatusCode::UNAUTHORIZED => return Err(SearchPageError::Unauthorized),
+                status if !status.is_success() => {
+                    let body = res.text().await.unwrap_or_default();
+                    return Err(SearchPageError::Other(format!(
+                        "HTTP {status}: {body}"
+                    )));
+                }
+                _ => {}
+            }
+
+            let page: JiraSearchResults = res
+                .json()
+                .await
+                .map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
+            let batch_len = page.issues.len() as u32;
+            all.extend(page.issues);
+
+            start_at += batch_len;
+            if batch_len == 0 || start_at >= page.total {
+                break;
+            }
+        }
+
+        Ok(all)
     }
 
     /// Fetches open issues currently assigned to the authenticated user.
@@ -592,7 +628,11 @@ impl Jira {
 
         loop {
             let mut headers = HeaderMap::new();
-            headers.insert(COOKIE, HeaderValue::from_str(session_id).map_err(|_| SearchPageError::Other)?);
+            headers.insert(
+                COOKIE,
+                HeaderValue::from_str(session_id)
+                    .map_err(|e| SearchPageError::Other(format!("invalid session cookie: {e}")))?,
+            );
 
             let res = self
                 .client
@@ -606,15 +646,21 @@ impl Jira {
                 ])
                 .send()
                 .await
-                .map_err(|_| SearchPageError::Other)?;
+                .map_err(|e| SearchPageError::Other(format!("request failed: {e}")))?;
 
             match res.status() {
                 StatusCode::UNAUTHORIZED => return Err(SearchPageError::Unauthorized),
-                status if !status.is_success() => return Err(SearchPageError::Other),
+                status if !status.is_success() => {
+                    let body = res.text().await.unwrap_or_default();
+                    return Err(SearchPageError::Other(format!("HTTP {status}: {body}")));
+                }
                 _ => {}
             }
 
-            let page: JiraSearchResults = res.json().await.map_err(|_| SearchPageError::Other)?;
+            let page: JiraSearchResults = res
+                .json()
+                .await
+                .map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
             let batch_len = page.issues.len() as u32;
             all.extend(page.issues);
 
@@ -690,7 +736,7 @@ impl Jira {
 /// Internal error for paginated search (auth vs other failures).
 enum SearchPageError {
     Unauthorized,
-    Other,
+    Other(String),
 }
 
 fn build_search_fields(extra_field_ids: &[String]) -> String {
@@ -769,17 +815,18 @@ pub struct JiraConfig {
     /// The URL should point to the root of your Jira installation.
     pub api_url: String,
 
-    /// Issue statuses treated as "completed" when searching for resolved work.
+    /// Deprecated: previously used in `status in (...)` for completed-issue search.
     ///
-    /// The values are inserted into the JQL `status in (...)` clause. Override
-    /// in the config file for localized Jira instances.
+    /// Kept for config compatibility. Discovery now filters by `resolved` date only,
+    /// because non-existent status names (e.g. English "Done" on a Russian Jira)
+    /// make the whole JQL fail.
     #[serde(default = "default_completed_statuses")]
     pub completed_statuses: Vec<String>,
 }
 
-/// Default completed-issue statuses for stock English Jira instances.
+/// Empty default — status names are no longer used in completed-issue JQL.
 fn default_completed_statuses() -> Vec<String> {
-    vec!["Done".to_string(), "Resolved".to_string()]
+    Vec::new()
 }
 
 impl JiraConfig {
