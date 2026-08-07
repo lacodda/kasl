@@ -562,10 +562,7 @@ impl Jira {
     /// Uses a cached session cookie and/or encrypted `.jira_secret`. Returns
     /// `Ok(None)` when neither is available so background daemons can skip
     /// the poll without blocking on stdin.
-    pub async fn get_assigned_open_issues_noninteractive(
-        &mut self,
-        extra_field_ids: &[String],
-    ) -> Result<Option<Vec<JiraIssue>>> {
+    pub async fn get_assigned_open_issues_noninteractive(&mut self, extra_field_ids: &[String]) -> Result<Option<Vec<JiraIssue>>> {
         let mut local_retries = 0;
         loop {
             let Some(session_id) = self.session_id_noninteractive().await? else {
@@ -585,24 +582,17 @@ impl Jira {
     }
 
     /// Fetches all pages of assigned open issues for a valid session cookie.
-    async fn fetch_assigned_open_pages(
-        &self,
-        session_id: &str,
-        extra_field_ids: &[String],
-    ) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
+    async fn fetch_assigned_open_pages(&self, session_id: &str, extra_field_ids: &[String]) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
         let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
         let fields = build_search_fields(extra_field_ids);
-        let url = format!("{}/{}", &self.config.api_url, SEARCH_URL);
+        let url = format!("{}/{}", self.config.api_url, SEARCH_URL);
 
         let mut all = Vec::new();
         let mut start_at: u32 = 0;
 
         loop {
             let mut headers = HeaderMap::new();
-            headers.insert(
-                COOKIE,
-                HeaderValue::from_str(session_id).map_err(|_| SearchPageError::Other)?,
-            );
+            headers.insert(COOKIE, HeaderValue::from_str(session_id).map_err(|_| SearchPageError::Other)?);
 
             let res = self
                 .client
@@ -704,12 +694,7 @@ enum SearchPageError {
 }
 
 fn build_search_fields(extra_field_ids: &[String]) -> String {
-    let mut fields = vec![
-        "summary".to_string(),
-        "status".to_string(),
-        "priority".to_string(),
-        "updated".to_string(),
-    ];
+    let mut fields = vec!["summary".to_string(), "status".to_string(), "priority".to_string(), "updated".to_string()];
     for id in extra_field_ids {
         let trimmed = id.trim();
         if !trimmed.is_empty() && !fields.iter().any(|f| f == trimmed) {
@@ -735,10 +720,7 @@ mod tests {
 
     #[test]
     fn build_search_fields_includes_custom_ids() {
-        let fields = build_search_fields(&[
-            "customfield_10001".to_string(),
-            "summary".to_string(),
-        ]);
+        let fields = build_search_fields(&["customfield_10001".to_string(), "summary".to_string()]);
         assert!(fields.contains("summary"));
         assert!(fields.contains("customfield_10001"));
         assert_eq!(fields.matches("summary").count(), 1);

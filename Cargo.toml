@@ -56,7 +56,7 @@ dialoguer = "0.12.0"                                 # Interactive prompts
 prettytable-rs = "0.10.0" # Terminal tables
 
 # HTTP client and async runtime
-reqwest = { version = "0.13.4", features = ["json", "multipart", "cookies"] }
+reqwest = { version = "0.13.4", features = ["json", "multipart", "cookies", "query"] }
 tokio = { version = "1.53.1", features = ["full"] }
 
 # Database

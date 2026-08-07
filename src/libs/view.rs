@@ -446,11 +446,7 @@ impl View {
         let pin_width = "★".width().max(1);
         let score_width = items
             .iter()
-            .map(|i| {
-                i.sort_value
-                    .map(|v| format!("{}", v).width())
-                    .unwrap_or_else(|| "—".width())
-            })
+            .map(|i| i.sort_value.map(|v| format!("{}", v).width()).unwrap_or_else(|| "—".width()))
             .max()
             .unwrap_or(1)
             .max("SCORE".width());
@@ -460,12 +456,7 @@ impl View {
             .max()
             .unwrap_or(1)
             .max("PRIORITY".width());
-        let key_width = items
-            .iter()
-            .map(|i| i.issue_key.width())
-            .max()
-            .unwrap_or(1)
-            .max("KEY".width());
+        let key_width = items.iter().map(|i| i.issue_key.width()).max().unwrap_or(1).max("KEY".width());
         let status_width = items
             .iter()
             .map(|i| {
@@ -483,11 +474,8 @@ impl View {
         // "", SCORE, PRIORITY, KEY, STATUS, SUMMARY
         let num_cols = 6;
         let frame_overhead = 3 * num_cols + 1;
-        let fixed =
-            pin_width + score_width + priority_width + key_width + status_width;
-        let summary_width = terminal_cols()
-            .saturating_sub(frame_overhead + fixed)
-            .max(12);
+        let fixed = pin_width + score_width + priority_width + key_width + status_width;
+        let summary_width = terminal_cols().saturating_sub(frame_overhead + fixed).max(12);
 
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -495,10 +483,7 @@ impl View {
 
         for item in items {
             let pin = if item.pinned { "★" } else { "" };
-            let score = item
-                .sort_value
-                .map(|v| format!("{}", v))
-                .unwrap_or_else(|| "—".to_string());
+            let score = item.sort_value.map(|v| format!("{}", v)).unwrap_or_else(|| "—".to_string());
             let status_raw = if item.status_name.is_empty() {
                 item.status_id.as_deref().unwrap_or("—")
             } else {

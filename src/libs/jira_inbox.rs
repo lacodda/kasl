@@ -44,9 +44,7 @@ pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
     let allow_toast = notify && inbox_cfg.notify;
 
     let mut jira = Jira::new(&jira_config);
-    let issues = jira
-        .get_assigned_open_issues(&inbox_cfg.extra_field_ids())
-        .await?;
+    let issues = jira.get_assigned_open_issues(&inbox_cfg.extra_field_ids()).await?;
     apply_issues(&jira, &issues, &inbox_cfg, allow_toast).await
 }
 
@@ -68,10 +66,7 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig) -> Result<SyncOutc
     };
 
     let mut jira = Jira::new(&jira_config);
-    let Some(issues) = jira
-        .get_assigned_open_issues_noninteractive(&inbox_cfg.extra_field_ids())
-        .await?
-    else {
+    let Some(issues) = jira.get_assigned_open_issues_noninteractive(&inbox_cfg.extra_field_ids()).await? else {
         warn!("Jira inbox poll skipped: no cached session or secret");
         return Ok(SyncOutcome {
             skipped: true,
@@ -82,18 +77,9 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig) -> Result<SyncOutc
     apply_issues(&jira, &issues, inbox_cfg, inbox_cfg.notify).await
 }
 
-async fn apply_issues(
-    jira: &Jira,
-    issues: &[crate::api::jira::JiraIssue],
-    inbox_cfg: &JiraInboxConfig,
-    notify: bool,
-) -> Result<SyncOutcome> {
+async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox_cfg: &JiraInboxConfig, notify: bool) -> Result<SyncOutcome> {
     let statuses = JiraStatuses::new()?;
-    let sort_field = inbox_cfg
-        .sort_by_field
-        .as_deref()
-        .map(str::trim)
-        .filter(|s| !s.is_empty());
+    let sort_field = inbox_cfg.sort_by_field.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
     let mut upserts = Vec::with_capacity(issues.len());
     for issue in issues {
@@ -197,12 +183,7 @@ fn show_toast_other(item: &JiraInboxItem) -> bool {
     let url = item.url.clone();
     let key = item.issue_key.clone();
 
-    match notify_rust::Notification::new()
-        .summary(&title)
-        .body(&body)
-        .action("default", "Open")
-        .show()
-    {
+    match notify_rust::Notification::new().summary(&title).body(&body).action("default", "Open").show() {
         Ok(handle) => {
             // Wait for click off the poller thread so sync stays responsive.
             std::thread::spawn(move || {
@@ -275,7 +256,10 @@ pub async fn run_poller() {
                 }
                 debug!(
                     "Jira inbox sync: fetched={}, new={}, updated={}, notified={}",
-                    outcome.fetched, outcome.new_keys.len(), outcome.updated, outcome.notified
+                    outcome.fetched,
+                    outcome.new_keys.len(),
+                    outcome.updated,
+                    outcome.notified
                 );
             }
             Ok(_) => {}

@@ -6,7 +6,7 @@
 use crate::db::db::Db;
 use anyhow::Result;
 use chrono::{Local, NaiveDateTime};
-use rusqlite::{params, OptionalExtension};
+use rusqlite::{OptionalExtension, params};
 
 /// A single Jira issue tracked in the local inbox.
 #[derive(Debug, Clone)]
@@ -72,11 +72,9 @@ impl JiraInbox {
             let existing: Option<String> = self
                 .db
                 .conn
-                .query_row(
-                    "SELECT issue_key FROM jira_inbox WHERE issue_key = ?1",
-                    params![item.issue_key],
-                    |row| row.get(0),
-                )
+                .query_row("SELECT issue_key FROM jira_inbox WHERE issue_key = ?1", params![item.issue_key], |row| {
+                    row.get(0)
+                })
                 .optional()?;
 
             if existing.is_some() {
@@ -168,27 +166,24 @@ impl JiraInbox {
     }
 
     pub fn set_pinned(&self, key: &str, pinned: bool) -> Result<bool> {
-        let n = self.db.conn.execute(
-            "UPDATE jira_inbox SET pinned = ?1 WHERE issue_key = ?2",
-            params![pinned as i32, key],
-        )?;
+        let n = self
+            .db
+            .conn
+            .execute("UPDATE jira_inbox SET pinned = ?1 WHERE issue_key = ?2", params![pinned as i32, key])?;
         Ok(n > 0)
     }
 
     pub fn set_dismissed(&self, key: &str, dismissed: bool) -> Result<bool> {
-        let n = self.db.conn.execute(
-            "UPDATE jira_inbox SET dismissed = ?1 WHERE issue_key = ?2",
-            params![dismissed as i32, key],
-        )?;
+        let n = self
+            .db
+            .conn
+            .execute("UPDATE jira_inbox SET dismissed = ?1 WHERE issue_key = ?2", params![dismissed as i32, key])?;
         Ok(n > 0)
     }
 
     pub fn mark_notified(&self, keys: &[String]) -> Result<()> {
         for key in keys {
-            self.db.conn.execute(
-                "UPDATE jira_inbox SET notified = 1 WHERE issue_key = ?1",
-                params![key],
-            )?;
+            self.db.conn.execute("UPDATE jira_inbox SET notified = 1 WHERE issue_key = ?1", params![key])?;
         }
         Ok(())
     }
@@ -197,10 +192,11 @@ impl JiraInbox {
     pub fn list_unnotified_new(&self, keys: &[String]) -> Result<Vec<JiraInboxItem>> {
         let mut items = Vec::new();
         for key in keys {
-            if let Some(item) = self.get_by_key(key)? {
-                if !item.notified && !item.dismissed {
-                    items.push(item);
-                }
+            if let Some(item) = self.get_by_key(key)?
+                && !item.notified
+                && !item.dismissed
+            {
+                items.push(item);
             }
         }
         Ok(items)

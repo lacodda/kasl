@@ -448,7 +448,11 @@ pub enum Message {
     JiraInboxRequiresJiraConfig,
     JiraInboxEmpty,
     JiraInboxListHeader,
-    JiraInboxSynced { fetched: usize, new_count: usize, updated: usize },
+    JiraInboxSynced {
+        fetched: usize,
+        new_count: usize,
+        updated: usize,
+    },
     JiraInboxNewIssues(usize),
     JiraInboxNotFound(String),
     JiraInboxPinned(String),

@@ -384,12 +384,7 @@ impl Default for JiraInboxConfig {
 impl JiraInboxConfig {
     /// Field ids to request from Jira search (custom fields only).
     pub fn extra_field_ids(&self) -> Vec<String> {
-        let mut ids: Vec<String> = self
-            .custom_fields
-            .iter()
-            .map(|f| f.id.trim().to_string())
-            .filter(|id| !id.is_empty())
-            .collect();
+        let mut ids: Vec<String> = self.custom_fields.iter().map(|f| f.id.trim().to_string()).filter(|id| !id.is_empty()).collect();
         if let Some(sort_id) = &self.sort_by_field {
             let trimmed = sort_id.trim();
             if !trimmed.is_empty() && !ids.iter().any(|id| id == trimmed) {
@@ -885,9 +880,7 @@ impl Config {
                 }
 
                 "jira_inbox" => {
-                    config.jira_inbox = Some(configure_jira_inbox(
-                        config.jira_inbox.clone().unwrap_or_default(),
-                    )?);
+                    config.jira_inbox = Some(configure_jira_inbox(config.jira_inbox.clone().unwrap_or_default())?);
                 }
 
                 _ => {} // Unknown module keys are safely ignored
@@ -1120,11 +1113,7 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
 
         let label = {
             let t = sort_label.trim();
-            if t.is_empty() {
-                "Scoring".to_string()
-            } else {
-                t.to_string()
-            }
+            if t.is_empty() { "Scoring".to_string() } else { t.to_string() }
         };
         custom_fields.push(JiraCustomField {
             id: sort_trimmed.to_string(),
@@ -1153,11 +1142,7 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
             id: trimmed.to_string(),
             label: {
                 let t = extra_label.trim();
-                if t.is_empty() {
-                    trimmed.to_string()
-                } else {
-                    t.to_string()
-                }
+                if t.is_empty() { trimmed.to_string() } else { t.to_string() }
             },
         });
     }

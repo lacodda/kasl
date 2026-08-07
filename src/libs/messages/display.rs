@@ -519,19 +519,12 @@ impl Display for Message {
             Message::SelectedTaskFormat(name, completeness) => format!("{} - {}%", name, completeness),
 
             // === JIRA INBOX MESSAGES ===
-            Message::JiraInboxRequiresJiraConfig => {
-                "Jira inbox requires Jira to be configured. Run `kasl init` and select Jira.".to_string()
-            }
+            Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl init` and select Jira.".to_string(),
             Message::JiraInboxEmpty => "Jira inbox is empty.".to_string(),
             Message::JiraInboxListHeader => "Jira inbox:".to_string(),
-            Message::JiraInboxSynced {
-                fetched,
-                new_count,
-                updated,
-            } => format!(
-                "Jira inbox synced: {} fetched, {} new, {} updated.",
-                fetched, new_count, updated
-            ),
+            Message::JiraInboxSynced { fetched, new_count, updated } => {
+                format!("Jira inbox synced: {} fetched, {} new, {} updated.", fetched, new_count, updated)
+            }
             Message::JiraInboxNewIssues(count) => format!("Jira inbox: {} new issue(s).", count),
             Message::JiraInboxNotFound(key) => format!("Issue '{}' not found in inbox.", key),
             Message::JiraInboxPinned(key) => format!("Pinned {}.", key),
@@ -543,16 +536,9 @@ impl Display for Message {
             Message::PromptJiraInboxEnabled => "Enable Jira inbox polling?".to_string(),
             Message::PromptJiraInboxPollInterval => "Jira inbox poll interval (seconds)".to_string(),
             Message::PromptJiraInboxNotify => "Show toast notifications for new issues?".to_string(),
-            Message::PromptJiraInboxSortFieldId => {
-                "Sort field id for ranking (e.g. customfield_12345 for Scoring; empty to skip)"
-                    .to_string()
-            }
-            Message::PromptJiraInboxSortFieldLabel => {
-                "Label for sort field (default Scoring)".to_string()
-            }
-            Message::PromptJiraInboxExtraFieldId => {
-                "Additional custom field id to fetch (empty to finish)".to_string()
-            }
+            Message::PromptJiraInboxSortFieldId => "Sort field id for ranking (e.g. customfield_12345 for Scoring; empty to skip)".to_string(),
+            Message::PromptJiraInboxSortFieldLabel => "Label for sort field (default Scoring)".to_string(),
+            Message::PromptJiraInboxExtraFieldId => "Additional custom field id to fetch (empty to finish)".to_string(),
             Message::PromptJiraInboxExtraFieldLabel => "Label for this custom field".to_string(),
 
             // === MIGRATION MESSAGES ===
