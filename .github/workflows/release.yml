@@ -1,95 +1,83 @@
-name: release
+name: Release
 
 on:
   push:
-    tags:
-      - "v*" # Run when tag matches v*, i.e. v1.0, v20.15.10
+    tags: ['v*']
+
+permissions:
+  contents: write
 
 env:
-  RELEASE_BIN: kasl
-  RELEASE_DIR: artifacts
-  GITHUB_REF: "${{ github.ref }}"
-  WINDOWS_TARGET: x86_64-pc-windows-msvc
-
-  # Space separated paths to include in the archive.
-  RELEASE_ADDS: README.md LICENSE
+  CARGO_TERM_COLOR: always
 
 jobs:
   build:
-    name: Build artifacts
+    name: ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            rust: stable
-
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: macos-latest
+            target: aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v7
+      - name: Install Linux build deps (rdev X11 input monitoring)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev libxi-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
-
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo "version=${GITHUB_REF:10}" >> $GITHUB_OUTPUT
-
-      - name: Add rustup target
-        run: rustup target add ${{ matrix.target }}
-
-      - name: Set RUSTFLAGS (Windows)
-        if: matrix.os == 'windows-latest'
-        run: echo "RUSTFLAGS=-Ctarget-feature=+crt-static" >> $GITHUB_ENV
-
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Create artifact directory
-        run: |
-          mkdir ${{ env.RELEASE_DIR }}
-          mkdir -p ${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}
-
-      - name: Move binaries (Windows)
-        if: matrix.os == 'windows-latest'
+      # All platforms ship tar.gz: kasl update and the npm wrapper of already
+      # released versions expect that extension, so it must never change.
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
         shell: bash
         run: |
-          mv ./target/${{ matrix.target }}/release/${{ env.RELEASE_BIN }}.exe ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}/${{ env.RELEASE_BIN }}.exe
-          mv ${{ env.RELEASE_ADDS }} ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}
-
-      - name: Create tarball
+          name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir "$name"
+          cp "target/${{ matrix.target }}/release/kasl.exe" LICENSE README.md "$name"
+          tar czf "$name.tar.gz" "$name"
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
         shell: bash
-        run: 7z a -ttar -so -an ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }} | 7z a -si ./${{ env.RELEASE_DIR }}/${{ env.RELEASE_BIN }}-${{ steps.get_version.outputs.version }}-${{ matrix.target }}.tar.gz
-
-      - name: Upload Zip
-        uses: actions/upload-artifact@v4
+        run: |
+          name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
+          mkdir "$name"
+          cp "target/${{ matrix.target }}/release/kasl" LICENSE README.md "$name"
+          tar czf "$name.tar.gz" "$name"
+      - uses: actions/upload-artifact@v7
         with:
-          name: ${{ matrix.target }}
-          path: ./${{ env.RELEASE_DIR }}
+          name: package-${{ matrix.target }}
+          path: kasl-*.tar.gz
+          if-no-files-found: error
 
   release:
-    name: GitHub Release
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
-      - name: Query version number
-        id: get_version
-        shell: bash
-        run: |
-          echo "using version tag ${GITHUB_REF:10}"
-          echo "version=${GITHUB_REF:10}" >> $GITHUB_OUTPUT
-
-      - name: Download Windows tarball
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
         with:
-          name: ${{ env.WINDOWS_TARGET }}
-
-      - name: Create Release
+          fetch-depth: 0
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@v4
+        id: cliff
+        with:
+          config: cliff.toml
+          args: --latest --strip header
+      - uses: actions/download-artifact@v8
+        with:
+          path: packages
+          merge-multiple: true
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.get_version.outputs.version }}
-          name: ${{ steps.get_version.outputs.version }}
-          files: ./kasl-${{ steps.get_version.outputs.version }}-${{ env.WINDOWS_TARGET }}.tar.gz
+          body: ${{ steps.cliff.outputs.content }}
+          files: packages/*
