@@ -1,0 +1,53 @@
+name: Publish
+
+# Triggered by the tag push directly (not the release event): releases here
+# are created by release.yml with GITHUB_TOKEN, and such events do not start
+# other workflows.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish (e.g. v0.9.0)
+        required: true
+
+permissions: {}
+
+jobs:
+  crates-io:
+    # Windows runner: the crate is only build-verified on Windows until 1.0.0
+    # (rdev needs X11 dev libs on Linux, untested there yet).
+    runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Get a crates.io token (OIDC trusted publishing)
+        uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      # npm >= 11.5.1 exchanges the OIDC token itself (trusted publishing);
+      # provenance is attached automatically.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm publish
+        working-directory: npm
