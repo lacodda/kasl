@@ -167,7 +167,7 @@ enum Commands {
 /// kasl task --name "New task"
 /// ```
 #[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(name = "kasl", author, version, about, long_about = None)]
 #[command(arg_required_else_help(true))]
 pub struct Cli {
     #[command(subcommand)]
