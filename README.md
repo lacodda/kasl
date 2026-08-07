@@ -17,7 +17,7 @@
 
 kasl is a comprehensive command-line utility designed to streamline work activity tracking, task management, and productivity reporting. It automatically monitors your work sessions, tracks breaks, manages tasks, and generates detailed reports for better productivity insights.
 
-**Current Version:** 0.10.0
+**Current Version:** 0.10.1
 
 ## ✨ Features
 
@@ -25,7 +25,7 @@ kasl is a comprehensive command-line utility designed to streamline work activit
 - **Automatic work session tracking** - Detects when you start and end your workday
 - **Smart break detection** - Automatically records breaks based on inactivity
 - **Background monitoring** - Runs silently in the background
-- **Windows-first** - Windows fully supported today; macOS and Linux builds and autostart are planned for 1.0.0
+- **Cross-platform binaries** - Windows x64, Linux x64, and macOS arm64 releases; unix autostart integration lands in 1.0.0
 
 ### 📋 Task Management
 - **CRUD operations** - Create, read, update, and delete tasks

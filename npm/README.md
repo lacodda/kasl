@@ -8,7 +8,7 @@ kasl init
 kasl watch
 ```
 
-The package downloads the prebuilt binary for your platform from [GitHub Releases](https://github.com/lacodda/kasl/releases) (Windows x64 for now; more platforms coming with 1.0.0). On other platforms install via cargo:
+The package downloads the prebuilt binary for your platform from [GitHub Releases](https://github.com/lacodda/kasl/releases) (Windows x64, Linux x64, macOS arm64). On other platforms install via cargo:
 
 ```bash
 cargo install kasl-cli

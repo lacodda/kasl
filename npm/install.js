@@ -10,9 +10,10 @@ const REPO = "lacodda/kasl";
 // kasl.binary field pins the release tag, otherwise it follows the version.
 const TAG = (pkg.kasl && pkg.kasl.binary) || `v${pkg.version}`;
 
-// Until 1.0.0 releases are built for Windows only; more targets arrive with cargo-dist.
 const TARGETS = {
   "win32-x64": ["x86_64-pc-windows-msvc", "tar.gz"],
+  "linux-x64": ["x86_64-unknown-linux-gnu", "tar.gz"],
+  "darwin-arm64": ["aarch64-apple-darwin", "tar.gz"],
 };
 
 const key = `${process.platform}-${process.arch}`;
