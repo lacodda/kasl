@@ -1,5 +1,5 @@
 {
-  "name": "kasl",
+  "name": "kasl-cli",
   "version": "0.9.0",
   "kasl": {
     "binary": "v0.9.0"

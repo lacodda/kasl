@@ -1,9 +1,9 @@
-# kasl
+# kasl-cli
 
 npm installer for [kasl](https://github.com/lacodda/kasl) — a work activity tracker CLI: automatic workday and break detection, task management with Jira/GitLab integration, productivity reports and exports.
 
 ```bash
-npm i -g kasl
+npm i -g kasl-cli
 kasl init
 kasl watch
 ```

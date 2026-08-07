@@ -52,7 +52,7 @@ kasl is a comprehensive command-line utility designed to streamline work activit
 
 Via npm (downloads the prebuilt binary; Windows x64 for now):
 ```bash
-npm i -g kasl
+npm i -g kasl-cli
 ```
 
 Via cargo (builds from source on any platform; the crate is named `kasl-cli`, the binary stays `kasl`):

@@ -5,7 +5,7 @@ const { spawnSync } = require("child_process");
 
 const exe = path.join(__dirname, process.platform === "win32" ? "kasl.exe" : "kasl");
 if (!require("fs").existsSync(exe)) {
-  console.error("kasl: binary missing - reinstall the package (npm i -g kasl)");
+  console.error("kasl: binary missing - reinstall the package (npm i -g kasl-cli)");
   process.exit(1);
 }
 const result = spawnSync(exe, process.argv.slice(2), { stdio: "inherit" });
