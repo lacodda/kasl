@@ -3,8 +3,9 @@ mod tests {
     use chrono::{Duration, NaiveDate};
     use kasl::db::{breaks::Breaks, workdays::Workdays};
     use kasl::libs::{config::ProductivityConfig, pause::Pause, productivity::Productivity};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     struct BreaksTestContext {
         _temp_dir: TempDir,
@@ -13,13 +14,20 @@ mod tests {
     impl TestContext for BreaksTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             BreaksTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_break_crud_operations(_ctx: &mut BreaksTestContext) {
         let breaks_db = Breaks::new().unwrap();
@@ -62,6 +70,7 @@ mod tests {
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_multiple_breaks_ordering(_ctx: &mut BreaksTestContext) {
         let breaks_db = Breaks::new().unwrap();
@@ -99,18 +108,22 @@ mod tests {
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_productivity_calculation_with_breaks(_ctx: &mut BreaksTestContext) {
         // Setup workday
         let mut workdays_db = Workdays::new().unwrap();
         let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
         workdays_db.insert_start(date).unwrap();
-        
+
         // Set specific workday times: 9:00 - 17:00 (8 hours)
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
+        workdays_db
+            .conn
+            .execute(
+                "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
+                [&date.to_string()],
+            )
+            .unwrap();
 
         let workday = workdays_db.fetch(date).unwrap().unwrap();
 
@@ -150,25 +163,29 @@ mod tests {
 
         // Debug: Check what we actually get
         println!("Expected: 85.0-100.0, Got: {}", productivity);
-        
+
         // Actual productivity calculation might differ due to implementation details
         // The test verifies that breaks are properly included in productivity calculation
-        assert!(productivity >= 85.0 && productivity <= 100.0);
+        assert!((85.0..=100.0).contains(&productivity));
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_productivity_threshold_validation(_ctx: &mut BreaksTestContext) {
         // Setup workday with low productivity
         let mut workdays_db = Workdays::new().unwrap();
         let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
         workdays_db.insert_start(date).unwrap();
-        
+
         // Set workday times: 9:00 - 17:00 (8 hours)
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
+        workdays_db
+            .conn
+            .execute(
+                "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
+                [&date.to_string()],
+            )
+            .unwrap();
 
         let workday = workdays_db.fetch(date).unwrap().unwrap();
 
@@ -205,11 +222,11 @@ mod tests {
         // Test needed break calculation for 75% threshold
         let needed_break_minutes = productivity_calc.calculate_needed_break_duration(Some(75.0));
         println!("Expected needed break minutes: 80, Got: {}", needed_break_minutes);
-        
+
         // NOTE: The new comprehensive productivity algorithm handles break calculations differently
         // due to overlap correction logic. When short pauses are present, adding breaks
         // may trigger overlap adjustments that affect the calculation.
-        // 
+        //
         // The original expectation was 80 minutes based on simple math:
         // 300 / (480 - break_time) = 75% → break_time = 80 minutes
         //
@@ -219,17 +236,21 @@ mod tests {
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_break_placement_algorithms(_ctx: &mut BreaksTestContext) {
         // Setup workday
         let mut workdays_db = Workdays::new().unwrap();
         let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
         workdays_db.insert_start(date).unwrap();
-        
-        workdays_db.conn.execute(
-            "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
-            [&date.to_string()],
-        ).unwrap();
+
+        workdays_db
+            .conn
+            .execute(
+                "UPDATE workdays SET start = '2025-01-15 09:00:00', end = '2025-01-15 17:00:00' WHERE date = ?",
+                [&date.to_string()],
+            )
+            .unwrap();
 
         let workday = workdays_db.fetch(date).unwrap().unwrap();
 
@@ -252,13 +273,13 @@ mod tests {
         // Test break placement options - this would normally be done in the breaks command
         // but we can test the logic indirectly by using work interval calculation
         let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses);
-        
+
         // Should have 3 intervals:
         // 1. 09:00 - 10:30 (90 minutes)
         // 2. 10:45 - 14:00 (195 minutes) - longest interval
         // 3. 14:15 - 17:00 (165 minutes)
         assert_eq!(intervals.len(), 3);
-        
+
         // Find the longest interval (should be the middle one)
         let longest_interval = intervals.iter().max_by_key(|i| i.duration.num_minutes()).unwrap();
         assert_eq!(longest_interval.duration.num_minutes(), 195);
@@ -267,12 +288,12 @@ mod tests {
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_productivity_suggestion_timing(_ctx: &mut BreaksTestContext) {
         // Use an old date to make test deterministic
-        let workday_start = NaiveDate::from_ymd_opt(2020, 1, 15).unwrap()
-            .and_hms_opt(9, 0, 0).unwrap();
-        
+        let workday_start = NaiveDate::from_ymd_opt(2020, 1, 15).unwrap().and_hms_opt(9, 0, 0).unwrap();
+
         // Mock workday in the past
         let workday = kasl::db::workdays::Workday {
             id: 1,
@@ -283,7 +304,7 @@ mod tests {
 
         // Test with different fractions (using old date so current time >> workday start)
         let mut productivity_calc = Productivity::with_test_data(&workday, vec![], vec![], vec![]);
-        
+
         // Test with 0% - always suggest
         productivity_calc.config.workday_hours = 8.0;
         productivity_calc.config.min_workday_fraction_before_suggest = 0.0;
@@ -295,17 +316,18 @@ mod tests {
         let should_suggest_half = productivity_calc.should_suggest_productivity_improvements();
         assert!(should_suggest_half);
 
-        // Test with 100% - should still suggest for old workday  
+        // Test with 100% - should still suggest for old workday
         productivity_calc.config.min_workday_fraction_before_suggest = 1.0;
         let should_suggest_full = productivity_calc.should_suggest_productivity_improvements();
         assert!(should_suggest_full);
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_productivity_config_defaults(_ctx: &mut BreaksTestContext) {
         let default_config = ProductivityConfig::default();
-        
+
         assert_eq!(default_config.min_productivity_threshold, 75.0);
         assert_eq!(default_config.workday_hours, 8.0);
         assert_eq!(default_config.min_break_duration, 20);
@@ -314,34 +336,36 @@ mod tests {
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_break_validation_constraints(_ctx: &mut BreaksTestContext) {
         let config = ProductivityConfig::default();
-        
+
         // Test break duration constraints
         assert!(config.min_break_duration <= config.max_break_duration);
         assert!(config.min_break_duration > 0);
         assert!(config.max_break_duration <= 480); // Max 8 hours
-        
+
         // Test productivity threshold constraints
         assert!(config.min_productivity_threshold > 0.0);
         assert!(config.min_productivity_threshold <= 100.0);
-        
+
         // Test workday hours constraints
         assert!(config.workday_hours > 0.0);
         assert!(config.workday_hours <= 24.0);
-        
+
         // Test fraction constraints
         assert!(config.min_workday_fraction_before_suggest >= 0.0);
         assert!(config.min_workday_fraction_before_suggest <= 1.0);
     }
 
     #[test_context(BreaksTestContext)]
+    #[serial]
     #[test]
     fn test_break_database_constraints(_ctx: &mut BreaksTestContext) {
         let breaks_db = Breaks::new().unwrap();
         let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-        
+
         // Test valid break
         let valid_break = kasl::db::breaks::Break {
             id: None,
@@ -352,14 +376,14 @@ mod tests {
             reason: None,
             created_at: None,
         };
-        
+
         let break_id = breaks_db.insert(&valid_break).unwrap();
         assert!(break_id > 0);
-        
+
         // Test delete non-existent break
         let delete_result = breaks_db.delete(9999);
         assert!(delete_result.is_err());
-        
+
         // Test get non-existent break
         let non_existent = breaks_db.get_by_id(9999).unwrap();
         assert!(non_existent.is_none());

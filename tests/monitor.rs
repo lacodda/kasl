@@ -4,9 +4,10 @@ mod tests {
     use kasl::db::workdays::Workdays;
     use kasl::libs::config::MonitorConfig;
     use kasl::libs::monitor::Monitor;
+    use serial_test::serial;
     use std::error::Error;
     use tempfile::TempDir;
-    use test_context::{test_context, AsyncTestContext};
+    use test_context::{AsyncTestContext, test_context};
     use tokio::time::{self, Duration, Instant};
 
     /// Test context for monitor tests. Creates a temporary directory for the database.
@@ -17,8 +18,14 @@ mod tests {
     impl AsyncTestContext for MonitorTestContext {
         async fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             MonitorTestContext { _temp_dir: temp_dir }
         }
     }
@@ -32,6 +39,7 @@ mod tests {
     }
 
     #[test_context(MonitorTestContext)]
+    #[serial]
     #[tokio::test]
     async fn test_workday_start_after_sustained_activity(_ctx: &mut MonitorTestContext) {
         let config = MonitorConfig {
@@ -69,6 +77,7 @@ mod tests {
     }
 
     #[test_context(MonitorTestContext)]
+    #[serial]
     #[tokio::test]
     async fn test_no_workday_start_on_brief_activity(_ctx: &mut MonitorTestContext) {
         let config = MonitorConfig {

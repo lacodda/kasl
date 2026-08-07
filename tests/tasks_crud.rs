@@ -2,8 +2,9 @@
 mod tests {
     use kasl::db::tasks::Tasks;
     use kasl::libs::task::{Task, TaskFilter};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     struct TaskTestContext {
         _temp_dir: TempDir,
@@ -12,13 +13,20 @@ mod tests {
     impl TestContext for TaskTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             TaskTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(TaskTestContext)]
+    #[serial]
     #[test]
     fn test_task_delete(_ctx: &mut TaskTestContext) {
         let mut tasks = Tasks::new().unwrap();
@@ -40,6 +48,7 @@ mod tests {
     }
 
     #[test_context(TaskTestContext)]
+    #[serial]
     #[test]
     fn test_task_update(_ctx: &mut TaskTestContext) {
         let mut tasks = Tasks::new().unwrap();
@@ -64,6 +73,7 @@ mod tests {
     }
 
     #[test_context(TaskTestContext)]
+    #[serial]
     #[test]
     fn test_task_delete_many(_ctx: &mut TaskTestContext) {
         let mut tasks = Tasks::new().unwrap();

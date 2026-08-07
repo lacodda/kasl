@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
     use kasl::db::templates::{TaskTemplate, Templates};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     struct TemplateTestContext {
         _temp_dir: TempDir,
@@ -11,13 +12,20 @@ mod tests {
     impl TestContext for TemplateTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             TemplateTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(TemplateTestContext)]
+    #[serial]
     #[test]
     fn test_template_crud(_ctx: &mut TemplateTestContext) {
         let mut templates = Templates::new().unwrap();
@@ -51,6 +59,7 @@ mod tests {
     }
 
     #[test_context(TemplateTestContext)]
+    #[serial]
     #[test]
     fn test_template_search(_ctx: &mut TemplateTestContext) {
         let mut templates = Templates::new().unwrap();

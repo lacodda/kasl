@@ -2,8 +2,9 @@
 mod tests {
     use chrono::NaiveDate;
     use kasl::db::{pauses::Pauses, workdays::Workdays};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     /// Test context for report command tests.
     struct ReportTestContext {
@@ -14,8 +15,14 @@ mod tests {
         /// Sets up a temporary directory for testing database operations.
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             ReportTestContext { _temp_dir: temp_dir }
         }
     }
@@ -24,6 +31,7 @@ mod tests {
     ///
     /// Simulates a workday with two pauses and verifies that the report is generated correctly.
     #[test_context(ReportTestContext)]
+    #[serial]
     #[test]
     fn test_report_with_pauses(_ctx: &mut ReportTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 6, 24).unwrap();
@@ -72,6 +80,7 @@ mod tests {
     ///
     /// Simulates a workday without pauses and verifies that the report is generated correctly.
     #[test_context(ReportTestContext)]
+    #[serial]
     #[test]
     fn test_report_no_pauses(_ctx: &mut ReportTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 6, 25).unwrap();
@@ -104,6 +113,7 @@ mod tests {
     /// Verifies that manual breaks created with the breaks command are properly
     /// integrated into work interval calculations for reports.
     #[test_context(ReportTestContext)]
+    #[serial]
     #[test]
     fn test_report_with_breaks_and_pauses(_ctx: &mut ReportTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 6, 26).unwrap();
@@ -151,29 +161,29 @@ mod tests {
         assert_eq!(combined_interruptions.len(), 2); // Should have both pause and break
 
         let intervals = kasl::libs::report::calculate_work_intervals(&workday, &combined_interruptions);
-        
+
         // Should create 3 work intervals:
         // 1. 09:00 - 10:30 (before pause)
         // 2. 11:00 - 12:00 (between pause and break)
         // 3. 13:00 - 17:00 (after break)
         assert_eq!(intervals.len(), 3);
-        
+
         // Verify the intervals are correctly calculated
         assert_eq!(intervals[0].start, date.and_hms_opt(9, 0, 0).unwrap());
         assert_eq!(intervals[0].end, date.and_hms_opt(10, 30, 0).unwrap());
-        
+
         assert_eq!(intervals[1].start, date.and_hms_opt(11, 0, 0).unwrap());
         assert_eq!(intervals[1].end, date.and_hms_opt(12, 0, 0).unwrap());
-        
+
         assert_eq!(intervals[2].start, date.and_hms_opt(13, 0, 0).unwrap());
         assert_eq!(intervals[2].end, date.and_hms_opt(17, 0, 0).unwrap());
 
         let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
         assert!(output.is_ok());
-        
+
         // Verify that productivity calculation includes the break
         let (_, productivity) = output.unwrap();
-        // The productivity should be calculated considering both the 30-minute pause 
+        // The productivity should be calculated considering both the 30-minute pause
         // and the 60-minute break, so total work time should be reduced accordingly
         assert!(productivity > 0.0 && productivity <= 100.0);
     }

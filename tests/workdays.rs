@@ -2,8 +2,9 @@
 mod tests {
     use chrono::{Local, NaiveDate};
     use kasl::db::workdays::Workdays;
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     /// Test context to ensure a clean database for each workday test.
     struct WorkdayTestContext {
@@ -13,13 +14,20 @@ mod tests {
     impl TestContext for WorkdayTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             WorkdayTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(WorkdayTestContext)]
+    #[serial]
     #[test]
     fn test_insert_and_fetch_workday(_ctx: &mut WorkdayTestContext) {
         let mut workdays = Workdays::new().unwrap();
@@ -39,6 +47,7 @@ mod tests {
     }
 
     #[test_context(WorkdayTestContext)]
+    #[serial]
     #[test]
     fn test_fetch_nonexistent_workday(_ctx: &mut WorkdayTestContext) {
         let mut workdays = Workdays::new().unwrap();
@@ -48,6 +57,7 @@ mod tests {
     }
 
     #[test_context(WorkdayTestContext)]
+    #[serial]
     #[test]
     fn test_fetch_month(_ctx: &mut WorkdayTestContext) {
         let mut workdays = Workdays::new().unwrap();
@@ -67,6 +77,7 @@ mod tests {
     }
 
     #[test_context(WorkdayTestContext)]
+    #[serial]
     #[test]
     fn test_insert_start_is_idempotent(_ctx: &mut WorkdayTestContext) {
         let mut workdays = Workdays::new().unwrap();

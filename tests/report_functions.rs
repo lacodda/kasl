@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, NaiveDate, NaiveDateTime, NaiveTime};
-    use kasl::libs::report::{filter_short_intervals, WorkInterval};
+    use kasl::libs::report::{WorkInterval, filter_short_intervals};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     struct ReportFunctionTestContext {
         _temp_dir: TempDir,
@@ -12,13 +13,20 @@ mod tests {
     impl TestContext for ReportFunctionTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             ReportFunctionTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(ReportFunctionTestContext)]
+    #[serial]
     #[test]
     fn test_filter_short_intervals(_ctx: &mut ReportFunctionTestContext) {
         // Create test intervals - some short, some long
@@ -59,6 +67,7 @@ mod tests {
     }
 
     #[test_context(ReportFunctionTestContext)]
+    #[serial]
     #[test]
     fn test_filter_short_intervals_none_filtered(_ctx: &mut ReportFunctionTestContext) {
         // Create test intervals - all long enough

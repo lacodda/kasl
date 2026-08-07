@@ -5,8 +5,9 @@ mod tests {
     use kasl::db::workdays::Workdays;
     use kasl::libs::export::{ExportData, ExportFormat, Exporter};
     use kasl::libs::task::Task;
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, AsyncTestContext};
+    use test_context::{AsyncTestContext, test_context};
 
     struct ExportTestContext {
         temp_dir: TempDir,
@@ -15,13 +16,20 @@ mod tests {
     impl AsyncTestContext for ExportTestContext {
         async fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             ExportTestContext { temp_dir }
         }
     }
 
     #[test_context(ExportTestContext)]
+    #[serial]
     #[tokio::test]
     async fn test_export_csv(ctx: &mut ExportTestContext) {
         // Setup test data
@@ -48,6 +56,7 @@ mod tests {
     }
 
     #[test_context(ExportTestContext)]
+    #[serial]
     #[tokio::test]
     async fn test_export_json(ctx: &mut ExportTestContext) {
         let date = Local::now().date_naive();
@@ -66,6 +75,7 @@ mod tests {
     }
 
     #[test_context(ExportTestContext)]
+    #[serial]
     #[tokio::test]
     async fn test_export_excel(ctx: &mut ExportTestContext) {
         let date = Local::now().date_naive();

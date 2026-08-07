@@ -1,102 +1,111 @@
 #[cfg(test)]
 mod tests {
-    use kasl::libs::formatter::{format_duration, FormattedEvent};
     use chrono::Duration;
-    use serde_json;
+    use kasl::libs::formatter::{FormattedEvent, format_duration};
+    use serial_test::serial;
 
+    #[serial]
     #[test]
     fn test_format_duration_zero() {
         let duration = Duration::zero();
         assert_eq!(format_duration(&duration), "00:00");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_minutes_only() {
         let duration = Duration::minutes(30);
         assert_eq!(format_duration(&duration), "00:30");
-        
+
         let duration = Duration::minutes(59);
         assert_eq!(format_duration(&duration), "00:59");
-        
+
         let duration = Duration::minutes(1);
         assert_eq!(format_duration(&duration), "00:01");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_hours_only() {
         let duration = Duration::hours(1);
         assert_eq!(format_duration(&duration), "01:00");
-        
+
         let duration = Duration::hours(8);
         assert_eq!(format_duration(&duration), "08:00");
-        
+
         let duration = Duration::hours(12);
         assert_eq!(format_duration(&duration), "12:00");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_hours_and_minutes() {
         let duration = Duration::hours(1) + Duration::minutes(30);
         assert_eq!(format_duration(&duration), "01:30");
-        
+
         let duration = Duration::hours(8) + Duration::minutes(45);
         assert_eq!(format_duration(&duration), "08:45");
-        
+
         let duration = Duration::hours(2) + Duration::minutes(5);
         assert_eq!(format_duration(&duration), "02:05");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_large_hours() {
         let duration = Duration::hours(24);
         assert_eq!(format_duration(&duration), "24:00");
-        
+
         let duration = Duration::hours(100);
         assert_eq!(format_duration(&duration), "100:00");
-        
+
         let duration = Duration::hours(999);
         assert_eq!(format_duration(&duration), "999:00");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_negative_clamped_to_zero() {
         let duration = Duration::minutes(-30);
         assert_eq!(format_duration(&duration), "00:00");
-        
+
         let duration = Duration::hours(-5);
         assert_eq!(format_duration(&duration), "00:00");
-        
+
         let duration = Duration::hours(-1) + Duration::minutes(-30);
         assert_eq!(format_duration(&duration), "00:00");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_seconds_rounded() {
         // Seconds should be ignored/rounded to minutes
         let duration = Duration::minutes(30) + Duration::seconds(30);
         assert_eq!(format_duration(&duration), "00:30");
-        
+
         let duration = Duration::minutes(30) + Duration::seconds(59);
         assert_eq!(format_duration(&duration), "00:30");
-        
+
         // 60+ seconds should add a minute
         let duration = Duration::minutes(30) + Duration::seconds(60);
         assert_eq!(format_duration(&duration), "00:31");
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_complex_calculations() {
         // Test various combinations
         let duration = Duration::hours(2) + Duration::minutes(90); // Should be 3:30
         assert_eq!(format_duration(&duration), "03:30");
-        
+
         let duration = Duration::minutes(120) + Duration::minutes(15); // Should be 2:15
         assert_eq!(format_duration(&duration), "02:15");
-        
+
         let duration = Duration::seconds(3661); // 1 hour, 1 minute, 1 second = 1:01
         assert_eq!(format_duration(&duration), "01:01");
     }
 
+    #[serial]
     #[test]
     fn test_formatted_event_creation() {
         let event = FormattedEvent {
@@ -112,6 +121,7 @@ mod tests {
         assert_eq!(event.duration, "08:00");
     }
 
+    #[serial]
     #[test]
     fn test_formatted_event_serialization() {
         let event = FormattedEvent {
@@ -136,6 +146,7 @@ mod tests {
         assert_eq!(deserialized.duration, event.duration);
     }
 
+    #[serial]
     #[test]
     fn test_formatted_event_clone() {
         let event = FormattedEvent {
@@ -152,6 +163,7 @@ mod tests {
         assert_eq!(event.duration, cloned.duration);
     }
 
+    #[serial]
     #[test]
     fn test_formatted_event_debug() {
         let event = FormattedEvent {
@@ -169,6 +181,7 @@ mod tests {
         assert!(debug_str.contains("duration: \"08:00\""));
     }
 
+    #[serial]
     #[test]
     fn test_formatted_event_edge_cases() {
         // Test with empty strings
@@ -198,6 +211,7 @@ mod tests {
         assert_eq!(event.duration, "00:00");
     }
 
+    #[serial]
     #[test]
     fn test_formatted_event_typical_work_scenarios() {
         // Morning work session
@@ -230,6 +244,7 @@ mod tests {
         assert_eq!(afternoon.duration, "04:30");
     }
 
+    #[serial]
     #[test]
     fn test_duration_formatting_consistency() {
         // Test that the same duration always formats the same way
@@ -240,20 +255,21 @@ mod tests {
         assert_eq!(format_duration(&duration1), "02:30");
     }
 
+    #[serial]
     #[test]
     fn test_duration_formatting_thread_safety() {
-        use std::thread;
         use std::sync::Arc;
+        use std::thread;
 
         let duration = Arc::new(Duration::hours(1) + Duration::minutes(45));
         let expected = "01:45";
 
-        let handles: Vec<_> = (0..10).map(|_| {
-            let duration = Arc::clone(&duration);
-            thread::spawn(move || {
-                format_duration(&*duration)
+        let handles: Vec<_> = (0..10)
+            .map(|_| {
+                let duration = Arc::clone(&duration);
+                thread::spawn(move || format_duration(&duration))
             })
-        }).collect();
+            .collect();
 
         for handle in handles {
             let result = handle.join().unwrap();
@@ -261,6 +277,7 @@ mod tests {
         }
     }
 
+    #[serial]
     #[test]
     fn test_format_duration_boundary_values() {
         // Test maximum reasonable values

@@ -3,8 +3,9 @@ mod tests {
     use chrono::{Duration, NaiveDate};
     use kasl::db::workdays::Workday;
     use kasl::libs::report::{analyze_short_intervals, calculate_work_intervals};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     struct IntervalTestContext {
         _temp_dir: TempDir,
@@ -13,13 +14,20 @@ mod tests {
     impl TestContext for IntervalTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             IntervalTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(IntervalTestContext)]
+    #[serial]
     #[test]
     fn test_short_interval_detection(_ctx: &mut IntervalTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
@@ -59,6 +67,7 @@ mod tests {
     }
 
     #[test_context(IntervalTestContext)]
+    #[serial]
     #[test]
     fn test_no_short_intervals(_ctx: &mut IntervalTestContext) {
         let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();

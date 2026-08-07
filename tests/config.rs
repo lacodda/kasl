@@ -1,8 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use kasl::libs::config::{Config, MonitorConfig, ServerConfig, ProductivityConfig};
+    use kasl::libs::config::{Config, MonitorConfig, ProductivityConfig, ServerConfig};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     /// Test context to ensure a clean environment for each config test.
     /// It sets up a temporary directory to act as the user's home/appdata directory.
@@ -21,8 +22,14 @@ mod tests {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
             // Mock the home/appdata directory for cross-platform compatibility.
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             ConfigTestContext {
                 _temp_dir: temp_dir,
                 min_pause_duration: 20,
@@ -37,6 +44,7 @@ mod tests {
     }
 
     #[test_context(ConfigTestContext)]
+    #[serial]
     #[test]
     fn test_default_config(_ctx: &mut ConfigTestContext) {
         let config = Config::default();
@@ -48,6 +56,7 @@ mod tests {
     }
 
     #[test_context(ConfigTestContext)]
+    #[serial]
     #[test]
     fn test_read_nonexistent_config(_ctx: &mut ConfigTestContext) {
         // When no config file exists, read() should return the default config.
@@ -57,6 +66,7 @@ mod tests {
     }
 
     #[test_context(ConfigTestContext)]
+    #[serial]
     #[test]
     fn test_save_and_read_config(ctx: &mut ConfigTestContext) {
         let config = Config {
@@ -94,6 +104,7 @@ mod tests {
     }
 
     #[test_context(ConfigTestContext)]
+    #[serial]
     #[test]
     fn test_default_monitor_config(ctx: &mut ConfigTestContext) {
         let monitor_config = MonitorConfig::default();
@@ -103,6 +114,7 @@ mod tests {
         assert_eq!(monitor_config.activity_threshold, ctx.activity_threshold);
     }
 
+    #[serial]
     #[test]
     fn test_default_productivity_config() {
         let productivity_config = ProductivityConfig::default();

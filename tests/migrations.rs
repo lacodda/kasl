@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use kasl::db::db::Db;
-    use kasl::db::migrations::{get_db_version, needs_migration, MigrationManager};
+    use kasl::db::migrations::{MigrationManager, get_db_version, needs_migration};
+    use serial_test::serial;
     use tempfile::TempDir;
-    use test_context::{test_context, TestContext};
+    use test_context::{TestContext, test_context};
 
     struct MigrationTestContext {
         _temp_dir: TempDir,
@@ -12,13 +13,20 @@ mod tests {
     impl TestContext for MigrationTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
-            std::env::set_var("HOME", temp_dir.path());
-            std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("HOME", temp_dir.path());
+            }
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("LOCALAPPDATA", temp_dir.path());
+            }
             MigrationTestContext { _temp_dir: temp_dir }
         }
     }
 
     #[test_context(MigrationTestContext)]
+    #[serial]
     #[test]
     fn test_migrations_run_automatically(_ctx: &mut MigrationTestContext) {
         // Create new DB which should run all migrations
@@ -33,6 +41,7 @@ mod tests {
     }
 
     #[test_context(MigrationTestContext)]
+    #[serial]
     #[test]
     fn test_migration_history(_ctx: &mut MigrationTestContext) {
         let mut conn = Db::new_without_migrations().unwrap();
@@ -46,12 +55,13 @@ mod tests {
         assert!(!history.is_empty());
 
         // Verify migrations are recorded in order
-        for i in 0..history.len() {
-            assert_eq!(history[i].0 as usize, i + 1);
+        for (i, entry) in history.iter().enumerate() {
+            assert_eq!(entry.0 as usize, i + 1);
         }
     }
 
     #[test_context(MigrationTestContext)]
+    #[serial]
     #[test]
     fn test_migration_idempotency(_ctx: &mut MigrationTestContext) {
         let mut conn = Db::new_without_migrations().unwrap();
