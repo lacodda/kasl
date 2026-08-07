@@ -6,7 +6,7 @@
 # to an unrelated project); the binary, library and app identity stay "kasl".
 [package]
 name = "kasl-cli"
-version = "0.9.0"
+version = "0.10.0"
 edition = "2024"
 rust-version = "1.97"
 description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ⏸, and task completion"

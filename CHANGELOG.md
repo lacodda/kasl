@@ -1,5 +1,34 @@
 # Changelog
 
+## 🎉 [0.10.0] - 2026-08-07
+
+### ✨ Features
+
+- Add Jira inbox: background polling of assigned issues, desktop toasts, and CLI (list, pin, dismiss, open, take)
+- Add Scoring sort fields, status ids, and full search pagination to inbox sync
+- Add --limit and truncate inbox summary to terminal width
+- Make Jira completed-issue statuses configurable
+
+### 🛠️ Bug Fixes
+
+- Date filters no longer shift a day in negative UTC offsets
+- Replace removed before_exec with pre_exec on Unix
+
+### 🎲 Miscellaneous tasks
+
+- Upgrade to Rust 1.97, edition 2024, and latest dependencies
+- Publish crate as kasl-cli keeping the kasl binary identity; add npm installer package
+- Publish to crates.io and npm via OIDC trusted publishing on tag push
+- Add CI (fmt, clippy, tests, 3-OS matrix); repair the docs deploy
+
+### 📖 Documentation
+
+- Document the inbox command; refresh README badges and platform support
+
+### 🧪 Testing
+
+- Serialize env-dependent tests and harden the daemon harness
+
 ## 🎉 [0.9.0] - 2026-08-06
 
 ### ✨ Features
