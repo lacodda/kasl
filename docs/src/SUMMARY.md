@@ -8,6 +8,7 @@
   - [`init`](./commands/init.md)
   - [`watch`](./commands/watch.md)
   - [`task`](./commands/task.md)
+  - [`inbox`](./commands/inbox.md)
   - [`report`](./commands/report.md)
   - [`sum`](./commands/sum.md)
   - [`export`](./commands/export.md)

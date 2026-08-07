@@ -160,6 +160,17 @@ kasl task --delete 1 2 3      # Delete by IDs
 kasl task --delete-today      # Delete all today's tasks
 ```
 
+#### `inbox` - Jira Inbox
+```bash
+kasl inbox                 # List assigned open Jira issues
+kasl inbox -n 5            # Top five by ranking (pin / Scoring / priority)
+kasl inbox --sync          # Poll Jira now
+kasl inbox --pin PROJ-123  # Keep an issue on top
+kasl inbox --open PROJ-123 # Open in browser
+kasl inbox --take PROJ-123 # Import into local tasks
+```
+The watcher polls Jira in the background and shows a desktop toast when a new issue is assigned to you (see the `jira_inbox` config section).
+
 #### `report` - Report Generation
 ```bash
 # View report
@@ -278,6 +289,11 @@ Configuration file is stored at:
   "jira": {
     "login": "your.email@company.com",
     "api_url": "https://jira.company.com"
+  },
+  "jira_inbox": {
+    "enabled": true,
+    "poll_interval_secs": 300,  // Seconds between Jira inbox polls
+    "notify": true              // Desktop toast for new issues
   }
 }
 ```
