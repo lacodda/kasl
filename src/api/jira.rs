@@ -31,10 +31,10 @@ use crate::libs::{config::ConfigModule, messages::Message, secret::Secret};
 use crate::msg_print;
 use anyhow::Result;
 use chrono::NaiveDate;
-use dialoguer::{theme::ColorfulTheme, Input};
+use dialoguer::{Input, theme::ColorfulTheme};
 use reqwest::{
-    header::{HeaderMap, HeaderValue, COOKIE},
     Client, StatusCode,
+    header::{COOKIE, HeaderMap, HeaderValue},
 };
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -350,7 +350,7 @@ impl Jira {
     /// ## JQL Query Details
     ///
     /// The search uses the following criteria:
-    /// - **Status Filter**: Issues with status "Done" or "Решена" (supports localized Jira)
+    /// - **Status Filter**: statuses from the `completed_statuses` config (default: Done, Resolved)
     /// - **Resolution Date**: Issues resolved within the full day range (00:00 to 23:59)
     /// - **Assignee Filter**: Only issues assigned to the current user (`currentUser()`)
     ///
@@ -433,15 +433,22 @@ impl Jira {
 
             // Step 2: Build JQL query for completed issues on the specified date
             let date_str = date.format("%Y-%m-%d").to_string();
+            let statuses = self
+                .config
+                .completed_statuses
+                .iter()
+                .map(|s| format!("\"{}\"", s))
+                .collect::<Vec<_>>()
+                .join(", ");
             let jql = format!(
-                "status in (Done, Решена) AND resolved >= \"{}\" AND resolved <= \"{} 23:59\" AND assignee in (currentUser())",
-                &date_str, &date_str
+                "status in ({}) AND resolved >= \"{}\" AND resolved <= \"{} 23:59\" AND assignee in (currentUser())",
+                statuses, date_str, date_str
             );
 
             // Step 3: Prepare request with session authentication
             let mut headers = HeaderMap::new();
             headers.insert(COOKIE, HeaderValue::from_str(&session_id)?);
-            let url = format!("{}/{}?jql={}", &self.config.api_url, SEARCH_URL, &jql);
+            let url = format!("{}/{}?jql={}", self.config.api_url, SEARCH_URL, jql);
 
             // Step 4: Execute the search request
             let res = match self.client.get(&url).headers(headers).send().await {
@@ -510,6 +517,18 @@ pub struct JiraConfig {
     /// Do not include the `/rest/api/` path as it will be added automatically.
     /// The URL should point to the root of your Jira installation.
     pub api_url: String,
+
+    /// Issue statuses treated as "completed" when searching for resolved work.
+    ///
+    /// The values are inserted into the JQL `status in (...)` clause. Override
+    /// in the config file for localized Jira instances.
+    #[serde(default = "default_completed_statuses")]
+    pub completed_statuses: Vec<String>,
+}
+
+/// Default completed-issue statuses for stock English Jira instances.
+fn default_completed_statuses() -> Vec<String> {
+    vec!["Done".to_string(), "Resolved".to_string()]
 }
 
 impl JiraConfig {
@@ -583,19 +602,18 @@ impl JiraConfig {
     /// ```
     pub fn init(config: &Option<Self>) -> Result<Self> {
         // Use existing configuration as defaults, or create empty defaults
-        let config = config
-            .clone()
-            .or(Some(Self {
-                login: "".to_string(),
-                api_url: "".to_string(),
-            }))
-            .unwrap();
+        let config = config.clone().unwrap_or(Self {
+            login: "".to_string(),
+            api_url: "".to_string(),
+            completed_statuses: default_completed_statuses(),
+        });
 
         // Display configuration module header
         msg_print!(Message::ConfigModuleJira);
 
         // Interactive configuration with existing values as defaults
         Ok(Self {
+            completed_statuses: config.completed_statuses.clone(),
             login: Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your Jira login")
                 .default(config.login)
