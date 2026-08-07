@@ -70,9 +70,21 @@ mod tests {
         // Check PID file exists
         assert!(pid_path.exists(), "PID file should exist after starting watch");
 
-        // Stop daemon
-        let output = kasl_cmd(&ctx.dir).args(["watch", "--stop"]).output().expect("Failed to stop watch");
-        assert!(output.status.success(), "watch --stop should succeed");
+        // Stop daemon (capture output for diagnostics on failure)
+        let output = kasl_cmd(&ctx.dir)
+            .args(["watch", "--stop"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .output()
+            .expect("Failed to stop watch");
+        assert!(
+            output.status.success(),
+            "watch --stop should succeed
+stdout: {}
+stderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         // Give it time to stop
         thread::sleep(Duration::from_millis(1000));
