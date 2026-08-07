@@ -55,6 +55,22 @@ mod tests {
         cmd
     }
 
+    /// Polls a condition until it holds or the deadline passes.
+    ///
+    /// CI runners vary wildly in speed, so fixed sleeps flake: a cold macOS
+    /// runner can take far longer than 2 s to start the daemon. Polling with
+    /// a generous deadline is fast on quick machines and patient on slow ones.
+    fn wait_for(cond: impl Fn() -> bool, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            if cond() {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
     #[test_context(DaemonTestContext)]
     #[serial]
     #[test]
@@ -64,11 +80,11 @@ mod tests {
         // Start daemon with spawn() instead of blocking output()
         let mut child = kasl_cmd(&ctx.dir).arg("watch").spawn().expect("Failed to start watch process");
 
-        // Give it time to start
-        thread::sleep(Duration::from_millis(2000));
-
-        // Check PID file exists
-        assert!(pid_path.exists(), "PID file should exist after starting watch");
+        // Wait for the daemon to come up and write its PID file
+        assert!(
+            wait_for(|| pid_path.exists(), Duration::from_secs(30)),
+            "PID file should exist after starting watch"
+        );
 
         // Stop daemon (capture output for diagnostics on failure)
         let output = kasl_cmd(&ctx.dir)
@@ -86,11 +102,11 @@ stderr: {}",
             String::from_utf8_lossy(&output.stderr)
         );
 
-        // Give it time to stop
-        thread::sleep(Duration::from_millis(1000));
-
-        // PID file should be gone
-        assert!(!pid_path.exists(), "PID file should be removed after stopping");
+        // PID file should be gone once the stop settles
+        assert!(
+            wait_for(|| !pid_path.exists(), Duration::from_secs(10)),
+            "PID file should be removed after stopping"
+        );
 
         // Clean up the launcher process if it's still running
         let _ = child.kill();
@@ -102,15 +118,13 @@ stderr: {}",
     #[test]
     fn test_no_duplicate_daemons(ctx: &mut DaemonTestContext) {
         let pid_path = DataStorage::new().get_path("kasl-watch.pid").unwrap();
+        let pid_path_clone = pid_path.clone();
 
         // Start first daemon using spawn() instead of output()
         let mut child1 = kasl_cmd(&ctx.dir).arg("watch").spawn().expect("Failed to start first watch");
 
-        // Give it time to start
-        thread::sleep(Duration::from_millis(2000));
-
-        // Check that PID file exists
-        assert!(pid_path.exists(), "First daemon should create PID file");
+        // Wait for the first daemon to come up and write its PID file
+        assert!(wait_for(|| pid_path.exists(), Duration::from_secs(30)), "First daemon should create PID file");
 
         // Read first PID
         let first_pid = std::fs::read_to_string(&pid_path).expect("Failed to read first PID").trim().to_string();
@@ -118,8 +132,16 @@ stderr: {}",
         // Try to start second daemon - this should replace the first one
         let mut child2 = kasl_cmd(&ctx.dir).arg("watch").spawn().expect("Failed to start second watch");
 
-        // Give it time to restart
-        thread::sleep(Duration::from_millis(2000));
+        // Wait for the restart to settle: either the PID changes or the file
+        // is (transiently) gone while the first daemon shuts down
+        let first = first_pid.clone();
+        wait_for(
+            move || match std::fs::read_to_string(&pid_path_clone) {
+                Ok(content) => content.trim() != first,
+                Err(_) => true,
+            },
+            Duration::from_secs(30),
+        );
 
         // Read second PID if file still exists
         if pid_path.exists() {
@@ -149,18 +171,17 @@ stderr: {}",
         // Start daemon
         let mut child = kasl_cmd(&ctx.dir).args(["watch"]).spawn().expect("Failed to start daemon");
 
-        // Give daemon time to start
-        thread::sleep(Duration::from_millis(2000));
-
-        // Check if daemon is now running
-        assert!(daemon::is_running(), "Daemon should be running after start");
+        // Wait for the daemon to come up
+        assert!(wait_for(daemon::is_running, Duration::from_secs(30)), "Daemon should be running after start");
 
         // Stop daemon
         let _ = kasl_cmd(&ctx.dir).args(["watch", "--stop"]).output();
-        thread::sleep(Duration::from_millis(1000));
 
-        // Check if daemon is stopped
-        assert!(!daemon::is_running(), "Daemon should be stopped after stop command");
+        // Wait for the daemon to go down
+        assert!(
+            wait_for(|| !daemon::is_running(), Duration::from_secs(10)),
+            "Daemon should be stopped after stop command"
+        );
 
         // Reap the launcher so no test process outlives the suite
         let _ = child.kill();

@@ -55,20 +55,34 @@ mod tests {
         cmd
     }
 
+    /// Polls a condition until it holds or the deadline passes; fixed sleeps
+    /// flake on slow CI runners.
+    fn wait_for(cond: impl Fn() -> bool, timeout: Duration) -> bool {
+        let deadline = std::time::Instant::now() + timeout;
+        while std::time::Instant::now() < deadline {
+            if cond() {
+                return true;
+            }
+            thread::sleep(Duration::from_millis(100));
+        }
+        false
+    }
+
     #[test_context(WatchRestartTestContext)]
     #[serial]
     #[test]
     fn test_watch_automatic_restart(ctx: &mut WatchRestartTestContext) {
         let pid_path = DataStorage::new().get_path("kasl-watch.pid").unwrap();
+        let pid_path_clone = pid_path.clone();
 
         // Start first instance using spawn() to avoid blocking
         let mut child1 = kasl_cmd(&ctx.dir).arg("watch").spawn().expect("Failed to start first watch instance");
 
-        // Give it time to start
-        thread::sleep(Duration::from_millis(2000));
-
-        // Check PID file exists
-        assert!(pid_path.exists(), "PID file should exist after starting watch");
+        // Wait for the daemon to come up and write its PID file
+        assert!(
+            wait_for(|| pid_path.exists(), Duration::from_secs(30)),
+            "PID file should exist after starting watch"
+        );
 
         // Read first PID
         let first_pid = std::fs::read_to_string(&pid_path).expect("Failed to read first PID").trim().to_string();
@@ -76,8 +90,16 @@ mod tests {
         // Start second instance (should stop the first) using spawn()
         let mut child2 = kasl_cmd(&ctx.dir).arg("watch").spawn().expect("Failed to start second watch instance");
 
-        // Give it time to restart
-        thread::sleep(Duration::from_millis(2000));
+        // Wait for the restart to settle: either the PID changes or the file
+        // is (transiently) gone while the first daemon shuts down
+        let first = first_pid.clone();
+        wait_for(
+            move || match std::fs::read_to_string(&pid_path_clone) {
+                Ok(content) => content.trim() != first,
+                Err(_) => true,
+            },
+            Duration::from_secs(30),
+        );
 
         // Check if PID file still exists and read second PID
         if pid_path.exists() {
@@ -90,11 +112,11 @@ mod tests {
         let output = kasl_cmd(&ctx.dir).args(["watch", "--stop"]).output().expect("Failed to stop watch");
         assert!(output.status.success());
 
-        // Give time for cleanup
-        thread::sleep(Duration::from_millis(1000));
-
-        // PID file should be gone
-        assert!(!pid_path.exists(), "PID file should be removed after stopping");
+        // PID file should be gone once the stop settles
+        assert!(
+            wait_for(|| !pid_path.exists(), Duration::from_secs(10)),
+            "PID file should be removed after stopping"
+        );
 
         // Clean up any remaining launcher processes
         let _ = child1.kill();
