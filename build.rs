@@ -38,8 +38,8 @@ impl AppMetadata {
         write!(
             self.file,
             "#[allow(unused)]\npub const APP_METADATA_{}: &str = \"{}\";\n",
-            &key.to_uppercase(),
-            &value
+            key.to_uppercase(),
+            value
         )
     }
 
@@ -53,7 +53,7 @@ impl AppMetadata {
         write!(
             self.file,
             "#[allow(unused)]\npub const APP_METADATA_{}: &[u8; {}] = &[",
-            &key.to_uppercase(),
+            key.to_uppercase(),
             value.len()
         )?;
 

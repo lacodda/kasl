@@ -47,10 +47,7 @@ pub fn drain_available_stdin_lines() -> Vec<String> {
     }
 
     let text = String::from_utf8_lossy(&bytes);
-    let mut lines: Vec<String> = text
-        .split('\n')
-        .map(|line| line.trim_end_matches('\r').to_string())
-        .collect();
+    let mut lines: Vec<String> = text.split('\n').map(|line| line.trim_end_matches('\r').to_string()).collect();
 
     if lines.last().map(|line| line.is_empty()).unwrap_or(false) {
         lines.pop();
@@ -126,16 +123,7 @@ fn stdin_has_pending_input_windows() -> bool {
 
         // Pipe / pty (Git Bash, many terminals): byte backlog is authoritative.
         let mut available: DWORD = 0;
-        if PeekNamedPipe(
-            handle,
-            std::ptr::null_mut(),
-            0,
-            std::ptr::null_mut(),
-            &mut available,
-            std::ptr::null_mut(),
-        ) != FALSE
-            && available > 0
-        {
+        if PeekNamedPipe(handle, std::ptr::null_mut(), 0, std::ptr::null_mut(), &mut available, std::ptr::null_mut()) != FALSE && available > 0 {
             return true;
         }
 
@@ -192,13 +180,7 @@ fn read_available_stdin_bytes_windows() -> Vec<u8> {
 
         let mut buf = vec![0u8; available as usize];
         let mut read: DWORD = 0;
-        let ok = ReadFile(
-            handle,
-            buf.as_mut_ptr() as *mut _,
-            available,
-            &mut read,
-            ptr::null_mut(),
-        );
+        let ok = ReadFile(handle, buf.as_mut_ptr() as *mut _, available, &mut read, ptr::null_mut());
         if ok == FALSE {
             return Vec::new();
         }
@@ -209,7 +191,7 @@ fn read_available_stdin_bytes_windows() -> Vec<u8> {
 
 #[cfg(unix)]
 fn stdin_has_pending_input_unix() -> bool {
-    use nix::poll::{poll, PollFd, PollFlags};
+    use nix::poll::{PollFd, PollFlags, poll};
     use std::os::fd::AsFd;
 
     let stdin = std::io::stdin();
@@ -219,7 +201,7 @@ fn stdin_has_pending_input_unix() -> bool {
 
 #[cfg(unix)]
 fn read_available_stdin_bytes_unix() -> Vec<u8> {
-    use nix::poll::{poll, PollFd, PollFlags};
+    use nix::poll::{PollFd, PollFlags, poll};
     use std::io::Read;
     use std::os::fd::{AsRawFd, BorrowedFd};
 
@@ -232,10 +214,7 @@ fn read_available_stdin_bytes_unix() -> Vec<u8> {
     let mut chunk = [0u8; 4096];
     let mut stdin_lock = stdin.lock();
     loop {
-        let mut fds = [PollFd::new(
-            unsafe { BorrowedFd::borrow_raw(stdin_lock.as_raw_fd()) },
-            PollFlags::POLLIN,
-        )];
+        let mut fds = [PollFd::new(unsafe { BorrowedFd::borrow_raw(stdin_lock.as_raw_fd()) }, PollFlags::POLLIN)];
         match poll(&mut fds, 0u16) {
             Ok(n) if n > 0 => match stdin_lock.read(&mut chunk) {
                 Ok(0) => break,

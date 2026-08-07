@@ -24,7 +24,7 @@
 use crate::{
     db::{
         db::Db,
-        migrations::{get_db_version, needs_migration, MigrationManager},
+        migrations::{MigrationManager, get_db_version, needs_migration},
     },
     libs::messages::Message,
     msg_info, msg_print,

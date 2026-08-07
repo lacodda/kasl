@@ -424,7 +424,7 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
         if interval.is_short(min_minutes) {
             // Record this short interval for analysis
             short_intervals.push((idx, interval.clone()));
-            total_duration = total_duration + interval.duration;
+            total_duration += interval.duration;
 
             // Identify optimization opportunity: remove the pause that created this interval
             // To remove a short interval, we need to remove the pause before it
@@ -504,7 +504,7 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
         if interval.is_short(min_minutes) {
             // This is a short interval - add to filtered list
             short_intervals.push((idx, interval.clone()));
-            total_duration = total_duration + interval.duration;
+            total_duration += interval.duration;
         } else {
             // This interval meets minimum duration - keep it
             filtered_intervals.push(interval.clone());
@@ -535,7 +535,7 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
 ///
 /// The function uses two different approaches for different metrics:
 /// - **Filtered Duration**: Summed directly from provided intervals (for display purposes)
-/// - **Productivity**: Calculated using the comprehensive `Productivity::calculate_productivity()` 
+/// - **Productivity**: Calculated using the comprehensive `Productivity::calculate_productivity()`
 ///   method which properly handles all pause types, breaks, and overlaps
 ///
 /// This separation allows for interval-based filtering (for clean reports) while maintaining
@@ -565,15 +565,12 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
 /// let (duration, productivity) = report_with_intervals(&workday, &filtered_intervals)?;
 /// println!("Work time: {}, Productivity: {:.1}%", format_duration(duration), productivity);
 /// ```
-pub fn report_with_intervals(
-    workday: &Workday,
-    intervals: &[WorkInterval]
-) -> Result<(Duration, f64)> {
+pub fn report_with_intervals(workday: &Workday, intervals: &[WorkInterval]) -> Result<(Duration, f64)> {
     // Calculate filtered duration based on provided intervals (for display purposes)
     let filtered_duration = intervals.iter().fold(Duration::zero(), |acc, interval| acc + interval.duration);
 
     // Use centralized productivity module for consistent, comprehensive calculation
-    let productivity = Productivity::new(&workday)?.calculate_productivity();
+    let productivity = Productivity::new(workday)?.calculate_productivity();
 
     Ok((filtered_duration, productivity))
 }
@@ -610,37 +607,30 @@ pub fn report_with_intervals(
 ///
 /// ```rust
 /// use kasl::libs::report::combine_breaks_and_pauses;
-/// 
+///
 /// let breaks = breaks_db.get_daily_breaks(date)?;
 /// let pauses = pauses_db.get_daily_pauses(date)?;
 /// let combined = combine_breaks_and_pauses(&breaks, &pauses);
-/// 
+///
 /// let intervals = calculate_work_intervals(&workday, &combined);
 /// ```
-pub fn combine_breaks_and_pauses(
-    breaks: &[crate::db::breaks::Break], 
-    pauses: &[crate::libs::pause::Pause]
-) -> Vec<crate::libs::pause::Pause> {
+pub fn combine_breaks_and_pauses(breaks: &[crate::db::breaks::Break], pauses: &[crate::libs::pause::Pause]) -> Vec<crate::libs::pause::Pause> {
     let mut combined = Vec::new();
-    
+
     // Add existing pauses
     combined.extend_from_slice(pauses);
-    
-    // Convert breaks to pause format and add them
-    let mut next_id = pauses.iter().map(|p| p.id).max().unwrap_or(0) + 1000; // Use high IDs to avoid conflicts
-    
-    for break_record in breaks {
-        combined.push(crate::libs::pause::Pause {
-            id: next_id,
-            start: break_record.start,
-            end: Some(break_record.end),
-            duration: Some(break_record.duration),
-        });
-        next_id += 1;
-    }
-    
+
+    // Convert breaks to pause format and add them; high IDs avoid conflicts
+    let first_id = pauses.iter().map(|p| p.id).max().unwrap_or(0) + 1000;
+    combined.extend(breaks.iter().enumerate().map(|(i, break_record)| crate::libs::pause::Pause {
+        id: first_id + i as i32,
+        start: break_record.start,
+        end: Some(break_record.end),
+        duration: Some(break_record.duration),
+    }));
+
     // Sort by start time for proper interval calculation
     combined.sort_by_key(|item| item.start);
-    
+
     combined
 }

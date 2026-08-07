@@ -23,11 +23,11 @@
 
 use super::data_storage::DataStorage;
 use aes::Aes256;
+use aes::cipher::block_padding::Pkcs7;
+use aes::cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use anyhow::Result;
 use base64::prelude::*;
-use block_modes::block_padding::Pkcs7;
-use block_modes::{BlockMode, Cbc};
-use dialoguer::{theme::ColorfulTheme, Password};
+use dialoguer::{Password, theme::ColorfulTheme};
 use std::fs::{self, File};
 use std::io::{Read, Write};
 use std::path::PathBuf;
@@ -43,7 +43,8 @@ include!(concat!(env!("OUT_DIR"), "/app_metadata.rs"));
 /// - **AES-256**: Advanced Encryption Standard with 256-bit keys
 /// - **CBC Mode**: Cipher Block Chaining for secure block encryption
 /// - **PKCS7 Padding**: Standard padding scheme for block alignment
-type Aes256Cbc = Cbc<Aes256, Pkcs7>;
+type Aes256CbcEnc = cbc::Encryptor<Aes256>;
+type Aes256CbcDec = cbc::Decryptor<Aes256>;
 
 /// Secure credential storage and management system.
 ///
@@ -349,13 +350,13 @@ impl Secret {
     /// ```
     fn encrypt(&self) -> Result<Self> {
         // Initialize AES cipher with embedded keys
-        let cipher = Aes256Cbc::new_from_slices(&self.key, &self.iv)?;
+        let cipher = Aes256CbcEnc::new_from_slices(&self.key, &self.iv)?;
 
         // Get password from memory
         let password = &self.password.clone().unwrap();
 
         // Encrypt password with PKCS7 padding
-        let ciphertext = cipher.encrypt_vec(&password.as_bytes());
+        let ciphertext = cipher.encrypt_padded_vec::<Pkcs7>(password.as_bytes());
 
         // Encode as Base64 for safe file storage
         let encoded = BASE64_STANDARD.encode(&ciphertext);
@@ -429,10 +430,12 @@ impl Secret {
         let ciphertext = BASE64_STANDARD.decode(encoded)?;
 
         // Initialize AES cipher with embedded keys
-        let cipher = Aes256Cbc::new_from_slices(&self.key, &self.iv)?;
+        let cipher = Aes256CbcDec::new_from_slices(&self.key, &self.iv)?;
 
         // Decrypt data and remove padding
-        let decrypted_ciphertext = cipher.decrypt_vec(&ciphertext)?;
+        let decrypted_ciphertext = cipher
+            .decrypt_padded_vec::<Pkcs7>(&ciphertext)
+            .map_err(|e| anyhow::anyhow!("Failed to decrypt stored secret: {e}"))?;
 
         // Convert decrypted bytes to UTF-8 string
         let decrypted_password = String::from_utf8(decrypted_ciphertext)?;

@@ -104,12 +104,8 @@ impl Productivity {
         Ok(Self {
             workday: workday.clone(),
             breaks: Breaks::new()?.get_daily_breaks(workday.date)?,
-            short_pauses: Pauses::new()?
-                .set_max_duration(monitor_config.min_pause_duration)
-                .get_workday_pauses(workday)?,
-            long_pauses: Pauses::new()?
-                .set_min_duration(monitor_config.min_pause_duration)
-                .get_workday_pauses(workday)?,
+            short_pauses: Pauses::new()?.set_max_duration(monitor_config.min_pause_duration).get_workday_pauses(workday)?,
+            long_pauses: Pauses::new()?.set_min_duration(monitor_config.min_pause_duration).get_workday_pauses(workday)?,
             config: productivity_config,
         })
     }
@@ -424,7 +420,7 @@ impl Productivity {
         // Calculate productivity percentage
         if work_time.num_seconds() > 0 {
             let productivity = (net_work_time.num_seconds() as f64 / work_time.num_seconds() as f64) * 100.0;
-            productivity.max(0.0).min(100.0) // Clamp between 0-100%
+            productivity.clamp(0.0, 100.0)
         } else {
             0.0
         }

@@ -2,7 +2,7 @@
 //!
 //! Handles the core reporting functionality of kasl including generation of detailed
 //! daily work reports, automatic filtering of short work intervals, integration with
-//! external APIs, and comprehensive productivity analysis using the centralized 
+//! external APIs, and comprehensive productivity analysis using the centralized
 //! Productivity module.
 //!
 //! ## Productivity Integration
@@ -122,11 +122,7 @@ pub async fn cmd(args: ReportArgs) -> Result<()> {
 ///
 /// Returns the target date with timezone information for report generation.
 fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
-    if is_last_day {
-        Local::now() - Duration::days(1)
-    } else {
-        Local::now()
-    }
+    if is_last_day { Local::now() - Duration::days(1) } else { Local::now() }
 }
 
 /// Handles the logic for daily reports.
@@ -350,7 +346,7 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 
     let config = Config::read()?;
     let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
-    
+
     // Load both manual breaks and automatic pauses for comprehensive report submission
     let manual_breaks = Breaks::new()?.get_daily_breaks(naive_date)?;
     let long_pauses = Pauses::new()?
@@ -447,7 +443,7 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 ///
 /// Returns a JSON value containing the structured report payload
 /// ready for API submission.
-fn build_report_payload(_workday: &Workday, tasks: &mut Vec<Task>, intervals: &[report::WorkInterval]) -> serde_json::Value {
+fn build_report_payload(_workday: &Workday, tasks: &mut [Task], intervals: &[report::WorkInterval]) -> serde_json::Value {
     let num_tasks = tasks.len();
     let num_intervals = intervals.len();
 
@@ -468,9 +464,7 @@ fn build_report_payload(_workday: &Workday, tasks: &mut Vec<Task>, intervals: &[
         for (i, interval) in intervals.iter().enumerate() {
             // Calculate number of tasks for this interval
             let count = base_tasks_per_interval + if extra_tasks > 0 { 1 } else { 0 };
-            if extra_tasks > 0 {
-                extra_tasks -= 1;
-            }
+            extra_tasks = extra_tasks.saturating_sub(1);
 
             // Collect tasks for this interval
             let mut assigned_tasks: Vec<Task> = task_iter.by_ref().take(count).cloned().collect();
@@ -494,9 +488,7 @@ fn build_report_payload(_workday: &Workday, tasks: &mut Vec<Task>, intervals: &[
         for task in tasks.iter() {
             // Calculate number of intervals for this task
             let count = base_intervals_per_task + if extra_intervals > 0 { 1 } else { 0 };
-            if extra_intervals > 0 {
-                extra_intervals -= 1;
-            }
+            extra_intervals = extra_intervals.saturating_sub(1);
 
             // Create entries for each interval assigned to this task
             for _ in 0..count {

@@ -31,7 +31,7 @@ use crate::{
 use anyhow::Result;
 use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
 use clap::Args;
-use dialoguer::{theme::ColorfulTheme, Input, Select};
+use dialoguer::{Input, Select, theme::ColorfulTheme};
 
 /// Command-line arguments for the breaks command.
 ///
@@ -188,7 +188,7 @@ async fn handle_interactive_break_creation(date: NaiveDate, productivity_config:
     // Prompt for break duration
     let theme = ColorfulTheme::default();
     let duration_input: String = Input::with_theme(&theme)
-        .with_prompt(&format!(
+        .with_prompt(format!(
             "Enter break duration ({}-{} minutes)",
             productivity_config.min_break_duration, productivity_config.max_break_duration
         ))

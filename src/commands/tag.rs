@@ -33,7 +33,7 @@ use crate::{
 };
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
+use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 
 /// Command-line arguments for tag management operations.
 ///
@@ -323,7 +323,12 @@ fn handle_edit(tag_identifier: String) -> Result<()> {
     let color = if new_color.is_empty() { None } else { Some(new_color) };
 
     // Update the tag
-    tags_db.update(&Tag{id: tag.id, name: new_name.clone(), color, created_at: None})?;
+    tags_db.update(&Tag {
+        id: tag.id,
+        name: new_name.clone(),
+        color,
+        created_at: None,
+    })?;
     msg_success!(Message::TagUpdated(new_name));
     Ok(())
 }

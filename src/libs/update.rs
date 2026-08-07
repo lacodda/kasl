@@ -281,17 +281,17 @@ impl Updater {
         }
 
         // Perform version check and display notification if update available
-        if let Ok(true) = updater.check_for_latest_release().await {
-            if let Some(latest_version) = &updater.latest_version {
-                // Display user-friendly update notification
-                msg_info!(
-                    Message::UpdateAvailable {
-                        app_name: updater.name,
-                        latest: latest_version.to_string()
-                    },
-                    true // Show with extra spacing for visibility
-                )
-            }
+        if let Ok(true) = updater.check_for_latest_release().await
+            && let Some(latest_version) = &updater.latest_version
+        {
+            // Display user-friendly update notification
+            msg_info!(
+                Message::UpdateAvailable {
+                    app_name: updater.name,
+                    latest: latest_version.to_string()
+                },
+                true // Show with extra spacing for visibility
+            )
         }
     }
 
@@ -375,7 +375,7 @@ impl Updater {
         let content = response.bytes().await?;
 
         // Save the downloaded archive to a temporary file for processing
-        let tar_gz_path = env::temp_dir().join(format!("{}.tar.gz", &self.name));
+        let tar_gz_path = env::temp_dir().join(format!("{}.tar.gz", self.name));
         fs::write(&tar_gz_path, &content)?;
 
         // Extract the new binary and replace the current executable

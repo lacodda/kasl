@@ -30,7 +30,7 @@ use crate::libs::report;
 use crate::msg_print;
 use anyhow::Result;
 use chrono::{Duration, NaiveDate, TimeDelta};
-use prettytable::{format, row, Cell, Row, Table};
+use prettytable::{Cell, Row, Table, format, row};
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
@@ -60,12 +60,7 @@ impl View {
         let show_tags = tasks.iter().any(|t| !t.tags.is_empty());
 
         let idx_width = tasks.len().to_string().width().max("#".width());
-        let id_width = tasks
-            .iter()
-            .map(|t| t.id.unwrap_or(0).to_string().width())
-            .max()
-            .unwrap_or(1)
-            .max("ID".width());
+        let id_width = tasks.iter().map(|t| t.id.unwrap_or(0).to_string().width()).max().unwrap_or(1).max("ID".width());
         let task_id_width = if show_task_id {
             tasks
                 .iter()
@@ -133,10 +128,7 @@ impl View {
         table.set_titles(Row::new(titles));
 
         for (index, task) in tasks.iter().enumerate() {
-            let mut cells = vec![
-                Cell::new(&(index + 1).to_string()),
-                Cell::new(&task.id.unwrap_or(0).to_string()),
-            ];
+            let mut cells = vec![Cell::new(&(index + 1).to_string()), Cell::new(&task.id.unwrap_or(0).to_string())];
             if show_task_id {
                 cells.push(Cell::new(&task.task_id.unwrap_or(0).to_string()));
             }
@@ -200,7 +192,7 @@ impl View {
 
         // Add summary rows with total time and productivity metrics
         table.add_empty_row(); // Visual separator before summary
-        table.add_row(row!["TOTAL", "", "", format_duration(&filtered_duration)]);
+        table.add_row(row!["TOTAL", "", "", format_duration(filtered_duration)]);
         table.add_row(row!["PRODUCTIVITY", "", "", format!("{:.1}%", productivity)]);
 
         // Render the intervals table to console

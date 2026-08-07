@@ -130,10 +130,7 @@ impl ReportTemplate {
             Ok(dir) => {
                 let path = dir.join(format!("{}.json", name));
                 match fs::read_to_string(&path) {
-                    Ok(contents) => match serde_json::from_str::<ReportTemplate>(&contents) {
-                        Ok(template) => template,
-                        Err(_) => Self::siserver(),
-                    },
+                    Ok(contents) => serde_json::from_str::<ReportTemplate>(&contents).unwrap_or_default(),
                     Err(_) => Self::siserver(),
                 }
             }

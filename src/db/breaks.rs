@@ -17,7 +17,7 @@
 //!
 //! let breaks_db = Breaks::new()?;
 //! let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
-//! 
+//!
 //! let break_record = Break {
 //!     id: None,
 //!     date,
@@ -45,22 +45,22 @@ use rusqlite::params;
 pub struct Break {
     /// Unique identifier for the break record
     pub id: Option<i64>,
-    
+
     /// Date this break belongs to
     pub date: NaiveDate,
-    
+
     /// Start time of the break
     pub start: NaiveDateTime,
-    
+
     /// End time of the break
     pub end: NaiveDateTime,
-    
+
     /// Duration of the break in minutes
     pub duration: Duration,
-    
+
     /// Optional reason for the break
     pub reason: Option<String>,
-    
+
     /// When this break record was created
     pub created_at: Option<NaiveDateTime>,
 }
@@ -119,12 +119,12 @@ impl Breaks {
     ///     reason: Some("Lunch break".to_string()),
     ///     created_at: None,
     /// };
-    /// 
+    ///
     /// breaks_db.insert(&break_record)?;
     /// ```
     pub fn insert(&self, break_record: &Break) -> Result<i64> {
         let conn = &self.db.conn;
-        
+
         let _result = conn.execute(
             "INSERT INTO breaks (date, start_time, end_time, duration, reason, created_at) 
              VALUES (?1, ?2, ?3, ?4, ?5, datetime('now'))",
@@ -136,7 +136,7 @@ impl Breaks {
                 break_record.reason,
             ],
         )?;
-        
+
         Ok(conn.last_insert_rowid())
     }
 
@@ -162,14 +162,14 @@ impl Breaks {
     /// ```
     pub fn get_daily_breaks(&self, date: NaiveDate) -> Result<Vec<Break>> {
         let conn = &self.db.conn;
-        
+
         let mut stmt = conn.prepare(
             "SELECT id, date, start_time, end_time, duration, reason, created_at 
              FROM breaks 
              WHERE date = ?1 
-             ORDER BY start_time"
+             ORDER BY start_time",
         )?;
-        
+
         let break_iter = stmt.query_map(params![date], |row| {
             Ok(Break {
                 id: Some(row.get(0)?),
@@ -181,12 +181,12 @@ impl Breaks {
                 created_at: row.get(6)?,
             })
         })?;
-        
+
         let mut breaks = Vec::new();
         for break_result in break_iter {
             breaks.push(break_result?);
         }
-        
+
         Ok(breaks)
     }
 
@@ -211,13 +211,13 @@ impl Breaks {
     /// ```
     pub fn delete(&self, id: i64) -> Result<()> {
         let conn = &self.db.conn;
-        
+
         let affected_rows = conn.execute("DELETE FROM breaks WHERE id = ?1", params![id])?;
-        
+
         if affected_rows == 0 {
             return Err(anyhow::anyhow!("Break record with ID {} not found", id));
         }
-        
+
         Ok(())
     }
 
@@ -235,13 +235,13 @@ impl Breaks {
     /// if the database query fails.
     pub fn get_by_id(&self, id: i64) -> Result<Option<Break>> {
         let conn = &self.db.conn;
-        
+
         let mut stmt = conn.prepare(
             "SELECT id, date, start_time, end_time, duration, reason, created_at 
              FROM breaks 
-             WHERE id = ?1"
+             WHERE id = ?1",
         )?;
-        
+
         let mut break_iter = stmt.query_map(params![id], |row| {
             Ok(Break {
                 id: Some(row.get(0)?),
@@ -253,7 +253,7 @@ impl Breaks {
                 created_at: row.get(6)?,
             })
         })?;
-        
+
         match break_iter.next() {
             Some(break_result) => Ok(Some(break_result?)),
             None => Ok(None),

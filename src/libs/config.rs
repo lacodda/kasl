@@ -29,7 +29,7 @@ use crate::libs::messages::Message;
 use crate::libs::task::normalize_task_name;
 use crate::{msg_error, msg_info, msg_print, msg_success};
 use anyhow::Result;
-use dialoguer::{theme::ColorfulTheme, Input, MultiSelect};
+use dialoguer::{Input, MultiSelect, theme::ColorfulTheme};
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -555,10 +555,7 @@ impl Config {
                 continue;
             }
             let key = normalize_task_name(trimmed);
-            let exists = discovery
-                .ignore_names
-                .iter()
-                .any(|existing| normalize_task_name(existing) == key);
+            let exists = discovery.ignore_names.iter().any(|existing| normalize_task_name(existing) == key);
             if !exists {
                 discovery.ignore_names.push(trimmed.to_string());
                 added += 1;
@@ -622,13 +619,10 @@ impl Config {
     /// ```
     pub fn init() -> Result<Self> {
         // Load existing configuration to use as defaults for the setup wizard
-        let mut config = match Self::read() {
-            Ok(config) => config,
-            Err(_) => Config::default(), // Fall back to default if loading fails
-        };
+        let mut config = Self::read().unwrap_or_default();
 
         // Define available configuration modules with their metadata
-        let node_descriptions = vec![
+        let node_descriptions = [
             SiConfig::module(),
             GitLabConfig::module(),
             JiraConfig::module(),
@@ -657,7 +651,7 @@ impl Config {
         // Present multi-select interface for module selection
         let selected_nodes = MultiSelect::with_theme(&ColorfulTheme::default())
             .with_prompt(Message::PromptSelectModules.to_string())
-            .items(&node_descriptions.iter().map(|module| &module.name).collect::<Vec<_>>())
+            .items(node_descriptions.iter().map(|module| &module.name).collect::<Vec<_>>())
             .interact()?;
 
         // Configure each selected module through its specific setup process
@@ -804,9 +798,7 @@ impl Config {
                 }
 
                 "task_discovery" => {
-                    config.task_discovery = Some(configure_task_discovery(
-                        config.task_discovery.clone().unwrap_or_default(),
-                    )?);
+                    config.task_discovery = Some(configure_task_discovery(config.task_discovery.clone().unwrap_or_default())?);
                 }
 
                 _ => {} // Unknown module keys are safely ignored
@@ -884,7 +876,7 @@ impl Config {
         paths.push(exe_dir.to_path_buf());
 
         // Reconstruct the PATH environment variable
-        let new_path = env::join_paths(paths).expect(&Message::FailedToJoinPaths.to_string());
+        let new_path = env::join_paths(paths).unwrap_or_else(|_| panic!("{}", Message::FailedToJoinPaths.to_string()));
 
         // Define the Windows registry key for system environment variables
         let path_key = r"HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Environment";
@@ -896,7 +888,7 @@ impl Config {
             .arg("/v")
             .arg("Path")
             .output()
-            .expect(&Message::FailedToExecuteRegQuery.to_string());
+            .unwrap_or_else(|_| panic!("{}", Message::FailedToExecuteRegQuery.to_string()));
 
         // Handle registry query failures gracefully
         if !reg_query_output.status.success() {
@@ -907,10 +899,10 @@ impl Config {
 
         // Parse the current PATH value from registry output
         let current_path = str::from_utf8(&reg_query_output.stdout)
-            .expect(&Message::FailedToParseRegOutput.to_string())
+            .unwrap_or_else(|_| panic!("{}", Message::FailedToParseRegOutput.to_string()))
             .split_whitespace()
             .last()
-            .expect(&Message::FailedToGetPathFromReg.to_string());
+            .unwrap_or_else(|| panic!("{}", Message::FailedToGetPathFromReg.to_string()));
 
         // Update the registry with the new PATH value
         let reg_set_output = Command::new("reg")
@@ -921,16 +913,19 @@ impl Config {
             .arg("/t")
             .arg("REG_EXPAND_SZ") // Expandable string type for environment variables
             .arg("/d")
-            .arg(&format!("{};{}", current_path, new_path.to_string_lossy()))
+            .arg(format!("{};{}", current_path, new_path.to_string_lossy()))
             .arg("/f") // Force overwrite without confirmation
             .output()
-            .expect(&Message::FailedToExecuteRegSet.to_string());
+            .unwrap_or_else(|_| panic!("{}", Message::FailedToExecuteRegSet.to_string()));
 
         // Check if the registry update was successful
         if !reg_set_output.status.success() {
             let status = reg_set_output.status.to_string();
             let stderr = String::from_utf8_lossy(&reg_set_output.stderr).to_string();
-            msg_error!(Message::PathRegistryUpdateError { status: status.clone(), stderr: stderr.clone() });
+            msg_error!(Message::PathRegistryUpdateError {
+                status: status.clone(),
+                stderr: stderr.clone()
+            });
             return Err(anyhow::anyhow!("{}", Message::PathRegistryUpdateError { status, stderr }));
         }
 
@@ -979,10 +974,7 @@ fn configure_task_discovery(mut discovery: TaskDiscoveryConfig) -> Result<TaskDi
         }
 
         let key = normalize_task_name(trimmed);
-        let exists = discovery
-            .ignore_names
-            .iter()
-            .any(|existing| normalize_task_name(existing) == key);
+        let exists = discovery.ignore_names.iter().any(|existing| normalize_task_name(existing) == key);
         if exists {
             msg_info!(Message::TaskDiscoveryIgnoreNameExists(trimmed.to_string()));
         } else {

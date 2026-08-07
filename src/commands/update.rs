@@ -35,7 +35,7 @@ use anyhow::Result;
 pub async fn cmd() -> Result<()> {
     // Check if watcher is currently running before update
     let watcher_was_running = daemon::is_running();
-    
+
     if watcher_was_running {
         msg_info!(Message::WatcherStoppingForUpdate);
         daemon::stop()?;
@@ -49,13 +49,13 @@ pub async fn cmd() -> Result<()> {
 
     if !needs_update {
         msg_info!(Message::NoUpdateRequired);
-        
+
         // If watcher was running before update check, restart it
         if watcher_was_running {
             msg_info!(Message::WatcherRestartingAfterUpdate);
             daemon::spawn()?;
         }
-        
+
         return Ok(());
     }
 

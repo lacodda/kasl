@@ -128,11 +128,7 @@ impl Display for Message {
             Message::TasksIncompleteHeader => "Incomplete tasks".to_string(),
             Message::TasksGitlabHeader => "Gitlab commits".to_string(),
             Message::TasksJiraHeader => "Jira issues".to_string(),
-            Message::TasksDiscoverySummary {
-                incomplete,
-                jira,
-                gitlab,
-            } => {
+            Message::TasksDiscoverySummary { incomplete, jira, gitlab } => {
                 let mut parts = Vec::new();
                 if *incomplete > 0 {
                     parts.push(format!("{} incomplete", incomplete));
@@ -385,7 +381,7 @@ impl Display for Message {
             Message::DbMigrationFailed => "Database migration failed".to_string(),
             Message::DatabaseOperationFailed { operation, error } => {
                 format!("Database operation '{}' failed (continuing monitoring): {}", operation, error)
-            },
+            }
             Message::NoIdSet => "No ID set".to_string(),
 
             // === FILE SYSTEM MESSAGES ===
@@ -397,7 +393,10 @@ impl Display for Message {
 
             // === SYSTEM/PATH MESSAGES ===
             Message::PathConfigured => "PATH successfully configured for system-wide access".to_string(),
-            Message::PathConfigWarning { error } => format!("Warning: Could not configure PATH automatically. {}\nYou may need to run as administrator or manually add kasl to your PATH.", error),
+            Message::PathConfigWarning { error } => format!(
+                "Warning: Could not configure PATH automatically. {}\nYou may need to run as administrator or manually add kasl to your PATH.",
+                error
+            ),
             Message::PathQueryFailed(status) => format!("Failed to query PATH from registry: {:?}", status),
             Message::PathSetFailed => "Failed to set PATH in registry".to_string(),
             Message::PathRegistryQueryError { status } => format!("Registry query failed (exit code: {})", status),
@@ -407,7 +406,7 @@ impl Display for Message {
                 } else {
                     format!("Registry update failed (exit code: {}): {}", status, stderr.trim())
                 }
-            },
+            }
             Message::FailedToJoinPaths => "Failed to join paths".to_string(),
             Message::FailedToExecuteRegQuery => "Failed to execute reg query".to_string(),
             Message::FailedToParseRegOutput => "Failed to parse reg query output".to_string(),
@@ -420,29 +419,41 @@ impl Display for Message {
 
             // === PRODUCTIVITY MESSAGES ===
             Message::MonthlyProductivity(percentage) => format!("Monthly work productivity: {:.1}%", percentage),
-            Message::LowProductivityWarning { current, threshold, needed_break_minutes } => {
+            Message::LowProductivityWarning {
+                current,
+                threshold,
+                needed_break_minutes,
+            } => {
                 format!(
                     "🔴 LOW PRODUCTIVITY: {:.1}% (minimum: {:.1}%)\n   To reach minimum productivity, add a {} minute break\n   Commands: kasl breaks -m {} (automatic) or kasl breaks (choose time)",
                     current, threshold, needed_break_minutes, needed_break_minutes
                 )
-            },
-            Message::ProductivityTooLowToSend { current, threshold, needed_break_minutes } => {
+            }
+            Message::ProductivityTooLowToSend {
+                current,
+                threshold,
+                needed_break_minutes,
+            } => {
                 format!(
                     "Cannot send report: productivity {:.1}% is below minimum {:.1}%\nAdd a break using: kasl breaks -m {}",
                     current, threshold, needed_break_minutes
                 )
-            },
-            Message::BreakCreated { start_time, end_time, duration_minutes } => {
+            }
+            Message::BreakCreated {
+                start_time,
+                end_time,
+                duration_minutes,
+            } => {
                 format!("Break created: {} - {} ({} minutes)", start_time, end_time, duration_minutes)
-            },
+            }
             Message::BreakCreateFailed(error) => format!("Failed to create break: {}", error),
             Message::BreakSuggestionCommand { auto_minutes } => {
                 format!("Run 'kasl breaks -m {}' to automatically place break", auto_minutes)
-            },
+            }
             Message::BreakInteractivePrompt => "Choose break placement interactively".to_string(),
             Message::BreakDurationPrompt { min_duration, max_duration } => {
                 format!("Enter break duration ({}-{} minutes):", min_duration, max_duration)
-            },
+            }
             Message::BreakPlacementOptions => "Select break placement:".to_string(),
             Message::BreakOptionSelected(option) => format!("Selected option {}", option),
             Message::BreakConflictsWithPauses => "Break conflicts with existing pauses".to_string(),

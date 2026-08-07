@@ -831,8 +831,8 @@ impl FormatTasks for Vec<Task> {
         // Handle edge case: fewer tasks than parts
         if len < parts {
             for i in 0..parts {
-                let mut part: Vec<Task> = Vec::with_capacity((len + parts - 1) / parts);
-                for j in 0..(len + parts - 1) / parts {
+                let mut part: Vec<Task> = Vec::with_capacity(len.div_ceil(parts));
+                for j in 0..len.div_ceil(parts) {
                     part.push(self[(i + j * len / parts) % len].clone());
                 }
                 result.push(part);
@@ -880,7 +880,7 @@ impl FormatTasks for Vec<Task> {
                 let completeness_display = task.completeness.map_or("Unknown".to_string(), |comp| format!("{}%", comp));
 
                 // Create formatted line for this task
-                return format!("{} ({})", task.name, completeness_display);
+                format!("{} ({})", task.name, completeness_display)
             })
             .collect::<Vec<_>>()
             .join("\n")
@@ -908,9 +908,7 @@ pub fn normalize_task_name(name: &str) -> String {
     let mut s = collapse_whitespace(name).to_lowercase();
 
     loop {
-        let trimmed = s
-            .trim_end_matches(|c: char| matches!(c, '.' | ',' | ';' | '!' | '?' | ':' | '…'))
-            .trim_end();
+        let trimmed = s.trim_end_matches(['.', ',', ';', '!', '?', ':', '…']).trim_end();
         if trimmed.len() == s.len() {
             break;
         }

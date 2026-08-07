@@ -145,13 +145,13 @@ mod windows {
 
         // Remove any existing task to ensure clean configuration
         let _ = Command::new("schtasks")
-            .args(&["/Delete", "/TN", TASK_NAME, "/F"])
+            .args(["/Delete", "/TN", TASK_NAME, "/F"])
             .creation_flags(CREATE_NO_WINDOW)
             .output();
 
         // Create new scheduled task with simplified configuration
         let output = Command::new("schtasks")
-            .args(&[
+            .args([
                 "/Create", // Create new task
                 "/SC",
                 "ONLOGON", // Trigger: On user logon
@@ -207,7 +207,7 @@ mod windows {
         msg_debug!("Removing scheduled task");
         // Attempt to delete the scheduled task
         let output = Command::new("schtasks")
-            .args(&["/Delete", "/TN", TASK_NAME, "/F"])
+            .args(["/Delete", "/TN", TASK_NAME, "/F"])
             .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
@@ -242,7 +242,7 @@ mod windows {
     pub fn is_enabled() -> Result<bool> {
         // Query task scheduler for the specific task
         let output = Command::new("schtasks")
-            .args(&["/Query", "/TN", TASK_NAME, "/FO", "CSV"])
+            .args(["/Query", "/TN", TASK_NAME, "/FO", "CSV"])
             .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
@@ -271,7 +271,7 @@ mod windows {
         use winapi::um::handleapi::CloseHandle;
         use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
         use winapi::um::securitybaseapi::GetTokenInformation;
-        use winapi::um::winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+        use winapi::um::winnt::{TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
 
         unsafe {
             // Get current process token
@@ -392,7 +392,7 @@ pub fn enable() -> Result<()> {
             // Try user-level autostart via Registry instead
             return enable_user_autostart();
         }
-        return windows::enable();
+        windows::enable()
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -439,7 +439,7 @@ fn enable_user_autostart() -> Result<()> {
 
     // Add entry to current user's Run key
     let output = Command::new("reg")
-        .args(&[
+        .args([
             "add",
             r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
             "/v",
@@ -486,7 +486,7 @@ pub fn disable() -> Result<()> {
         // Try to disable both system and user level autostart
         let _ = windows::disable();
         let _ = disable_user_autostart();
-        return Ok(());
+        Ok(())
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -510,7 +510,7 @@ fn disable_user_autostart() -> Result<()> {
 
     // Remove entry from current user's Run key
     let output = Command::new("reg")
-        .args(&[
+        .args([
             "delete",
             r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
             "/v",
@@ -577,11 +577,11 @@ pub fn is_enabled() -> Result<bool> {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
         let output = Command::new("reg")
-            .args(&["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "Kasl"])
+            .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "Kasl"])
             .creation_flags(CREATE_NO_WINDOW)
             .output()?;
 
-        return Ok(output.status.success());
+        Ok(output.status.success())
     }
 
     #[cfg(not(target_os = "windows"))]

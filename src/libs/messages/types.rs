@@ -20,7 +20,7 @@
 //! msg_error!(Message::ConfigSaveError);
 //! msg_info!(Message::MonitorStarted {
 //!     pause_threshold: 60,
-//!     poll_interval: 500, 
+//!     poll_interval: 500,
 //!     activity_threshold: 30,
 //! });
 //! ```
@@ -214,9 +214,9 @@ pub enum Message {
     // === SHORT INTERVALS MESSAGES ===
     ShortIntervalsDetected(usize, String), // count, total duration
     NoShortIntervalsFound(u64),            // min_minutes
-    ShortIntervalsToRemove(usize), // count
-    RemovingPauses(usize),         // count
-    ShortIntervalsCleared(usize),  // deleted count
+    ShortIntervalsToRemove(usize),         // count
+    RemovingPauses(usize),                 // count
+    ShortIntervalsCleared(usize),          // deleted count
     NoRemovablePausesFound,
     UpdatedReport,
     PromptMinWorkInterval,
@@ -287,7 +287,9 @@ pub enum Message {
     WatcherStoppingForConfig,
     WatcherRestartingAfterConfig,
     WatcherRestarted,
-    WatcherRestartFailed { error: String },
+    WatcherRestartFailed {
+        error: String,
+    },
     UpdateBinaryNotFoundInArchive,
 
     // === AUTHENTICATION MESSAGES ===
@@ -315,7 +317,10 @@ pub enum Message {
     DbConnectionFailed,
     DbQueryFailed,
     DbMigrationFailed,
-    DatabaseOperationFailed { operation: String, error: String },
+    DatabaseOperationFailed {
+        operation: String,
+        error: String,
+    },
     NoIdSet,
 
     // === FILE SYSTEM MESSAGES ===
@@ -327,11 +332,18 @@ pub enum Message {
 
     // === SYSTEM/PATH MESSAGES ===
     PathConfigured,
-    PathConfigWarning { error: String },
+    PathConfigWarning {
+        error: String,
+    },
     PathQueryFailed(String), // status
     PathSetFailed,
-    PathRegistryQueryError { status: String },
-    PathRegistryUpdateError { status: String, stderr: String },
+    PathRegistryQueryError {
+        status: String,
+    },
+    PathRegistryUpdateError {
+        status: String,
+        stderr: String,
+    },
     FailedToJoinPaths,
     FailedToExecuteRegQuery,
     FailedToParseRegOutput,

@@ -29,7 +29,7 @@ use crate::libs::messages::Message;
 use crate::{msg_error, msg_print};
 use anyhow::Result;
 use chrono::{Duration, Local};
-use dialoguer::{theme::ColorfulTheme, Input};
+use dialoguer::{Input, theme::ColorfulTheme};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -242,29 +242,28 @@ impl GitLab {
         let mut commits_info = Vec::new();
         for event in events {
             // Only process push events
-            if event.action_name == "pushed to" {
-                if let Some(push_data) = event.push_data {
-                    if let Some(commit_to) = push_data.commit_to {
-                        // Fetch detailed commit information
-                        let commit_detail = match self.get_commit_detail(event.project_id, &commit_to).await {
-                            Ok(detail) => detail,
-                            Err(_) => continue, // Skip commits that can't be fetched
-                        };
+            if event.action_name == "pushed to"
+                && let Some(push_data) = event.push_data
+                && let Some(commit_to) = push_data.commit_to
+            {
+                // Fetch detailed commit information
+                let commit_detail = match self.get_commit_detail(event.project_id, &commit_to).await {
+                    Ok(detail) => detail,
+                    Err(_) => continue, // Skip commits that can't be fetched
+                };
 
-                        // Extract commit message (first line only for task names)
-                        let clean_message = commit_detail
-                            .message
-                            .split_once('\n') // Split on first newline
-                            .map(|(part, _)| part) // Take first part (summary line)
-                            .unwrap_or(&commit_detail.message) // Use full message if no newline
-                            .to_string();
+                // Extract commit message (first line only for task names)
+                let clean_message = commit_detail
+                    .message
+                    .split_once('\n') // Split on first newline
+                    .map(|(part, _)| part) // Take first part (summary line)
+                    .unwrap_or(&commit_detail.message) // Use full message if no newline
+                    .to_string();
 
-                        commits_info.push(CommitInfo {
-                            sha: commit_detail.id,
-                            message: clean_message,
-                        });
-                    }
-                }
+                commits_info.push(CommitInfo {
+                    sha: commit_detail.id,
+                    message: clean_message,
+                });
             }
         }
 

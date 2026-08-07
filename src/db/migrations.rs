@@ -25,7 +25,7 @@
 use crate::libs::messages::Message;
 use crate::{msg_debug, msg_error, msg_info, msg_success};
 use anyhow::Result;
-use rusqlite::{params, Connection, Transaction};
+use rusqlite::{Connection, Transaction, params};
 
 /// SQL schema for the migrations tracking table.
 ///
@@ -79,6 +79,12 @@ pub struct MigrationManager {
     /// sequence. Each migration builds upon the schema state created by
     /// its predecessors.
     migrations: Vec<Migration>,
+}
+
+impl Default for MigrationManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MigrationManager {
@@ -257,7 +263,7 @@ impl MigrationManager {
                 )",
                 [],
             )?;
-            
+
             // Create index for efficient daily break lookups
             tx.execute("CREATE INDEX idx_breaks_date ON breaks(date)", [])?;
             Ok(())

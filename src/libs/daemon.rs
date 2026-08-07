@@ -78,7 +78,7 @@ pub async fn run_with_signal_handling() -> Result<()> {
     #[cfg(unix)]
     {
         tokio::spawn(async move {
-            use tokio::signal::unix::{signal, SignalKind};
+            use tokio::signal::unix::{SignalKind, signal};
 
             // Set up handlers for standard Unix termination signals
             let mut sigterm = signal(SignalKind::terminate()).expect(&Message::FailedToCreateSigtermHandler.to_string());
@@ -318,24 +318,24 @@ pub fn spawn() -> Result<()> {
 
     // Check if a daemon is already running and stop it
     // This ensures only one daemon instance is active at a time
-    if pid_path.exists() {
-        if let Ok(pid_str) = std::fs::read_to_string(&pid_path) {
-            msg_info!(Message::WatcherStoppingExisting(pid_str.trim().to_string()));
+    if pid_path.exists()
+        && let Ok(pid_str) = std::fs::read_to_string(&pid_path)
+    {
+        msg_info!(Message::WatcherStoppingExisting(pid_str.trim().to_string()));
 
-            // Try to stop the existing daemon
-            if let Err(e) = stop_internal() {
-                msg_warning!(Message::WatcherFailedToStopExisting(e.to_string()));
-                // Remove the PID file anyway in case the process is already dead
-                let _ = std::fs::remove_file(&pid_path);
-            }
-
-            // Give the old process time to clean up
-            std::thread::sleep(Duration::from_millis(1000));
+        // Try to stop the existing daemon
+        if let Err(e) = stop_internal() {
+            msg_warning!(Message::WatcherFailedToStopExisting(e.to_string()));
+            // Remove the PID file anyway in case the process is already dead
+            let _ = std::fs::remove_file(&pid_path);
         }
+
+        // Give the old process time to clean up
+        std::thread::sleep(Duration::from_millis(1000));
     }
 
     // Get the current executable path for spawning
-    let current_exe = std::env::current_exe().expect(&Message::FailedToGetCurrentExecutable.to_string());
+    let current_exe = std::env::current_exe().unwrap_or_else(|_| panic!("{}", Message::FailedToGetCurrentExecutable.to_string()));
 
     #[cfg(unix)]
     {
@@ -509,18 +509,18 @@ fn is_process_running(pid: u32) -> bool {
             true
         }
     }
-    
+
     #[cfg(unix)]
     {
         use std::process::Command;
-        
+
         // Use ps command to check if process exists
         match Command::new("ps").arg("-p").arg(pid.to_string()).output() {
             Ok(output) => output.status.success(),
             Err(_) => false,
         }
     }
-    
+
     #[cfg(not(any(unix, windows)))]
     {
         // For unsupported platforms, assume not running

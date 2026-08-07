@@ -31,7 +31,7 @@ use crate::db::db::Db;
 use crate::libs::messages::Message;
 use crate::msg_error_anyhow;
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 
 /// SQL schema for the task templates table.

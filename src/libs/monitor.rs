@@ -38,10 +38,10 @@ use crate::libs::messages::Message;
 use crate::{msg_debug, msg_error, msg_info};
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
-use rdev::{listen, EventType};
+use rdev::{EventType, listen};
 use std::sync::{Arc, Mutex};
 use tokio::time::{self, Duration, Instant};
-use tracing::{debug, instrument, span, Level};
+use tracing::{Level, debug, instrument, span};
 
 /// Represents the current state of the user's activity.
 ///
@@ -426,7 +426,7 @@ impl Monitor {
                 // Currently active, but no recent activity detected
                 State::Active if !activity_detected => {
                     if let Err(e) = self.handle_inactivity() {
-                        msg_error!(Message::DatabaseOperationFailed { 
+                        msg_error!(Message::DatabaseOperationFailed {
                             operation: "handle_inactivity".to_string(),
                             error: e.to_string()
                         });

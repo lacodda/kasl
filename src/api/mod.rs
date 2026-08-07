@@ -134,11 +134,11 @@ pub trait Session {
     /// - Network or API errors prevent authentication
     async fn get_session_id(&mut self) -> Result<String> {
         // Attempt to restore session from encrypted cache
-        let session_id_file_path = DataStorage::new().get_path(&self.session_id_file())?;
+        let session_id_file_path = DataStorage::new().get_path(self.session_id_file())?;
         let session_id_file_path_str = session_id_file_path.to_str().unwrap();
 
-        if let Ok(session_id) = Self::read_session_id(&session_id_file_path_str) {
-            return Ok(session_id);
+        if let Ok(session_id) = Self::read_session_id(session_id_file_path_str) {
+            Ok(session_id)
         } else {
             // No valid cached session - begin authentication process
             loop {
@@ -156,7 +156,7 @@ pub trait Session {
                 match session_id {
                     Ok(session_id) => {
                         // Success - cache the session and reset retry counter
-                        let _ = Self::write_session_id(&session_id_file_path_str, &session_id);
+                        let _ = Self::write_session_id(session_id_file_path_str, &session_id);
                         self.reset_retry(); // Reset retry counter after successful authentication
                         return Ok(session_id);
                     }
@@ -231,7 +231,7 @@ pub trait Session {
     ///
     /// Returns an error if file deletion fails. Missing files are not considered errors.
     fn delete_session_id(&self) -> Result<()> {
-        let session_id_file_path = DataStorage::new().get_path(&self.session_id_file())?;
+        let session_id_file_path = DataStorage::new().get_path(self.session_id_file())?;
         fs::remove_file(session_id_file_path)?;
         Ok(())
     }

@@ -18,8 +18,8 @@
 //! kasl export tasks --format csv # Export tasks to CSV
 //! ```
 
-pub mod breaks;
 pub mod autostart;
+pub mod breaks;
 pub mod export;
 pub mod init;
 pub mod migrations;

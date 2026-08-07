@@ -34,7 +34,7 @@ use crate::{
         config::Config,
         messages::Message,
         stdin_drain::drain_available_stdin_lines,
-        task::{collapse_whitespace, is_ignored_name, normalize_task_name, Task, TaskFilter},
+        task::{Task, TaskFilter, collapse_whitespace, is_ignored_name, normalize_task_name},
         view::View,
     },
     msg_error, msg_info, msg_print, msg_success,
@@ -42,7 +42,7 @@ use crate::{
 use anyhow::Result;
 use chrono::Local;
 use clap::Args;
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
+use dialoguer::{Confirm, Input, MultiSelect, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
@@ -85,11 +85,7 @@ impl TaskSource {
 fn format_discovery_item(item: &DiscoveryItem) -> String {
     match item.source {
         TaskSource::Incomplete => {
-            format!(
-                "↻ {} — {}%",
-                item.task.name,
-                item.task.completeness.unwrap_or(0)
-            )
+            format!("↻ {} — {}%", item.task.name, item.task.completeness.unwrap_or(0))
         }
         TaskSource::Jira => format!("◉ {}", item.task.name),
         TaskSource::Gitlab => match &item.short_sha {
@@ -114,12 +110,7 @@ fn dedup_discovery_items(items: Vec<DiscoveryItem>) -> Vec<DiscoveryItem> {
     }
 
     let mut result: Vec<DiscoveryItem> = best.into_values().collect();
-    result.sort_by(|a, b| {
-        a.source
-            .priority()
-            .cmp(&b.source.priority())
-            .then_with(|| a.task.name.cmp(&b.task.name))
-    });
+    result.sort_by(|a, b| a.source.priority().cmp(&b.source.priority()).then_with(|| a.task.name.cmp(&b.task.name)));
     result
 }
 
@@ -594,94 +585,9 @@ async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::libs::config::default_ignore_names;
-
-    #[test]
-    fn normalize_collapses_whitespace_and_punctuation() {
-        assert_eq!(normalize_task_name("New commit"), "new commit");
-        assert_eq!(normalize_task_name("New commit "), "new commit");
-        assert_eq!(normalize_task_name("New commit."), "new commit");
-        assert_eq!(normalize_task_name(" New commit"), "new commit");
-        assert_eq!(normalize_task_name("New  commit..."), "new commit");
-    }
-
-    #[test]
-    fn collapse_whitespace_turns_newlines_into_spaces() {
-        let pasted = "PROJ-42\nFix login redirect for OAuth callback\r\n";
-        assert_eq!(
-            collapse_whitespace(pasted),
-            "PROJ-42 Fix login redirect for OAuth callback"
-        );
-        assert_eq!(collapse_whitespace("  spaced   out  "), "spaced out");
-    }
-
-    #[test]
-    fn looks_like_issue_key_detects_jira_keys() {
-        assert!(looks_like_issue_key("PROJ-42"));
-        assert!(looks_like_issue_key("ABC-1001"));
-        assert!(!looks_like_issue_key("PROJ-42 summary"));
-        assert!(!looks_like_issue_key("update alert"));
-        assert!(!looks_like_issue_key(""));
-    }
-
-    #[test]
-    fn default_ignore_filters_merge_and_update_webui_but_not_update_alert() {
-        let ignore = default_ignore_names();
-        assert!(!ignore.iter().any(|n| normalize_task_name(n) == "update alert"));
-
-        assert!(is_ignored_name(
-            "Merge remote-tracking branch 'origin/release/4.39.0' into feature/x",
-            &ignore
-        ));
-        assert!(is_ignored_name("Merge branch 'main' into feature/x", &ignore));
-        assert!(is_ignored_name("update webui", &ignore));
-        assert!(is_ignored_name("  Update WebUI  ", &ignore));
-        assert!(!is_ignored_name("update alert", &ignore));
-        assert!(!is_ignored_name("Fix login validation", &ignore));
-    }
-
-    #[test]
-    fn custom_ignore_list_filters_update_alert() {
-        let mut ignore = default_ignore_names();
-        ignore.push("update alert".to_string());
-        assert!(is_ignored_name("update alert", &ignore));
-        assert!(is_ignored_name("Update alert.", &ignore));
-    }
-
-    #[test]
-    fn dedup_prefers_incomplete_over_jira_over_gitlab() {
-        let items = vec![
-            DiscoveryItem {
-                source: TaskSource::Gitlab,
-                task: Task::new("New commit.", "", Some(100)),
-                short_sha: Some("abc1234".into()),
-            },
-            DiscoveryItem {
-                source: TaskSource::Jira,
-                task: Task::new("New commit", "", Some(100)),
-                short_sha: None,
-            },
-            DiscoveryItem {
-                source: TaskSource::Incomplete,
-                task: Task::new(" New commit", "", Some(40)),
-                short_sha: None,
-            },
-        ];
-
-        let deduped = dedup_discovery_items(items);
-        assert_eq!(deduped.len(), 1);
-        assert_eq!(deduped[0].source, TaskSource::Incomplete);
-        assert_eq!(deduped[0].task.name, "New commit");
-    }
-}
-
 /// Prompts for a task name and absorbs leftover multi-line paste from stdin.
 fn prompt_task_name_interactive() -> String {
-    let raw = crate::libs::stdin_drain::read_pastable_line(&Message::PromptTaskName.to_string())
-        .unwrap_or_default();
+    let raw = crate::libs::stdin_drain::read_pastable_line(&Message::PromptTaskName.to_string()).unwrap_or_default();
     let name = collapse_whitespace(&raw);
     if raw.lines().filter(|l| !l.trim().is_empty()).count() > 1 {
         msg_info!(Message::TaskNameMergedFromPaste);
@@ -701,10 +607,7 @@ fn looks_like_issue_key(name: &str) -> bool {
     let Some((prefix, rest)) = name.split_once('-') else {
         return false;
     };
-    !prefix.is_empty()
-        && prefix.chars().all(|c| c.is_ascii_alphanumeric())
-        && !rest.is_empty()
-        && rest.chars().all(|c| c.is_ascii_digit())
+    !prefix.is_empty() && prefix.chars().all(|c| c.is_ascii_alphanumeric()) && !rest.is_empty() && rest.chars().all(|c| c.is_ascii_digit())
 }
 
 /// Handles manual task creation with interactive prompts.
@@ -925,7 +828,7 @@ async fn handle_edit_by_id(id: i32) -> Result<()> {
 
     // Show current task state
     msg_print!(Message::CurrentTaskState, true);
-    View::tasks(&[task.clone()])?;
+    View::tasks(std::slice::from_ref(&task))?;
 
     // Interactive editing
     let edited_task = edit_task_interactive(&task)?;
@@ -938,7 +841,7 @@ async fn handle_edit_by_id(id: i32) -> Result<()> {
 
     // Show preview of changes
     msg_print!(Message::TaskEditPreview, true);
-    View::tasks(&[edited_task.clone()])?;
+    View::tasks(std::slice::from_ref(&edited_task))?;
 
     // Confirm changes
     let confirmed = Confirm::with_theme(&ColorfulTheme::default())
@@ -996,7 +899,7 @@ async fn handle_edit_interactive() -> Result<()> {
         let task = &tasks[index];
 
         msg_print!(Message::EditingTask(task.name.clone()), true);
-        View::tasks(&[task.clone()])?;
+        View::tasks(std::slice::from_ref(task))?;
 
         let edited_task = edit_task_interactive(task)?;
 
@@ -1049,11 +952,7 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
         .with_prompt(Message::PromptTaskCompletenessEdit.to_string())
         .default(task.completeness.unwrap_or(100))
         .validate_with(|input: &i32| -> Result<(), &str> {
-            if *input >= 0 && *input <= 100 {
-                Ok(())
-            } else {
-                Err(&completeness_range_msg)
-            }
+            if *input >= 0 && *input <= 100 { Ok(()) } else { Err(&completeness_range_msg) }
         })
         .interact_text()?;
 
@@ -1138,4 +1037,82 @@ async fn handle_create_from_template_interactive() -> Result<()> {
 
     let template = &templates[selection];
     handle_create_from_template(template.name.clone()).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::libs::config::default_ignore_names;
+
+    #[test]
+    fn normalize_collapses_whitespace_and_punctuation() {
+        assert_eq!(normalize_task_name("New commit"), "new commit");
+        assert_eq!(normalize_task_name("New commit "), "new commit");
+        assert_eq!(normalize_task_name("New commit."), "new commit");
+        assert_eq!(normalize_task_name(" New commit"), "new commit");
+        assert_eq!(normalize_task_name("New  commit..."), "new commit");
+    }
+
+    #[test]
+    fn collapse_whitespace_turns_newlines_into_spaces() {
+        let pasted = "PROJ-42\nFix login redirect for OAuth callback\r\n";
+        assert_eq!(collapse_whitespace(pasted), "PROJ-42 Fix login redirect for OAuth callback");
+        assert_eq!(collapse_whitespace("  spaced   out  "), "spaced out");
+    }
+
+    #[test]
+    fn looks_like_issue_key_detects_jira_keys() {
+        assert!(looks_like_issue_key("PROJ-42"));
+        assert!(looks_like_issue_key("ABC-1001"));
+        assert!(!looks_like_issue_key("PROJ-42 summary"));
+        assert!(!looks_like_issue_key("update alert"));
+        assert!(!looks_like_issue_key(""));
+    }
+
+    #[test]
+    fn default_ignore_filters_merge_and_update_webui_but_not_update_alert() {
+        let ignore = default_ignore_names();
+        assert!(!ignore.iter().any(|n| normalize_task_name(n) == "update alert"));
+
+        assert!(is_ignored_name("Merge remote-tracking branch 'origin/release/4.39.0' into feature/x", &ignore));
+        assert!(is_ignored_name("Merge branch 'main' into feature/x", &ignore));
+        assert!(is_ignored_name("update webui", &ignore));
+        assert!(is_ignored_name("  Update WebUI  ", &ignore));
+        assert!(!is_ignored_name("update alert", &ignore));
+        assert!(!is_ignored_name("Fix login validation", &ignore));
+    }
+
+    #[test]
+    fn custom_ignore_list_filters_update_alert() {
+        let mut ignore = default_ignore_names();
+        ignore.push("update alert".to_string());
+        assert!(is_ignored_name("update alert", &ignore));
+        assert!(is_ignored_name("Update alert.", &ignore));
+    }
+
+    #[test]
+    fn dedup_prefers_incomplete_over_jira_over_gitlab() {
+        let items = vec![
+            DiscoveryItem {
+                source: TaskSource::Gitlab,
+                task: Task::new("New commit.", "", Some(100)),
+                short_sha: Some("abc1234".into()),
+            },
+            DiscoveryItem {
+                source: TaskSource::Jira,
+                task: Task::new("New commit", "", Some(100)),
+                short_sha: None,
+            },
+            DiscoveryItem {
+                source: TaskSource::Incomplete,
+                task: Task::new(" New commit", "", Some(40)),
+                short_sha: None,
+            },
+        ];
+
+        let deduped = dedup_discovery_items(items);
+        assert_eq!(deduped.len(), 1);
+        assert_eq!(deduped[0].source, TaskSource::Incomplete);
+        assert_eq!(deduped[0].task.name, "New commit");
+    }
 }

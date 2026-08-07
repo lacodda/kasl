@@ -24,7 +24,7 @@
 //! };
 //! ```
 
-use chrono::{prelude::NaiveDateTime, Duration};
+use chrono::{Duration, prelude::NaiveDateTime};
 
 /// Represents a single pause period with complete timing information.
 ///
@@ -127,4 +127,3 @@ pub struct Pause {
     /// placeholder values or real-time duration calculation.
     pub duration: Option<Duration>,
 }
-

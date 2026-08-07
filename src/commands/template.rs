@@ -33,7 +33,7 @@ use crate::{
 };
 use anyhow::Result;
 use clap::{Args, Subcommand};
-use dialoguer::{theme::ColorfulTheme, Confirm, Input, Select};
+use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 
 /// Command-line arguments for template management operations.
 ///
@@ -230,11 +230,7 @@ fn handle_create(name: Option<String>) -> Result<()> {
         .with_prompt(Message::PromptTemplateCompleteness.to_string())
         .default(100)
         .validate_with(|input: &i32| -> Result<(), &str> {
-            if *input >= 0 && *input <= 100 {
-                Ok(())
-            } else {
-                Err(&completeness_range_msg)
-            }
+            if *input >= 0 && *input <= 100 { Ok(()) } else { Err(&completeness_range_msg) }
         })
         .interact_text()?;
 
@@ -355,11 +351,7 @@ fn handle_edit(name: Option<String>) -> Result<()> {
         .with_prompt(Message::PromptTemplateCompleteness.to_string())
         .default(template.completeness)
         .validate_with(|input: &i32| -> Result<(), &str> {
-            if *input >= 0 && *input <= 100 {
-                Ok(())
-            } else {
-                Err(&completeness_range_msg)
-            }
+            if *input >= 0 && *input <= 100 { Ok(()) } else { Err(&completeness_range_msg) }
         })
         .interact_text()?;
 

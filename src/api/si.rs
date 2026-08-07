@@ -36,10 +36,11 @@ use crate::{
 use anyhow::Result;
 use base64::prelude::*;
 use chrono::{Datelike, Duration, NaiveDate, Weekday};
-use dialoguer::{theme::ColorfulTheme, Input};
+use dialoguer::{Input, theme::ColorfulTheme};
 use reqwest::{
-    header::{self, HeaderMap, HeaderValue, COOKIE},
-    multipart, Client, StatusCode,
+    Client, StatusCode,
+    header::{self, COOKIE, HeaderMap, HeaderValue},
+    multipart,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -164,7 +165,7 @@ impl RestDatesResponse {
     /// # Returns
     ///
     /// Always returns `Ok(())` as this operation cannot fail.
-    fn process_dates(&self, dates: &Vec<String>, date_set: &mut HashSet<NaiveDate>) -> Result<()> {
+    fn process_dates(&self, dates: &[String], date_set: &mut HashSet<NaiveDate>) -> Result<()> {
         dates
             .iter()
             .filter_map(|date_str| NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok())
@@ -260,13 +261,13 @@ impl Session for Si {
             .await?;
 
         // Stage 3: Cookie Extraction
-        if let Some(cookie) = login_res.headers().get("Set-Cookie") {
-            if let Ok(cookie_val) = cookie.to_str() {
-                // Find the PORTALSESSID cookie in the Set-Cookie header
-                if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
-                    let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
-                    return Ok(session_id.to_string());
-                }
+        if let Some(cookie) = login_res.headers().get("Set-Cookie")
+            && let Ok(cookie_val) = cookie.to_str()
+        {
+            // Find the PORTALSESSID cookie in the Set-Cookie header
+            if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
+                let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
+                return Ok(session_id.to_string());
             }
         }
 
@@ -441,7 +442,7 @@ impl Si {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn send(&mut self, data: &String, date: &NaiveDate) -> Result<StatusCode> {
+    pub async fn send(&mut self, data: &str, date: &NaiveDate) -> Result<StatusCode> {
         let mut local_retries = 0;
         loop {
             // Get valid session for API request
@@ -452,7 +453,7 @@ impl Si {
             // Prepare multipart form data for submission
             let form = multipart::Form::new()
                 .text("date", date)
-                .text("tasks", data.clone())
+                .text("tasks", data.to_owned())
                 .text("comment", "")
                 .text("day_type", "1")
                 .text("duty", "0")
@@ -725,7 +726,7 @@ impl Si {
 
         // Move backward from weekends to find the last working day
         while matches!(last_day_of_month.weekday(), Weekday::Sat | Weekday::Sun) {
-            last_day_of_month = last_day_of_month - Duration::days(1);
+            last_day_of_month -= Duration::days(1);
         }
 
         // Check if the input date matches the calculated last working day
@@ -847,14 +848,11 @@ impl SiConfig {
     /// ```
     pub fn init(config: &Option<SiConfig>) -> Result<Self> {
         // Use existing configuration as defaults, or create empty defaults
-        let config = config
-            .clone()
-            .or(Some(Self {
-                login: "".to_string(),
-                auth_url: "".to_string(),
-                api_url: "".to_string(),
-            }))
-            .unwrap();
+        let config = config.clone().unwrap_or(Self {
+            login: "".to_string(),
+            auth_url: "".to_string(),
+            api_url: "".to_string(),
+        });
 
         // Display configuration module header
         msg_print!(Message::ConfigModuleSiServer);

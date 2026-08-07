@@ -386,12 +386,12 @@ impl Exporter {
         // Hourly (SiServer-style) layout is only meaningful for Excel output.
         // When requested, delegate to the dedicated renderer and skip the
         // generic report layout entirely.
-        if self.hourly {
-            if let ExportFormat::Excel = self.format {
-                self.export_report_excel_hourly(date)?;
-                msg_success!(Message::ExportCompleted(self.output_path.display().to_string()));
-                return Ok(());
-            }
+        if self.hourly
+            && let ExportFormat::Excel = self.format
+        {
+            self.export_report_excel_hourly(date)?;
+            msg_success!(Message::ExportCompleted(self.output_path.display().to_string()));
+            return Ok(());
         }
 
         // Gather comprehensive report data from multiple database sources
@@ -616,7 +616,7 @@ impl Exporter {
     /// - Net Work Time = Total Time - Pause Duration
     /// - Gross Work Time = End Time - Start Time
     /// ```
-    /// 
+    ///
     /// Note: This differs from the comprehensive calculation in `libs::productivity::Productivity`
     /// which handles breaks, different pause types, and overlap scenarios.
     ///
@@ -737,7 +737,7 @@ impl Exporter {
             // Determine end time (use current time if workday is still active)
             let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
             let duration = end_time - workday.start;
-            total_duration = total_duration + duration;
+            total_duration += duration;
 
             // Add daily summary record
             days.push(ExportDaySum {
@@ -792,8 +792,8 @@ impl Exporter {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
 
         // Write work intervals section with headers
-        wtr.write_record(&["WORK INTERVALS", "", "", ""])?;
-        wtr.write_record(&["Index", "Start", "End", "Duration"])?;
+        wtr.write_record(["WORK INTERVALS", "", "", ""])?;
+        wtr.write_record(["Index", "Start", "End", "Duration"])?;
         for interval in &report.intervals {
             wtr.write_record(&[
                 interval.index.to_string(),
@@ -804,16 +804,16 @@ impl Exporter {
         }
 
         // Add spacing and summary section
-        wtr.write_record(&["", "", "", ""])?;
-        wtr.write_record(&["SUMMARY", "", "", ""])?;
-        wtr.write_record(&["Date", &report.date, "", ""])?;
-        wtr.write_record(&["Total Hours", &report.total_hours, "", ""])?;
-        wtr.write_record(&["Productivity", &format!("{:.1}%", report.productivity), "", ""])?;
+        wtr.write_record(["", "", "", ""])?;
+        wtr.write_record(["SUMMARY", "", "", ""])?;
+        wtr.write_record(["Date", &report.date, "", ""])?;
+        wtr.write_record(["Total Hours", &report.total_hours, "", ""])?;
+        wtr.write_record(["Productivity", &format!("{:.1}%", report.productivity), "", ""])?;
 
         // Add spacing and tasks section
-        wtr.write_record(&["", "", "", ""])?;
-        wtr.write_record(&["TASKS", "", "", ""])?;
-        wtr.write_record(&["ID", "Name", "Comment", "Completeness"])?;
+        wtr.write_record(["", "", "", ""])?;
+        wtr.write_record(["TASKS", "", "", ""])?;
+        wtr.write_record(["ID", "Name", "Comment", "Completeness"])?;
         for task in &report.tasks {
             wtr.write_record(&[task.id.to_string(), task.name.clone(), task.comment.clone(), format!("{}%", task.completeness)])?;
         }
@@ -837,7 +837,7 @@ impl Exporter {
     /// writing fails.
     fn export_tasks_csv(&self, tasks: &[ExportTask]) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
-        wtr.write_record(&["ID", "Name", "Comment", "Completeness"])?;
+        wtr.write_record(["ID", "Name", "Comment", "Completeness"])?;
 
         for task in tasks {
             wtr.write_record(&[task.id.to_string(), task.name.clone(), task.comment.clone(), format!("{}%", task.completeness)])?;
@@ -865,7 +865,7 @@ impl Exporter {
 
         // Write title and daily breakdown
         wtr.write_record(&[format!("Monthly Summary - {}", summary.month), "".to_owned(), "".to_owned()])?;
-        wtr.write_record(&["Date", "Hours", "Type"])?;
+        wtr.write_record(["Date", "Hours", "Type"])?;
 
         for day in &summary.days {
             wtr.write_record(&[
@@ -876,10 +876,10 @@ impl Exporter {
         }
 
         // Add summary statistics
-        wtr.write_record(&["", "", ""])?;
-        wtr.write_record(&["Total Hours", &summary.total_hours, ""])?;
-        wtr.write_record(&["Average Hours", &summary.average_hours, ""])?;
-        wtr.write_record(&["Total Days", &summary.total_days.to_string(), ""])?;
+        wtr.write_record(["", "", ""])?;
+        wtr.write_record(["Total Hours", &summary.total_hours, ""])?;
+        wtr.write_record(["Average Hours", &summary.average_hours, ""])?;
+        wtr.write_record(["Total Days", &summary.total_days.to_string(), ""])?;
 
         wtr.flush()?;
         Ok(())
@@ -961,7 +961,7 @@ impl Exporter {
         worksheet.write_string(row, 1, &report.total_hours)?;
         row += 1;
         worksheet.write_string(row, 0, "Productivity")?;
-        worksheet.write_string(row, 1, &format!("{:.1}%", report.productivity))?;
+        worksheet.write_string(row, 1, format!("{:.1}%", report.productivity))?;
 
         // Add tasks section with spacing
         row += 2;
@@ -977,7 +977,7 @@ impl Exporter {
             worksheet.write_number(row, 0, task.id as f64)?;
             worksheet.write_string(row, 1, &task.name)?;
             worksheet.write_string(row, 2, &task.comment)?;
-            worksheet.write_string(row, 3, &format!("{}%", task.completeness))?;
+            worksheet.write_string(row, 3, format!("{}%", task.completeness))?;
             row += 1;
         }
 
@@ -1019,7 +1019,7 @@ impl Exporter {
             worksheet.write_number(row, 0, task.id as f64)?;
             worksheet.write_string(row, 1, &task.name)?;
             worksheet.write_string(row, 2, &task.comment)?;
-            worksheet.write_string(row, 3, &format!("{}%", task.completeness))?;
+            worksheet.write_string(row, 3, format!("{}%", task.completeness))?;
         }
 
         worksheet.autofit();
@@ -1049,7 +1049,7 @@ impl Exporter {
         let title_format = Format::new().set_bold().set_font_size(14.0);
 
         // Write title and daily breakdown
-        worksheet.write_string_with_format(0, 0, &format!("Monthly Summary - {}", summary.month), &title_format)?;
+        worksheet.write_string_with_format(0, 0, format!("Monthly Summary - {}", summary.month), &title_format)?;
         worksheet.write_string_with_format(2, 0, "Date", &header_format)?;
         worksheet.write_string_with_format(2, 1, "Hours", &header_format)?;
         worksheet.write_string_with_format(2, 2, "Type", &header_format)?;
@@ -1338,7 +1338,10 @@ struct HourSlot {
 
 /// Truncates a timestamp down to the start of its hour (zeroing minutes/seconds).
 fn floor_to_hour(dt: NaiveDateTime) -> NaiveDateTime {
-    dt.with_minute(0).and_then(|d| d.with_second(0)).and_then(|d| d.with_nanosecond(0)).unwrap_or(dt)
+    dt.with_minute(0)
+        .and_then(|d| d.with_second(0))
+        .and_then(|d| d.with_nanosecond(0))
+        .unwrap_or(dt)
 }
 
 /// Returns `true` when `[a_start, a_end)` overlaps `[b_start, b_end)`.
@@ -1348,12 +1351,7 @@ fn ranges_overlap(a_start: NaiveDateTime, a_end: NaiveDateTime, b_start: NaiveDa
 
 /// Builds hour-aligned slots covering `[work_start, work_end)` and classifies
 /// each slot by overlap with work intervals and interruptions.
-fn classify_hour_slots(
-    work_start: NaiveDateTime,
-    work_end: NaiveDateTime,
-    intervals: &[WorkInterval],
-    interruptions: &[Pause],
-) -> Vec<HourSlot> {
+fn classify_hour_slots(work_start: NaiveDateTime, work_end: NaiveDateTime, intervals: &[WorkInterval], interruptions: &[Pause]) -> Vec<HourSlot> {
     let mut slots = Vec::new();
     if work_end <= work_start {
         return slots;
@@ -1365,7 +1363,9 @@ fn classify_hour_slots(
         let slot_end = slot_grid_end.min(work_end);
         let window_start = slot_start.max(work_start);
 
-        let has_work = intervals.iter().any(|interval| ranges_overlap(window_start, slot_end, interval.start, interval.end));
+        let has_work = intervals
+            .iter()
+            .any(|interval| ranges_overlap(window_start, slot_end, interval.start, interval.end));
         let has_break = interruptions.iter().any(|pause| {
             let Some(pause_end) = pause.end else {
                 return false;
@@ -1423,9 +1423,7 @@ fn assign_tasks_to_hour_slots(tasks: &[Task], slots: &[HourSlot], locale: &Local
 
         for task in tasks {
             let count = base + if extra > 0 { 1 } else { 0 };
-            if extra > 0 {
-                extra -= 1;
-            }
+            extra = extra.saturating_sub(1);
             let text = locale.work_text(&task.name);
             for _ in 0..count {
                 if cursor < num_work {
@@ -1442,7 +1440,7 @@ fn assign_tasks_to_hour_slots(tasks: &[Task], slots: &[HourSlot], locale: &Local
         let mut no_break_local: Vec<usize> = work_indices
             .iter()
             .enumerate()
-            .filter(|(_, &slot_idx)| !slots[slot_idx].has_break)
+            .filter(|&(_, &slot_idx)| !slots[slot_idx].has_break)
             .map(|(local_i, _)| local_i)
             .collect();
 
@@ -1457,9 +1455,7 @@ fn assign_tasks_to_hour_slots(tasks: &[Task], slots: &[HourSlot], locale: &Local
 
         for &local_i in &no_break_local {
             let count = base + if rem > 0 { 1 } else { 0 };
-            if rem > 0 {
-                rem -= 1;
-            }
+            rem = rem.saturating_sub(1);
             for _ in 0..count {
                 if let Some(text) = iter.next() {
                     parts[local_i].push(text);

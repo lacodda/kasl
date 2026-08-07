@@ -71,6 +71,12 @@ pub struct DataStorage {
     base_path: PathBuf,
 }
 
+impl Default for DataStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DataStorage {
     /// Creates a new DataStorage instance with platform-appropriate base path.
     ///

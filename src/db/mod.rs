@@ -112,6 +112,7 @@
 ///
 /// Provides the fundamental `Db` struct that manages SQLite connections,
 /// applies migrations, and ensures proper database configuration.
+#[allow(clippy::module_inception)] // kasl::db::db::Db is the established public path
 pub mod db;
 
 /// Database schema migration system.
