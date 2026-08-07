@@ -1,5 +1,22 @@
 # Changelog
 
+## 🎉 [0.9.0] - 2026-08-06
+
+### ✨ Features
+
+- Add hourly daily report with localization and design templates
+- Unify task discovery into a single filtered MultiSelect
+- Add configurable ignore list for task discovery
+
+### 🛠️ Bug Fixes
+
+- Merge adjacent pauses before duration filtering
+- Use a dedicated small gap threshold for merging pauses
+- Distribute hourly report tasks one per hour slot
+- Keep task table within terminal width
+- Sanitize multi-line pasted task names
+- Exclude pre-workday idle from pause accounting
+
 ## 🎉 [0.8.2] - 2025-08-23
 
 ### ✨ Features
