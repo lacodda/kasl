@@ -176,7 +176,7 @@ fn show_toast_windows(item: &JiraInboxItem) -> bool {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(all(not(windows), not(target_os = "macos")))]
 fn show_toast_other(item: &JiraInboxItem) -> bool {
     let title = format!("Jira {}", item.issue_key);
     let body = toast_body(item);
@@ -195,11 +195,29 @@ fn show_toast_other(item: &JiraInboxItem) -> bool {
                     }
                 });
             });
-            debug!("Showed toast for {}", key);
+            debug!("Showed toast for {}", item.issue_key);
             true
         }
         Err(e) => {
-            warn!("Failed to show toast for {}: {}", key, e);
+            warn!("Failed to show toast for {}: {}", item.issue_key, e);
+            false
+        }
+    }
+}
+
+/// macOS: notify-rust cannot wait for notification clicks (no actions API),
+/// so the toast is display-only and opening stays on the CLI (`inbox --open`).
+#[cfg(target_os = "macos")]
+fn show_toast_other(item: &JiraInboxItem) -> bool {
+    let title = format!("Jira {}", item.issue_key);
+    let body = toast_body(item);
+    match notify_rust::Notification::new().summary(&title).body(&body).show() {
+        Ok(_) => {
+            debug!("Showed toast for {}", item.issue_key);
+            true
+        }
+        Err(e) => {
+            warn!("Failed to show toast for {}: {}", item.issue_key, e);
             false
         }
     }

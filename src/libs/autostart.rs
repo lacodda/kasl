@@ -46,8 +46,11 @@
 //! - Supports both GUI and CLI application launching
 
 use crate::libs::messages::Message;
-use crate::{msg_debug, msg_error_anyhow, msg_info};
+use crate::msg_error_anyhow;
+#[cfg(target_os = "windows")]
+use crate::{msg_debug, msg_info};
 use anyhow::Result;
+#[cfg(target_os = "windows")]
 use std::env;
 
 /// Windows-specific autostart implementation module.
