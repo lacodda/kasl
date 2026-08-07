@@ -345,6 +345,7 @@ mod unix {
     /// Currently returns `false` since privilege checking is not yet
     /// implemented for Unix platforms. Future implementation will check
     /// for root access or sudo capabilities.
+    #[allow(dead_code)] // parity with the Windows module; used once unix autostart lands
     pub fn is_admin() -> bool {
         false
     }

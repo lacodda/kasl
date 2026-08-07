@@ -81,8 +81,8 @@ pub async fn run_with_signal_handling() -> Result<()> {
             use tokio::signal::unix::{SignalKind, signal};
 
             // Set up handlers for standard Unix termination signals
-            let mut sigterm = signal(SignalKind::terminate()).expect(&Message::FailedToCreateSigtermHandler.to_string());
-            let mut sigint = signal(SignalKind::interrupt()).expect(&Message::FailedToCreateSigintHandler.to_string());
+            let mut sigterm = signal(SignalKind::terminate()).unwrap_or_else(|_| panic!("{}", Message::FailedToCreateSigtermHandler));
+            let mut sigint = signal(SignalKind::interrupt()).unwrap_or_else(|_| panic!("{}", Message::FailedToCreateSigintHandler));
 
             // Wait for any termination signal
             tokio::select! {

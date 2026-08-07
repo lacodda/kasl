@@ -188,10 +188,10 @@ fn show_toast_other(item: &JiraInboxItem) -> bool {
             // Wait for click off the poller thread so sync stays responsive.
             std::thread::spawn(move || {
                 handle.wait_for_action(|action| {
-                    if action == "default" {
-                        if let Err(e) = open_url(&url) {
-                            warn!("Failed to open {} from toast: {}", key, e);
-                        }
+                    if action == "default"
+                        && let Err(e) = open_url(&url)
+                    {
+                        warn!("Failed to open {} from toast: {}", key, e);
                     }
                 });
             });
