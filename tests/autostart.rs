@@ -96,7 +96,7 @@ mod tests {
         // is_enabled should return false for Unix
         let status_result = autostart::is_enabled();
         assert!(status_result.is_ok());
-        assert_eq!(status_result.unwrap(), false);
+        assert!(!status_result.unwrap());
     }
 
     #[test_context(AutostartTestContext)]
