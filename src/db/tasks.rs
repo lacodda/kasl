@@ -27,7 +27,7 @@ use crate::libs::messages::Message;
 use crate::libs::task::{Task, TaskFilter};
 use crate::msg_error_anyhow;
 use anyhow::Result;
-use rusqlite::{params, Connection, Statement, ToSql};
+use rusqlite::{Connection, Statement, ToSql, params};
 use std::vec;
 
 /// SQL schema definition for the tasks table.
@@ -72,7 +72,7 @@ const SELECT_TASKS: &str = "SELECT * FROM tasks";
 ///
 /// Filters tasks by creation date using local timezone conversion
 /// to ensure accurate date matching across different time zones.
-const WHERE_DATE: &str = "WHERE date(timestamp) = date(?1, 'localtime')";
+const WHERE_DATE: &str = "WHERE date(timestamp) = date(?1)";
 
 /// ID-based filtering clause for retrieving specific tasks.
 ///
@@ -199,7 +199,7 @@ impl Tasks {
         let db = Db::new()?;
 
         // Initialize the tasks table schema
-        db.conn.execute(&SCHEMA_TASKS, [])?;
+        db.conn.execute(SCHEMA_TASKS, [])?;
 
         Ok(Self { conn: db.conn, id: None })
     }
@@ -459,7 +459,7 @@ impl Tasks {
     /// ```sql
     /// SELECT * FROM tasks WHERE task_id IN (?, ?, ?)
     /// ```
-    fn query_by_ids(ids: &Vec<i32>) -> String {
+    fn query_by_ids(ids: &[i32]) -> String {
         format!("{} {} ({})", SELECT_TASKS, WHERE_ID_IN, vec!["?"; ids.len()].join(", "))
     }
 

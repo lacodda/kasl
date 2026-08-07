@@ -30,7 +30,7 @@ use crate::libs::pause::Pause;
 use anyhow::Result;
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeDelta};
 use parking_lot::Mutex;
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use std::sync::Arc;
 
 /// SQL schema for the pauses table.
@@ -74,8 +74,7 @@ const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL 
 /// Retrieves every completed pause (end IS NOT NULL) for the given date
 /// ordered chronologically. Duration filtering is performed in Rust after
 /// merging consecutive pauses, so no threshold is applied here.
-const SELECT_DAILY_PAUSES: &str =
-    "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1, 'localtime') AND end IS NOT NULL ORDER BY start ASC, id ASC";
+const SELECT_DAILY_PAUSES: &str = "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1) AND end IS NOT NULL ORDER BY start ASC, id ASC";
 
 /// Delete a single pause record by ID.
 ///
@@ -191,22 +190,22 @@ impl Pauses {
         let mut merged: Vec<Pause> = Vec::with_capacity(pauses.len());
 
         for pause in pauses {
-            if let Some(last) = merged.last_mut() {
-                if let Some(last_end) = last.end {
-                    // Merge when the work gap between the pauses is small enough
-                    // (contiguous, overlapping, or a negligible burst of activity).
-                    let gap = (pause.start - last_end).num_seconds();
-                    if gap <= max_gap_secs {
-                        let new_end = match pause.end {
-                            Some(end) => Some(end.max(last_end)),
-                            None => Some(last_end),
-                        };
-                        last.end = new_end;
-                        if let Some(end) = last.end {
-                            last.duration = Some(TimeDelta::seconds((end - last.start).num_seconds()));
-                        }
-                        continue;
+            if let Some(last) = merged.last_mut()
+                && let Some(last_end) = last.end
+            {
+                // Merge when the work gap between the pauses is small enough
+                // (contiguous, overlapping, or a negligible burst of activity).
+                let gap = (pause.start - last_end).num_seconds();
+                if gap <= max_gap_secs {
+                    let new_end = match pause.end {
+                        Some(end) => Some(end.max(last_end)),
+                        None => Some(last_end),
+                    };
+                    last.end = new_end;
+                    if let Some(end) = last.end {
+                        last.duration = Some(TimeDelta::seconds((end - last.start).num_seconds()));
                     }
+                    continue;
                 }
             }
             merged.push(pause);
@@ -220,10 +219,7 @@ impl Pauses {
     /// Positive value with `min` semantics is expressed through `min_duration`,
     /// `max` semantics through `max_duration`. Only one of them is ever set.
     fn duration_threshold_seconds(&self) -> Option<i64> {
-        self.min_duration
-            .as_ref()
-            .or(self.max_duration.as_ref())
-            .and_then(|d| d.parse::<i64>().ok())
+        self.min_duration.as_ref().or(self.max_duration.as_ref()).and_then(|d| d.parse::<i64>().ok())
     }
 
     /// Records the start of a new pause with the current timestamp.
@@ -417,28 +413,18 @@ impl Pauses {
         // single continuous pause before filtering. The tolerance is the small,
         // dedicated `pause_merge_gap` setting (in seconds): genuine work periods
         // between pauses are longer than this and remain separate.
-        let max_gap_secs = Config::read()
-            .ok()
-            .and_then(|c| c.monitor)
-            .map(|m| m.pause_merge_gap as i64)
-            .unwrap_or(0);
+        let max_gap_secs = Config::read().ok().and_then(|c| c.monitor).map(|m| m.pause_merge_gap as i64).unwrap_or(0);
         let pauses = Self::merge_consecutive_pauses(pauses, max_gap_secs);
 
         // Apply the configured duration threshold to the merged pauses.
         let pauses = match (&self.min_duration, &self.max_duration) {
             (Some(_), _) => {
                 let min = self.duration_threshold_seconds().unwrap_or(0);
-                pauses
-                    .into_iter()
-                    .filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) >= min)
-                    .collect()
+                pauses.into_iter().filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) >= min).collect()
             }
             (_, Some(_)) => {
                 let max = self.duration_threshold_seconds().unwrap_or(0);
-                pauses
-                    .into_iter()
-                    .filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) < max)
-                    .collect()
+                pauses.into_iter().filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) < max).collect()
             }
             _ => pauses,
         };
@@ -572,19 +558,19 @@ pub fn filter_pauses_to_workday(pauses: Vec<Pause>, workday: &Workday) -> Vec<Pa
                 return None;
             }
 
-            if let Some(work_end) = work_end {
-                if pause.start >= work_end {
-                    return None;
-                }
+            if let Some(work_end) = work_end
+                && pause.start >= work_end
+            {
+                return None;
             }
 
             if pause.start < work_start {
                 pause.start = work_start;
             }
-            if let (Some(end), Some(work_end)) = (pause.end, work_end) {
-                if end > work_end {
-                    pause.end = Some(work_end);
-                }
+            if let (Some(end), Some(work_end)) = (pause.end, work_end)
+                && end > work_end
+            {
+                pause.end = Some(work_end);
             }
             if let Some(end) = pause.end {
                 if end <= pause.start {
