@@ -8,7 +8,9 @@
   <a href="https://github.com/lacodda/kasl/releases"><img src="https://img.shields.io/github/v/release/lacodda/kasl?style=flat-square" alt="Release"></a>
   <a href="https://github.com/lacodda/kasl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/lacodda/kasl?style=flat-square" alt="License"></a>
   <a href="https://github.com/lacodda/kasl/actions"><img src="https://img.shields.io/github/actions/workflow/status/lacodda/kasl/release.yml?style=flat-square" alt="Build Status"></a>
-  <a href="https://docs.rs/kasl"><img src="https://img.shields.io/docsrs/kasl?style=flat-square" alt="Documentation"></a>
+  <a href="https://docs.rs/kasl-cli"><img src="https://img.shields.io/docsrs/kasl-cli?style=flat-square" alt="Documentation"></a>
+  <a href="https://crates.io/crates/kasl-cli"><img src="https://img.shields.io/crates/v/kasl-cli?style=flat-square" alt="crates.io"></a>
+  <a href="https://www.npmjs.com/package/kasl-cli"><img src="https://img.shields.io/npm/v/kasl-cli?style=flat-square" alt="npm"></a>
 </p>
 
 ## Overview 📖
@@ -23,7 +25,7 @@ kasl is a comprehensive command-line utility designed to streamline work activit
 - **Automatic work session tracking** - Detects when you start and end your workday
 - **Smart break detection** - Automatically records breaks based on inactivity
 - **Background monitoring** - Runs silently in the background
-- **Cross-platform support** - Works on Windows, macOS, and Linux
+- **Windows-first** - Windows fully supported today; macOS and Linux builds and autostart are planned for 1.0.0
 
 ### 📋 Task Management
 - **CRUD operations** - Create, read, update, and delete tasks

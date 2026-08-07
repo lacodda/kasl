@@ -2,22 +2,22 @@ name: documentation
 
 on:
   push:
-  pull_request:
+    branches: [main]
 
 jobs:
   book:
     name: Build and deploy book
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
 
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         env:
-          cache-name: cache-mdbook
+          cache-name: cache-mdbook-04
         with:
           path: |
             ~/.cargo/.crates.toml
@@ -25,13 +25,12 @@ jobs:
             ~/.cargo/bin
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-0.3 }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}
 
+      # mdBook is pinned to 0.4: 0.5 cannot parse this book.toml, and
+      # unpinned self-updates are what broke this workflow before.
       - name: Install mdBook
-        run: |
-          (test -x $HOME/.cargo/bin/cargo-install-update || cargo install cargo-update)
-          (test -x $HOME/.cargo/bin/mdbook || cargo install --vers "^0.4" mdbook)
-          cargo install-update -a
+        run: test -x $HOME/.cargo/bin/mdbook || cargo install --vers "^0.4" mdbook
 
       - name: Build Documentation
         run: |
