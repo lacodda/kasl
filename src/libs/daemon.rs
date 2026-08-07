@@ -251,7 +251,7 @@ async fn run_monitor() -> Result<()> {
 /// ```rust,no_run
 /// std::process::Command::new(current_exe)
 ///     .arg("--daemon-run")
-///     .before_exec(|| {
+///     .pre_exec(|| {
 ///         nix::unistd::setsid()?; // Create new session
 ///         Ok(())
 ///     })
@@ -342,15 +342,19 @@ pub fn spawn() -> Result<()> {
         use std::os::unix::process::CommandExt;
 
         // Spawn daemon process with session detachment
-        let child = std::process::Command::new(current_exe)
-            .arg("--daemon-run")
-            .before_exec(|| {
+        let mut command = std::process::Command::new(current_exe);
+        command.arg("--daemon-run");
+        // SAFETY: setsid is async-signal-safe and touches no shared state,
+        // which is all pre_exec requires between fork and exec.
+        unsafe {
+            command.pre_exec(|| {
                 // Detach from the current session to become a daemon
                 // This ensures the process continues running after parent exits
                 nix::unistd::setsid()?;
                 Ok(())
-            })
-            .spawn()?;
+            });
+        }
+        let child = command.spawn()?;
 
         let pid = child.id();
         std::fs::write(pid_path, pid.to_string())?;
