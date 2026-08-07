@@ -85,9 +85,21 @@ fn main() -> io::Result<()> {
     let cargo_toml = fs::read_to_string("Cargo.toml").expect("Failed to read Cargo.toml");
     let cargo_toml: Value = toml::from_str(&cargo_toml).expect("Failed to parse Cargo.toml");
 
+    // The application identity (data directory, self-update asset names) follows
+    // the binary name from [[bin]], not the crate name: the crate is published
+    // as "kasl-cli" while the binary and on-disk identity stay "kasl".
+    let bin_name = cargo_toml
+        .get("bin")
+        .and_then(|bins| bins.as_array())
+        .and_then(|bins| bins.first())
+        .and_then(|bin| bin.get("name"))
+        .and_then(|name| name.as_str())
+        .map(str::to_string)
+        .unwrap_or_else(|| env::var("CARGO_PKG_NAME").unwrap());
+
     // Initialize metadata writer and add basic package information
     let mut app_metadata = AppMetadata::new()?;
-    app_metadata.write("NAME", &env::var("CARGO_PKG_NAME").unwrap())?;
+    app_metadata.write("NAME", &bin_name)?;
     app_metadata.write("VERSION", &env::var("CARGO_PKG_VERSION").unwrap())?;
 
     // Extract custom metadata from Cargo.toml [package.metadata] section
@@ -117,13 +129,10 @@ fn main() -> io::Result<()> {
             (key_bytes.to_vec(), iv_bytes.to_vec())
         }
         _ => {
-            // Generate deterministic default keys based on package name
-            // This ensures consistent keys across builds while maintaining security
-            let package_name = env::var("CARGO_PKG_NAME").unwrap_or_else(|_| "kasl".to_string());
-
-            // Create deterministic but unique keys based on package name
-            let mut default_key = format!("{}_default_encryption_key_32b", package_name);
-            let mut default_iv = format!("{}_iv_16b", package_name);
+            // Generate deterministic default keys based on the binary name so
+            // they stay stable across the crate rename to "kasl-cli"
+            let mut default_key = format!("{}_default_encryption_key_32b", bin_name);
+            let mut default_iv = format!("{}_iv_16b", bin_name);
 
             // Ensure exact lengths required by AES-256
             default_key.truncate(32);

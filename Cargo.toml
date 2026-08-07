@@ -2,8 +2,10 @@
 # A comprehensive command-line utility for tracking work activities, 
 # managing tasks, and generating productivity reports.
 
+# The crate is published as "kasl-cli" (the "kasl" name on crates.io belongs
+# to an unrelated project); the binary, library and app identity stay "kasl".
 [package]
-name = "kasl"
+name = "kasl-cli"
 version = "0.9.0"
 edition = "2021"
 description = "kasl is a comprehensive command-line utility 🛠️ designed to streamline the tracking of work activities 📊, including start times ⏰, pauses ⏸, and task completion"
@@ -12,8 +14,16 @@ authors = ["Kirill Lakhtachev <lahtachev@gmail.com> (https://lacodda.com)"]
 readme = "README.md"
 license = "MIT"
 keywords = ["cli", "tool", "work", "time", "flow"]
-categories = ["cli"]
+categories = ["command-line-utilities"]
 build = "build.rs"
+exclude = ["docs/", "tools/", ".github/", ".changeset/", "kasl.webp", "CNAME"]
+
+[lib]
+name = "kasl"
+
+[[bin]]
+name = "kasl"
+path = "src/main.rs"
 
 # Application metadata used during build process
 [package.metadata]
