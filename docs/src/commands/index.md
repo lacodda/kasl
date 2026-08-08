@@ -26,6 +26,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 - **[`autostart`](./autostart.md)** - Configure automatic startup
 - **[`update`](./update.md)** - Update application to latest version
+- **[`completions`](./completions.md)** - Print a shell completion script
 
 ## Quick Reference
 

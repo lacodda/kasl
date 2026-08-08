@@ -17,6 +17,7 @@
   - [`template`](./commands/template.md)
   - [`autostart`](./commands/autostart.md)
   - [`update`](./commands/update.md)
+  - [`completions`](./commands/completions.md)
 - [API Integrations](./api-integrations.md)
 - [Database](./database.md)
 - [Development](./development.md)

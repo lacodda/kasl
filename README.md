@@ -248,6 +248,12 @@ kasl autostart status   # Check status
 kasl update  # Check and install updates
 ```
 
+#### `completions` - Shell Completions
+```bash
+kasl completions bash        # bash, zsh, fish, powershell, elvish
+eval "$(kasl completions bash)"
+```
+
 #### `migrations` - Database Management (Debug Only)
 ```bash
 kasl migrations status  # Check database version

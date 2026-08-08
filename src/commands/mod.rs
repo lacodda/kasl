@@ -134,6 +134,16 @@ enum Commands {
     #[command(about = "Manage Jira inbox issues")]
     Inbox(inbox::InboxArgs),
 
+    /// Print a shell completion script
+    ///
+    /// Emits the completion script for the chosen shell on stdout; source it
+    /// from the shell profile to get completion for kasl's commands and flags.
+    #[command(about = "Print a shell completion script (source it from your shell profile)")]
+    Completions {
+        /// Target shell
+        shell: clap_complete::Shell,
+    },
+
     /// Database migration management utilities (debug builds only)
     ///
     /// Provides tools for database schema management, migration history,
@@ -208,6 +218,11 @@ impl Cli {
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
+            Commands::Completions { shell } => {
+                use clap::CommandFactory;
+                clap_complete::generate(shell, &mut Self::command(), "kasl", &mut std::io::stdout());
+                Ok(())
+            }
             Commands::Inbox(args) => inbox::cmd(args).await,
 
             // Database migrations only available in debug builds
