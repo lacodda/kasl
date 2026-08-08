@@ -1,91 +1,100 @@
 # `pauses` Command
 
-The `pauses` command provides detailed views of automatically detected and manually recorded breaks during work sessions. It helps users understand their break patterns and verify the accuracy of automatic pause detection.
+The `pauses` command shows the absences recorded during a workday and lets you record the ones the activity monitor missed.
+
+Most pauses arrive on their own: the `watch` daemon notices that input has stopped and writes a pause when activity resumes. But the monitor only sees the keyboard and mouse, so an absence spent away from the machine - a meeting in another room, a walk with the laptop shut - leaves no trace. `pauses add` is how you put it on the record.
 
 ## Usage
 
 ```bash
-kasl pauses [OPTIONS]
+kasl pauses [SUBCOMMAND]
 ```
 
-## Options
+| Subcommand | Purpose |
+| --- | --- |
+| `list` | Show pauses for a date |
+| `add` | Record an absence the monitor did not detect |
+| `remove` | Delete a pause record |
 
-- `-d, --date <DATE>`: Date to fetch pauses for (default: `today`)
-  - `today`: Current date
-  - `YYYY-MM-DD`: Specific date in ISO format
+Running `kasl pauses` with no subcommand lists today's pauses.
 
-- `-m, --min-duration <MINUTES>`: Minimum pause duration filter in minutes
-  - When specified, only pauses longer than this duration will be displayed
-  - Overrides the default minimum pause duration from configuration
-  - Useful for filtering out brief interruptions and focusing on significant breaks
-  - If not specified, uses the configured `min_pause_duration` setting
+## `kasl pauses list`
 
-## Display Format
+```bash
+kasl pauses list [OPTIONS]
+```
 
-The output includes:
+- `-d, --date <DATE>`: Date to fetch pauses for (default: `today`). Accepts `today` or `YYYY-MM-DD`.
+- `-m, --min-duration <MINUTES>`: Only show pauses at least this long. Overrides the configured `min_pause_duration`.
 
-- **Pause List**: Each pause with start time, end time, and duration
-- **Total Time**: Sum of all pause durations for the day
-- **Pause Count**: Number of breaks recorded
+Protected pauses (see below) are always listed, whatever the threshold.
 
-## Data Sources
+## `kasl pauses add`
 
-Pause data comes from:
+```bash
+kasl pauses add --start <HH:MM> --minutes <N> [OPTIONS]
+```
 
-- **Automatic Detection**: Monitor-recorded inactivity periods
-- **Manual Adjustments**: User-added pauses via `adjust` command
-- **Time Corrections**: Modified pause times from manual adjustments
+- `-s, --start <HH:MM>`: When the absence began. Required.
+- `-m, --minutes <N>`: How long it lasted, in minutes. Required.
+- `-d, --date <DATE>`: Date the absence belongs to (default: `today`).
+- `--keep`: Protect the pause from filtering and merging.
+- `-r, --reason <TEXT>`: Optional note describing the absence.
+
+You state the time; nothing is inferred. If the entry would overlap a pause already on record, it is rejected rather than silently merged - a day should not hold two contradictory accounts of the same minutes.
+
+### Protected pauses (`--keep`)
+
+Ordinary pauses pass through two filters before they reach a report: pauses shorter than `min_pause_duration` are dropped, and pauses separated by a negligible burst of activity are merged into one. Both filters exist to clean up noise from the monitor.
+
+A pause you entered by hand is not noise. `--keep` marks it protected, which exempts it from both: a deliberately short entry survives the threshold, and an entry adjacent to a detected pause keeps its own bounds instead of being absorbed.
+
+Use it when the absence is real but short enough that the threshold would discard it:
+
+```bash
+kasl pauses add --start 16:20 --minutes 10 --keep --reason "stand-up in the other room"
+```
+
+## `kasl pauses remove`
+
+```bash
+kasl pauses remove <ID> [-y]
+```
+
+- `<ID>`: Id of the pause to remove, as shown by `kasl pauses list`.
+- `-y, --yes`: Remove without asking for confirmation.
+
+Without `-y` the command asks before deleting. Outside an interactive terminal it refuses instead of prompting, so scripts fail loudly rather than hang.
 
 ## Examples
-
-### Basic Usage
 
 ```bash
 # Show today's pauses
 kasl pauses
 
-# Show pauses for specific date
-kasl pauses --date 2024-12-15
+# Show pauses for a specific date
+kasl pauses list --date 2026-08-07
 
-# Show pauses for yesterday
-kasl pauses --date 2024-12-14
-```
+# Show only significant breaks
+kasl pauses list --min-duration 30
 
-### Duration Filtering
+# Record an hour-long lunch the monitor missed
+kasl pauses add --start 13:00 --minutes 60 --reason "lunch"
 
-```bash
-# Show only pauses longer than 30 minutes
-kasl pauses --min-duration 30
+# Record a short absence that must survive the duration filter
+kasl pauses add --start 16:20 --minutes 10 --keep
 
-# Show only significant breaks (longer than 15 minutes)
-kasl pauses --min-duration 15
+# Record an absence on an earlier day
+kasl pauses add --date 2026-08-07 --start 11:30 --minutes 45
 
-# Filter specific date with duration
-kasl pauses --date 2024-12-15 --min-duration 10
-```
-
-### Analysis Examples
-
-```bash
-# Review break patterns for the week
-kasl pauses --date 2024-12-15
-kasl pauses --date 2024-12-16
-kasl pauses --date 2024-12-17
-
-# Focus on significant breaks only
-kasl pauses --min-duration 30
-
-# Compare different duration thresholds
-kasl pauses --min-duration 5
-kasl pauses --min-duration 15
-kasl pauses --min-duration 30
+# Remove a pause entered by mistake
+kasl pauses remove 42
 ```
 
 ## Sample Output
 
-### Today's Pauses
 ```
-December 15, 2024
+August 8, 2026
 
 +--------------+-------+-------+----------+
 | ID           | START | END   | DURATION |
@@ -93,181 +102,29 @@ December 15, 2024
 | 1            | 10:30 | 10:45 | 00:15    |
 | 2            | 12:00 | 13:00 | 01:00    |
 | 3            | 15:15 | 15:30 | 00:15    |
-| 4            | 16:45 | 17:00 | 00:15    |
 |              |       |       |          |
-| TOTAL        |       |       | 01:45    |
+| TOTAL        |       |       | 01:30    |
 +--------------+-------+-------+----------+
 ```
 
-### Filtered Output (min-duration: 30)
-```
-December 15, 2024
+## How pauses affect productivity
 
-+--------------+-------+-------+----------+
-| ID           | START | END   | DURATION |
-+--------------+-------+-------+----------+
-| 1            | 12:00 | 13:00 | 01:00    |
-|              |       |       |          |
-| TOTAL        |       |       | 01:00    |
-+--------------+-------+-------+----------+
+Productivity is the share of available time you were actually at the machine:
+
+```text
+Available Work Time = Workday Length - Long Pauses
+Net Work Time       = Available Work Time - Short Pauses
+Productivity        = Net Work Time / Available Work Time * 100
 ```
 
-### No Pauses Found
-```
-December 15, 2024
+Long pauses - detected absences at or above `min_pause_duration`, plus every manual pause you record - are time you were away, so they leave the denominator entirely. Short pauses are brief interruptions while you were present, so they lower the numerator only.
 
-+--------------+-------+-------+----------+
-| ID           | START | END   | DURATION |
-+--------------+-------+-------+----------+
-+--------------+-------+-------+----------+
-```
+Recording a genuine absence therefore raises productivity: the time no longer counts against you. That is the honest use of `pauses add`, and the only one it supports - it records absences, it does not manufacture them.
 
-## Use Cases
-
-### Daily Break Review
-
-```bash
-# Review today's break patterns
-kasl pauses
-
-# Check if lunch break was recorded
-kasl pauses --min-duration 30
-```
-
-### Break Pattern Analysis
-
-```bash
-# Analyze break patterns over multiple days
-for date in 2024-12-15 2024-12-16 2024-12-17; do
-    echo "=== $date ==="
-    kasl pauses --date $date
-    echo
-done
-```
-
-### Monitoring Verification
-
-```bash
-# Verify that automatic pause detection is working
-kasl pauses --min-duration 5
-
-# Check for missed breaks
-kasl pauses --date 2024-12-15
-```
-
-### Manual Pause Review
-
-```bash
-# Review manually added pauses
-kasl pauses --date 2024-12-15
-
-# Compare with automatic detection
-kasl report --date 2024-12-15
-```
-
-## Duration Filtering
-
-### Understanding Duration Filters
-
-The `--min-duration` option helps focus on significant breaks:
-
-- **5 minutes**: Very short breaks (coffee, bathroom)
-- **15 minutes**: Standard short breaks
-- **30 minutes**: Significant breaks (lunch, meetings)
-- **60 minutes**: Major breaks (lunch, appointments)
-
-### Configuration Integration
-
-The command respects your configuration settings:
-
-```bash
-# Check your current minimum pause duration setting
-kasl init --show-config
-
-# The pauses command will use this setting by default
-kasl pauses
-```
-
-## Integration with Other Commands
-
-The `pauses` command works with other kasl commands:
-
-- **`report`**: Compare pause data with overall workday summary
-- **`adjust`**: Add manual pauses that appear in pause listings
-- **`watch`**: Automatic pause detection that feeds into pause data
-- **`export`**: Export pause data for external analysis
-
-## Troubleshooting
-
-### Common Issues
-
-**No pauses found**
-```bash
-# Check if workday exists
-kasl report --date 2024-12-15
-
-# Try without duration filter
-kasl pauses --date 2024-12-15
-
-# Check monitoring configuration
-kasl init --show-config
-```
-
-**Unexpected pause durations**
-```bash
-# Review pause detection settings
-kasl init --show-config
-
-# Check for manual adjustments
-kasl adjust --date 2024-12-15
-```
-
-**Missing breaks**
-```bash
-# Add manual pause if automatic detection missed it
-kasl adjust --mode pause --minutes 30 --date 2024-12-15
-
-# Verify the pause was added
-kasl pauses --date 2024-12-15
-```
-
-### Data Validation
-
-```bash
-# Cross-reference with workday report
-kasl report --date 2024-12-15
-kasl pauses --date 2024-12-15
-
-# Export data for external verification
-kasl export --date 2024-12-15 --format json
-```
-
-## Best Practices
-
-### Regular Review
-
-1. **Review daily pauses** to understand break patterns
-2. **Verify automatic detection** is working correctly
-3. **Add manual pauses** for missed breaks
-4. **Analyze patterns** to improve work habits
-
-### Break Management
-
-1. **Use appropriate duration filters** for different analysis needs
-2. **Document manual pauses** with clear descriptions
-3. **Review break patterns** to optimize productivity
-4. **Ensure compliance** with break requirements
-
-### Data Quality
-
-1. **Verify pause accuracy** regularly
-2. **Add missing breaks** promptly
-3. **Review monitoring settings** if detection is poor
-4. **Keep pause data consistent** with workday records
+> **Note:** earlier versions had a separate `kasl breaks` command that invented break times to lift the productivity figure above the reporting threshold. It has been removed. Existing break records were migrated into the pause list as protected pauses, so historical reports keep their numbers.
 
 ## Related Commands
 
-- **[`report`](./report.md)** - View complete workday summary including pauses
-- **[`adjust`](./adjust.md)** - Add manual pauses and adjust recorded times
-- **[`watch`](./watch.md)** - Monitor activity and detect automatic pauses
+- **[`report`](./report.md)** - View the complete workday summary including pauses
+- **[`watch`](./watch.md)** - Monitor activity and detect pauses automatically
 - **[`export`](./export.md)** - Export pause data for external analysis

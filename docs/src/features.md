@@ -36,38 +36,37 @@ Intelligent pause detection that adapts to your work patterns:
 
 ## 🎯 Productivity Optimization
 
-### Manual Break Management
+### Recording Missed Absences
 
-Strategic break placement for productivity improvement:
+The monitor only sees keyboard and mouse, so an absence spent away from the machine leaves no trace. Manual pauses put it on the record:
 
-- **Automatic Placement**: Optimal break positioning using intelligent algorithms
-- **Interactive Mode**: User-guided break creation with multiple placement options
-- **Productivity Validation**: Ensures breaks improve metrics effectively
-- **Conflict Prevention**: Avoids overlaps with existing pauses
-
-### Break Placement Strategies
+- **Explicit Times**: You state when the absence began and how long it lasted
+- **Protection**: `--keep` exempts an entry from threshold filtering and merging
+- **Conflict Prevention**: An entry overlapping a recorded pause is rejected
 
 ```bash
-# Automatic optimal placement
-kasl breaks -m 30
+# Record an hour-long lunch the monitor missed
+kasl pauses add --start 13:00 --minutes 60 --reason "lunch"
 
-# Interactive placement selection
-kasl breaks
+# Record a short absence that must survive the duration filter
+kasl pauses add --start 16:20 --minutes 10 --keep
 ```
-
-**Placement Algorithms:**
-- **Middle of Longest Work Period**: Splits extended work sessions
-- **After Existing Pauses**: Extends natural break periods
-- **Before Existing Pauses**: Creates preparation time
 
 ### Productivity Metrics
 
 Real-time productivity tracking and validation:
 
 - **Threshold Validation**: Configurable minimum productivity for report submission
-- **Break Recommendations**: Suggests break duration to reach targets
-- **Progress Tracking**: Shows productivity impact of added breaks
+- **Low-Productivity Warning**: Flags a day that falls below the threshold
 - **Report Integration**: Blocks low-productivity report submission
+
+```text
+Available Work Time = Workday Length - Long Pauses
+Net Work Time       = Available Work Time - Short Pauses
+Productivity        = Net Work Time / Available Work Time * 100
+```
+
+Long pauses - detected absences at or above `min_pause_duration`, plus every manual pause - leave the denominator entirely. Short pauses lower the numerator only.
 
 ### Configuration
 
@@ -76,18 +75,10 @@ Real-time productivity tracking and validation:
   "productivity": {
     "min_productivity_threshold": 75.0,
     "workday_hours": 8.0,
-    "min_break_duration": 20,
-    "max_break_duration": 180,
     "min_workday_fraction_before_suggest": 0.5
   }
 }
 ```
-
-**Key Features:**
-- **Smart Recommendations**: Only suggests breaks when meaningful
-- **Validation Safeguards**: Prevents invalid break placement
-- **Progress Feedback**: Shows real-time productivity improvements
-- **Report Quality**: Ensures only high-quality reports are submitted
 
 ## 📋 Task Management
 
@@ -225,26 +216,26 @@ kasl report
 
 ## ⚙️ Advanced Features
 
-### Time Adjustments
+### Correcting the Record
 
-Correct work times with preview before applying:
+Record an absence the monitor missed, or remove a pause entered by mistake:
 
 ```bash
-# Adjust work start time
-kasl adjust --mode start --minutes 30 --date 2025-01-15
+# Record an absence on a given date
+kasl pauses add --date 2026-08-07 --start 11:30 --minutes 45
 
-# Add a pause
-kasl adjust --mode pause --minutes 15 --date 2025-01-15
+# Keep a short absence that the duration filter would drop
+kasl pauses add --start 16:20 --minutes 10 --keep
 
-# Adjust work end time
-kasl adjust --mode end --minutes 20 --date 2025-01-15
+# Remove a pause by id
+kasl pauses remove 42
 ```
 
 Features:
-- Preview changes before applying
-- Multiple adjustment modes
-- Date-specific adjustments
-- Force mode for immediate application
+- Explicit times - nothing is inferred
+- Overlapping entries are rejected
+- `--keep` exempts an entry from filtering and merging
+- Date-specific entries
 
 ### Data Export
 

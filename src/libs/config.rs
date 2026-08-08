@@ -153,19 +153,6 @@ pub struct ProductivityConfig {
     /// premature suggestions during normal workday startup.
     /// Typical value: 0.5 (50% of workday)
     pub min_workday_fraction_before_suggest: f64,
-
-    /// Minimum break duration in minutes.
-    ///
-    /// Manual breaks must be at least this long to be accepted.
-    /// Prevents creation of breaks that are too short to meaningfully
-    /// impact productivity calculations.
-    pub min_break_duration: u64,
-
-    /// Maximum break duration in minutes.
-    ///
-    /// Manual breaks cannot exceed this duration. Prevents creation
-    /// of breaks that extend beyond the current time or are unreasonably long.
-    pub max_break_duration: u64,
 }
 
 /// Daily report export configuration.
@@ -468,16 +455,12 @@ impl Default for ProductivityConfig {
     ///
     /// - **75% minimum productivity**: Reasonable threshold allowing for breaks
     /// - **8 hours workday**: Standard full-time work expectation
-    /// - **50% workday fraction**: Wait until mid-day before suggesting breaks
-    /// - **20 minutes minimum break**: Long enough to impact productivity meaningfully
-    /// - **180 minutes maximum break**: Prevents unreasonably long breaks
+    /// - **50% workday fraction**: Wait until mid-day before warning on productivity
     fn default() -> Self {
         ProductivityConfig {
             min_productivity_threshold: 75.0,
             workday_hours: 8.0,
             min_workday_fraction_before_suggest: 0.5,
-            min_break_duration: 20,
-            max_break_duration: 180,
         }
     }
 }
@@ -819,22 +802,10 @@ impl Config {
                             .default(default.workday_hours)
                             .interact_text()?,
 
-                        // Minimum workday fraction before suggestions
+                        // Minimum workday fraction before the productivity warning
                         min_workday_fraction_before_suggest: Input::with_theme(&ColorfulTheme::default())
                             .with_prompt(Message::PromptMinWorkdayFraction.to_string())
                             .default(default.min_workday_fraction_before_suggest)
-                            .interact_text()?,
-
-                        // Minimum break duration in minutes
-                        min_break_duration: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt(Message::PromptMinBreakDuration.to_string())
-                            .default(default.min_break_duration)
-                            .interact_text()?,
-
-                        // Maximum break duration in minutes
-                        max_break_duration: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt(Message::PromptMaxBreakDuration.to_string())
-                            .default(default.max_break_duration)
                             .interact_text()?,
                     });
                 }

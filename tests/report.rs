@@ -139,28 +139,18 @@ mod tests {
         .unwrap();
         drop(conn);
 
-        // Insert a manual break: 12:00-13:00 (lunch)
-        let breaks_db = kasl::db::breaks::Breaks::new().unwrap();
-        let break_record = kasl::db::breaks::Break {
-            id: None,
-            date,
-            start: date.and_hms_opt(12, 0, 0).unwrap(),
-            end: date.and_hms_opt(13, 0, 0).unwrap(),
-            duration: chrono::Duration::hours(1),
-            reason: Some("Lunch break".to_string()),
-            created_at: None,
-        };
-        breaks_db.insert(&break_record).unwrap();
+        // Insert a manual break: 12:00-13:00 (lunch), now just a protected pause
+        pauses_db
+            .insert_manual(date.and_hms_opt(12, 0, 0).unwrap(), chrono::Duration::hours(1), true, Some("Lunch break"))
+            .unwrap();
 
         let workday = workdays.fetch(date).unwrap().unwrap();
         let pauses_vec = pauses_db.get_daily_pauses(date).unwrap();
-        let breaks_vec = breaks_db.get_daily_breaks(date).unwrap();
 
-        // Test that the combined calculation includes both breaks and pauses
-        let combined_interruptions = kasl::libs::report::combine_breaks_and_pauses(&breaks_vec, &pauses_vec);
-        assert_eq!(combined_interruptions.len(), 2); // Should have both pause and break
+        // Should have both the automatic pause and the manual (protected) pause
+        assert_eq!(pauses_vec.len(), 2);
 
-        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &combined_interruptions);
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
 
         // Should create 3 work intervals:
         // 1. 09:00 - 10:30 (before pause)

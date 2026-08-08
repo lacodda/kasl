@@ -22,7 +22,7 @@
 //! ```
 
 use crate::{
-    db::{breaks::Breaks, pauses::Pauses, tasks::Tasks, workdays::Workdays},
+    db::{pauses::Pauses, tasks::Tasks, workdays::Workdays},
     libs::{
         config::Config,
         formatter::format_duration,
@@ -1103,19 +1103,17 @@ impl Exporter {
         // Respect the same interruption sources and thresholds as report submission.
         let config = Config::read()?;
         let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
-        let breaks = Breaks::new()?.get_daily_breaks(date)?;
         let pauses = Pauses::new()?
             .set_min_duration(monitor_config.min_pause_duration)
             .get_workday_pauses(&workday)?;
-        let interruptions = report::combine_breaks_and_pauses(&breaks, &pauses);
 
-        let intervals = report::calculate_work_intervals(&workday, &interruptions);
+        let intervals = report::calculate_work_intervals(&workday, &pauses);
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
 
         // End of the workday (fall back to "now" if the session is still open).
         let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
 
-        let slots = classify_hour_slots(workday.start, end_time, &intervals, &interruptions);
+        let slots = classify_hour_slots(workday.start, end_time, &intervals, &pauses);
         let task_texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
         let rows = build_hourly_rows(&slots, &task_texts, locale.break_label);
 
@@ -1530,12 +1528,7 @@ mod hourly_tests {
     fn pause(start_h: u32, start_m: u32, end_h: u32, end_m: u32) -> Pause {
         let start = dt(start_h, start_m);
         let end = dt(end_h, end_m);
-        Pause {
-            id: 1,
-            start,
-            end: Some(end),
-            duration: Some(end - start),
-        }
+        Pause::detected(1, start, Some(end), Some(end - start))
     }
 
     fn task(name: &str) -> Task {

@@ -217,15 +217,6 @@ kasl export summary --format excel -o monthly_report.xlsx
 kasl export all --format json  # Export everything
 ```
 
-#### `adjust` - Time Adjustment
-```bash
-# Adjust work time
-kasl adjust --mode start --minutes 30  # Remove 30 min from start
-kasl adjust --mode end --minutes 60    # Remove 1 hour from end
-kasl adjust --mode pause --minutes 45  # Add 45-min pause
-kasl adjust  # Interactive mode
-```
-
 ### Utility Commands
 
 #### `sum` - Monthly Summary
@@ -233,11 +224,16 @@ kasl adjust  # Interactive mode
 kasl sum  # View monthly working hours summary
 ```
 
-#### `pauses` - Break Management
+#### `pauses` - Pauses and Missed Absences
 ```bash
-kasl pauses                     # Today's breaks
-kasl pauses --date 2025-01-15  # Specific date
-kasl pauses --min-duration 10   # Filter by duration
+kasl pauses                          # Today's pauses
+kasl pauses list --date 2025-01-15   # Specific date
+kasl pauses list --min-duration 10   # Filter by duration
+
+# Record an absence the monitor missed
+kasl pauses add --start 13:00 --minutes 60 --reason "lunch"
+kasl pauses add --start 16:20 --minutes 10 --keep  # survives the filter
+kasl pauses remove 42
 ```
 
 #### `autostart` - System Integration

@@ -1,13 +1,14 @@
-//! Database operations for tracking work breaks and pause periods.
+//! Database operations for tracking pause periods.
 //!
-//! Manages the storage and retrieval of pause/break records during work sessions.
-//! Provides functionality for automatically tracking user inactivity periods and
-//! manually recorded breaks.
+//! Manages the storage and retrieval of pause records during work sessions:
+//! absences detected automatically by the activity monitor, and ones the user
+//! recorded by hand because the monitor could not see them.
 //!
 //! ## Features
 //!
 //! - **Automatic Detection**: Records pauses when user activity stops
-//! - **Manual Entry**: Support for manually adding break periods
+//! - **Manual Entry**: Records a complete pause with user-stated bounds
+//! - **Protection**: Manual pauses can bypass threshold filtering and merging
 //! - **Duration Calculation**: Automatic computation of pause lengths
 //! - **Daily Filtering**: Retrieve pauses for specific dates with duration thresholds
 //! - **Batch Operations**: Delete multiple pause records efficiently
@@ -42,7 +43,9 @@ const SCHEMA_PAUSES: &str = "CREATE TABLE IF NOT EXISTS pauses (
     id INTEGER NOT NULL PRIMARY KEY,
     start TIMESTAMP NOT NULL,
     end TIMESTAMP,
-    duration INTEGER
+    duration INTEGER,
+    protected INTEGER NOT NULL DEFAULT 0,
+    reason TEXT
 )";
 
 /// Insert a new pause start record with the current timestamp.
@@ -74,7 +77,15 @@ const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL 
 /// Retrieves every completed pause (end IS NOT NULL) for the given date
 /// ordered chronologically. Duration filtering is performed in Rust after
 /// merging consecutive pauses, so no threshold is applied here.
-const SELECT_DAILY_PAUSES: &str = "SELECT id, start, end, duration FROM pauses WHERE date(start) = date(?1) AND end IS NOT NULL ORDER BY start ASC, id ASC";
+const SELECT_DAILY_PAUSES: &str =
+    "SELECT id, start, end, duration, protected FROM pauses WHERE date(start) = date(?1) AND end IS NOT NULL ORDER BY start ASC, id ASC";
+
+/// Insert a complete manual pause with explicit start, end and duration.
+///
+/// Used by `kasl pauses add`, where the user states when they were away
+/// instead of the monitor detecting it. `protected` decides whether the
+/// record is exempt from threshold filtering and merging.
+const INSERT_MANUAL_PAUSE: &str = "INSERT INTO pauses (start, end, duration, protected, reason) VALUES (?1, ?2, ?3, ?4, ?5)";
 
 /// Delete a single pause record by ID.
 ///
@@ -186,11 +197,20 @@ impl Pauses {
     /// start, the latest end, and its duration is recomputed as `end - start`.
     ///
     /// The input is expected to be sorted chronologically by start time.
+    /// Protected pauses never participate in merging: they were stated by the
+    /// user with explicit bounds, so absorbing them into a neighbour (or
+    /// absorbing a neighbour into them) would falsify what the user recorded.
     fn merge_consecutive_pauses(pauses: Vec<Pause>, max_gap_secs: i64) -> Vec<Pause> {
         let mut merged: Vec<Pause> = Vec::with_capacity(pauses.len());
 
         for pause in pauses {
+            if pause.protected {
+                merged.push(pause);
+                continue;
+            }
+
             if let Some(last) = merged.last_mut()
+                && !last.protected
                 && let Some(last_end) = last.end
             {
                 // Merge when the work gap between the pauses is small enough
@@ -339,6 +359,48 @@ impl Pauses {
         Ok(())
     }
 
+    /// Records a complete pause stated by the user, with explicit bounds.
+    ///
+    /// Unlike monitor-detected pauses, which are opened by `insert_start` and
+    /// closed later by `insert_end`, a manual pause is written in one shot: the
+    /// user knows when they left and how long they were gone. No placement is
+    /// inferred and no time is invented.
+    ///
+    /// # Arguments
+    ///
+    /// * `start` - When the absence began
+    /// * `duration` - How long it lasted
+    /// * `protected` - Exempt the record from threshold filtering and merging
+    /// * `reason` - Optional note describing the absence
+    ///
+    /// # Returns
+    ///
+    /// Returns the id of the inserted pause record.
+    pub fn insert_manual(&self, start: NaiveDateTime, duration: TimeDelta, protected: bool, reason: Option<&str>) -> Result<i64> {
+        let end = start + duration;
+        let conn_guard = self.conn.lock();
+        conn_guard.execute(
+            INSERT_MANUAL_PAUSE,
+            params![
+                start.format("%Y-%m-%d %H:%M:%S").to_string(),
+                end.format("%Y-%m-%d %H:%M:%S").to_string(),
+                duration.num_seconds(),
+                protected as i64,
+                reason,
+            ],
+        )?;
+        Ok(conn_guard.last_insert_rowid())
+    }
+
+    /// Returns the pause overlapping the given time range, if any exists.
+    ///
+    /// Used to reject a manual pause that would collide with an already
+    /// recorded one, so the day never contains contradictory absences.
+    pub fn find_overlapping(&self, start: NaiveDateTime, end: NaiveDateTime) -> Result<Option<Pause>> {
+        let pauses = self.get_daily_pauses(start.date())?;
+        Ok(pauses.into_iter().find(|p| p.end.map(|p_end| p.start < end && start < p_end).unwrap_or(false)))
+    }
+
     /// Retrieves all pause records for a specific date with duration filtering.
     ///
     /// This method fetches all completed pause records for the given date that
@@ -399,6 +461,7 @@ impl Pauses {
                 start: NaiveDateTime::parse_from_str(&start_str, "%Y-%m-%d %H:%M:%S").unwrap(),
                 end: end_str.map(|s| NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").unwrap()),
                 duration: Some(TimeDelta::seconds(duration)),
+                protected: row.get::<_, i64>(4).unwrap_or(0) != 0,
             })
         })?;
 
@@ -417,14 +480,26 @@ impl Pauses {
         let pauses = Self::merge_consecutive_pauses(pauses, max_gap_secs);
 
         // Apply the configured duration threshold to the merged pauses.
+        //
+        // Protected pauses bypass the `min_duration` threshold entirely: the user
+        // stated them deliberately, so a short manual entry must not be filtered
+        // away. The `max_duration` filter is used to isolate *short* pauses for
+        // productivity accounting, so protected records are excluded from it —
+        // they are accounted for as real, long-form absences.
         let pauses = match (&self.min_duration, &self.max_duration) {
             (Some(_), _) => {
                 let min = self.duration_threshold_seconds().unwrap_or(0);
-                pauses.into_iter().filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) >= min).collect()
+                pauses
+                    .into_iter()
+                    .filter(|p| p.protected || p.duration.map(|d| d.num_seconds()).unwrap_or(0) >= min)
+                    .collect()
             }
             (_, Some(_)) => {
                 let max = self.duration_threshold_seconds().unwrap_or(0);
-                pauses.into_iter().filter(|p| p.duration.map(|d| d.num_seconds()).unwrap_or(0) < max).collect()
+                pauses
+                    .into_iter()
+                    .filter(|p| !p.protected && p.duration.map(|d| d.num_seconds()).unwrap_or(0) < max)
+                    .collect()
             }
             _ => pauses,
         };
@@ -606,6 +681,7 @@ mod tests {
             start,
             end: Some(end),
             duration: Some(end - start),
+            protected: false,
         }
     }
 

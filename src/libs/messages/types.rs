@@ -360,31 +360,22 @@ pub enum Message {
     LowProductivityWarning {
         current: f64,
         threshold: f64,
-        needed_break_minutes: u64,
     },
     ProductivityTooLowToSend {
         current: f64,
         threshold: f64,
-        needed_break_minutes: u64,
     },
-    BreakCreated {
+    ManualPauseCreated {
         start_time: String,
         end_time: String,
         duration_minutes: u64,
     },
-    BreakCreateFailed(String),
-    BreakSuggestionCommand {
-        auto_minutes: u64,
+    ManualPauseOverlaps {
+        start_time: String,
+        end_time: String,
     },
-    BreakInteractivePrompt,
-    BreakDurationPrompt {
-        min_duration: u64,
-        max_duration: u64,
-    },
-    BreakPlacementOptions,
-    BreakOptionSelected(usize),
-    BreakConflictsWithPauses,
-    NoValidBreakPlacement,
+    ManualPauseRemoved(i32),
+    ManualPauseNotFound(i32),
     ProductivityRecalculated(f64),
 
     // === ENCRYPTION/SECRET MESSAGES ===
@@ -412,8 +403,6 @@ pub enum Message {
     PromptMinProductivityThreshold,
     PromptWorkdayHours,
     PromptMinWorkdayFraction,
-    PromptMinBreakDuration,
-    PromptMaxBreakDuration,
     PromptServerApiUrl,
     PromptServerAuthToken,
     PromptConfirmDelete,

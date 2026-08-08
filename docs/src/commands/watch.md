@@ -187,7 +187,7 @@ The `watch` command works with other kasl commands:
 
 - **`task`**: Create and manage tasks while monitoring
 - **`report`**: Generate reports based on monitored data
-- **`adjust`**: Manually adjust times recorded by monitoring
+- **`pauses`**: Record absences that monitoring did not detect
 - **`pauses`**: View recorded breaks and pauses
 
 ## Best Practices
@@ -217,6 +217,6 @@ The `watch` command works with other kasl commands:
 
 - **[`task`](./task.md)** - Manage tasks and work items
 - **[`report`](./report.md)** - Generate work reports
-- **[`adjust`](./adjust.md)** - Adjust recorded times
+- **[`pauses`](./pauses.md)** - Record absences the monitor missed
 - **[`pauses`](./pauses.md)** - View recorded breaks
 - **[`init`](./init.md)** - Configure monitoring settings

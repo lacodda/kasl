@@ -19,7 +19,6 @@
 //! ```
 
 pub mod autostart;
-pub mod breaks;
 pub mod export;
 pub mod inbox;
 pub mod init;
@@ -121,19 +120,12 @@ enum Commands {
     #[command(about = "Watch user activity in the background to record pauses")]
     Watch(watch::WatchArgs),
 
-    /// Display recorded breaks and pauses
+    /// View recorded pauses and record ones the monitor missed
     ///
-    /// Shows all detected pauses for a specific date with duration calculations
-    /// and filtering options.
-    #[command(about = "Display pauses for a given date")]
+    /// Lists detected pauses for a date, and lets the user add an absence the
+    /// activity monitor did not catch or remove one recorded by mistake.
+    #[command(about = "View pauses and record ones the monitor missed")]
     Pauses(pauses::PausesArgs),
-
-    /// Add manual breaks for productivity optimization
-    ///
-    /// Create strategically placed breaks to improve productivity metrics
-    /// and meet minimum thresholds for report submission.
-    #[command(about = "Add manual breaks for productivity optimization")]
-    Breaks(breaks::BreaksArgs),
 
     /// Jira inbox of assigned open issues
     ///
@@ -216,7 +208,6 @@ impl Cli {
             Commands::Update => update::cmd().await,
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
-            Commands::Breaks(args) => breaks::cmd(args).await,
             Commands::Inbox(args) => inbox::cmd(args).await,
 
             // Database migrations only available in debug builds

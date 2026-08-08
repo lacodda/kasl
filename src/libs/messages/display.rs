@@ -420,45 +420,30 @@ impl Display for Message {
 
             // === PRODUCTIVITY MESSAGES ===
             Message::MonthlyProductivity(percentage) => format!("Monthly work productivity: {:.1}%", percentage),
-            Message::LowProductivityWarning {
-                current,
-                threshold,
-                needed_break_minutes,
-            } => {
+            Message::LowProductivityWarning { current, threshold } => {
                 format!(
-                    "🔴 LOW PRODUCTIVITY: {:.1}% (minimum: {:.1}%)\n   To reach minimum productivity, add a {} minute break\n   Commands: kasl breaks -m {} (automatic) or kasl breaks (choose time)",
-                    current, threshold, needed_break_minutes, needed_break_minutes
+                    "🔴 LOW PRODUCTIVITY: {:.1}% (minimum: {:.1}%)\n   If an absence is missing from the day, record it: kasl pauses add --start HH:MM --minutes N",
+                    current, threshold
                 )
             }
-            Message::ProductivityTooLowToSend {
-                current,
-                threshold,
-                needed_break_minutes,
-            } => {
+            Message::ProductivityTooLowToSend { current, threshold } => {
                 format!(
-                    "Cannot send report: productivity {:.1}% is below minimum {:.1}%\nAdd a break using: kasl breaks -m {}",
-                    current, threshold, needed_break_minutes
+                    "Cannot send report: productivity {:.1}% is below minimum {:.1}%\nIf an absence is missing from the day, record it: kasl pauses add --start HH:MM --minutes N",
+                    current, threshold
                 )
             }
-            Message::BreakCreated {
+            Message::ManualPauseCreated {
                 start_time,
                 end_time,
                 duration_minutes,
             } => {
-                format!("Break created: {} - {} ({} minutes)", start_time, end_time, duration_minutes)
+                format!("Pause recorded: {} - {} ({} minutes)", start_time, end_time, duration_minutes)
             }
-            Message::BreakCreateFailed(error) => format!("Failed to create break: {}", error),
-            Message::BreakSuggestionCommand { auto_minutes } => {
-                format!("Run 'kasl breaks -m {}' to automatically place break", auto_minutes)
+            Message::ManualPauseOverlaps { start_time, end_time } => {
+                format!("Overlaps an existing pause ({} - {})", start_time, end_time)
             }
-            Message::BreakInteractivePrompt => "Choose break placement interactively".to_string(),
-            Message::BreakDurationPrompt { min_duration, max_duration } => {
-                format!("Enter break duration ({}-{} minutes):", min_duration, max_duration)
-            }
-            Message::BreakPlacementOptions => "Select break placement:".to_string(),
-            Message::BreakOptionSelected(option) => format!("Selected option {}", option),
-            Message::BreakConflictsWithPauses => "Break conflicts with existing pauses".to_string(),
-            Message::NoValidBreakPlacement => "No valid placement found for break".to_string(),
+            Message::ManualPauseRemoved(id) => format!("Pause {} removed", id),
+            Message::ManualPauseNotFound(id) => format!("no pause with id '{}' - see `kasl pauses list`", id),
             Message::ProductivityRecalculated(percentage) => format!("Productivity recalculated: {:.1}%", percentage),
 
             // === ENCRYPTION/SECRET MESSAGES ===
@@ -486,8 +471,6 @@ impl Display for Message {
             Message::PromptMinProductivityThreshold => "Enter minimum productivity threshold (%)".to_string(),
             Message::PromptWorkdayHours => "Enter expected workday duration (hours)".to_string(),
             Message::PromptMinWorkdayFraction => "Enter minimum workday fraction before suggesting breaks (0.0-1.0)".to_string(),
-            Message::PromptMinBreakDuration => "Enter minimum break duration (minutes)".to_string(),
-            Message::PromptMaxBreakDuration => "Enter maximum break duration (minutes)".to_string(),
             Message::PromptServerApiUrl => "Enter server API URL".to_string(),
             Message::PromptServerAuthToken => "Enter server auth token".to_string(),
             Message::PromptConfirmDelete => "Are you sure you want to delete this item?".to_string(),

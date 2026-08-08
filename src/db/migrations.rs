@@ -327,6 +327,31 @@ impl MigrationManager {
             tx.execute("ALTER TABLE jira_inbox DROP COLUMN status", [])?;
             Ok(())
         });
+
+        // Version 11: fold manual breaks into pauses as protected records.
+        //
+        // The separate `breaks` table held synthetic records whose times were
+        // invented by a placement heuristic; downstream code converted them to
+        // pauses anyway. Manual breaks now live in `pauses` with `protected = 1`,
+        // which exempts them from the duration threshold and from merging with
+        // adjacent pauses. Existing break rows are carried over so historical
+        // reports keep their numbers.
+        self.add_migration(11, "fold_breaks_into_protected_pauses", |tx| {
+            tx.execute("ALTER TABLE pauses ADD COLUMN protected INTEGER NOT NULL DEFAULT 0", [])?;
+            tx.execute("ALTER TABLE pauses ADD COLUMN reason TEXT", [])?;
+
+            // Carry over manual breaks; duration is stored in seconds in `pauses`
+            // but was stored in minutes in `breaks`.
+            tx.execute(
+                "INSERT INTO pauses (start, end, duration, protected, reason)
+                 SELECT start_time, end_time, duration * 60, 1, reason FROM breaks",
+                [],
+            )?;
+
+            tx.execute("DROP INDEX IF EXISTS idx_breaks_date", [])?;
+            tx.execute("DROP TABLE IF EXISTS breaks", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

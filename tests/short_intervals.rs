@@ -43,18 +43,18 @@ mod tests {
 
         // Create pauses that will result in a 5-minute interval
         let pauses = vec![
-            kasl::libs::pause::Pause {
-                id: 1,
-                start: date.and_hms_opt(10, 0, 0).unwrap(),
-                end: Some(date.and_hms_opt(10, 30, 0).unwrap()),
-                duration: Some(Duration::minutes(30)),
-            },
-            kasl::libs::pause::Pause {
-                id: 2,
-                start: date.and_hms_opt(10, 35, 0).unwrap(),
-                end: Some(date.and_hms_opt(12, 0, 0).unwrap()),
-                duration: Some(Duration::minutes(85)),
-            },
+            kasl::libs::pause::Pause::detected(
+                1,
+                date.and_hms_opt(10, 0, 0).unwrap(),
+                Some(date.and_hms_opt(10, 30, 0).unwrap()),
+                Some(Duration::minutes(30)),
+            ),
+            kasl::libs::pause::Pause::detected(
+                2,
+                date.and_hms_opt(10, 35, 0).unwrap(),
+                Some(date.and_hms_opt(12, 0, 0).unwrap()),
+                Some(Duration::minutes(85)),
+            ),
         ];
 
         let intervals = calculate_work_intervals(&workday, &pauses);
@@ -79,12 +79,12 @@ mod tests {
         };
 
         // Create pauses that result in longer intervals
-        let pauses = vec![kasl::libs::pause::Pause {
-            id: 1,
-            start: date.and_hms_opt(12, 0, 0).unwrap(),
-            end: Some(date.and_hms_opt(13, 0, 0).unwrap()),
-            duration: Some(Duration::hours(1)),
-        }];
+        let pauses = vec![kasl::libs::pause::Pause::detected(
+            1,
+            date.and_hms_opt(12, 0, 0).unwrap(),
+            Some(date.and_hms_opt(13, 0, 0).unwrap()),
+            Some(Duration::hours(1)),
+        )];
 
         let intervals = calculate_work_intervals(&workday, &pauses);
         let analysis = analyze_short_intervals(&intervals, 10);

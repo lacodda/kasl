@@ -16,12 +16,12 @@
 //! use kasl::libs::pause::Pause;
 //! use chrono::{NaiveDateTime, Duration};
 //!
-//! let pause = Pause {
-//!     id: 1,
-//!     start: NaiveDateTime::parse_from_str("2025-08-11 09:15:00", "%Y-%m-%d %H:%M:%S")?,
-//!     end: Some(NaiveDateTime::parse_from_str("2025-08-11 09:30:00", "%Y-%m-%d %H:%M:%S")?),
-//!     duration: Some(Duration::minutes(15)),
-//! };
+//! let pause = Pause::detected(
+//!     1,
+//!     NaiveDateTime::parse_from_str("2025-08-11 09:15:00", "%Y-%m-%d %H:%M:%S")?,
+//!     Some(NaiveDateTime::parse_from_str("2025-08-11 09:30:00", "%Y-%m-%d %H:%M:%S")?),
+//!     Some(Duration::minutes(15)),
+//! );
 //! ```
 
 use chrono::{Duration, prelude::NaiveDateTime};
@@ -126,4 +126,29 @@ pub struct Pause {
     /// determined yet. Display formatting handles this gracefully by showing
     /// placeholder values or real-time duration calculation.
     pub duration: Option<Duration>,
+
+    /// Whether this pause was entered manually and must be preserved as-is.
+    ///
+    /// Protected pauses are recorded by the user through `kasl pauses add`
+    /// rather than detected by the activity monitor. They are exempt from the
+    /// minimum-duration threshold and are never merged with adjacent pauses,
+    /// so a deliberately short entry (a ten-minute walk the monitor missed)
+    /// survives filtering intact.
+    pub protected: bool,
+}
+
+impl Pause {
+    /// Builds a monitor-detected pause (not protected).
+    ///
+    /// Used when reconstructing pauses from sources that carry no protection
+    /// flag, such as in-memory analysis of activity data.
+    pub fn detected(id: i32, start: NaiveDateTime, end: Option<NaiveDateTime>, duration: Option<Duration>) -> Self {
+        Self {
+            id,
+            start,
+            end,
+            duration,
+            protected: false,
+        }
+    }
 }

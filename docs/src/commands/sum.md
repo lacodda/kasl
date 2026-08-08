@@ -115,7 +115,7 @@ The `sum` command works with other kasl commands:
 
 - **`report`**: Daily reports that feed into monthly summaries
 - **`watch`**: Activity monitoring that provides the underlying data
-- **`adjust`**: Manual time adjustments that affect summary calculations
+- **`pauses`**: Manual pauses that affect summary calculations
 - **`export`**: Export monthly data for external analysis
 
 ## Use Cases
@@ -210,6 +210,6 @@ kasl report --show-all
 
 - **[`report`](./report.md)** - Generate daily work reports
 - **[`watch`](./watch.md)** - Monitor activity for data collection
-- **[`adjust`](./adjust.md)** - Adjust recorded times
+- **[`pauses`](./pauses.md)** - Record absences the monitor missed
 - **[`export`](./export.md)** - Export data for external analysis
 - **[`init`](./init.md)** - Configure API integration

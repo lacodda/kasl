@@ -122,7 +122,5 @@ mod tests {
         assert_eq!(productivity_config.min_productivity_threshold, 75.0);
         assert_eq!(productivity_config.workday_hours, 8.0);
         assert_eq!(productivity_config.min_workday_fraction_before_suggest, 0.5);
-        assert_eq!(productivity_config.min_break_duration, 20);
-        assert_eq!(productivity_config.max_break_duration, 180);
     }
 }

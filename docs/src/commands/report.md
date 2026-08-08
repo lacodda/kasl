@@ -221,7 +221,7 @@ The `report` command works with other kasl commands:
 
 - **`watch`**: Uses data collected by activity monitoring
 - **`task`**: Includes task completion data in reports
-- **`adjust`**: Reflects manual time adjustments in reports
+- **`pauses`**: Manual pauses are reflected in report intervals
 - **`pauses`**: Integrates pause data for comprehensive reporting
 
 ## Best Practices
@@ -237,7 +237,7 @@ The `report` command works with other kasl commands:
 
 1. **Verify data accuracy**: Check reports for unusual patterns
 2. **Review filtering**: Note filtered short intervals for context
-3. **Document adjustments**: Note any manual time corrections
+3. **Document absences**: Record any absence the monitor missed
 4. **Review completeness**: Ensure all work is properly recorded
 
 ### Organizational Integration
@@ -251,6 +251,6 @@ The `report` command works with other kasl commands:
 
 - **[`watch`](./watch.md)** - Monitor activity for report data
 - **[`task`](./task.md)** - Manage tasks included in reports
-- **[`adjust`](./adjust.md)** - Adjust times reflected in reports
+- **[`pauses`](./pauses.md)** - Record absences reflected in reports
 - **[`pauses`](./pauses.md)** - View breaks included in reports
 - **[`sum`](./sum.md)** - Generate monthly summaries
