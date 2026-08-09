@@ -317,6 +317,8 @@ mod windows {
 mod unix {
     use super::*;
     use std::fs;
+    #[cfg(not(target_os = "macos"))]
+    use std::os::unix::fs::symlink;
     use std::path::PathBuf;
     use std::process::Command;
 
@@ -429,14 +431,26 @@ mod unix {
 
         fs::write(&path, unit)?;
 
-        // Pick up the new unit, then enable it for subsequent logins.
-        let _ = Command::new("systemctl").args(["--user", "daemon-reload"]).output();
-        let output = Command::new("systemctl").args(["--user", "enable", SYSTEMD_UNIT]).output()?;
+        // Enable by creating the wants symlink ourselves rather than calling
+        // `systemctl --user enable`. A running user manager resolves units
+        // against the config path it was started with, so when XDG_CONFIG_HOME
+        // differs from that path it reports "unit file does not exist" even
+        // though the file is right there. The symlink is exactly what enabling
+        // produces, so systemd honours it on the next login either way.
+        let wants_dir = path
+            .parent()
+            .ok_or_else(|| msg_error_anyhow!(Message::AutostartEnableFailed("cannot resolve systemd user directory".into())))?
+            .join("default.target.wants");
+        fs::create_dir_all(&wants_dir)?;
 
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr).trim().to_string();
-            return Err(msg_error_anyhow!(Message::AutostartEnableFailed(error)));
-        }
+        let link = wants_dir.join(SYSTEMD_UNIT);
+        let _ = fs::remove_file(&link);
+        symlink(&path, &link)?;
+
+        // Ask a running manager to pick the unit up, so autostart also takes
+        // effect without a re-login. Absent or unreachable systemd is fine:
+        // the symlink above is what actually enables it.
+        let _ = Command::new("systemctl").args(["--user", "daemon-reload"]).output();
 
         msg_info!(Message::AutostartEnabledUser);
         Ok(())
@@ -471,7 +485,10 @@ mod unix {
             return Ok(());
         }
 
-        let _ = Command::new("systemctl").args(["--user", "disable", SYSTEMD_UNIT]).output();
+        // Remove the wants symlink first - that is what enabling created.
+        if let Some(parent) = path.parent() {
+            let _ = fs::remove_file(parent.join("default.target.wants").join(SYSTEMD_UNIT));
+        }
         fs::remove_file(&path)?;
         let _ = Command::new("systemctl").args(["--user", "daemon-reload"]).output();
 
