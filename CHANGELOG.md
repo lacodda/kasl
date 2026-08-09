@@ -16,6 +16,8 @@ All notable changes to this project are documented in this file.
 - Find completed issues without status-name JQL
 - Expand push ranges and keep only today's own commits
 - Close an unclosed past workday at its last activity
+- Import msg_info outside Windows too
+- Enable the systemd unit by symlink, not systemctl
 
 ### Documentation
 - Repair doc examples and gate them in CI
@@ -32,6 +34,7 @@ All notable changes to this project are documented in this file.
 
 ### Testing
 - Poll for daemon state instead of fixed sleeps
+- Skip keyring assertions where no keyring exists
 
 ### style
 - Rustfmt and clippy cleanup for gitlab and jira changes
