@@ -1,8 +1,8 @@
 {
   "name": "kasl-cli",
-  "version": "0.10.2",
+  "version": "1.0.0",
   "kasl": {
-    "binary": "v0.10.1"
+    "binary": "v1.0.0"
   },
   "description": "Work activity tracker CLI: automatic workday and break detection, task management with Jira/GitLab integration, productivity reports and exports",
   "license": "MIT",

@@ -2,6 +2,39 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.0] - 2026-08-09
+
+### Breaking Changes
+- **Replace manual breaks with user-stated pauses** - `kasl breaks` is removed; use `kasl pauses add`. The productivity config no longer accepts min_break_duration or max_break_duration.
+- **Move task, tag, template and inbox to subcommands** - task, tag, template and inbox no longer accept their old flags. Use the subcommands listed above.
+- **Move credentials to the OS keyring** - ENCRYPTION_KEY and ENCRYPTION_IV are no longer used at build time. Credentials no longer travel with a copy of the data directory; they are entered once per machine.
+- **Default report language to English** - reports render in English by default. Set `report.language` to "ru" to keep Russian output.
+
+### Bug Fixes
+- Report the binary name kasl instead of the crate name kasl-cli
+- Download the binary on first run, not only in postinstall
+- Find completed issues without status-name JQL
+- Expand push ranges and keep only today's own commits
+- Close an unclosed past workday at its last activity
+
+### Documentation
+- Repair doc examples and gate them in CI
+- Move the site from mdBook to Astro Starlight
+
+### Features
+- Replace manual breaks with user-stated pauses
+- Add shell completion script generation
+- Move task, tag, template and inbox to subcommands
+- Move credentials to the OS keyring
+- Implement autostart on macOS and Linux
+- Default report language to English
+- Add `ka` as a short alias for the kasl binary
+
+### Testing
+- Poll for daemon state instead of fixed sleeps
+
+### style
+- Rustfmt and clippy cleanup for gitlab and jira changes
 ## [0.10.1] - 2026-08-07
 
 ### Bug Fixes
