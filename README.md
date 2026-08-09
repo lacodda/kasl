@@ -1,384 +1,165 @@
-# kasl - Key Activity Synchronization and Logging
+<p align="center"><img src="assets/banner.svg" alt="kasl - key activity synchronization and logging" width="720"></p>
+
+> Your workday, recorded while you work: kasl watches activity in the background, turns it into intervals, pauses and tasks, and files the report for you.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/lacodda/kasl/main/kasl.webp" width="320" alt="kasl">
-</p>
-
-<p align="center">
-  <a href="https://github.com/lacodda/kasl/releases"><img src="https://img.shields.io/github/v/release/lacodda/kasl?style=flat-square" alt="Release"></a>
-  <a href="https://github.com/lacodda/kasl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/lacodda/kasl?style=flat-square" alt="License"></a>
-  <a href="https://github.com/lacodda/kasl/actions"><img src="https://img.shields.io/github/actions/workflow/status/lacodda/kasl/release.yml?style=flat-square" alt="Build Status"></a>
-  <a href="https://docs.rs/kasl-cli"><img src="https://img.shields.io/docsrs/kasl-cli?style=flat-square" alt="Documentation"></a>
   <a href="https://crates.io/crates/kasl-cli"><img src="https://img.shields.io/crates/v/kasl-cli?style=flat-square" alt="crates.io"></a>
   <a href="https://www.npmjs.com/package/kasl-cli"><img src="https://img.shields.io/npm/v/kasl-cli?style=flat-square" alt="npm"></a>
+  <a href="https://github.com/lacodda/kasl/actions"><img src="https://img.shields.io/github/actions/workflow/status/lacodda/kasl/ci.yml?style=flat-square" alt="CI"></a>
+  <a href="https://github.com/lacodda/kasl/blob/main/LICENSE"><img src="https://img.shields.io/github/license/lacodda/kasl?style=flat-square" alt="License"></a>
 </p>
 
-## Overview 📖
+## Why
 
-kasl is a comprehensive command-line utility designed to streamline work activity tracking, task management, and productivity reporting. It automatically monitors your work sessions, tracks breaks, manages tasks, and generates detailed reports for better productivity insights.
+Time sheets get filled in from memory, at the end of the day, when the day is already gone. You reconstruct when you started, guess how long lunch was, and try to recall what that morning hour went into.
 
-**Current Version:** 1.0.0
+kasl records it as it happens. A background daemon watches keyboard and mouse activity, decides when the workday started, notices the breaks, and keeps the intervals. Tasks come from your own commits and issues rather than from memory. At the end you look at the day and send it, instead of inventing it.
 
-## ✨ Features
+## A day in the life
 
-### 🔍 Activity Monitoring
-- **Automatic work session tracking** - Detects when you start and end your workday
-- **Smart break detection** - Automatically records breaks based on inactivity
-- **Background monitoring** - Runs silently in the background
-- **Cross-platform binaries** - Windows x64, Linux x64, and macOS arm64 releases; unix autostart integration lands in 1.0.0
+Start the daemon once - or have it start itself at login - and forget about it:
 
-### 📋 Task Management
-- **CRUD operations** - Create, read, update, and delete tasks
-- **Task templates** - Save frequently used tasks as reusable templates
-- **Tagging system** - Organize tasks with custom tags and colors
-- **Progress tracking** - Track task completion percentage
-- **Batch operations** - Edit or delete multiple tasks at once
+```console
+$ kasl watch
+Watcher started in the background (PID: 24180).
+```
 
-### 📊 Reporting & Analytics
-- **Daily reports** - Comprehensive view of work intervals and tasks
-- **Monthly summaries** - Aggregated statistics and productivity metrics
-- **Productivity calculation** - Measure actual work time vs. presence time
-- **Short interval detection** - Identify and merge fragmented work periods
-- **Export capabilities** - Export data to CSV, JSON, or Excel formats
+Later, note what you worked on. Candidates come from today's GitLab commits and resolved Jira issues, so most of this is picking from a list rather than typing:
 
-### ⚙️ Advanced Features
-- **Time adjustment** - Correct work times with preview before applying
-- **Database migrations** - Safe schema updates when upgrading (debug builds only)
-- **API integrations** - Connect with GitLab, Jira, and custom APIs
-- **Autostart support** - Start monitoring automatically on system boot
-- **Debug logging** - Detailed logs for troubleshooting
+```console
+$ kasl task find
+Found: 1 incomplete, 2 jira, 4 gitlab
+? Select tasks to import ›
+❯ ◉ ↻ PROJ-419 Draft migration for protected pauses — 60%
+  ◉ ◉ PROJ-412 Fix session timeout on the settings page
+  ◯ ● Review PR #318: pause merging (a1c9f42)
+```
 
-## 🚀 Installation
+Look at the day. The intervals, the breaks and the productivity figure were recorded while you worked:
 
-### Quick Install (Recommended)
+```console
+$ kasl report
+Report for August 8, 2026
 
-Via npm (downloads the prebuilt binary; Windows x64 for now):
++--------------+-------+-------+----------+
+| ID           | START | END   | DURATION |
++--------------+-------+-------+----------+
+| 1            | 09:12 | 13:30 | 04:18    |
+| 2            | 14:18 | 16:02 | 01:44    |
+| 3            | 16:29 | 18:04 | 01:35    |
+|              |       |       |          |
+| TOTAL        |       |       | 07:37    |
+| PRODUCTIVITY |       |       | 96.1%    |
++--------------+-------+-------+----------+
+
+Tasks:
+
++---+----+---------------------------------------------------+------------------+------+
+| # | ID | NAME                                              | COMMENT          | DONE |
++---+----+---------------------------------------------------+------------------+------+
+| 1 | 1  | PROJ-412 Fix session timeout on the settings page | stale cookie jar | 100% |
+| 2 | 2  | Review PR #318: pause merging                     |                  | 100% |
+| 3 | 3  | PROJ-419 Draft migration for protected pauses     | backfill pending | 60%  |
++---+----+---------------------------------------------------+------------------+------+
+```
+
+The monitor only sees the keyboard and the mouse, so an hour in a meeting room leaves no trace. Put it on the record yourself:
+
+```console
+$ kasl pauses add --start 15:00 --minutes 40 --reason "offsite meeting"
+Pause recorded: 15:00 - 15:40 (40 minutes)
+```
+
+Send the day when it is done:
+
+```console
+$ kasl report --send
+Your report dated August 8, 2026 has been successfully submitted
+Wait for a message to your email address
+```
+
+And watch the month accumulate:
+
+```console
+$ kasl sum
+Working hours for August, 2026
+
++------------+-------+--------------+
+| DATE       | HOURS | PRODUCTIVITY |
++------------+-------+--------------+
+| 2026-08-07 | 08:04 | 94.7%        |
+| 2026-08-08 | 07:37 | 96.1%        |
+|            |       |              |
+| TOTAL      | 15:41 |              |
+| AVERAGE    | 07:50 |              |
++------------+-------+--------------+
+
+Monthly work productivity: 95.4%
+```
+
+## What you get
+
+- **A workday that records itself.** The daemon starts the day on sustained activity rather than the first stray keypress, and closes pauses when you come back. Brief interruptions and real absences count differently, so the productivity figure means something.
+- **Tasks you do not have to remember.** Today's GitLab commits and resolved Jira issues are offered as candidates and deduplicated against what you already logged. A Jira inbox polls assigned issues in the background and raises a desktop notification when something new lands on you.
+- **Honest numbers.** kasl records absences; it does not invent them. When a day falls below your reporting threshold it says so - and if the cause is a break the monitor missed, you add that break with its real time.
+- **Reports where they need to go.** One command submits the day, or the month, to your corporate API. Exports to CSV, JSON and Excel, including the hourly breakdown that time sheets tend to ask for.
+- **Credentials in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing sensitive in a config file, nothing encrypted with a key that ships inside the binary.
+- **Nothing that hangs.** Every prompt checks for a terminal first, so kasl under cron, under CI or under the daemon fails with a message naming the flag you needed instead of waiting forever for an answer nobody can give.
+- **A short alias.** `ka` is installed alongside `kasl`, and completions are available for bash, zsh, fish, PowerShell and elvish.
+
+## Install
+
+**With npm:**
+
 ```bash
 npm i -g kasl-cli
 ```
 
-Via cargo (builds from source on any platform; the crate is named `kasl-cli`, the binary stays `kasl`):
+**With cargo:**
+
 ```bash
 cargo install kasl-cli
 ```
 
-### Install Script
+**Install script.** macOS / Linux:
 
-Install kasl using curl:
 ```bash
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"
 ```
 
-Or using wget:
-```bash
-sh -c "$(wget https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh -O -)"
-```
+**Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` on your `PATH`.
 
-### Build from Source
-
-Requirements:
-- Rust 1.70 or higher
-- Git
+## Quick start
 
 ```bash
-git clone https://github.com/lacodda/kasl.git
-cd kasl
-cargo build --release
-cargo install --path .
+kasl init                 # first-run wizard: monitor settings, integrations, credentials
+kasl watch                # start monitoring in the background
+kasl autostart enable     # and have it start at login
+kasl task find            # pick up today's commits and issues
+kasl report               # see the day
+kasl report --send        # file it
 ```
 
-## 📚 Quick Start
+Data lives in the platform user data directory: `%LOCALAPPDATA%\lacodda\kasl` on Windows, `~/Library/Application Support/lacodda/kasl` on macOS, `~/.local/share/lacodda/kasl` on Linux.
 
-### Initial Setup
+Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.com)**.
 
-```bash
-# Configure kasl interactively
-kasl init
+## Status
 
-# Start activity monitoring
-kasl watch
+Everything above works today, on Windows, macOS and Linux. What is next:
 
-# Enable autostart on system boot
-kasl autostart enable
-```
+- [ ] **Doctor and notifications** - `kasl doctor`, a nudge when a break is due or the day is still open
+- [ ] **Smarter time** - overnight tracking and a configurable day boundary, so work past midnight belongs to the right day
+- [ ] **Backup and quick views** - automatic database backups, `kasl now` for status bars, `kasl standup` for a markdown summary
+- [ ] **Live TUI** - a persistent view of the day while you work
+- [ ] **Plugins** - `kasl-plugin-*` subprocesses, with Jira and GitLab moving behind the same interface
 
-### Daily Workflow
+Released versions and what landed in each: [CHANGELOG](CHANGELOG.md).
 
-```bash
-# Create a new task
-kasl task add --name "Review pull requests" --completeness 0
+## Documentation
 
-# Update task progress
-kasl task edit 1
+The documentation site (Astro Starlight) lives in [`docs/`](docs/); architecture decision records are in [`docs/adr/`](docs/adr/).
 
-# View today's report
-kasl report
+## License
 
-# Manually end workday (if needed)
-kasl end
-
-# Submit daily report
-kasl report --send
-```
-
-## 📖 Command Reference
-
-### Core Commands
-
-#### `watch` - Activity Monitoring
-```bash
-# Start monitoring in background
-kasl watch
-
-# Run in foreground (debug mode)
-kasl watch --foreground
-
-# Stop monitoring
-kasl watch --stop
-```
-
-#### `task` - Task Management
-```bash
-# Create task
-kasl task add --name "Fix bug #123" --comment "High priority" --tags "bug,urgent"
-
-# Create from template
-kasl task add --template daily-standup
-kasl task add --from-template  # Interactive selection
-
-# View tasks
-kasl task list              # Today's tasks
-kasl task list --all        # All tasks
-kasl task list --tag urgent # Tasks with specific tag
-kasl task show 5            # Show specific task by ID
-
-# Edit tasks
-kasl task edit 5   # Edit by ID
-kasl task edit     # Pick several tasks to edit interactively
-
-# Remove tasks
-kasl task remove 1 2 3   # Remove by IDs
-kasl task remove --today # Remove all today's tasks
-```
-Scripted flows can add `-y`/`--yes` to `remove` to skip the confirmation prompt, and `add` errors instead of hanging when `--name` is missing outside an interactive terminal.
-
-#### `inbox` - Jira Inbox
-```bash
-kasl inbox                # List assigned open Jira issues
-kasl inbox -n 5            # Top five by ranking (pin / Scoring / priority)
-kasl inbox sync            # Poll Jira now
-kasl inbox pin PROJ-123    # Keep an issue on top
-kasl inbox open PROJ-123   # Open in browser
-kasl inbox take PROJ-123   # Import into local tasks
-```
-The watcher polls Jira in the background and shows a desktop toast when a new issue is assigned to you (see the `jira_inbox` config section).
-
-#### `report` - Report Generation
-```bash
-# View report
-kasl report                      # Today's report
-kasl report --last              # Yesterday's report
-
-# Submit reports
-kasl report --send              # Send daily report
-kasl report --month             # Send monthly summary
-```
-
-#### `end` - Manual Workday End
-```bash
-# Manually end today's workday
-kasl end
-```
-
-#### `template` - Task Templates
-```bash
-# Manage templates
-kasl template add --name "standup"
-kasl template list
-kasl template show standup
-kasl template edit standup
-kasl template remove standup
-kasl template search daily
-```
-
-#### `tag` - Tag Management
-```bash
-# Manage tags
-kasl tag add urgent --color red
-kasl tag list
-kasl tag show urgent   # Show tasks with tag
-kasl tag edit urgent
-kasl tag remove personal
-```
-
-#### `export` - Data Export
-```bash
-# Export data
-kasl export report --format csv
-kasl export tasks --format json --date 2025-01-15
-kasl export summary --format excel -o monthly_report.xlsx
-kasl export all --format json  # Export everything
-```
-
-### Utility Commands
-
-#### `sum` - Monthly Summary
-```bash
-kasl sum  # View monthly working hours summary
-```
-
-#### `pauses` - Pauses and Missed Absences
-```bash
-kasl pauses                          # Today's pauses
-kasl pauses list --date 2025-01-15   # Specific date
-kasl pauses list --min-duration 10   # Filter by duration
-
-# Record an absence the monitor missed
-kasl pauses add --start 13:00 --minutes 60 --reason "lunch"
-kasl pauses add --start 16:20 --minutes 10 --keep  # survives the filter
-kasl pauses remove 42
-```
-
-#### `autostart` - System Integration
-```bash
-kasl autostart enable   # Enable autostart
-kasl autostart disable  # Disable autostart
-kasl autostart status   # Check status
-```
-
-#### `update` - Self-Update
-```bash
-kasl update  # Check and install updates
-```
-
-#### `completions` - Shell Completions
-```bash
-kasl completions bash        # bash, zsh, fish, powershell, elvish
-eval "$(kasl completions bash)"
-```
-
-#### `migrations` - Database Management (Debug Only)
-```bash
-kasl migrations status  # Check database version
-kasl migrations history # View migration history
-```
-**Note:** This command is only available in debug builds.
-
-## ⚙️ Configuration
-
-Configuration file is stored at:
-- Windows: `%LOCALAPPDATA%\lacodda\kasl\config.json`
-- macOS: `~/Library/Application Support/lacodda/kasl/config.json`
-- Linux: `~/.local/share/lacodda/kasl/config.json`
-
-### Configuration Options
-
-```json
-{
-  "monitor": {
-    "min_pause_duration": 20,    // Minutes - minimum break to record
-    "pause_threshold": 60,       // Seconds - inactivity before pause
-    "poll_interval": 500,        // Milliseconds - activity check interval
-    "activity_threshold": 30,    // Seconds - activity before workday start
-    "min_work_interval": 10      // Minutes - minimum work interval
-  },
-  "si": {
-    "login": "your.email@company.com",
-    "auth_url": "https://auth.company.com",
-    "api_url": "https://api.company.com"
-  },
-  "gitlab": {
-    "access_token": "your-token",
-    "api_url": "https://gitlab.com"
-  },
-  "jira": {
-    "login": "your.email@company.com",
-    "api_url": "https://jira.company.com"
-  },
-  "jira_inbox": {
-    "enabled": true,
-    "poll_interval_secs": 300,  // Seconds between Jira inbox polls
-    "notify": true              // Desktop toast for new issues
-  }
-}
-```
-
-## 🔍 Debugging
-
-Enable debug logging for troubleshooting:
-
-```bash
-# Enable debug mode with full formatting
-KASL_DEBUG=1 kasl watch
-
-# Use standard Rust logging
-RUST_LOG=kasl=debug kasl report
-
-# Trace level for maximum verbosity
-RUST_LOG=kasl=trace KASL_LOG_FORMAT=full kasl watch
-```
-
-## 🗄️ Database
-
-kasl uses SQLite for local data storage. The database is located at:
-- Windows: `%LOCALAPPDATA%\lacodda\kasl\kasl.db`
-- macOS: `~/Library/Application Support/lacodda/kasl/kasl.db`
-- Linux: `~/.local/share/lacodda/kasl/kasl.db`
-
-### Backup
-
-Regular backups are recommended:
-```bash
-# Export all data
-kasl export all --format json -o backup_$(date +%Y%m%d).json
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-### Development Setup
-
-```bash
-# Clone repository
-git clone https://github.com/lacodda/kasl.git
-cd kasl
-
-# Run tests
-cargo test
-
-# Run with debug logging
-KASL_DEBUG=1 cargo run -- watch --foreground
-
-# Build for release
-cargo build --release
-
-# Debug build (enables migrations command)
-cargo build
-```
-
-### Code Style
-
-We maintain consistent code documentation standards. Please refer to our style guide:
-- [Documentation Style Guide](https://kasl.lacodda.com/development/style-guide.html) - Complete guide for writing documentation
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Built with [Rust](https://www.rust-lang.org/)
-- CLI powered by [clap](https://github.com/clap-rs/clap)
-- Database management with [rusqlite](https://github.com/rusqlite/rusqlite)
-- Excel export via [rust_xlsxwriter](https://github.com/jmcnamara/rust_xlsxwriter)
-
-## 📞 Support
-
-- 📧 Email: lahtachev@gmail.com
-- 🐛 Issues: [GitHub Issues](https://github.com/lacodda/kasl/issues)
-- 📖 Documentation: [kasl.lacodda.com](https://kasl.lacodda.com)
-
----
-
-Made with ❤️ by [Kirill Lakhtachev](https://lacodda.com)
+MIT (c) [Kirill Lakhtachev](https://lacodda.com)
