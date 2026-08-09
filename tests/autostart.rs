@@ -20,6 +20,13 @@ mod tests {
             unsafe {
                 std::env::set_var("LOCALAPPDATA", temp_dir.path());
             }
+            // Linux autostart honours XDG_CONFIG_HOME before ~/.config, so it
+            // must be redirected too - otherwise a runner that sets it would
+            // have this test write a systemd unit into the real session.
+            // SAFETY: tests touching the env are #[serial] or single-threaded setup
+            unsafe {
+                std::env::set_var("XDG_CONFIG_HOME", temp_dir.path().join("config"));
+            }
             AutostartTestContext { _temp_dir: temp_dir }
         }
     }
@@ -85,18 +92,27 @@ mod tests {
     #[test_context(AutostartTestContext)]
     #[serial]
     #[test]
-    fn test_unix_autostart_not_implemented(_ctx: &mut AutostartTestContext) {
-        // Test that Unix autostart returns not implemented error
-        let enable_result = autostart::enable();
-        assert!(enable_result.is_err());
+    fn test_unix_autostart_enable_disable_roundtrip(_ctx: &mut AutostartTestContext) {
+        // HOME points at a temp dir, so this writes a real LaunchAgent plist or
+        // systemd user unit there and then removes it, without touching the
+        // developer's own session.
+        assert!(!autostart::is_enabled().unwrap(), "should start disabled");
 
-        let disable_result = autostart::disable();
-        assert!(disable_result.is_err());
+        autostart::enable().unwrap();
+        assert!(autostart::is_enabled().unwrap(), "unit file should exist after enable");
 
-        // is_enabled should return false for Unix
-        let status_result = autostart::is_enabled();
-        assert!(status_result.is_ok());
-        assert!(!status_result.unwrap());
+        autostart::disable().unwrap();
+        assert!(!autostart::is_enabled().unwrap(), "unit file should be gone after disable");
+    }
+
+    #[cfg(unix)]
+    #[test_context(AutostartTestContext)]
+    #[serial]
+    #[test]
+    fn test_unix_disable_is_idempotent(_ctx: &mut AutostartTestContext) {
+        // Disabling what was never enabled is success: nothing starts kasl.
+        assert!(autostart::disable().is_ok());
+        assert!(autostart::disable().is_ok());
     }
 
     #[test_context(AutostartTestContext)]
@@ -115,8 +131,8 @@ mod tests {
 
         #[cfg(unix)]
         {
-            // On Unix, this should return not implemented error
-            assert!(result.is_err());
+            // On Unix, removing an absent agent is success: nothing autostarts.
+            assert!(result.is_ok());
         }
     }
 

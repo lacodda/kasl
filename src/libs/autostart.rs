@@ -12,7 +12,8 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::libs::autostart;
 //!
 //! autostart::enable()?;              // Enable autostart
@@ -23,6 +24,8 @@
 //!     true => println!("Autostart is enabled"),
 //!     false => println!("Autostart is disabled"),
 //! }
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Implementation Notes
@@ -312,40 +315,188 @@ mod windows {
 #[cfg(not(target_os = "windows"))]
 mod unix {
     use super::*;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
 
-    /// Enables autostart on Unix systems.
+    /// Reverse-DNS label for the macOS LaunchAgent, and its plist file name.
+    #[cfg(target_os = "macos")]
+    const LAUNCH_AGENT_LABEL: &str = "com.lacodda.kasl";
+
+    /// Unit name for the Linux systemd user service.
+    #[cfg(not(target_os = "macos"))]
+    const SYSTEMD_UNIT: &str = "kasl.service";
+
+    /// Absolute path of the running binary, for embedding in the unit file.
+    fn exe_path() -> Result<String> {
+        Ok(std::env::current_exe()?.to_string_lossy().to_string())
+    }
+
+    /// Path of the macOS LaunchAgent plist for the current user.
+    #[cfg(target_os = "macos")]
+    fn plist_path() -> Result<PathBuf> {
+        let home = std::env::var("HOME").map_err(|_| msg_error_anyhow!(Message::AutostartEnableFailed("HOME is not set".into())))?;
+        Ok(PathBuf::from(home).join("Library/LaunchAgents").join(format!("{}.plist", LAUNCH_AGENT_LABEL)))
+    }
+
+    /// Path of the systemd user unit for the current user.
     ///
-    /// Currently returns an error indicating that autostart is not yet
-    /// implemented for Unix platforms. Future implementation will support:
-    /// - XDG autostart specification for Linux
-    /// - macOS Launch Services integration
-    /// - Desktop environment specific methods
+    /// Honours `XDG_CONFIG_HOME` before falling back to `~/.config`.
+    #[cfg(not(target_os = "macos"))]
+    fn unit_path() -> Result<PathBuf> {
+        let base = match std::env::var("XDG_CONFIG_HOME") {
+            Ok(dir) if !dir.is_empty() => PathBuf::from(dir),
+            _ => {
+                let home = std::env::var("HOME").map_err(|_| msg_error_anyhow!(Message::AutostartEnableFailed("HOME is not set".into())))?;
+                PathBuf::from(home).join(".config")
+            }
+        };
+        Ok(base.join("systemd/user").join(SYSTEMD_UNIT))
+    }
+
+    /// Registers kasl to start monitoring when the user logs in.
+    ///
+    /// Installs a per-user agent rather than a system service: the daemon
+    /// tracks one person's activity and needs their session, so it has no
+    /// business running as root or before login.
+    #[cfg(target_os = "macos")]
     pub fn enable() -> Result<()> {
-        Err(msg_error_anyhow!(Message::AutostartNotImplemented))
+        let path = plist_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        // RunAtLoad starts it at login; KeepAlive is deliberately absent so a
+        // user who stops the daemon by hand is not fought by launchd.
+        let plist = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>{label}</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{exe}</string>
+        <string>watch</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>
+"#,
+            label = LAUNCH_AGENT_LABEL,
+            exe = exe_path()?
+        );
+
+        fs::write(&path, plist)?;
+
+        // Load it now so autostart takes effect without a logout. An already
+        // loaded agent makes this fail harmlessly, hence the ignored result.
+        let _ = Command::new("launchctl").arg("load").arg(&path).output();
+
+        msg_info!(Message::AutostartEnabledUser);
+        Ok(())
     }
 
-    /// Disables autostart on Unix systems.
+    /// Registers kasl as a systemd user service started on login.
+    #[cfg(not(target_os = "macos"))]
+    pub fn enable() -> Result<()> {
+        let path = unit_path()?;
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        // Type=simple: `kasl watch` daemonises itself, but as a user unit it is
+        // simplest to let systemd own the process it spawns.
+        // WantedBy=default.target ties it to the user session, not to boot.
+        let unit = format!(
+            "[Unit]
+             Description=kasl activity monitoring
+             After=graphical-session.target
+
+             [Service]
+             Type=simple
+             ExecStart={exe} watch --foreground
+             Restart=on-failure
+
+             [Install]
+             WantedBy=default.target
+",
+            exe = exe_path()?
+        );
+
+        fs::write(&path, unit)?;
+
+        // Pick up the new unit, then enable it for subsequent logins.
+        let _ = Command::new("systemctl").args(["--user", "daemon-reload"]).output();
+        let output = Command::new("systemctl").args(["--user", "enable", SYSTEMD_UNIT]).output()?;
+
+        if !output.status.success() {
+            let error = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(msg_error_anyhow!(Message::AutostartEnableFailed(error)));
+        }
+
+        msg_info!(Message::AutostartEnabledUser);
+        Ok(())
+    }
+
+    /// Removes the macOS LaunchAgent.
     ///
-    /// Currently returns an error indicating that autostart is not yet
-    /// implemented for Unix platforms.
+    /// Absence is success: the goal is that nothing starts kasl at login.
+    #[cfg(target_os = "macos")]
     pub fn disable() -> Result<()> {
-        Err(msg_error_anyhow!(Message::AutostartNotImplemented))
+        let path = plist_path()?;
+
+        if !path.exists() {
+            msg_info!(Message::AutostartAlreadyDisabled);
+            return Ok(());
+        }
+
+        let _ = Command::new("launchctl").arg("unload").arg(&path).output();
+        fs::remove_file(&path)?;
+
+        msg_info!(Message::AutostartDisabled);
+        Ok(())
     }
 
-    /// Checks if autostart is enabled on Unix systems.
-    ///
-    /// Currently returns `false` since autostart is not yet implemented
-    /// for Unix platforms.
+    /// Removes the systemd user service.
+    #[cfg(not(target_os = "macos"))]
+    pub fn disable() -> Result<()> {
+        let path = unit_path()?;
+
+        if !path.exists() {
+            msg_info!(Message::AutostartAlreadyDisabled);
+            return Ok(());
+        }
+
+        let _ = Command::new("systemctl").args(["--user", "disable", SYSTEMD_UNIT]).output();
+        fs::remove_file(&path)?;
+        let _ = Command::new("systemctl").args(["--user", "daemon-reload"]).output();
+
+        msg_info!(Message::AutostartDisabled);
+        Ok(())
+    }
+
+    /// Reports whether the LaunchAgent is installed.
+    #[cfg(target_os = "macos")]
     pub fn is_enabled() -> Result<bool> {
-        Ok(false)
+        Ok(plist_path().map(|path| path.exists()).unwrap_or(false))
     }
 
-    /// Checks for administrative privileges on Unix systems.
+    /// Reports whether the systemd user unit is installed.
     ///
-    /// Currently returns `false` since privilege checking is not yet
-    /// implemented for Unix platforms. Future implementation will check
-    /// for root access or sudo capabilities.
-    #[allow(dead_code)] // parity with the Windows module; used once unix autostart lands
+    /// Presence of the unit file is the check, rather than asking systemd:
+    /// `systemctl` is unavailable in containers and on non-systemd distributions,
+    /// where a missing binary would otherwise read as "disabled" even when the
+    /// unit is there.
+    #[cfg(not(target_os = "macos"))]
+    pub fn is_enabled() -> Result<bool> {
+        Ok(unit_path().map(|path| path.exists()).unwrap_or(false))
+    }
+
+    /// Autostart here is per-user, so elevation is never required.
+    #[allow(dead_code)] // parity with the Windows module
     pub fn is_admin() -> bool {
         false
     }
@@ -558,7 +709,8 @@ fn disable_user_autostart() -> Result<()> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,no_run
+/// # fn main() -> anyhow::Result<()> {
 /// use kasl::libs::autostart;
 ///
 /// if autostart::is_enabled()? {
@@ -566,6 +718,8 @@ fn disable_user_autostart() -> Result<()> {
 /// } else {
 ///     println!("Autostart is disabled");
 /// }
+/// # Ok(())
+/// # }
 /// ```
 pub fn is_enabled() -> Result<bool> {
     #[cfg(target_os = "windows")]
@@ -605,11 +759,14 @@ pub fn is_enabled() -> Result<bool> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,no_run
+/// # fn main() -> anyhow::Result<()> {
 /// use kasl::libs::autostart;
 ///
 /// let status = autostart::status()?;
 /// println!("Autostart status: {}", status);
+/// # Ok(())
+/// # }
 /// ```
 pub fn status() -> Result<String> {
     match is_enabled()? {
