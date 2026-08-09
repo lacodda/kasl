@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.2] - 2026-08-09
+
+### Bug Fixes
+- One README and one description across all three pages
 ## [1.0.1] - 2026-08-09
 
 ### Bug Fixes
