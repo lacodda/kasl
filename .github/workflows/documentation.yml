@@ -1,45 +1,51 @@
-name: documentation
+name: Docs
 
 on:
   push:
     branches: [main]
+    paths: ['docs/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
 
 jobs:
-  book:
-    name: Build and deploy book
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v6
         with:
-          toolchain: stable
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        env:
-          cache-name: cache-mdbook-04
+          version: 10
+      - uses: actions/setup-node@v7
         with:
-          path: |
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            ~/.cargo/bin
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-          key: ${{ runner.os }}-build-${{ env.cache-name }}
-
-      # mdBook is pinned to 0.4: 0.5 cannot parse this book.toml, and
-      # unpinned self-updates are what broke this workflow before.
-      - name: Install mdBook
-        run: test -x $HOME/.cargo/bin/mdbook || cargo install --vers "^0.4" mdbook
-
-      - name: Build Documentation
-        run: |
-          mdbook build -d docs
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
         working-directory: docs
-
-      - name: Deploy to GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4.4.3
+      - name: Build
+        run: pnpm build
+        working-directory: docs
+      # docs/public/CNAME is copied into dist by Astro, which is what keeps
+      # kasl.lacodda.com pointing at this site.
+      - uses: actions/upload-pages-artifact@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: gh-pages
-          folder: docs
+          path: docs/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

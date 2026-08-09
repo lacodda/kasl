@@ -59,7 +59,11 @@ lib-cov/
 target/
 
 # Docs
+# mdBook output (docs moved to Astro Starlight in 1.0)
 docs/book
+
+# Astro build cache
+docs/.astro/
 
 # DBs
 *.db

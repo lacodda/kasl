@@ -1,0 +1,38 @@
+---
+title: kasl
+description: Key Activity Synchronization and Logging - a CLI that watches your activity, turns it into workdays, pauses and tasks, and files the report for you.
+template: splash
+hero:
+  tagline: Your workday, recorded while you work - not remembered afterwards.
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: Get started
+      link: /getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/lacodda/kasl
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid stagger>
+	<Card title="Tracks itself" icon="laptop">
+		A background daemon watches keyboard and mouse activity and turns it into
+		workdays, work intervals and pauses. Nothing to start and stop by hand.
+	</Card>
+	<Card title="Collects your tasks" icon="list-format">
+		Pulls today's GitLab commits and resolved Jira issues, keeps an inbox of
+		assigned issues, and lets you add your own with tags and templates.
+	</Card>
+	<Card title="Files the report" icon="upload">
+		Daily and monthly reports with productivity metrics, submitted to your
+		corporate API with one command, or exported to CSV, JSON or Excel.
+	</Card>
+	<Card title="Stays out of the way" icon="approve-check">
+		Single binary, no runtime dependencies, credentials in the OS keyring.
+		Windows, macOS and Linux.
+	</Card>
+</CardGrid>

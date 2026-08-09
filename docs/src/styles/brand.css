@@ -1,0 +1,19 @@
+/* The lacodda line mark is a square hex tile; without an explicit size it
+   fills the whole nav height and crowds the wordmark. */
+.site-title img {
+	width: 2rem;
+	height: 2rem;
+}
+
+/* Brand accent: kasl lime. */
+:root {
+	--sl-color-accent: #a9c23f;
+	--sl-color-accent-high: #cfe07f;
+	--sl-color-accent-low: #3f4a17;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent: #6f8324;
+	--sl-color-accent-high: #3f4a17;
+	--sl-color-accent-low: #e8f0c4;
+}
