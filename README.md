@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/banner.svg" alt="kasl - key activity synchronization and logging" width="720"></p>
+<p align="center"><img src="https://github.com/lacodda/kasl/raw/main/assets/banner.svg" alt="kasl - key activity synchronization and logging" width="720"></p>
 
 > Your workday, recorded while you work: kasl watches activity in the background, turns it into intervals, pauses and tasks, and files the report for you.
 
@@ -154,11 +154,11 @@ Everything above works today, on Windows, macOS and Linux. What is next:
 - [ ] **Live TUI** - a persistent view of the day while you work
 - [ ] **Plugins** - `kasl-plugin-*` subprocesses, with Jira and GitLab moving behind the same interface
 
-Released versions and what landed in each: [CHANGELOG](CHANGELOG.md).
+Released versions and what landed in each: [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation
 
-The documentation site (Astro Starlight) lives in [`docs/`](docs/); architecture decision records are in [`docs/adr/`](docs/adr/).
+The documentation site (Astro Starlight) lives in [`docs/`](https://github.com/lacodda/kasl/tree/main/docs); architecture decision records are in [`docs/adr/`](https://github.com/lacodda/kasl/tree/main/docs/adr).
 
 ## License
 

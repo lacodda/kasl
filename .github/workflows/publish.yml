@@ -49,5 +49,10 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      # One README for all three pages. npm publishes whatever sits next to
+      # package.json, so the root file is copied in here rather than kept as a
+      # second copy in the repo, where it drifted from the original.
+      - name: Use the root README for the npm page
+        run: cp README.md npm/README.md
       - run: npm publish
         working-directory: npm
