@@ -88,6 +88,10 @@ fn main() -> io::Result<()> {
     // The application identity (data directory, self-update asset names) follows
     // the binary name from [[bin]], not the crate name: the crate is published
     // as "kasl-cli" while the binary and on-disk identity stay "kasl".
+    //
+    // The FIRST [[bin]] wins, and must remain "kasl". The `ka` alias that follows
+    // it is the same program under a shorter name; if it ever came first, every
+    // user's data directory and update channel would move.
     let bin_name = cargo_toml
         .get("bin")
         .and_then(|bins| bins.as_array())
@@ -111,53 +115,31 @@ fn main() -> io::Result<()> {
         }
     }
 
-    // Handle encryption keys for secure storage
-    // Keys can be provided via environment variables or generated deterministically
-    let (encryption_key, encryption_iv) = match (env::var("ENCRYPTION_KEY"), env::var("ENCRYPTION_IV")) {
-        (Ok(key), Ok(iv)) => {
-            // Validate that provided keys have correct lengths for AES-256
-            let key_bytes = key.as_bytes();
-            let iv_bytes = iv.as_bytes();
+    // Legacy AES keys, kept only to read credentials written before 1.0.
+    //
+    // Credentials now live in the OS keyring; nothing is encrypted with these
+    // keys any more. They are fixed rather than taken from the environment
+    // because every published binary was built without ENCRYPTION_KEY set and
+    // therefore used exactly these values - reproducing them is what lets the
+    // one-time migration in libs::secret read what those builds wrote. They are
+    // not secret and never were: the derivation was always visible here.
+    //
+    // Remove once migration support is dropped.
+    let mut legacy_key = format!("{}_default_encryption_key_32b", bin_name);
+    let mut legacy_iv = format!("{}_iv_16b", bin_name);
 
-            if key_bytes.len() != 32 {
-                panic!("ENCRYPTION_KEY must be exactly 32 bytes long, got {} bytes", key_bytes.len());
-            }
-            if iv_bytes.len() != 16 {
-                panic!("ENCRYPTION_IV must be exactly 16 bytes long, got {} bytes", iv_bytes.len());
-            }
+    legacy_key.truncate(32);
+    while legacy_key.len() < 32 {
+        legacy_key.push('!');
+    }
 
-            (key_bytes.to_vec(), iv_bytes.to_vec())
-        }
-        _ => {
-            // Generate deterministic default keys based on the binary name so
-            // they stay stable across the crate rename to "kasl-cli"
-            let mut default_key = format!("{}_default_encryption_key_32b", bin_name);
-            let mut default_iv = format!("{}_iv_16b", bin_name);
+    legacy_iv.truncate(16);
+    while legacy_iv.len() < 16 {
+        legacy_iv.push('!');
+    }
 
-            // Ensure exact lengths required by AES-256
-            default_key.truncate(32);
-            while default_key.len() < 32 {
-                default_key.push('!');
-            }
-
-            default_iv.truncate(16);
-            while default_iv.len() < 16 {
-                default_iv.push('!');
-            }
-
-            // Warn developer about using default keys
-            println!("cargo:warning=ENCRYPTION_KEY or ENCRYPTION_IV not found in environment.");
-            println!("cargo:warning=Using default keys. For production, create a .env file with:");
-            println!("cargo:warning=ENCRYPTION_KEY=your_32_byte_key_here!!!!!!!!!");
-            println!("cargo:warning=ENCRYPTION_IV=your_16_byte_iv!");
-
-            (default_key.into_bytes(), default_iv.into_bytes())
-        }
-    };
-
-    // Embed encryption keys as compile-time byte arrays
-    app_metadata.write_bytes("ENCRYPTION_KEY", &encryption_key)?;
-    app_metadata.write_bytes("ENCRYPTION_IV", &encryption_iv)?;
+    app_metadata.write_bytes("ENCRYPTION_KEY", legacy_key.as_bytes())?;
+    app_metadata.write_bytes("ENCRYPTION_IV", legacy_iv.as_bytes())?;
 
     Ok(())
 }

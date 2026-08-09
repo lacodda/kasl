@@ -1,464 +1,234 @@
-//! Secure credential storage and management with AES encryption.
+//! Credential storage backed by the operating system keyring.
 //!
-//! Provides functionality for securely storing and retrieving sensitive information
-//! such as passwords and API tokens using AES-256-CBC encryption.
+//! Passwords are kept in the platform credential store - Credential Manager on
+//! Windows, Keychain on macOS, the Secret Service on Linux - so they are
+//! protected by the user's login session rather than by this program.
 //!
-//! ## Features
+//! ## Why not the previous scheme
 //!
-//! - **AES-256-CBC Encryption**: Industry-standard encryption for credential storage
-//! - **Compile-time Keys**: Encryption keys embedded during build process
-//! - **Secure Input**: Password prompting without echo to terminal
-//! - **File Protection**: Encrypted credentials stored in user data directory
-//! - **Memory Safety**: Credentials cleared from memory after use
+//! Until 1.0 credentials lived in AES-256-CBC files under the data directory,
+//! encrypted with a key compiled into the binary. Because release builds were
+//! produced without build-time key material, every published binary shared one
+//! key that is derivable from the public source - so the stored ciphertext was
+//! only obfuscation. The key also had to be identical across versions, which
+//! made rotating it impossible. Both problems disappear once the OS holds the
+//! secret.
+//!
+//! ## Migration
+//!
+//! Existing AES files are read once, transparently: on the first lookup that
+//! misses the keyring, [`Secret::get_or_prompt`] decrypts the legacy file,
+//! stores the value in the keyring, and deletes the file. Users keep working
+//! without re-entering anything. Decryption uses the same compiled-in key as
+//! before, so a binary can always read what it previously wrote; when that
+//! fails - a file written by a differently-keyed build - the user is prompted
+//! instead, which is the same recovery path a corrupted file always had.
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
 //! use kasl::libs::secret::Secret;
 //!
+//! # fn main() -> anyhow::Result<()> {
 //! let secret = Secret::new(".jira_secret", "Enter your Jira password");
 //! let password = secret.get_or_prompt()?;
-//! let new_password = secret.prompt()?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::data_storage::DataStorage;
 use aes::Aes256;
 use aes::cipher::block_padding::Pkcs7;
-use aes::cipher::{BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
-use anyhow::Result;
+use aes::cipher::{BlockModeDecrypt, KeyIvInit};
+use anyhow::{Context, Result};
 use base64::prelude::*;
 use dialoguer::{Password, theme::ColorfulTheme};
-use std::fs::{self, File};
-use std::io::{Read, Write};
+use keyring::Entry;
+use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 
-// Include generated metadata containing encryption keys
-// This file is created during the build process and contains
-// compile-time embedded encryption keys and initialization vectors
+// Include generated metadata containing the legacy encryption keys.
+// Still needed to read credentials written before the keyring migration.
 include!(concat!(env!("OUT_DIR"), "/app_metadata.rs"));
 
-/// Type alias for AES-256-CBC cipher with PKCS7 padding.
-///
-/// This cipher configuration provides:
-/// - **AES-256**: Advanced Encryption Standard with 256-bit keys
-/// - **CBC Mode**: Cipher Block Chaining for secure block encryption
-/// - **PKCS7 Padding**: Standard padding scheme for block alignment
-type Aes256CbcEnc = cbc::Encryptor<Aes256>;
+/// Type alias for the legacy AES-256-CBC decryptor.
 type Aes256CbcDec = cbc::Decryptor<Aes256>;
 
-/// Secure credential storage and management system.
+/// Service name under which kasl registers its credentials with the OS.
 ///
-/// This structure manages the complete lifecycle of sensitive credentials
-/// including user prompting, encryption, file storage, and decryption.
-/// It provides a high-level interface for secure credential handling.
+/// Appears verbatim in Credential Manager, Keychain and Secret Service, so it
+/// must stay stable: changing it orphans every stored credential.
+const KEYRING_SERVICE: &str = "lacodda.kasl";
+
+/// Credential manager backed by the OS keyring.
 ///
-/// ## Design Principles
-///
-/// - **Lazy Loading**: Passwords only decrypted when needed
-/// - **Immutable State**: Credential changes create new instances
-/// - **Error Recovery**: Graceful handling of encryption/decryption failures
-/// - **User Friendly**: Clear prompts and error messages
-///
-/// ## Internal State
-///
-/// The struct maintains both encrypted and decrypted state:
-/// - File-based encrypted storage for persistence
-/// - Memory-based decrypted storage for immediate use
-/// - Cryptographic keys for encryption/decryption operations
-///
-/// ## Lifecycle
-///
-/// 1. **Creation**: Initialize with file path and user prompt
-/// 2. **Retrieval**: Check for existing encrypted file
-/// 3. **Prompting**: Secure password input when needed
-/// 4. **Encryption**: AES encryption before file storage
-/// 5. **Decryption**: AES decryption when retrieving
+/// Each instance addresses one credential, identified by the account name
+/// derived from the legacy file name (`.jira_secret` becomes `jira`), and knows
+/// how to ask the user for it when the store has nothing.
 #[derive(Clone, Debug)]
 pub struct Secret {
-    /// Optional in-memory password storage.
-    ///
-    /// When present, contains the decrypted password for immediate use.
-    /// This avoids repeated decryption operations but increases memory
-    /// exposure time. Cleared when instance is dropped.
-    password: Option<String>,
+    /// Account name for this credential inside the keyring service.
+    account: String,
 
     /// User-facing prompt text for password input.
     ///
     /// Displayed when prompting for credentials through the terminal.
     /// Should be descriptive and indicate which service needs authentication.
-    /// Examples: "Enter your Jira password", "GitLab API token"
     prompt: String,
 
-    /// File system path for encrypted credential storage.
+    /// Location of the pre-1.0 encrypted file, if one was ever written.
     ///
-    /// Points to the location where encrypted credentials are stored.
-    /// Typically in the user's application data directory with a
-    /// service-specific filename (e.g., ".jira_secret").
-    secret_file_path: PathBuf,
-
-    /// AES encryption key for credential protection.
-    ///
-    /// 256-bit key used for AES encryption/decryption operations.
-    /// Embedded at compile time from build environment or defaults.
-    /// Should be kept consistent across application versions.
-    key: Vec<u8>,
-
-    /// Initialization vector for AES-CBC encryption.
-    ///
-    /// Fixed IV used with AES-CBC mode for deterministic encryption.
-    /// While using a fixed IV reduces security, it allows for consistent
-    /// file-based storage without additional key derivation complexity.
-    iv: Vec<u8>,
+    /// Consulted only during migration and removed once its contents reach the
+    /// keyring.
+    legacy_file_path: PathBuf,
 }
 
 impl Secret {
-    /// Creates a new Secret instance for credential management.
-    ///
-    /// This constructor initializes a new secret manager with the specified
-    /// file storage location and user prompt text. It loads encryption keys
-    /// from compile-time embedded metadata and prepares the file path within
-    /// the application's data directory.
-    ///
-    /// ## Key Management
-    ///
-    /// Encryption keys are loaded from compile-time metadata:
-    /// - Keys embedded during build process for security
-    /// - Consistent keys across application installations
-    /// - No runtime key generation or derivation needed
-    ///
-    /// ## File Path Resolution
-    ///
-    /// The secret file path is resolved using the application's data storage:
-    /// - Platform-appropriate user data directory
-    /// - Service-specific filename for credential isolation
-    /// - Automatic directory creation when needed
+    /// Creates a credential handle for the given secret.
     ///
     /// # Arguments
     ///
-    /// * `secret_name` - Filename for storing encrypted credentials (e.g., ".jira_secret")
-    /// * `prompt` - User-facing text for password prompts (e.g., "Enter your Jira password")
-    ///
-    /// # Returns
-    ///
-    /// A new Secret instance ready for credential operations.
+    /// * `secret_name` - Legacy file name for the credential (e.g. `.jira_secret`),
+    ///   which also determines the keyring account name
+    /// * `prompt` - User-facing text shown when asking for the password
     ///
     /// # Examples
     ///
     /// ```rust
     /// use kasl::libs::secret::Secret;
     ///
-    /// // Jira password management
     /// let jira_secret = Secret::new(".jira_secret", "Enter your Jira password");
-    ///
-    /// // GitLab token management
-    /// let gitlab_secret = Secret::new(".gitlab_token", "Enter your GitLab API token");
-    ///
-    /// // SI Server credentials
-    /// let si_secret = Secret::new(".si_credentials", "Enter your SI Server password");
     /// ```
-    ///
-    /// # Error Handling
-    ///
-    /// Path resolution errors are handled gracefully by falling back to
-    /// the current directory if the data storage path cannot be created.
     pub fn new(secret_name: &str, prompt: &str) -> Self {
-        // Load compile-time embedded encryption keys
-        let key = APP_METADATA_ENCRYPTION_KEY.to_vec();
-        let iv = APP_METADATA_ENCRYPTION_IV.to_vec();
+        // `.jira_secret` -> `jira`: a readable account name in the OS UI.
+        let account = secret_name.trim_start_matches('.').trim_end_matches("_secret").to_string();
 
-        // Resolve secret file path in application data directory
-        let secret_file_path = DataStorage::new().get_path(secret_name).unwrap_or_else(|_| PathBuf::from(secret_name));
+        let legacy_file_path = DataStorage::new().get_path(secret_name).unwrap_or_else(|_| PathBuf::from(secret_name));
 
         Self {
-            password: None,
-            secret_file_path,
+            account,
             prompt: prompt.to_owned(),
-            key,
-            iv,
+            legacy_file_path,
         }
     }
 
-    /// Creates a new Secret instance with the specified password.
-    ///
-    /// This internal method creates a copy of the current Secret with
-    /// a different password value. Used for maintaining immutable state
-    /// while updating the in-memory password storage.
-    ///
-    /// # Arguments
-    ///
-    /// * `password` - The password to store in the new instance
-    ///
-    /// # Returns
-    ///
-    /// A new Secret instance with the updated password.
-    fn set_password(&self, password: &str) -> Self {
-        Self {
-            password: Some(password.to_owned()),
-            ..self.clone()
-        }
+    /// Opens the keyring entry for this credential.
+    fn entry(&self) -> Result<Entry> {
+        Entry::new(KEYRING_SERVICE, &self.account).with_context(|| format!("cannot open keyring entry for '{}'", self.account))
     }
 
-    /// Retrieves password from cache or prompts user if not available.
+    /// Retrieves the password from the keyring, prompting when absent.
     ///
-    /// This method implements the primary credential retrieval logic:
-    /// 1. Check if encrypted file exists and is readable
-    /// 2. Attempt to decrypt existing credentials
-    /// 3. Prompt user for new credentials if decryption fails
-    /// 4. Encrypt and store new credentials for future use
-    ///
-    /// ## Caching Behavior
-    ///
-    /// - **Cache Hit**: Return decrypted password from file
-    /// - **Cache Miss**: Prompt user and store new password
-    /// - **Decryption Error**: Re-prompt user (file may be corrupted)
-    ///
-    /// ## Error Recovery
-    ///
-    /// If decryption fails (corrupted file, wrong keys, etc.), the method
-    /// gracefully falls back to prompting the user for new credentials.
-    /// This ensures the application can recover from storage corruption.
+    /// Order of resolution: keyring, then a legacy AES file (migrated on the
+    /// spot), then the user. A value obtained from either of the last two is
+    /// written to the keyring, so this is the only time it is asked for.
     ///
     /// # Returns
     ///
-    /// Returns the user's password, either from cache or fresh input.
+    /// The stored or freshly entered password.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - User cancels password prompt
-    /// - File system operations fail
-    /// - Encryption operations fail
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kasl::libs::secret::Secret;
-    ///
-    /// let secret = Secret::new(".api_token", "Enter API token");
-    ///
-    /// // First call prompts user and caches result
-    /// let token = secret.get_or_prompt()?;
-    ///
-    /// // Subsequent calls use cached value
-    /// let same_token = secret.get_or_prompt()?;
-    /// ```
+    /// Returns an error when the keyring is unavailable, or when there is no
+    /// terminal to prompt at and nothing stored to fall back on.
     pub fn get_or_prompt(&self) -> Result<String> {
-        // Check if encrypted credentials file exists
-        if fs::metadata(&self.secret_file_path).is_ok() {
-            // Attempt to decrypt existing credentials
-            if let Ok(password) = self.decrypt() {
-                return Ok(password);
-            }
-            // Decryption failed - file may be corrupted, continue to prompt
+        if let Some(password) = self.try_get_cached() {
+            return Ok(password);
         }
 
-        // No cached credentials or decryption failed - prompt user
         self.prompt()
     }
 
-    /// Returns a cached password without prompting the user.
+    /// Returns a stored password without prompting the user.
     ///
-    /// Used by background daemons that must not block on stdin. Returns
-    /// `None` when the secret file is missing or cannot be decrypted.
-    pub fn try_get_cached(&self) -> Option<String> {
-        if fs::metadata(&self.secret_file_path).is_ok() {
-            self.decrypt().ok()
-        } else {
-            None
-        }
-    }
-
-    /// Prompts user for password and stores it securely.
-    ///
-    /// This method handles the complete password input and storage workflow:
-    /// 1. Display secure password prompt (no echo)
-    /// 2. Encrypt the entered password
-    /// 3. Store encrypted data to file
-    /// 4. Return the entered password
-    ///
-    /// ## Security Features
-    ///
-    /// - **No Echo**: Password characters not displayed on screen
-    /// - **Immediate Encryption**: Password encrypted before file storage
-    /// - **Memory Clearing**: Original password cleared after encryption
-    ///
-    /// ## User Experience
-    ///
-    /// The prompt uses a colorful theme for better visibility and
-    /// provides clear instructions to the user. Password input is
-    /// handled securely without displaying characters.
+    /// Used by the background daemon, which has no terminal and must never
+    /// block. Migrates a legacy file if one is found, so an unattended run
+    /// benefits from the migration too.
     ///
     /// # Returns
     ///
-    /// Returns the password entered by the user.
+    /// `Some(password)` when the credential is known, `None` otherwise.
+    pub fn try_get_cached(&self) -> Option<String> {
+        if let Ok(entry) = self.entry()
+            && let Ok(password) = entry.get_password()
+        {
+            return Some(password);
+        }
+
+        // Nothing in the keyring - a pre-1.0 install may still have the file.
+        self.migrate_legacy_file()
+    }
+
+    /// Prompts for the password and stores it in the keyring.
     ///
     /// # Errors
     ///
-    /// Returns an error if:
-    /// - User cancels password input (Ctrl+C)
-    /// - Password encryption fails
-    /// - File system write operations fail
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use kasl::libs::secret::Secret;
-    ///
-    /// let secret = Secret::new(".password", "Enter your password");
-    ///
-    /// // Force password prompt (ignores cache)
-    /// let password = secret.prompt()?;
-    /// ```
+    /// Fails when stdin is not a terminal, rather than blocking on input that
+    /// cannot arrive - this path is reachable from a scheduled `report --send`.
     pub fn prompt(&self) -> Result<String> {
-        // Reached whenever a cached credential is missing or stale, including
-        // from a scheduled `report --send`. Fail loudly rather than hang there.
+        // Reached whenever a stored credential is missing or stale, including
+        // from a scheduled run. Fail loudly rather than hang there.
         crate::libs::prompt::ensure_interactive(&format!(
             "{} - but there is no terminal to ask; run `kasl init` interactively first",
             self.prompt
         ))?;
 
-        // Display secure password prompt
         let password = Password::with_theme(&ColorfulTheme::default()).with_prompt(&self.prompt).interact()?;
 
-        // Encrypt and store the password
-        self.set_password(&password).encrypt()?;
+        self.store(&password)?;
 
         Ok(password)
     }
 
-    /// Encrypts the stored password and saves it to file.
-    ///
-    /// This method performs the complete encryption and storage workflow:
-    /// 1. Initialize AES-256-CBC cipher with embedded keys
-    /// 2. Encrypt the password using PKCS7 padding
-    /// 3. Encode encrypted data as Base64 for safe storage
-    /// 4. Write encoded data to the secret file
-    ///
-    /// ## Encryption Process
-    ///
-    /// - **Input**: Plain text password from memory
-    /// - **Cipher**: AES-256-CBC with compile-time keys
-    /// - **Padding**: PKCS7 for block alignment
-    /// - **Encoding**: Base64 for text-safe storage
-    /// - **Output**: Encrypted file in application data directory
-    ///
-    /// ## File System Operations
-    ///
-    /// - Creates parent directories if they don't exist
-    /// - Overwrites existing credential files
-    /// - Uses platform-appropriate file permissions
-    ///
-    /// # Returns
-    ///
-    /// Returns a new Secret instance for method chaining.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No password is set in memory
-    /// - AES encryption fails
-    /// - Base64 encoding fails
-    /// - File system write operations fail
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let secret = Secret::new(".test", "Test password")
-    ///     .set_password("my_secret")
-    ///     .encrypt()?;
-    /// ```
-    fn encrypt(&self) -> Result<Self> {
-        // Initialize AES cipher with embedded keys
-        let cipher = Aes256CbcEnc::new_from_slices(&self.key, &self.iv)?;
-
-        // Get password from memory
-        let password = &self.password.clone().unwrap();
-
-        // Encrypt password with PKCS7 padding
-        let ciphertext = cipher.encrypt_padded_vec::<Pkcs7>(password.as_bytes());
-
-        // Encode as Base64 for safe file storage
-        let encoded = BASE64_STANDARD.encode(&ciphertext);
-
-        // Ensure parent directory exists
-        if let Some(parent) = self.secret_file_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-
-        // Write encrypted data to file
-        let mut file = File::create(&self.secret_file_path)?;
-        file.write_all(encoded.as_bytes())?;
-
-        Ok(self.clone())
+    /// Writes the password into the OS keyring.
+    pub fn store(&self, password: &str) -> Result<()> {
+        self.entry()?
+            .set_password(password)
+            .with_context(|| format!("cannot store credential '{}' in the OS keyring", self.account))
     }
 
-    /// Decrypts stored credentials from file.
+    /// Removes the credential from the keyring, if present.
     ///
-    /// This method performs the complete decryption workflow:
-    /// 1. Read Base64-encoded data from credential file
-    /// 2. Decode Base64 to get raw encrypted bytes
-    /// 3. Initialize AES cipher with embedded keys
-    /// 4. Decrypt data and remove PKCS7 padding
-    /// 5. Convert decrypted bytes to UTF-8 string
+    /// Absence is not an error: the goal is that nothing remains afterwards.
+    pub fn delete(&self) -> Result<()> {
+        match self.entry()?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(e).with_context(|| format!("cannot remove credential '{}' from the OS keyring", self.account)),
+        }
+    }
+
+    /// Moves a pre-1.0 AES file into the keyring and deletes it.
     ///
-    /// ## Decryption Process
-    ///
-    /// - **Input**: Base64-encoded encrypted file
-    /// - **Decoding**: Base64 to raw encrypted bytes
-    /// - **Cipher**: AES-256-CBC with compile-time keys
-    /// - **Padding**: PKCS7 removal for original data
-    /// - **Output**: Plain text password string
-    ///
-    /// ## Error Recovery
-    ///
-    /// The method handles various failure modes:
-    /// - **File Not Found**: Returns error for missing credentials
-    /// - **Invalid Base64**: Returns error for corrupted encoding
-    /// - **Decryption Failure**: Returns error for wrong keys or corrupted data
-    /// - **Invalid UTF-8**: Returns error for corrupted password data
-    ///
-    /// # Returns
-    ///
-    /// Returns the decrypted password as a string.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Credential file doesn't exist or can't be read
-    /// - Base64 decoding fails (corrupted file)
-    /// - AES decryption fails (wrong keys, corrupted data)
-    /// - Decrypted data is not valid UTF-8
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// let secret = Secret::new(".existing_secret", "Password");
-    ///
-    /// match secret.decrypt() {
-    ///     Ok(password) => println!("Retrieved cached password"),
-    ///     Err(_) => println!("No cached password or decryption failed"),
-    /// }
-    /// ```
-    fn decrypt(&self) -> Result<String> {
-        // Read Base64-encoded data from file
-        let mut file = File::open(&self.secret_file_path)?;
+    /// Returns the recovered password, or `None` when there is no readable
+    /// legacy file. A file that cannot be decrypted is left untouched: it may
+    /// have been written by a build with different key material, and destroying
+    /// it would remove the user's only chance of recovering it by other means.
+    fn migrate_legacy_file(&self) -> Option<String> {
+        let password = self.decrypt_legacy_file().ok()?;
+
+        // Keep the file if the keyring rejects the value, so nothing is lost.
+        if self.store(&password).is_err() {
+            return Some(password);
+        }
+
+        let _ = fs::remove_file(&self.legacy_file_path);
+
+        Some(password)
+    }
+
+    /// Decrypts the legacy AES-256-CBC credential file.
+    fn decrypt_legacy_file(&self) -> Result<String> {
+        let mut file = fs::File::open(&self.legacy_file_path)?;
         let mut encoded = String::new();
         file.read_to_string(&mut encoded)?;
 
-        // Decode Base64 to get encrypted bytes
-        let ciphertext = BASE64_STANDARD.decode(encoded)?;
-
-        // Initialize AES cipher with embedded keys
-        let cipher = Aes256CbcDec::new_from_slices(&self.key, &self.iv)?;
-
-        // Decrypt data and remove padding
-        let decrypted_ciphertext = cipher
+        let ciphertext = BASE64_STANDARD.decode(encoded.trim())?;
+        let cipher = Aes256CbcDec::new_from_slices(APP_METADATA_ENCRYPTION_KEY, APP_METADATA_ENCRYPTION_IV)?;
+        let plaintext = cipher
             .decrypt_padded_vec::<Pkcs7>(&ciphertext)
-            .map_err(|e| anyhow::anyhow!("Failed to decrypt stored secret: {e}"))?;
+            .map_err(|e| anyhow::anyhow!("failed to decrypt stored secret: {e}"))?;
 
-        // Convert decrypted bytes to UTF-8 string
-        let decrypted_password = String::from_utf8(decrypted_ciphertext)?;
-
-        Ok(decrypted_password)
+        Ok(String::from_utf8(plaintext)?)
     }
 }
