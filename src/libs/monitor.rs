@@ -14,7 +14,8 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # async fn f() -> anyhow::Result<()> {
 //! use kasl::libs::config::MonitorConfig;
 //! use kasl::libs::monitor::Monitor;
 //!
@@ -27,8 +28,10 @@
 //!     ..Default::default()
 //! };
 //!
-//! let monitor = Monitor::new(config)?;
+//! let mut monitor = Monitor::new(config)?;
 //! monitor.run().await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::db::pauses::Pauses;
@@ -74,8 +77,6 @@ enum State {
 ///
 /// Orchestrates all aspects of activity monitoring, from low-level input detection
 /// to high-level workday management.
-/// └─────────────────┘    └─────────────────┘    └─────────────────┘
-/// ```
 ///
 /// ## Thread Safety
 ///
@@ -216,16 +217,18 @@ impl Monitor {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # async fn f() -> anyhow::Result<()> {
     /// use kasl::libs::config::MonitorConfig;
     /// use kasl::libs::monitor::Monitor;
     ///
     /// // Create monitor with default configuration
     /// let config = MonitorConfig::default();
-    /// let monitor = Monitor::new(config)?;
+    /// let mut monitor = Monitor::new(config)?;
     ///
     /// // Start monitoring
     /// monitor.run().await?;
-    /// # Ok::<(), anyhow::Error>(())
+    /// # Ok(())
+    /// # }
     /// ```
     #[instrument(skip(config))]
     pub fn new(config: MonitorConfig) -> Result<Self> {
@@ -386,6 +389,7 @@ impl Monitor {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # async fn f() -> anyhow::Result<()> {
     /// use kasl::libs::config::MonitorConfig;
     /// use kasl::libs::monitor::Monitor;
     ///
@@ -399,7 +403,8 @@ impl Monitor {
     ///
     /// let mut monitor = Monitor::new(config)?;
     /// monitor.run().await?; // Runs indefinitely
-    /// # Ok::<(), anyhow::Error>(())
+    /// # Ok(())
+    /// # }
     /// ```
     #[instrument(skip(self))]
     pub async fn run(&mut self) -> Result<()> {
@@ -625,6 +630,8 @@ impl Monitor {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// use kasl::libs::config::MonitorConfig;
+    ///
     /// // This method is called automatically by the monitoring loop
     /// // when inactivity exceeds the configured threshold
     ///
@@ -727,7 +734,7 @@ impl Monitor {
     /// # Pause Duration Calculation
     ///
     /// After this method completes, the pause duration can be calculated as:
-    /// ```
+    /// ```text
     /// duration = end_time - start_time
     /// ```
     ///

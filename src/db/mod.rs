@@ -13,7 +13,8 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use kasl::db::{db::Db, tasks::Tasks, workdays::Workdays};
 //! use kasl::libs::task::Task;
 //!
@@ -21,10 +22,13 @@
 //! let mut tasks = Tasks::new()?;
 //! let task = Task::new("Review code", "Check PR #123", Some(75));
 //! tasks.insert(&task)?;
+//! # Ok(())
+//! # }
 //! ```
 //!
-//! ```rust
-//! use kasl::db::{tags::Tags, templates::Templates};
+//! ```rust,no_run
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! use kasl::db::{tags::{Tags, Tag}, templates::{Templates, TaskTemplate}};
 //!
 //! // Create and manage tags
 //! let mut tags = Tags::new()?;
@@ -39,6 +43,8 @@
 //!     100
 //! );
 //! templates.create(&template)?;
+//! # Ok(())
+//! # }
 //! ```
 //!
 //! ## Performance Considerations
@@ -61,7 +67,7 @@
 //! ## Migration Best Practices
 //!
 //! ### Schema Evolution
-//! ```rust
+//! ```text
 //! // Adding a new column (backward compatible)
 //! tx.execute("ALTER TABLE tasks ADD COLUMN priority INTEGER DEFAULT 1", [])?;
 //!

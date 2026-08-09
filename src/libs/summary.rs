@@ -157,6 +157,14 @@ pub struct DailySummary {
 ///
 /// The trait follows a functional programming approach with method chaining:
 /// ```rust,no_run
+/// use kasl::libs::summary::{DailySummary, SummaryCalculator};
+/// use chrono::Duration;
+/// use std::collections::HashSet;
+///
+/// let summaries: Vec<DailySummary> = vec![];
+/// let company_holidays = HashSet::new();
+/// let default_hours = Duration::hours(8);
+///
 /// let result = summaries
 ///     .add_rest_dates(company_holidays, default_hours)
 ///     .calculate_totals();
@@ -220,9 +228,11 @@ pub trait SummaryCalculator {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// use kasl::libs::summary::{DailySummary, SummaryCalculator};
     /// use std::collections::HashSet;
     /// use chrono::{Duration, NaiveDate};
     ///
+    /// let work_summaries: Vec<DailySummary> = vec![];
     /// let mut rest_dates = HashSet::new();
     /// rest_dates.insert(NaiveDate::from_ymd_opt(2025, 8, 15).unwrap()); // Company holiday
     ///
@@ -274,12 +284,21 @@ pub trait SummaryCalculator {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// use kasl::libs::summary::{DailySummary, SummaryCalculator};
+    /// use kasl::libs::formatter::format_duration;
+    /// use std::collections::HashSet;
+    /// use chrono::Duration;
+    ///
+    /// let summaries: Vec<DailySummary> = vec![];
+    /// let rest_dates = HashSet::new();
+    ///
     /// let (processed_summaries, total_hours, average_daily) = summaries
     ///     .add_rest_dates(rest_dates, Duration::hours(8))
     ///     .calculate_totals();
     ///
     /// println!("Total monthly hours: {}", format_duration(&total_hours));
     /// println!("Average daily hours: {}", format_duration(&average_daily));
+    /// # let _ = processed_summaries;
     /// ```
     fn calculate_totals(self) -> (Self, Duration, Duration)
     where
@@ -480,6 +499,12 @@ pub trait SummaryFormatter {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// use kasl::libs::summary::{DailySummary, SummaryFormatter};
+    /// use chrono::Duration;
+    ///
+    /// let calculated_summaries: (Vec<DailySummary>, Duration, Duration) =
+    ///     (vec![], Duration::zero(), Duration::zero());
+    ///
     /// let (daily_map, total_str, avg_str) = calculated_summaries.format_summary();
     ///
     /// // Access daily data

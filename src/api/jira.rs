@@ -13,17 +13,20 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use kasl::api::{Jira, JiraConfig};
-//! use chrono::Local;
-//!
+//! # use kasl::api::jira::{Jira, JiraConfig};
+//! # use chrono::Local;
+//! # async fn f() -> anyhow::Result<()> {
 //! let config = JiraConfig {
 //!     login: "username".to_string(),
 //!     api_url: "https://jira.company.com".to_string(),
+//!     completed_statuses: Vec::new(),
 //! };
 //!
 //! let mut jira = Jira::new(&config);
 //! let today = Local::now().date_naive();
 //! let issues = jira.get_completed_issues(&today).await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::Session;
@@ -378,11 +381,12 @@ impl Jira {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use kasl::api::{Jira, JiraConfig};
+    /// use kasl::api::jira::{Jira, JiraConfig};
     ///
     /// let config = JiraConfig {
     ///     login: "username".to_string(),
     ///     api_url: "https://jira.company.com".to_string(),
+    ///     completed_statuses: Vec::new(),
     /// };
     /// let jira = Jira::new(&config);
     /// ```
@@ -456,13 +460,14 @@ impl Jira {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use kasl::api::{Jira, JiraConfig};
+    /// # use kasl::api::jira::{Jira, JiraConfig};
     /// # use chrono::NaiveDate;
     /// # use anyhow::Result;
     /// # async fn example() -> Result<()> {
     /// let config = JiraConfig {
     ///     login: "username".to_string(),
     ///     api_url: "https://jira.company.com".to_string(),
+    ///     completed_statuses: Vec::new(),
     /// };
     /// let mut jira = Jira::new(&config);
     ///
@@ -878,6 +883,7 @@ impl JiraConfig {
     /// let existing_config = Some(JiraConfig {
     ///     login: "olduser".to_string(),
     ///     api_url: "https://old-jira.com".to_string(),
+    ///     completed_statuses: Vec::new(),
     /// });
     ///
     /// let new_config = JiraConfig::init(&existing_config)?;

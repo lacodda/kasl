@@ -14,7 +14,8 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::db::templates::{Templates, TaskTemplate};
 //!
 //! let mut templates = Templates::new()?;
@@ -25,6 +26,8 @@
 //!     50
 //! );
 //! templates.create(&template)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::db::db::Db;
@@ -177,6 +180,7 @@ impl TaskTemplate {
     ///     "Check emails, review calendar, plan day".to_string(),
     ///     25 // Start at 25% since some prep is already done
     /// );
+    /// # let _ = template;
     /// ```
     ///
     /// # Design Considerations
@@ -239,11 +243,14 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::templates::Templates;
     ///
     /// let mut templates = Templates::new()?;
     /// // Ready for template operations
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Database Integration
@@ -291,7 +298,8 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::templates::{Templates, TaskTemplate};
     ///
     /// let mut templates = Templates::new()?;
@@ -302,6 +310,8 @@ impl Templates {
     ///     0
     /// );
     /// templates.create(&template)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -362,9 +372,13 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::templates::Templates;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut templates = Templates::new()?;
     /// templates.delete("obsolete-template")?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Safety Considerations
@@ -397,12 +411,16 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::templates::Templates;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut templates = Templates::new()?;
     /// let all_templates = templates.get_all()?;
     /// for template in all_templates {
     ///     println!("Template: {} -> {}", template.name, template.task_name);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Considerations
@@ -455,7 +473,9 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::templates::Templates;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut templates = Templates::new()?;
     /// if let Some(template) = templates.get("daily-standup")? {
     ///     println!("Found template: {}", template.task_name);
@@ -463,6 +483,8 @@ impl Templates {
     /// } else {
     ///     println!("Template 'daily-standup' not found");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Name Matching
@@ -524,7 +546,9 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::templates::Templates;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut templates = Templates::new()?;
     ///
     /// // Find all templates related to "review"
@@ -536,6 +560,9 @@ impl Templates {
     /// for template in review_templates {
     ///     println!("Found: {} -> {}", template.name, template.task_name);
     /// }
+    /// # let _ = standup_templates;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Notes
@@ -593,7 +620,9 @@ impl Templates {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::templates::{Templates, TaskTemplate};
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut templates = Templates::new()?;
     /// if templates.exists("daily-standup")? {
     ///     println!("Template already exists");
@@ -607,6 +636,8 @@ impl Templates {
     ///     );
     ///     templates.create(&template)?;
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance

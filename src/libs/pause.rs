@@ -13,6 +13,7 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! # fn f() -> Result<(), chrono::ParseError> {
 //! use kasl::libs::pause::Pause;
 //! use chrono::{NaiveDateTime, Duration};
 //!
@@ -22,6 +23,8 @@
 //!     Some(NaiveDateTime::parse_from_str("2025-08-11 09:30:00", "%Y-%m-%d %H:%M:%S")?),
 //!     Some(Duration::minutes(15)),
 //! );
+//! # Ok(())
+//! # }
 //! ```
 
 use chrono::{Duration, prelude::NaiveDateTime};

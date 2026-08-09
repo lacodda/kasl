@@ -207,7 +207,7 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 /// ## Productivity Calculation
 ///
 /// Productivity is calculated as:
-/// ```
+/// ```text
 /// Productivity = (Net Work Time / Available Work Time) * 100%
 /// Where Available Work Time = Gross Work Time - Manual Breaks - Long Pauses
 /// ```

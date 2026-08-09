@@ -13,7 +13,8 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use kasl::db::db::Db;
 //!
 //! let db = Db::new()?;
@@ -22,6 +23,8 @@
 //!     [],
 //!     |row| row.get(0)
 //! )?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::db::migrations;
@@ -115,7 +118,8 @@ impl Db {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use kasl::db::db::Db;
     ///
     /// // Standard database initialization
@@ -129,6 +133,8 @@ impl Db {
     /// )?;
     ///
     /// println!("Database contains {} tasks", task_count);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Error Scenarios
@@ -196,7 +202,8 @@ impl Db {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use kasl::db::db::Db;
     /// use kasl::db::migrations::{get_db_version, needs_migration};
     ///
@@ -212,6 +219,8 @@ impl Db {
     ///     println!("Database needs migration");
     ///     // Apply migrations manually if needed
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Safety Considerations

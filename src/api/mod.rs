@@ -14,7 +14,7 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```text
 //! use kasl::api::{GitLabConfig, JiraConfig, SiConfig};
 //!
 //! let jira_module = JiraConfig::module();

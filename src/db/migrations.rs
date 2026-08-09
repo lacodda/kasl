@@ -13,13 +13,16 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> Result<(), Box<dyn std::error::Error>> {
 //! use kasl::db::migrations::{init_with_migrations, get_db_version};
 //! use rusqlite::Connection;
 //!
 //! let mut conn = Connection::open("kasl.db")?;
 //! init_with_migrations(&mut conn)?;
 //! let version = get_db_version(&conn)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::libs::messages::Message;
@@ -400,12 +403,15 @@ impl MigrationManager {
     /// # Example
     ///
     /// ```rust
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
     /// use kasl::db::migrations::MigrationManager;
     /// use rusqlite::Connection;
     ///
     /// let manager = MigrationManager::new();
     /// let mut conn = Connection::open(":memory:")?;
     /// manager.run_migrations(&mut conn)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn run_migrations(&self, conn: &mut Connection) -> Result<()> {
         // Initialize the migrations tracking table
@@ -494,10 +500,18 @@ impl MigrationManager {
     /// # Example
     ///
     /// ```rust
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use kasl::db::migrations::MigrationManager;
+    /// use rusqlite::Connection;
+    ///
     /// let manager = MigrationManager::new();
+    /// let mut conn = Connection::open(":memory:")?;
+    /// manager.run_migrations(&mut conn)?;
     /// if manager.is_migration_applied(&conn, 3)? {
     ///     // Tags system is available
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn is_migration_applied(&self, conn: &Connection, version: u32) -> Result<bool> {
         let count: i32 = conn.query_row("SELECT COUNT(*) FROM migrations WHERE version = ?1", params![version], |row| row.get(0))?;
@@ -523,11 +537,19 @@ impl MigrationManager {
     /// # Example
     ///
     /// ```rust
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use kasl::db::migrations::MigrationManager;
+    /// use rusqlite::Connection;
+    ///
     /// let manager = MigrationManager::new();
+    /// let mut conn = Connection::open(":memory:")?;
+    /// manager.run_migrations(&mut conn)?;
     /// let history = manager.get_migration_history(&conn)?;
     /// for (version, name, applied_at) in history {
     ///     println!("v{}: {} ({})", version, name, applied_at);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn get_migration_history(&self, conn: &Connection) -> Result<Vec<(u32, String, String)>> {
         let mut stmt = conn.prepare("SELECT version, name, applied_at FROM migrations ORDER BY version")?;
@@ -563,11 +585,19 @@ impl MigrationManager {
     /// # Example
     ///
     /// ```rust
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// use kasl::db::migrations::MigrationManager;
+    /// use rusqlite::Connection;
+    ///
     /// #[cfg(debug_assertions)]
     /// {
     ///     let manager = MigrationManager::new();
+    ///     let mut conn = Connection::open(":memory:")?;
+    ///     manager.run_migrations(&mut conn)?;
     ///     manager.rollback_to(&mut conn, 2)?; // Roll back to version 2
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     #[cfg(debug_assertions)]
     pub fn rollback_to(&self, conn: &mut Connection, target_version: u32) -> Result<()> {
@@ -605,12 +635,15 @@ impl MigrationManager {
 ///
 /// # Example
 ///
-/// ```rust
+/// ```rust,no_run
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use kasl::db::migrations::init_with_migrations;
 /// use rusqlite::Connection;
 ///
 /// let mut conn = Connection::open("kasl.db")?;
 /// init_with_migrations(&mut conn)?;
+/// # Ok(())
+/// # }
 /// ```
 pub fn init_with_migrations(conn: &mut Connection) -> Result<()> {
     let manager = MigrationManager::new();
@@ -634,10 +667,15 @@ pub fn init_with_migrations(conn: &mut Connection) -> Result<()> {
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use kasl::db::migrations::get_db_version;
+/// use rusqlite::Connection;
 ///
+/// let conn = Connection::open(":memory:")?;
 /// let version = get_db_version(&conn)?;
 /// println!("Current schema version: {}", version);
+/// # Ok(())
+/// # }
 /// ```
 pub fn get_db_version(conn: &Connection) -> Result<u32> {
     let manager = MigrationManager::new();
@@ -660,11 +698,16 @@ pub fn get_db_version(conn: &Connection) -> Result<u32> {
 /// # Example
 ///
 /// ```rust
+/// # fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// use kasl::db::migrations::needs_migration;
+/// use rusqlite::Connection;
 ///
+/// let conn = Connection::open(":memory:")?;
 /// if needs_migration(&conn)? {
 ///     println!("Database needs migration!");
 /// }
+/// # Ok(())
+/// # }
 /// ```
 pub fn needs_migration(conn: &Connection) -> Result<bool> {
     let manager = MigrationManager::new();

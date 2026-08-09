@@ -194,10 +194,13 @@ impl Updater {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
     /// use kasl::libs::update::Updater;
     ///
     /// let updater = Updater::new()?;
     /// println!("Updater configured for {} v{}", updater.name, updater.version);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new() -> Result<Self> {
         // Extract repository information from compile-time metadata
@@ -254,11 +257,13 @@ impl Updater {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # async fn f() {
     /// use kasl::libs::update::Updater;
     ///
     /// // Call during application startup
     /// Updater::show_update_notification().await;
     /// // User sees notification only if update is available and check is due
+    /// # }
     /// ```
     ///
     /// # Background Behavior
@@ -349,6 +354,7 @@ impl Updater {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # async fn f() -> anyhow::Result<()> {
     /// use kasl::libs::update::Updater;
     ///
     /// let mut updater = Updater::new()?;
@@ -356,6 +362,8 @@ impl Updater {
     ///     updater.perform_update().await?;
     ///     println!("Update completed successfully");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Error Scenarios
@@ -439,12 +447,17 @@ impl Updater {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # async fn f() -> anyhow::Result<()> {
+    /// use kasl::libs::update::Updater;
+    ///
     /// let mut updater = Updater::new()?;
     /// if updater.check_for_latest_release().await? {
     ///     println!("Update available: {} -> {}",
     ///         updater.version,
     ///         updater.latest_version.unwrap());
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn check_for_latest_release(&mut self) -> Result<bool> {
         // Fetch latest release information from GitHub API
@@ -759,7 +772,7 @@ impl Updater {
     ///
     /// # Examples
     ///
-    /// ```rust,no_run
+    /// ```text
     /// let updater = Updater::new()?;
     /// if updater.is_check_due() {
     ///     // Perform update check

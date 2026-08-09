@@ -18,10 +18,11 @@
 //!
 //! // Basic message display
 //! msg_info!(Message::TaskCreated);
-//! msg_success!(Message::ReportSent("2025-01-15".to_string()));
+//! msg_success!(Message::DailyReportSent("2025-01-15".to_string()));
 //! msg_error!(Message::ConfigSaveError);
 //!
 //! // Custom formatted messages
+//! let count = 5;
 //! msg_info!(format!("Processing {} items", count));
 //! ```
 
@@ -112,13 +113,19 @@ pub fn is_debug_mode() -> bool {
 ///
 /// ### Simple Message
 /// ```rust
+/// use kasl::msg_print;
+/// use kasl::libs::messages::types::Message;
+///
 /// msg_print!(Message::ConfigSaved);
 /// // Output: "Configuration saved successfully"
 /// ```
 ///
 /// ### Message with Line Breaks
 /// ```rust
-/// msg_print!(Message::ReportHeader, true);
+/// use kasl::msg_print;
+/// use kasl::libs::messages::types::Message;
+///
+/// msg_print!(Message::ReportHeader("2025-01-15".to_string()), true);
 /// // Output: "\n📊 Daily Work Report\n"
 /// ```
 ///
@@ -169,13 +176,19 @@ macro_rules! msg_print {
 ///
 /// ### Simple Success Message
 /// ```rust
+/// use kasl::msg_success;
+/// use kasl::libs::messages::types::Message;
+///
 /// msg_success!(Message::TaskCreated);
 /// // Output: "✅ Task created successfully"
 /// ```
 ///
 /// ### Success Message with Line Breaks
 /// ```rust
-/// msg_success!(Message::ExportSuccess("data.csv".to_string()), true);
+/// use kasl::msg_success;
+/// use kasl::libs::messages::types::Message;
+///
+/// msg_success!(Message::ExportCompleted("data.csv".to_string()), true);
 /// // Output: "\n✅ Data exported successfully to: data.csv\n"
 /// ```
 #[macro_export]
@@ -225,12 +238,18 @@ macro_rules! msg_success {
 ///
 /// ### Simple Error Message
 /// ```rust
+/// use kasl::msg_error;
+/// use kasl::libs::messages::types::Message;
+///
 /// msg_error!(Message::TaskNotFound);
 /// // Output to stderr: "❌ Task not found"
 /// ```
 ///
 /// ### Error Message with Line Breaks
 /// ```rust
+/// use kasl::msg_error;
+/// use kasl::libs::messages::types::Message;
+///
 /// msg_error!(Message::ConfigParseError, true);
 /// // Output to stderr: "\n❌ Failed to parse configuration file\n"
 /// ```
@@ -278,13 +297,19 @@ macro_rules! msg_error {
 ///
 /// ### Simple Warning Message
 /// ```rust
+/// use kasl::msg_warning;
+/// use kasl::libs::messages::types::Message;
+///
 /// msg_warning!(Message::AutostartCheckingAlternative);
 /// // Output: "⚠️ Checking alternative autostart methods..."
 /// ```
 ///
 /// ### Warning Message with Line Breaks
 /// ```rust
-/// msg_warning!(Message::SignalHandlingNotSupported, true);
+/// use kasl::msg_warning;
+/// use kasl::libs::messages::types::Message;
+///
+/// msg_warning!(Message::WatcherSignalHandlingNotSupported, true);
 /// // Output: "\n⚠️ Signal handling not supported on this platform\n"
 /// ```
 #[macro_export]
@@ -330,13 +355,19 @@ macro_rules! msg_warning {
 ///
 /// ### Simple Info Message
 /// ```rust
+/// use kasl::msg_info;
+/// use kasl::libs::messages::types::Message;
+///
 /// msg_info!(Message::WatcherStarted(1234));
 /// // Output: "ℹ️ Watcher started with PID: 1234"
 /// ```
 ///
 /// ### Info Message with Line Breaks
 /// ```rust
-/// msg_info!(Message::MonthlySummaryHeader, true);
+/// use kasl::msg_info;
+/// use kasl::libs::messages::types::Message;
+///
+/// msg_info!(Message::WorkingHoursForMonth("2025-01".to_string()), true);
 /// // Output: "\nℹ️ 📅 Monthly Summary\n"
 /// ```
 #[macro_export]
@@ -388,13 +419,20 @@ macro_rules! msg_info {
 ///
 /// ### Technical Debug Information
 /// ```rust
-/// msg_debug!("Processing task with ID: {}", task_id);
+/// use kasl::msg_debug;
+///
+/// let task_id = 42;
+/// msg_debug!(format!("Processing task with ID: {}", task_id));
 /// // Debug mode output: "🔍 Processing task with ID: 42"
 /// // Normal mode output: (nothing)
 /// ```
 ///
 /// ### State Change Debugging
 /// ```rust
+/// use kasl::msg_debug;
+///
+/// let old_state = "Active";
+/// let new_state = "InPause";
 /// msg_debug!(format!("State transition: {:?} -> {:?}", old_state, new_state));
 /// // Debug mode output: "🔍 State transition: Active -> InPause"
 /// // Normal mode output: (nothing)
@@ -429,6 +467,7 @@ macro_rules! msg_debug {
 /// use anyhow::Result;
 /// use kasl::{msg_error_anyhow, libs::messages::Message};
 ///
+/// # fn config_is_invalid() -> bool { false }
 /// fn validate_config() -> Result<()> {
 ///     if config_is_invalid() {
 ///         return Err(msg_error_anyhow!(Message::ConfigParseError));
@@ -440,10 +479,12 @@ macro_rules! msg_debug {
 /// ### Error Context Addition
 /// ```rust
 /// use anyhow::{Result, Context};
+/// use kasl::{msg_error_anyhow, libs::messages::Message};
 ///
+/// # fn some_operation() -> Result<()> { Ok(()) }
 /// fn complex_operation() -> Result<()> {
 ///     some_operation()
-///         .context(msg_error_anyhow!(Message::OperationFailed))
+///         .context(msg_error_anyhow!(Message::TaskUpdateFailed))
 /// }
 /// ```
 ///
@@ -481,22 +522,28 @@ macro_rules! msg_error_anyhow {
 /// use kasl::{msg_bail_anyhow, libs::messages::Message};
 ///
 /// fn process_task(task_id: Option<i32>) -> Result<()> {
-///     let id = task_id.unwrap_or_else(|| {
-///         msg_bail_anyhow!(Message::InvalidInput);
-///     });
-///    
+///     let id = match task_id {
+///         Some(id) => id,
+///         None => msg_bail_anyhow!(Message::InvalidInput),
+///     };
+///
 ///     // Continue processing with valid ID
+///     let _ = id;
 ///     Ok(())
 /// }
 /// ```
 ///
 /// ### Permission Checking
 /// ```rust
+/// use anyhow::Result;
+/// use kasl::{msg_bail_anyhow, libs::messages::Message};
+///
+/// # fn user_has_permission() -> bool { true }
 /// fn secure_operation() -> Result<()> {
 ///     if !user_has_permission() {
 ///         msg_bail_anyhow!(Message::PermissionDenied);
 ///     }
-///    
+///
 ///     // Continue with authorized operation
 ///     Ok(())
 /// }
@@ -504,11 +551,15 @@ macro_rules! msg_error_anyhow {
 ///
 /// ### Resource Validation
 /// ```rust
+/// use anyhow::Result;
+/// use kasl::{msg_bail_anyhow, libs::messages::Message};
+///
+/// # fn resource_exists(_path: &str) -> bool { true }
 /// fn access_resource(path: &str) -> Result<()> {
 ///     if !resource_exists(path) {
-///         msg_bail_anyhow!(Message::ResourceNotFound);
+///         msg_bail_anyhow!(Message::FileNotFound);
 ///     }
-///    
+///
 ///     // Continue with valid resource
 ///     Ok(())
 /// }

@@ -13,12 +13,15 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::libs::data_storage::DataStorage;
 //!
 //! let storage = DataStorage::new();
 //! let db_path = storage.get_path("kasl.db")?;
 //! let config_path = storage.get_path("config.json")?;
+//! # Ok(())
+//! # }
 //! ```
 
 use anyhow::Result;
@@ -107,14 +110,18 @@ impl DataStorage {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::libs::data_storage::DataStorage;
     ///
     /// // Create platform-specific storage manager
     /// let storage = DataStorage::new();
     ///
-    /// // Base path is automatically configured
-    /// println!("Base path: {:?}", storage.base_path);
+    /// // Base path is automatically configured; resolve a file within it
+    /// let db_path = storage.get_path("kasl.db")?;
+    /// println!("Database path: {:?}", db_path);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// ## Environment Variable Usage
@@ -186,7 +193,8 @@ impl DataStorage {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::libs::data_storage::DataStorage;
     ///
     /// let storage = DataStorage::new();
@@ -201,6 +209,8 @@ impl DataStorage {
     ///
     /// // Get path for session cache
     /// let session_path = storage.get_path(".jira_session_id")?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// ## File Naming Conventions

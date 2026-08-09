@@ -14,13 +14,17 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::db::tags::{Tags, Tag};
 //!
 //! let mut tags = Tags::new()?;
 //! let urgent_tag = Tag::new("urgent".to_string(), Some("red".to_string()));
 //! let tag_id = tags.create(&urgent_tag)?;
+//! let task_id = 1;
 //! tags.add_tag_to_task(task_id, tag_id)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::db::db::Db;
@@ -249,11 +253,14 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::tags::Tags;
     ///
     /// let mut tags = Tags::new()?;
     /// // Ready for tag operations
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -289,13 +296,16 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::tags::{Tags, Tag};
     ///
     /// let mut tags = Tags::new()?;
     /// let tag = Tag::new("priority".to_string(), Some("orange".to_string()));
     /// let tag_id = tags.create(&tag)?;
     /// println!("Created tag with ID: {}", tag_id);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -326,12 +336,17 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let tag_id = 1;
     /// let mut tag = tags.get_by_id(tag_id)?.unwrap();
     /// tag.name = "high-priority".to_string();
     /// tag.color = Some("crimson".to_string());
     /// tags.update(&tag)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -369,9 +384,14 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let tag_id = 1;
     /// tags.delete(tag_id)?; // Removes tag and all associations
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Side Effects
@@ -400,12 +420,16 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
     /// let all_tags = tags.get_all()?;
     /// for tag in all_tags {
     ///     println!("Tag: {} ({})", tag.name, tag.color.unwrap_or("no color".to_string()));
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Considerations
@@ -447,13 +471,17 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
     /// if let Some(tag) = tags.get_by_name("urgent")? {
     ///     println!("Found tag: {} with color: {:?}", tag.name, tag.color);
     /// } else {
     ///     println!("Tag 'urgent' not found");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Name Matching
@@ -493,11 +521,15 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
     /// if let Some(tag) = tags.get_by_id(42)? {
     ///     println!("Tag ID 42: {}", tag.name);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance
@@ -536,12 +568,17 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let task_id = 1;
     /// let task_tags = tags.get_tags_by_task(task_id)?;
     /// for tag in task_tags {
     ///     println!("Task has tag: {}", tag.name);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Return Characteristics
@@ -584,10 +621,15 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let tag_id = 1;
     /// let task_ids = tags.get_tasks_by_tag(tag_id)?;
     /// println!("Tag is used by {} tasks", task_ids.len());
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Use Cases
@@ -625,10 +667,15 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let (task_id, tag_id) = (1, 1);
     /// tags.add_tag_to_task(task_id, tag_id)?;
     /// println!("Tag associated with task");
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Idempotency
@@ -658,10 +705,15 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let (task_id, tag_id) = (1, 1);
     /// tags.remove_tag_from_task(task_id, tag_id)?;
     /// println!("Tag removed from task");
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Side Effects
@@ -691,10 +743,15 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let task_id = 1;
     /// let removed_count = tags.remove_all_tags_from_task(task_id)?;
     /// println!("Removed {} tag associations", removed_count);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Use Cases
@@ -750,8 +807,11 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
+    /// let task_id = 1;
     ///
     /// // Replace task tags with new set
     /// let new_tag_ids = vec![1, 3, 5]; // urgent, backend, review
@@ -760,6 +820,8 @@ impl Tags {
     /// // Task now has exactly these three tags
     /// let current_tags = tags.get_tags_by_task(task_id)?;
     /// assert_eq!(current_tags.len(), 3);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Considerations
@@ -816,11 +878,15 @@ impl Tags {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tags::Tags;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
     /// let tag_names = vec!["urgent".to_string(), "backend".to_string()];
     /// let tag_ids = tags.get_or_create_tags(&tag_names)?;
     /// // tag_ids now contains IDs for both tags (created if needed)
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Default Color Assignment

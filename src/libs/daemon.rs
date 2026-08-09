@@ -15,11 +15,14 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! # async fn f() -> anyhow::Result<()> {
 //! use kasl::libs::daemon;
 //!
 //! daemon::spawn()?;                           // Start background monitoring
 //! daemon::stop()?;                            // Stop background monitoring
 //! daemon::run_with_signal_handling().await?;  // Run with signal handling
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::libs::config::Config;
@@ -255,7 +258,7 @@ async fn run_monitor() -> Result<()> {
 /// ## Platform-Specific Spawning
 ///
 /// ### Unix Systems
-/// ```rust,no_run
+/// ```text
 /// std::process::Command::new(current_exe)
 ///     .arg("--daemon-run")
 ///     .pre_exec(|| {
@@ -266,7 +269,7 @@ async fn run_monitor() -> Result<()> {
 /// ```
 ///
 /// ### Windows
-/// ```rust,no_run
+/// ```text
 /// std::process::Command::new(current_exe)
 ///     .arg("--daemon-run")
 ///     .creation_flags(CREATE_NO_WINDOW) // Hide console window
@@ -305,11 +308,14 @@ async fn run_monitor() -> Result<()> {
 /// # Usage Examples
 ///
 /// ```rust,no_run
+/// # fn main() -> anyhow::Result<()> {
 /// use kasl::libs::daemon;
 ///
 /// // Start background monitoring
 /// daemon::spawn()?;
 /// println!("Background monitoring started");
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Security Considerations
@@ -439,11 +445,14 @@ pub fn spawn() -> Result<()> {
 /// # Usage Examples
 ///
 /// ```rust,no_run
+/// # fn main() -> anyhow::Result<()> {
 /// use kasl::libs::daemon;
 ///
 /// // Stop background monitoring
 /// daemon::stop()?;
 /// println!("Monitoring stopped");
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Idempotent Operation

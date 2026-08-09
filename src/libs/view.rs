@@ -13,11 +13,31 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! # fn f() -> anyhow::Result<()> {
 //! use kasl::libs::view::View;
+//! use kasl::libs::task::Task;
+//! use kasl::db::workdays::Workday;
+//! use kasl::libs::report::WorkInterval;
+//! use chrono::{Local, TimeDelta};
+//! use std::collections::HashMap;
+//!
+//! let tasks: Vec<Task> = vec![];
+//! let workday = Workday {
+//!     id: 1,
+//!     date: Local::now().date_naive(),
+//!     start: Local::now().naive_local(),
+//!     end: None,
+//! };
+//! let intervals: Vec<WorkInterval> = vec![];
+//! let filtered_duration = TimeDelta::zero();
+//! let productivity = 0.0_f64;
+//! let summary_data = (HashMap::new(), String::new(), String::new());
 //!
 //! View::tasks(&tasks)?;
 //! View::report(&workday, &intervals, &filtered_duration, &productivity, &tasks)?;
 //! View::sum(&summary_data)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::task::Task;
@@ -243,11 +263,18 @@ impl View {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
     /// use kasl::libs::view::View;
     /// use std::collections::HashMap;
     ///
+    /// let daily_map = HashMap::new();
+    /// let total_hours = String::new();
+    /// let average_hours = String::new();
+    ///
     /// let summary_data = (daily_map, total_hours, average_hours);
     /// View::sum(&summary_data)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, (String, String)>, String, String)) -> Result<()> {
         // Initialize table with appropriate formatting for summary data
@@ -348,11 +375,14 @@ impl View {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
     /// use kasl::libs::view::View;
     /// use kasl::db::templates::TaskTemplate;
     ///
-    /// let templates = vec![/* template instances */];
+    /// let templates: Vec<TaskTemplate> = vec![/* template instances */];
     /// View::templates(&templates)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn templates(templates: &[TaskTemplate]) -> Result<()> {
         // Initialize table with clean formatting for template data
@@ -413,11 +443,14 @@ impl View {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
     /// use kasl::libs::view::View;
     /// use kasl::db::tags::Tag;
     ///
-    /// let tags = vec![/* tag instances */];
+    /// let tags: Vec<Tag> = vec![/* tag instances */];
     /// View::tags(&tags)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn tags(tags: &[crate::db::tags::Tag]) -> Result<()> {
         // Initialize table with appropriate formatting for tag data

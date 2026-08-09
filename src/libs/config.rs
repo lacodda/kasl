@@ -14,11 +14,14 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::libs::config::Config;
 //!
 //! let config = Config::read()?;
 //! let updated_config = Config::init()?;
 //! updated_config.save()?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::data_storage::DataStorage;
@@ -519,6 +522,7 @@ impl Config {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::libs::config::Config;
     ///
     /// // Load configuration, falling back to defaults if no file exists
@@ -528,6 +532,8 @@ impl Config {
     /// if config.jira.is_some() {
     ///     println!("Jira integration is configured");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn read() -> Result<Config> {
         // Resolve the configuration file path using the data storage system
@@ -572,11 +578,14 @@ impl Config {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::libs::config::{Config, MonitorConfig};
     ///
     /// let mut config = Config::read()?;
     /// config.monitor = Some(MonitorConfig::default());
     /// config.save()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn save(&self) -> Result<()> {
         // Resolve the configuration file path and ensure directory exists
@@ -668,11 +677,14 @@ impl Config {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::libs::config::Config;
     ///
     /// // Run interactive setup and save the result
     /// let config = Config::init()?;
     /// config.save()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn init() -> Result<Self> {
         // The whole wizard is prompts: every module below asks for values, and
@@ -905,10 +917,13 @@ impl Config {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::libs::config::Config;
     ///
     /// // Ensure kasl is available globally
     /// Config::set_app_global()?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn set_app_global() -> Result<()> {
         // Get the directory containing the current executable

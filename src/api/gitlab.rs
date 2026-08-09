@@ -13,8 +13,8 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use kasl::api::gitlab::{GitLab, GitLabConfig};
-//!
+//! # use kasl::api::gitlab::{GitLab, GitLabConfig};
+//! # async fn f() -> anyhow::Result<()> {
 //! let config = GitLabConfig {
 //!     access_token: "glpat-xxxxxxxxxxxxxxxxxxxx".to_string(),
 //!     api_url: "https://gitlab.com".to_string(),
@@ -22,6 +22,8 @@
 //!
 //! let client = GitLab::new(&config);
 //! let commits = client.get_today_commits().await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::libs::config::ConfigModule;
@@ -142,6 +144,7 @@ impl GitLab {
     /// # Example
     ///
     /// ```rust,no_run
+    /// # use kasl::api::gitlab::{GitLab, GitLabConfig};
     /// let config = GitLabConfig {
     ///     access_token: "glpat-xxxxxxxxxxxxxxxxxxxx".to_string(),
     ///     api_url: "https://gitlab.example.com".to_string(),
@@ -216,7 +219,7 @@ impl GitLab {
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```text
     /// let commits = gitlab_client.get_today_commits().await?;
     /// for commit in commits {
     ///     println!("Commit {}: {}", commit.sha, commit.message);
@@ -515,12 +518,16 @@ impl GitLabConfig {
     /// # Example
     ///
     /// ```rust,no_run
+    /// # use kasl::api::gitlab::GitLabConfig;
+    /// # fn f() -> anyhow::Result<()> {
     /// let existing_config = Some(GitLabConfig {
     ///     access_token: "glpat-old-token".to_string(),
     ///     api_url: "https://gitlab.com".to_string(),
     /// });
     ///
     /// let new_config = GitLabConfig::init(&existing_config)?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn init(config: &Option<GitLabConfig>) -> Result<Self> {
         // Use existing configuration as defaults, or create empty defaults

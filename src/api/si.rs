@@ -14,9 +14,9 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use kasl::api::{Si, SiConfig};
-//! use chrono::Local;
-//!
+//! # use kasl::api::si::{Si, SiConfig};
+//! # use chrono::Local;
+//! # async fn f() -> anyhow::Result<()> {
 //! let config = SiConfig {
 //!     login: "username".to_string(),
 //!     auth_url: "https://auth.company.com".to_string(),
@@ -26,6 +26,8 @@
 //! let mut si = Si::new(&config);
 //! let today = Local::now().date_naive();
 //! let rest_dates = si.rest_dates(today).await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::{
@@ -366,7 +368,7 @@ impl Si {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// use kasl::api::{Si, SiConfig};
+    /// use kasl::api::si::{Si, SiConfig};
     ///
     /// let config = SiConfig {
     ///     login: "username".to_string(),
@@ -427,10 +429,15 @@ impl Si {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use kasl::api::{Si, SiConfig};
+    /// # use kasl::api::si::{Si, SiConfig};
     /// # use chrono::Local;
     /// # use anyhow::Result;
     /// # async fn example() -> Result<()> {
+    /// # let config = SiConfig {
+    /// #     login: "username".to_string(),
+    /// #     auth_url: "https://auth.company.com".to_string(),
+    /// #     api_url: "https://api.company.com".to_string(),
+    /// # };
     /// let mut si = Si::new(&config);
     /// let report_data = r#"{"hours": 8, "tasks": 5}"#.to_string();
     /// let today = Local::now().date_naive();
@@ -513,10 +520,15 @@ impl Si {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use kasl::api::{Si, SiConfig};
+    /// # use kasl::api::si::{Si, SiConfig};
     /// # use chrono::Local;
     /// # use anyhow::Result;
     /// # async fn example() -> Result<()> {
+    /// # let config = SiConfig {
+    /// #     login: "username".to_string(),
+    /// #     auth_url: "https://auth.company.com".to_string(),
+    /// #     api_url: "https://api.company.com".to_string(),
+    /// # };
     /// let mut si = Si::new(&config);
     /// let today = Local::now().date_naive();
     ///
@@ -602,10 +614,15 @@ impl Si {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use kasl::api::{Si, SiConfig};
+    /// # use kasl::api::si::{Si, SiConfig};
     /// # use chrono::Local;
     /// # use anyhow::Result;
     /// # async fn example() -> Result<()> {
+    /// # let config = SiConfig {
+    /// #     login: "username".to_string(),
+    /// #     auth_url: "https://auth.company.com".to_string(),
+    /// #     api_url: "https://api.company.com".to_string(),
+    /// # };
     /// let mut si = Si::new(&config);
     /// let this_year = Local::now().date_naive();
     ///
@@ -705,10 +722,15 @@ impl Si {
     /// # Examples
     ///
     /// ```rust,no_run
-    /// # use kasl::api::{Si, SiConfig};
+    /// # use kasl::api::si::{Si, SiConfig};
     /// # use chrono::NaiveDate;
     /// # use anyhow::Result;
     /// # fn example() -> Result<()> {
+    /// # let config = SiConfig {
+    /// #     login: "username".to_string(),
+    /// #     auth_url: "https://auth.company.com".to_string(),
+    /// #     api_url: "https://api.company.com".to_string(),
+    /// # };
     /// let si = Si::new(&config);
     /// let date = NaiveDate::from_ymd_opt(2024, 1, 31).unwrap(); // January 31st
     ///

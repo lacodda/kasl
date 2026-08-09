@@ -32,9 +32,11 @@ jobs:
         run: cargo fmt --check
       - name: Lint
         run: cargo clippy --all-targets -- -D warnings
-      # Doctests are excluded: 175 of 212 doc examples predate gating and do
-      # not compile; repairing them is scheduled with the docs overhaul.
       - name: Test
         run: cargo test --all-targets
+      # Doc examples are gated from 1.0 on. They were ungated for years and
+      # rotted to 160 failures; keeping them in CI is what stops that recurring.
+      - name: Doctests
+        run: cargo test --doc
       - name: Build
         run: cargo build --release

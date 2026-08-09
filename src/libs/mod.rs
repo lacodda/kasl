@@ -15,12 +15,15 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::libs::task::Task;
 //! use kasl::db::tasks::Tasks;
 //!
 //! let task = Task::new("Implement feature", "Add user authentication", Some(75));
 //! let mut tasks_db = Tasks::new()?;
 //! tasks_db.insert(&task)?;
+//! # Ok(())
+//! # }
 //! ```
 
 pub mod autostart;

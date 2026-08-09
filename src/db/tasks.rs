@@ -13,13 +13,16 @@
 //!
 //! ## Usage
 //!
-//! ```rust
-//! use kasl::db::tasks::{Tasks, TaskFilter};
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
+//! use kasl::db::tasks::Tasks;
 //! use kasl::libs::task::Task;
 //!
 //! let mut tasks = Tasks::new()?;
 //! let task = Task::new("Review code", "Check PR #123", Some(75));
 //! tasks.insert(&task)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use super::db::Db;
@@ -182,11 +185,14 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::tasks::Tasks;
     ///
     /// let mut tasks = Tasks::new()?;
     /// // Ready for task operations
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -229,7 +235,8 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::tasks::Tasks;
     /// use kasl::libs::task::Task;
     ///
@@ -237,6 +244,8 @@ impl Tasks {
     /// let task = Task::new("Code review", "Review PR #123", Some(50));
     /// tasks.insert(&task)?
     ///      .update_id()?; // Method chaining
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Database Effects
@@ -276,11 +285,17 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// use kasl::libs::task::Task;
+    ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
     /// let subtask = Task::new("Subtask", "Part of larger task", Some(0));
     /// tasks.insert(&subtask)?
     ///      .update_id()?; // Set task_id to reference itself or parent
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -307,11 +322,17 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// use kasl::libs::task::Task;
+    ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
     /// let task = Task::new("New task", "Description", Some(100));
     /// let inserted_tasks = tasks.insert(&task)?
     ///                          .get()?; // Retrieve the inserted task
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Error Conditions
@@ -363,8 +384,10 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
-    /// use kasl::db::tasks::{Tasks, TaskFilter};
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
+    /// use kasl::db::tasks::Tasks;
+    /// use kasl::libs::task::TaskFilter;
     /// use chrono::Local;
     ///
     /// let mut tasks = Tasks::new()?;
@@ -380,6 +403,8 @@ impl Tasks {
     ///
     /// // Get incomplete tasks
     /// let incomplete = tasks.fetch(TaskFilter::Incomplete)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Notes
@@ -487,12 +512,17 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
+    /// let task_id = 1;
     /// let deleted_count = tasks.delete(task_id)?;
     /// if deleted_count > 0 {
     ///     println!("Task deleted successfully");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Safety Considerations
@@ -538,11 +568,15 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
     /// let ids_to_delete = vec![101, 102, 103];
     /// let deleted_count = tasks.delete_many(&ids_to_delete)?;
     /// println!("Deleted {} tasks", deleted_count);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Edge Cases
@@ -586,13 +620,18 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
+    /// let task_id = 1;
     /// if tasks.exists(task_id)? {
     ///     println!("Task exists and can be updated");
     /// } else {
     ///     println!("Task not found");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance
@@ -635,12 +674,17 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
+    /// let task_id = 1;
     /// let mut task = tasks.get_by_id(task_id)?.unwrap();
     /// task.name = "Updated task name".to_string();
-    /// task.completeness = 75;
+    /// task.completeness = Some(75);
     /// tasks.update(&task)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -682,13 +726,17 @@ impl Tasks {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::tasks::Tasks;
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut tasks = Tasks::new()?;
     /// if let Some(task) = tasks.get_by_id(42)? {
     ///     println!("Found task: {}", task.name);
     /// } else {
     ///     println!("Task with ID 42 not found");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance

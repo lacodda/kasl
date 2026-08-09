@@ -250,7 +250,7 @@ fn resolve_report_output(data: ExportData, format: ExportFormat, date: NaiveDate
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```text
 /// let today = parse_date("today")?;           // Current date
 /// let christmas = parse_date("2025-12-25")?;  // Specific holiday
 /// let start_year = parse_date("2025-01-01")?; // Year beginning

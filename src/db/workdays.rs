@@ -13,7 +13,8 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::db::workdays::Workdays;
 //! use chrono::Local;
 //!
@@ -22,6 +23,8 @@
 //!
 //! workdays.insert_start(today)?;
 //! workdays.insert_end(today)?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::{db::db::Db, libs::messages::Message, msg_error_anyhow};
@@ -177,11 +180,14 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::workdays::Workdays;
     ///
     /// let mut workdays = Workdays::new()?;
     /// // Ready for workday tracking
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Database Integration
@@ -235,12 +241,16 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
     /// use chrono::Local;
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut workdays = Workdays::new()?;
     /// let today = Local::now().date_naive();
     /// workdays.insert_start(today)?; // Start tracking work for today
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Idempotency
@@ -288,9 +298,11 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
     /// use chrono::Local;
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut workdays = Workdays::new()?;
     /// let today = Local::now().date_naive();
     ///
@@ -298,6 +310,8 @@ impl Workdays {
     /// workdays.insert_start(today)?;
     /// // ... work happens ...
     /// workdays.insert_end(today)?; // Mark work as completed
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Error Conditions
@@ -340,9 +354,11 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
     /// use chrono::Local;
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut workdays = Workdays::new()?;
     /// let today = Local::now().date_naive();
     ///
@@ -356,6 +372,8 @@ impl Workdays {
     /// } else {
     ///     println!("No work session recorded for today");
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Data Integrity
@@ -413,9 +431,11 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
-    /// use chrono::{Local, NaiveDate};
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
+    /// use chrono::Local;
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut workdays = Workdays::new()?;
     /// let current_month = Local::now().date_naive();
     ///
@@ -428,6 +448,8 @@ impl Workdays {
     ///         println!("Date: {}, Duration: {:?}", workday.date, duration);
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Considerations
@@ -502,9 +524,11 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
     /// use chrono::{Local, NaiveDateTime};
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut workdays = Workdays::new()?;
     /// let today = Local::now().date_naive();
     ///
@@ -515,6 +539,8 @@ impl Workdays {
     /// )?;
     ///
     /// workdays.update_start(today, corrected_start)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Error Conditions
@@ -567,9 +593,11 @@ impl Workdays {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
     /// use chrono::{Local, NaiveDateTime};
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let mut workdays = Workdays::new()?;
     /// let today = Local::now().date_naive();
     ///
@@ -582,6 +610,8 @@ impl Workdays {
     ///
     /// // Clear end time (mark as ongoing)
     /// workdays.update_end(today, None)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Data Consistency

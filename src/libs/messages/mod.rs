@@ -80,7 +80,8 @@ pub use types::Message;
 ///
 /// This function works seamlessly with the application's messaging macros:
 /// ```rust
-/// use kasl::{msg_success};
+/// use kasl::msg_success;
+/// use kasl::libs::messages::Message;
 ///
 /// // Equivalent to using success() function directly
 /// msg_success!(Message::TaskCreated);
@@ -137,17 +138,19 @@ pub fn success(msg: Message) -> String {
 /// println!("{}", message); // "❌ Failed to save configuration"
 ///
 /// // With error details
-/// let detailed_error = error(Message::UpdateDownloadFailed("Network timeout".to_string()));
-/// println!("{}", detailed_error); // "❌ Failed to download update: Network timeout"
+/// let detailed_error = error(Message::GitlabFetchFailed("Network timeout".to_string()));
+/// println!("{}", detailed_error); // "❌ [kasl] Failed to get GitLab events: Network timeout"
 /// ```
 ///
 /// # Error Handling Integration
 ///
 /// This function integrates with the application's error handling:
 /// ```rust
-/// use kasl::{msg_error};
+/// use kasl::msg_error;
+/// use kasl::libs::messages::Message;
 /// use anyhow::Result;
 ///
+/// # fn operation() -> Result<()> { Ok(()) }
 /// fn save_config() -> Result<()> {
 ///     // ... operation that might fail
 ///     if let Err(_) = operation() {
@@ -217,9 +220,12 @@ pub fn error(msg: Message) -> String {
 ///
 /// Warnings often provide guidance for resolution:
 /// ```rust
-/// use kasl::{msg_warning, msg_info};
+/// use kasl::msg_warning;
+/// use kasl::libs::messages::Message;
 ///
 /// // Warning with follow-up guidance
+/// let count = 3;
+/// let duration = "45 minutes".to_string();
 /// msg_warning!(Message::ShortIntervalsDetected(count, duration));
 /// ```
 pub fn warning(msg: Message) -> String {
@@ -288,6 +294,7 @@ pub fn warning(msg: Message) -> String {
 /// Info messages often work together with other message types:
 /// ```rust
 /// use kasl::{msg_info, msg_success};
+/// use kasl::libs::messages::Message;
 ///
 /// // Sequential information flow
 /// msg_info!(Message::WatcherStartingForeground);
@@ -368,10 +375,10 @@ pub fn info(msg: Message) -> String {
 /// ```rust
 /// use kasl::libs::messages::{Message, success, wrap_msg};
 ///
-/// // Create an emphasized success message
+/// // Create an emphasized success message using the prefix function directly
 /// let emphasized_success = format!("\n{}\n", success(Message::OperationCompleted));
-/// // Or use wrap_msg for consistent formatting
-/// let wrapped_success = wrap_msg(success(Message::OperationCompleted));
+/// // Or use wrap_msg directly on the Message for consistent formatting
+/// let wrapped_success = wrap_msg(Message::OperationCompleted);
 /// ```
 pub fn wrap_msg(msg: Message) -> String {
     format!("\n{}\n", msg)

@@ -15,13 +15,15 @@
 //!
 //! ## Usage
 //!
-//! ```rust
+//! ```rust,no_run
+//! # fn main() -> anyhow::Result<()> {
 //! use kasl::db::pauses::Pauses;
-//! use chrono::Local;
 //!
 //! let pauses = Pauses::new()?;
 //! pauses.insert_start()?;
-//! pauses.insert_end(300)?; // 5 minutes
+//! pauses.insert_end()?; // completes the most recent open pause
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::db::db::Db;
@@ -135,11 +137,14 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::pauses::Pauses;
     ///
     /// let pauses = Pauses::new()?;
     /// // Ready to track pauses
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Errors
@@ -256,9 +261,13 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::pauses::Pauses;
+    /// # fn main() -> anyhow::Result<()> {
     /// let pauses = Pauses::new()?;
     /// pauses.insert_start()?; // Pause started at current time
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Thread Safety
@@ -289,15 +298,19 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::pauses::Pauses;
     /// use chrono::NaiveDateTime;
     ///
+    /// # fn main() -> anyhow::Result<()> {
     /// let pauses = Pauses::new()?;
     /// let start_time = NaiveDateTime::parse_from_str(
     ///     "2025-01-15 14:30:00",
     ///     "%Y-%m-%d %H:%M:%S"
     /// )?;
     /// pauses.insert_start_with_time(start_time)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Data Integrity
@@ -332,11 +345,15 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::pauses::Pauses;
+    /// # fn main() -> anyhow::Result<()> {
     /// let pauses = Pauses::new()?;
     /// pauses.insert_start()?;
     /// // ... user is inactive for 5 minutes ...
     /// pauses.insert_end()?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Behavior Notes
@@ -427,17 +444,21 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::pauses::Pauses;
     /// use chrono::Local;
     ///
-    /// let pauses = Pauses::new()?;
+    /// # fn main() -> anyhow::Result<()> {
+    /// // Get pauses of 10 minutes or longer
+    /// let pauses = Pauses::new()?.set_min_duration(10);
     /// let today = Local::now().date_naive();
     ///
-    /// // Get pauses of 10 minutes or longer
-    /// let significant_pauses = pauses.get_daily_pauses(today, 10)?;
+    /// let significant_pauses = pauses.get_daily_pauses(today)?;
     /// for pause in significant_pauses {
     ///     println!("Pause: {:?} - {:?}", pause.start, pause.end);
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Notes
@@ -535,9 +556,13 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::pauses::Pauses;
+    /// # fn main() -> anyhow::Result<()> {
     /// let pauses = Pauses::new()?;
     /// pauses.delete(123)?; // Delete pause with ID 123
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Safety Considerations
@@ -575,11 +600,15 @@ impl Pauses {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # use kasl::db::pauses::Pauses;
+    /// # fn main() -> anyhow::Result<()> {
     /// let pauses = Pauses::new()?;
     /// let ids_to_delete = vec![101, 102, 103];
     /// let deleted_count = pauses.delete_many(&ids_to_delete)?;
     /// println!("Deleted {} pause records", deleted_count);
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Performance Benefits

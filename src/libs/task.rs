@@ -52,6 +52,8 @@ use chrono::NaiveDate;
 ///
 /// ### New Task Creation
 /// ```rust
+/// use kasl::libs::task::Task;
+///
 /// let task = Task::new(
 ///     "Code review for PR #123",
 ///     "Review authentication changes and security implications",
@@ -61,6 +63,9 @@ use chrono::NaiveDate;
 ///
 /// ### Task Updates
 /// ```rust
+/// use kasl::libs::task::Task;
+///
+/// let existing_task = Task::new("Existing task", "Details", Some(50));
 /// let mut task = existing_task;
 /// task.completeness = Some(75); // 75% complete
 /// task.comment = "Almost finished, testing remaining".to_string();
@@ -68,14 +73,30 @@ use chrono::NaiveDate;
 ///
 /// ### External Integration
 /// ```rust
+/// use kasl::libs::task::Task;
+///
+/// // Simulated Jira issue data used to populate a task.
+/// let jira_issue_id = 42;
+/// struct JiraIssue {
+///     summary: String,
+///     description: Option<String>,
+/// }
+/// let jira_issue = JiraIssue {
+///     summary: "Fix login bug".to_string(),
+///     description: Some("Users cannot log in with SSO".to_string()),
+/// };
+///
 /// let jira_task = Task {
 ///     id: None, // Will be assigned by database
 ///     task_id: Some(jira_issue_id),
+///     timestamp: None,
 ///     name: jira_issue.summary,
 ///     comment: jira_issue.description.unwrap_or_default(),
 ///     completeness: Some(100), // Imported completed issues
-///     // ... other fields
+///     excluded_from_search: None,
+///     tags: vec![],
 /// };
+/// # let _ = jira_task;
 /// ```
 #[derive(Debug, Clone)]
 pub struct Task {
@@ -311,9 +332,15 @@ impl Task {
     /// ## Use Cases
     ///
     /// ### Task Editing Workflow
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
+    /// use kasl::libs::task::Task;
+    /// use kasl::db::tasks::Tasks;
+    ///
+    /// let mut tasks_db = Tasks::new()?;
+    ///
     /// // Load existing task from database
-    /// let mut existing_task = tasks_db.get_by_id(42)?;
+    /// let mut existing_task = tasks_db.get_by_id(42)?.expect("task exists");
     ///
     /// // Create updated version with user modifications
     /// let updated_task = Task::new(
@@ -327,16 +354,28 @@ impl Task {
     ///
     /// // Save to database
     /// tasks_db.update(&existing_task)?;
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// ### Bulk Task Updates
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
+    /// use kasl::libs::task::Task;
+    /// use kasl::db::tasks::Tasks;
+    ///
+    /// let mut tasks_db = Tasks::new()?;
+    /// let tasks_to_update: Vec<Task> = vec![];
+    /// let get_update_template = |_task: &Task| -> Option<Task> { None };
+    ///
     /// for mut task in tasks_to_update {
     ///     if let Some(template) = get_update_template(&task) {
     ///         task.update_from(&template);
     ///         tasks_db.update(&task)?;
     ///     }
     /// }
+    /// # Ok(())
+    /// # }
     /// ```
     ///
     /// # Arguments
@@ -723,7 +762,7 @@ pub trait FormatTasks {
     /// ## Use Cases
     ///
     /// ### Parallel Processing
-    /// ```rust
+    /// ```text
     /// let task_groups = tasks.divide(cpu_count);
     /// for group in task_groups {
     ///     spawn_worker_thread(group);
@@ -731,7 +770,7 @@ pub trait FormatTasks {
     /// ```
     ///
     /// ### Load Balancing
-    /// ```rust
+    /// ```text
     /// let worker_assignments = tasks.divide(worker_count);
     /// for (worker_id, assignment) in worker_assignments.iter().enumerate() {
     ///     assign_tasks_to_worker(worker_id, assignment);
@@ -739,7 +778,7 @@ pub trait FormatTasks {
     /// ```
     ///
     /// ### UI Organization
-    /// ```rust
+    /// ```text
     /// let columns = tasks.divide(3); // Three-column layout
     /// for (col_index, column_tasks) in columns.iter().enumerate() {
     ///     render_task_column(col_index, column_tasks);
