@@ -23,13 +23,14 @@
 
 /// Supported report languages.
 ///
-/// The default (and fallback for unknown codes) is [`Language::Ru`], which
-/// preserves the original Russian wording of the report.
+/// The default (and fallback for unknown codes) is [`Language::En`]. Russian
+/// was the original default, but the shipped product speaks English; set
+/// `report.language = "ru"` in the config to get the previous wording back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Language {
-    /// Russian — the historical default output.
+    /// Russian - opt in through the report configuration.
     Ru,
-    /// English.
+    /// English - the default output.
     En,
 }
 
@@ -37,11 +38,11 @@ impl Language {
     /// Parses a language code (case-insensitive) into a [`Language`].
     ///
     /// Recognizes `ru` and `en`. Any other value falls back to
-    /// [`Language::Ru`] so that a typo never breaks report generation.
+    /// [`Language::En`] so that a typo never breaks report generation.
     pub fn from_code(code: &str) -> Language {
         match code.trim().to_ascii_lowercase().as_str() {
-            "en" | "eng" | "english" => Language::En,
-            _ => Language::Ru,
+            "ru" | "rus" | "russian" => Language::Ru,
+            _ => Language::En,
         }
     }
 }
@@ -106,7 +107,7 @@ impl Locale {
     }
 }
 
-/// Russian locale table (default).
+/// Russian locale table.
 static RU: Locale = Locale {
     report_title: "Отчет за день",
     day_type_working: "рабочий",
