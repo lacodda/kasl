@@ -41,7 +41,7 @@ use crate::{
     libs::{
         config::Config,
         messages::Message,
-        prompt::ensure_interactive,
+        prompt::{ensure_interactive, is_interactive},
         stdin_drain::drain_available_stdin_lines,
         task::{Task, TaskFilter, collapse_whitespace, is_ignored_name, normalize_task_name},
         view::View,
@@ -630,8 +630,15 @@ async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
         None => prompt_task_name_interactive(),
     };
 
+    // Only the name is required. With a name supplied but no comment or
+    // completeness, the remaining prompts are skipped rather than attempted:
+    // `task add --name X` has to work from a script, where there is nobody to
+    // answer them.
+    let interactive = is_interactive();
+
     let mut comment = match task_args.comment {
         Some(c) => collapse_whitespace(&c),
+        None if !interactive => String::new(),
         None => {
             let raw: String = Input::with_theme(&ColorfulTheme::default())
                 .allow_empty(true)
@@ -644,7 +651,7 @@ async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
 
     // Fallback: multi-line paste often lands as name=KEY + comment=summary when stdin
     // drain is unavailable (native console). Rejoin and ask for a real comment again.
-    if !name_from_args && !comment_from_args && looks_like_issue_key(&name) && !comment.is_empty() {
+    if interactive && !name_from_args && !comment_from_args && looks_like_issue_key(&name) && !comment.is_empty() {
         name = collapse_whitespace(&format!("{} {}", name, comment));
         msg_info!(Message::TaskNameMergedFromPaste);
         let raw: String = Input::with_theme(&ColorfulTheme::default())
@@ -658,14 +665,16 @@ async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
     // Discard any remaining paste leftovers before completeness.
     let _ = drain_available_stdin_lines();
 
-    let completeness = task_args.completeness.unwrap_or_else(|| {
-        Input::with_theme(&ColorfulTheme::default())
+    let completeness = match task_args.completeness {
+        Some(c) => c,
+        None if !interactive => 100,
+        None => Input::with_theme(&ColorfulTheme::default())
             .allow_empty(true)
             .with_prompt(Message::PromptTaskCompleteness.to_string())
             .default(100)
             .interact_text()
-            .unwrap()
-    });
+            .unwrap(),
+    };
 
     // Create and insert the task
     let task = Task::new(&name, &comment, Some(completeness));

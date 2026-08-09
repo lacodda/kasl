@@ -335,7 +335,11 @@ pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDat
     }
 
     let now = chrono::Local::now().naive_local();
-    if workday.date == now.date() {
+    // Only while the day is still today, and only if the clock has actually
+    // passed the start: a workday timestamped slightly ahead of the clock - a
+    // DST shift, a corrected system time - would otherwise yield an end before
+    // the start, and every duration computed from it would go negative.
+    if workday.date == now.date() && now > workday.start {
         return now;
     }
 
@@ -695,6 +699,22 @@ mod tests {
         let date = NaiveDate::from_ymd_opt(2025, 8, 22).unwrap();
         let wd = workday(date, 9, None);
         assert_eq!(workday_end_time(&wd, &[]), wd.start);
+    }
+
+    #[test]
+    fn unclosed_today_never_ends_before_it_starts() {
+        // A start slightly ahead of the clock - DST, a corrected system time -
+        // must not produce a negative-length day, which read as 0% productivity.
+        let now = chrono::Local::now().naive_local();
+        let wd = workday(now.date(), 0, None);
+        let wd = Workday {
+            start: now + Duration::hours(2),
+            ..wd
+        };
+
+        let end = workday_end_time(&wd, &[]);
+
+        assert!(end >= wd.start, "end {end} precedes start {}", wd.start);
     }
 
     #[test]
