@@ -70,10 +70,10 @@ kasl autostart enable
 
 ```bash
 # Create a new task
-kasl task --name "Review pull requests" --completeness 0
+kasl task add --name "Review pull requests" --completeness 0
 
 # Update task progress
-kasl task --edit 1
+kasl task edit 1
 
 # View today's report
 kasl report

@@ -37,11 +37,11 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 kasl watch
 
 # Create today's tasks
-kasl task --name "Code review" --completeness 0
-kasl task --name "Team meeting" --completeness 0
+kasl task add --name "Code review" --completeness 0
+kasl task add --name "Team meeting" --completeness 0
 
 # Update task progress
-kasl task --edit 1
+kasl task edit 1
 
 # View today's report
 kasl report
@@ -54,19 +54,19 @@ kasl report --send
 
 ```bash
 # Create tasks
-kasl task --name "Task name" --comment "Description" --completeness 0
+kasl task add --name "Task name" --comment "Description" --completeness 0
 
 # List tasks
-kasl task --show
-kasl task --show --all
+kasl task list
+kasl task list --all
 
 # Edit tasks
-kasl task --edit 1
-kasl task --edit-interactive
+kasl task edit 1
+kasl task edit
 
-# Delete tasks
-kasl task --delete 1 2 3
-kasl task --delete-today
+# Remove tasks
+kasl task remove 1 2 3
+kasl task remove --today
 ```
 
 ### Recording Missed Absences
@@ -99,28 +99,28 @@ kasl export --output my_report.csv
 
 ```bash
 # Create tags
-kasl tag create --name "urgent" --color "red"
-kasl tag create --name "backend" --color "blue"
+kasl tag add "urgent" --color "red"
+kasl tag add "backend" --color "blue"
 
 # List tags
 kasl tag list
 
 # Assign tags to tasks
-kasl task --name "Fix bug" --tags "urgent,backend"
+kasl task add --name "Fix bug" --tags "urgent,backend"
 
 # Filter by tags
-kasl task --show --tag "urgent"
+kasl task list --tag "urgent"
 ```
 
 ### Templates
 
 ```bash
 # Create template
-kasl template create --name "daily-standup"
+kasl template add --name "daily-standup"
 
 # Use template
-kasl task --from-template
-kasl task --template "daily-standup"
+kasl task add --from-template
+kasl task add --template "daily-standup"
 ```
 
 ## Command Categories
@@ -167,6 +167,7 @@ kasl --help
 
 # Show specific command help
 kasl task --help
+kasl task add --help
 kasl report --help
 ```
 
@@ -178,10 +179,10 @@ Some commands support interactive mode:
 kasl task
 
 # Interactive template selection
-kasl task --from-template
+kasl task add --from-template
 
 # Interactive task editing
-kasl task --edit-interactive
+kasl task edit
 ```
 
 ## Command Options

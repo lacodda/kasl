@@ -310,6 +310,13 @@ impl Secret {
     /// let password = secret.prompt()?;
     /// ```
     pub fn prompt(&self) -> Result<String> {
+        // Reached whenever a cached credential is missing or stale, including
+        // from a scheduled `report --send`. Fail loudly rather than hang there.
+        crate::libs::prompt::ensure_interactive(&format!(
+            "{} - but there is no terminal to ask; run `kasl init` interactively first",
+            self.prompt
+        ))?;
+
         // Display secure password prompt
         let password = Password::with_theme(&ColorfulTheme::default()).with_prompt(&self.prompt).interact()?;
 

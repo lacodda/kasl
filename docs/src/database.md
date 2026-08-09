@@ -186,11 +186,11 @@ cp kasl_backup.db ~/.local/share/lacodda/kasl/kasl.db
 
 Remove old data:
 ```bash
-# Delete specific tasks
-kasl task --delete 1 2 3
+# Remove specific tasks
+kasl task remove 1 2 3
 
-# Delete all today's tasks
-kasl task --delete-today
+# Remove all today's tasks
+kasl task remove --today
 
 # Delete old pauses (manual SQL)
 sqlite3 kasl.db "DELETE FROM pauses WHERE start < date('now', '-30 days');"

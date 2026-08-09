@@ -248,7 +248,7 @@ impl Display for Message {
             Message::PromptTemplateCompleteness => "Default completeness (0-100)".to_string(),
             Message::CreatingTaskFromTemplate(name) => format!("Creating task from template '{}'", name),
             Message::SelectTemplate => "Select a template".to_string(),
-            Message::CreateTemplateFirst => "Create templates with 'kasl template create'".to_string(),
+            Message::CreateTemplateFirst => "Create templates with 'kasl template add'".to_string(),
 
             // === TAG MESSAGES ===
             Message::TagCreated(name) => format!("Tag '{}' created successfully.", name),

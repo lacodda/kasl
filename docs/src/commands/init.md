@@ -239,7 +239,7 @@ After running `init`:
 
 3. **Create your first task**:
    ```bash
-   kasl task --name "Set up kasl" --completeness 100
+   kasl task add --name "Set up kasl" --completeness 100
    ```
 
 4. **View your report**:

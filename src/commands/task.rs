@@ -13,17 +13,25 @@
 //! ## Usage
 //!
 //! ```bash
-//! # Create a new task
-//! kasl task --name "Review code" --comment "Check PR #123"
+//! # Create a task interactively, or with values up front
+//! kasl task
+//! kasl task add --name "Review code" --comment "Check PR #123"
 //!
 //! # List tasks with different filters
-//! kasl task --list                    # Show all tasks
-//! kasl task --today                   # Show today's tasks
-//! kasl task --incomplete              # Show incomplete tasks
+//! kasl task list                      # Today's tasks
+//! kasl task list --all                # Every task
+//! kasl task list --tag urgent         # Tasks carrying a tag
+//! kasl task show 42                   # Specific tasks by id
+//!
+//! # Edit and remove
+//! kasl task edit 42                   # Edit one task
+//! kasl task edit                      # Pick several interactively
+//! kasl task remove 1 2 3
+//! kasl task remove --today
 //!
 //! # Import from external services
-//! kasl task --find                    # Find tasks from GitLab/Jira
-//! kasl task --template "bug-fix"      # Create from template
+//! kasl task find                      # Find tasks from GitLab/Jira
+//! kasl task add --template "bug-fix"  # Create from template
 //! ```
 
 use crate::{
@@ -33,6 +41,7 @@ use crate::{
     libs::{
         config::Config,
         messages::Message,
+        prompt::ensure_interactive,
         stdin_drain::drain_available_stdin_lines,
         task::{Task, TaskFilter, collapse_whitespace, is_ignored_name, normalize_task_name},
         view::View,
@@ -41,7 +50,7 @@ use crate::{
 };
 use anyhow::Result;
 use chrono::Local;
-use clap::Args;
+use clap::{Args, Subcommand};
 use dialoguer::{Confirm, Input, MultiSelect, Select, theme::ColorfulTheme};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::{HashMap, HashSet};
@@ -114,136 +123,107 @@ fn dedup_discovery_items(items: Vec<DiscoveryItem>) -> Vec<DiscoveryItem> {
     result
 }
 
-/// Command-line arguments for comprehensive task management.
+/// Command-line arguments for task management.
 ///
-/// The task command supports extensive functionality through various argument
-/// combinations, enabling both simple task creation and complex task management
-/// operations including batch processing and external integrations.
+/// Task operations are subcommands (`add`, `list`, `show`, `edit`, `remove`,
+/// `find`). Running `kasl task` with no subcommand creates a task
+/// interactively, which is the most frequent daily action.
 #[derive(Debug, Args)]
 pub struct TaskArgs {
-    /// Name or title of the task to create
-    ///
-    /// When creating a new task, this specifies the primary identifier
-    /// and description. Task names should be descriptive enough to
-    /// understand the work involved at a glance.
+    #[command(subcommand)]
+    command: Option<TaskCommand>,
+}
+
+/// Available task operations.
+#[derive(Debug, Subcommand)]
+enum TaskCommand {
+    /// Add a task
+    #[command(about = "Add a task")]
+    Add(AddArgs),
+
+    /// List tasks
+    #[command(about = "List tasks")]
+    List(ListArgs),
+
+    /// Show tasks by id
+    #[command(about = "Show tasks by id")]
+    Show {
+        /// Task ids to show
+        #[arg(value_name = "ID", required = true, num_args = 1..)]
+        id: Vec<i32>,
+    },
+
+    /// Edit a task
+    #[command(about = "Edit a task by id, or several interactively")]
+    Edit {
+        /// Task id to edit; omit to pick several interactively
+        #[arg(value_name = "ID")]
+        id: Option<i32>,
+    },
+
+    /// Remove tasks
+    #[command(about = "Remove tasks by id, or all of today's")]
+    Remove(RemoveArgs),
+
+    /// Find incomplete and external tasks to import
+    #[command(about = "Find incomplete tasks and import from GitLab/Jira")]
+    Find,
+}
+
+/// Arguments for creating a task.
+#[derive(Debug, Args, Default)]
+pub struct AddArgs {
+    /// Task name
     #[arg(short, long)]
     name: Option<String>,
 
-    /// Optional descriptive comment for additional task context
-    ///
-    /// Provides space for detailed descriptions, requirements, or notes
-    /// about the task. This field supports longer text and can include
-    /// technical details, links, or implementation notes.
+    /// Task comment or description
     #[arg(long)]
     comment: Option<String>,
 
-    /// Task completion percentage (0-100)
-    ///
-    /// Indicates how much of the task has been completed:
-    /// - 0: Not started
-    /// - 1-99: In progress with specific completion level
-    /// - 100: Fully completed
-    ///
-    /// This enables tracking of partial task completion and work-in-progress items.
+    /// Completion percentage (0-100)
     #[arg(short, long)]
     completeness: Option<i32>,
 
-    /// Display existing tasks with optional filtering
-    ///
-    /// When specified, shows tasks instead of creating new ones. Can be
-    /// combined with other filtering options like --all, --id, or --tag
-    /// to control which tasks are displayed.
-    #[arg(short, long)]
-    show: bool,
-
-    /// Show all tasks regardless of date (use with --show)
-    ///
-    /// Overrides the default behavior of showing only today's tasks,
-    /// displaying the complete task history. Useful for reviewing
-    /// long-term work patterns and finding historical tasks.
-    #[arg(short, long)]
-    all: bool,
-
-    /// Display or operate on specific task IDs (use with --show)
-    ///
-    /// Accepts a list of task IDs for precise task selection. This enables
-    /// targeted operations on specific tasks without filtering through
-    /// the entire task list.
-    #[arg(short, long)]
-    id: Option<Vec<i32>>,
-
-    /// Find and suggest tasks from multiple sources
-    ///
-    /// Activates the intelligent task discovery mode that:
-    /// - Finds incomplete local tasks that can be continued
-    /// - Imports today's commits from configured GitLab repositories
-    /// - Retrieves completed issues from configured Jira instances
-    /// - Presents unified interface for task selection and creation
-    #[arg(short, long, help = "Find incomplete tasks")]
-    find: bool,
-
-    /// Delete specified tasks by their IDs
-    ///
-    /// Accepts a list of task IDs for permanent removal. This operation
-    /// includes confirmation prompts and shows preview of tasks to be
-    /// deleted for safety.
-    #[arg(short, long, help = "Delete tasks by IDs")]
-    delete: Option<Vec<i32>>,
-
-    /// Delete all tasks for today (requires confirmation)
-    ///
-    /// Dangerous operation that removes all tasks created today.
-    /// Includes multiple confirmation steps to prevent accidental
-    /// data loss. Use with extreme caution.
-    #[arg(long, help = "Delete all tasks for today")]
-    delete_today: bool,
-
-    /// Edit a specific task by its ID
-    ///
-    /// Opens interactive editing interface for the specified task,
-    /// allowing modification of name, comment, and completion status.
-    /// Includes preview of changes before applying.
-    #[arg(short, long, help = "Edit task by ID")]
-    edit: Option<i32>,
-
-    /// Interactive batch editing of multiple tasks
-    ///
-    /// Presents a selection interface for choosing multiple tasks
-    /// from today's list, then provides editing interface for each
-    /// selected task. Efficient for updating multiple related tasks.
-    #[arg(long, help = "Edit multiple tasks interactively")]
-    edit_interactive: bool,
-
-    /// Create task from a named template
-    ///
-    /// Uses a predefined task template to create a new task with
-    /// default values. Template values can be modified during creation.
-    /// Streamlines creation of frequently used task types.
-    #[arg(long, short = 't')]
-    template: Option<String>,
-
-    /// Interactive template selection for task creation
-    ///
-    /// Displays available templates and allows selection through
-    /// a user-friendly interface. Alternative to specifying template
-    /// name directly via --template flag.
-    #[arg(long, short = 'l')]
-    from_template: bool,
-
-    /// Comma-separated list of tags to apply to the task
-    ///
-    /// Assigns categorization tags to the task for organization
-    /// and filtering. Tags will be created automatically if they
-    /// don't exist. Example: "urgent,backend,bug"
+    /// Comma-separated tags to assign
     #[arg(long)]
     tags: Option<String>,
 
-    /// Filter tasks by a specific tag name (use with --show)
-    ///
-    /// Displays only tasks that have been assigned the specified tag.
-    /// Useful for viewing tasks within a specific category or project.
+    /// Create from a named template
+    #[arg(long, short = 't')]
+    template: Option<String>,
+
+    /// Pick a template interactively
+    #[arg(long, short = 'l')]
+    from_template: bool,
+}
+
+/// Arguments for listing tasks.
+#[derive(Debug, Args)]
+pub struct ListArgs {
+    /// List tasks from every date, not just today
+    #[arg(short, long)]
+    all: bool,
+
+    /// Only tasks carrying this tag
     #[arg(long)]
     tag: Option<String>,
+}
+
+/// Arguments for removing tasks.
+#[derive(Debug, Args)]
+pub struct RemoveArgs {
+    /// Task ids to remove
+    #[arg(value_name = "ID", num_args = 1..)]
+    id: Vec<i32>,
+
+    /// Remove every task recorded for today
+    #[arg(long)]
+    today: bool,
+
+    /// Remove without asking for confirmation
+    #[arg(long, short = 'y')]
+    yes: bool,
 }
 
 /// Main entry point for the comprehensive task management command.
@@ -314,61 +294,57 @@ pub struct TaskArgs {
 pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     let date = Local::now();
 
-    // Handle deletion operations first (highest priority for safety)
-    if let Some(ids) = task_args.delete {
-        return handle_delete_by_ids(ids).await;
-    }
-
-    if task_args.delete_today {
-        return handle_delete_today().await;
-    }
-
-    // Handle editing operations
-    if let Some(id) = task_args.edit {
-        return handle_edit_by_id(id).await;
-    }
-
-    if task_args.edit_interactive {
-        return handle_edit_interactive().await;
-    }
-
-    // Handle template-based creation
-    if let Some(template_name) = task_args.template {
-        return handle_create_from_template(template_name).await;
-    }
-
-    if task_args.from_template {
-        return handle_create_from_template_interactive().await;
-    }
-
-    // Handle display operations
-    if task_args.show {
-        let mut filter: TaskFilter = TaskFilter::Date(date.date_naive());
-
-        // Apply appropriate filter based on arguments
-        if task_args.all {
-            filter = TaskFilter::All;
-        } else if task_args.id.is_some() {
-            filter = TaskFilter::ByIds(task_args.id.unwrap());
-        } else if let Some(tag) = task_args.tag {
-            filter = TaskFilter::ByTag(tag);
+    match task_args.command {
+        Some(TaskCommand::Add(args)) => {
+            // Template creation is a form of adding, so it lives here too.
+            if let Some(template_name) = args.template {
+                return handle_create_from_template(template_name).await;
+            }
+            if args.from_template {
+                return handle_create_from_template_interactive().await;
+            }
+            handle_task_creation(args).await
         }
-
-        let tasks = Tasks::new()?.fetch(filter)?;
-        if tasks.is_empty() {
-            msg_error!(Message::TaskNotFound);
-            return Ok(());
+        Some(TaskCommand::List(args)) => {
+            let filter = if args.all {
+                TaskFilter::All
+            } else if let Some(tag) = args.tag {
+                TaskFilter::ByTag(tag)
+            } else {
+                TaskFilter::Date(date.date_naive())
+            };
+            show_tasks(filter)
         }
-        View::tasks(&tasks)?;
+        Some(TaskCommand::Show { id }) => show_tasks(TaskFilter::ByIds(id)),
+        Some(TaskCommand::Edit { id }) => match id {
+            Some(id) => handle_edit_by_id(id).await,
+            None => handle_edit_interactive().await,
+        },
+        Some(TaskCommand::Remove(args)) => {
+            if args.today {
+                handle_delete_today(args.yes).await
+            } else if args.id.is_empty() {
+                msg_error!(Message::NoTaskIdsProvided);
+                Ok(())
+            } else {
+                handle_delete_by_ids(args.id, args.yes).await
+            }
+        }
+        Some(TaskCommand::Find) => handle_task_discovery(date).await,
+        // Bare `kasl task` creates a task interactively - the daily entry point.
+        None => handle_task_creation(AddArgs::default()).await,
+    }
+}
 
+/// Fetches and renders tasks for the given filter.
+fn show_tasks(filter: TaskFilter) -> Result<()> {
+    let tasks = Tasks::new()?.fetch(filter)?;
+    if tasks.is_empty() {
+        msg_error!(Message::TaskNotFound);
         return Ok(());
-    } else if task_args.find {
-        // Handle intelligent task discovery and import
-        return handle_task_discovery(date).await;
     }
-
-    // Default: Create new task (manual or interactive)
-    handle_task_creation(task_args).await
+    View::tasks(&tasks)?;
+    Ok(())
 }
 
 /// Handles intelligent task discovery from multiple sources.
@@ -382,6 +358,9 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
 ///
 /// * `date` - Current date/time for filtering today's external content
 async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
+    // Discovery ends in a MultiSelect of what to import.
+    ensure_interactive("`kasl task find` is interactive and needs a terminal")?;
+
     let date_naive = date.date_naive();
     let mut config = Config::read()?;
     let gitlab_config = config.gitlab.clone();
@@ -635,7 +614,13 @@ fn looks_like_issue_key(name: &str) -> bool {
 /// # Arguments
 ///
 /// * `task_args` - Command-line arguments containing optional task information
-async fn handle_task_creation(task_args: TaskArgs) -> Result<()> {
+async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
+    // Anything not supplied on the command line is asked for, so a missing name
+    // means prompting - which must not happen with no one at the terminal.
+    if task_args.name.is_none() {
+        ensure_interactive("task name is required; pass --name outside an interactive terminal")?;
+    }
+
     // Collect task information (from args or interactive prompts)
     let name_from_args = task_args.name.is_some();
     let comment_from_args = task_args.comment.is_some();
@@ -720,7 +705,7 @@ async fn handle_task_creation(task_args: TaskArgs) -> Result<()> {
 /// # Arguments
 ///
 /// * `ids` - Vector of task IDs to delete
-async fn handle_delete_by_ids(ids: Vec<i32>) -> Result<()> {
+async fn handle_delete_by_ids(ids: Vec<i32>, assume_yes: bool) -> Result<()> {
     if ids.is_empty() {
         msg_error!(Message::NoTaskIdsProvided);
         return Ok(());
@@ -740,25 +725,30 @@ async fn handle_delete_by_ids(ids: Vec<i32>) -> Result<()> {
     msg_print!(Message::TasksToBeDeleted, true);
     View::tasks(&tasks)?;
 
-    // Request confirmation based on number of tasks
-    let confirmed = if ids.len() == 1 {
-        Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(Message::ConfirmDeleteTask.to_string())
-            .default(false)
-            .interact()?
-    } else {
-        Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(Message::ConfirmDeleteTasks(ids.len()).to_string())
-            .default(false)
-            .interact()?
-    };
+    if !assume_yes {
+        // Never block on a prompt when there is no one to answer it.
+        ensure_interactive("refusing to remove tasks without --yes outside an interactive terminal")?;
 
-    if confirmed {
-        let deleted_count = tasks_db.delete_many(&ids)?;
-        msg_success!(Message::TasksDeletedCount(deleted_count));
-    } else {
-        msg_info!(Message::OperationCancelled);
+        // Request confirmation based on number of tasks
+        let prompt = if ids.len() == 1 {
+            Message::ConfirmDeleteTask
+        } else {
+            Message::ConfirmDeleteTasks(ids.len())
+        };
+
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(prompt.to_string())
+            .default(false)
+            .interact()?;
+
+        if !confirmed {
+            msg_info!(Message::OperationCancelled);
+            return Ok(());
+        }
     }
+
+    let deleted_count = tasks_db.delete_many(&ids)?;
+    msg_success!(Message::TasksDeletedCount(deleted_count));
 
     Ok(())
 }
@@ -776,7 +766,7 @@ async fn handle_delete_by_ids(ids: Vec<i32>) -> Result<()> {
 /// - Uses clear warning language
 /// - Defaults to "No" for all confirmations
 /// - Provides escape points throughout the process
-async fn handle_delete_today() -> Result<()> {
+async fn handle_delete_today(assume_yes: bool) -> Result<()> {
     let mut tasks_db = Tasks::new()?;
     let today = Local::now().date_naive();
 
@@ -792,30 +782,36 @@ async fn handle_delete_today() -> Result<()> {
     msg_print!(Message::TasksToBeDeleted, true);
     View::tasks(&tasks)?;
 
-    // First confirmation with task count
-    let first_confirm = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::ConfirmDeleteAllTodayTasks(tasks.len()).to_string())
-        .default(false)
-        .interact()?;
+    if !assume_yes {
+        // Never block on a prompt when there is no one to answer it.
+        ensure_interactive("refusing to remove today's tasks without --yes outside an interactive terminal")?;
 
-    if !first_confirm {
-        msg_info!(Message::OperationCancelled);
-        return Ok(());
+        // First confirmation with task count
+        let first_confirm = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::ConfirmDeleteAllTodayTasks(tasks.len()).to_string())
+            .default(false)
+            .interact()?;
+
+        if !first_confirm {
+            msg_info!(Message::OperationCancelled);
+            return Ok(());
+        }
+
+        // Second confirmation with stronger warning
+        let second_confirm = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::ConfirmDeleteAllTodayTasksFinal.to_string())
+            .default(false)
+            .interact()?;
+
+        if !second_confirm {
+            msg_info!(Message::OperationCancelled);
+            return Ok(());
+        }
     }
 
-    // Second confirmation with stronger warning
-    let second_confirm = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::ConfirmDeleteAllTodayTasksFinal.to_string())
-        .default(false)
-        .interact()?;
-
-    if second_confirm {
-        let ids: Vec<i32> = tasks.iter().filter_map(|t| t.id).collect();
-        let deleted_count = tasks_db.delete_many(&ids)?;
-        msg_success!(Message::TasksDeletedCount(deleted_count));
-    } else {
-        msg_info!(Message::OperationCancelled);
-    }
+    let ids: Vec<i32> = tasks.iter().filter_map(|t| t.id).collect();
+    let deleted_count = tasks_db.delete_many(&ids)?;
+    msg_success!(Message::TasksDeletedCount(deleted_count));
 
     Ok(())
 }
@@ -830,6 +826,9 @@ async fn handle_delete_today() -> Result<()> {
 ///
 /// * `id` - Database ID of the task to edit
 async fn handle_edit_by_id(id: i32) -> Result<()> {
+    // Editing prompts for each field with the current value as default.
+    ensure_interactive("`kasl task edit` is interactive and needs a terminal")?;
+
     let mut tasks_db = Tasks::new()?;
 
     // Fetch the task to edit
@@ -882,6 +881,9 @@ async fn handle_edit_by_id(id: i32) -> Result<()> {
 /// list, then provides individual editing interfaces for each selected task.
 /// This is efficient for updating multiple related tasks in sequence.
 async fn handle_edit_interactive() -> Result<()> {
+    // Picks tasks from a MultiSelect, then prompts per task.
+    ensure_interactive("`kasl task edit` without an id is interactive and needs a terminal")?;
+
     let mut tasks_db = Tasks::new()?;
 
     // Get today's tasks for selection
@@ -1034,6 +1036,9 @@ async fn handle_create_from_template(template_name: String) -> Result<()> {
 /// Displays available templates in a selection interface, allowing users
 /// to choose from existing templates without needing to remember template names.
 async fn handle_create_from_template_interactive() -> Result<()> {
+    // Template is chosen from a Select.
+    ensure_interactive("`--from-template` is interactive; pass --template NAME outside a terminal")?;
+
     let mut templates_db = Templates::new()?;
     let templates = templates_db.get_all()?;
 

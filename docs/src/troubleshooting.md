@@ -297,10 +297,10 @@ This guide helps you resolve common issues with kasl.
 2. **Verify task creation**:
    ```bash
    # Create test task
-   kasl task --name "Test task" --completeness 0
+   kasl task add --name "Test task" --completeness 0
    
    # List tasks
-   kasl task --show
+   kasl task list
    ```
 
 3. **Check for database issues**:
@@ -325,7 +325,7 @@ This guide helps you resolve common issues with kasl.
 
 2. **Recreate tags**:
    ```bash
-   kasl tag create --name "test" --color "red"
+   kasl tag add "test" --color "red"
    kasl tag list
    ```
 
@@ -419,13 +419,13 @@ Debug mode shows:
 RUST_LOG=kasl=debug kasl init
 
 # Debug task operations
-RUST_LOG=kasl=debug kasl task --show
+RUST_LOG=kasl=debug kasl task list
 
 # Debug report generation
 RUST_LOG=kasl=debug kasl report
 
 # Debug API operations
-RUST_LOG=kasl=debug kasl task --find
+RUST_LOG=kasl=debug kasl task find
 ```
 
 ## Performance Issues

@@ -17,18 +17,18 @@
 //! kasl template list
 //!
 //! # Create new template
-//! kasl template create --name "bug-fix"
+//! kasl template add --name "bug-fix"
 //!
 //! # Search templates
 //! kasl template search "development"
 //!
 //! # Delete template
-//! kasl template delete "old-template"
+//! kasl template remove "old-template"
 //! ```
 
 use crate::{
     db::templates::{TaskTemplate, Templates},
-    libs::{messages::Message, view::View},
+    libs::{messages::Message, prompt::ensure_interactive, view::View},
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -53,12 +53,12 @@ pub struct TemplateArgs {
 /// direct command-line usage and interactive operation.
 #[derive(Debug, Subcommand)]
 enum TemplateCommand {
-    /// Create a new task template
+    /// Add a new task template
     ///
     /// Creates a new reusable template with specified or interactive values.
     /// Templates provide default values for task creation, streamlining
     /// workflows for frequently created task types.
-    Create {
+    Add {
         /// Unique name identifier for the template
         ///
         /// Must be unique across all templates and should be descriptive
@@ -75,6 +75,15 @@ enum TemplateCommand {
     /// Useful for reviewing available templates and their configurations.
     List,
 
+    /// Show a single template's contents
+    ///
+    /// Displays the task name, comment and default completeness stored in
+    /// the template, so its effect on task creation is visible before use.
+    Show {
+        /// Name of the template to show
+        name: Option<String>,
+    },
+
     /// Edit an existing template
     ///
     /// Modifies an existing template's properties including task name,
@@ -88,17 +97,21 @@ enum TemplateCommand {
         name: Option<String>,
     },
 
-    /// Delete a template
+    /// Remove a template
     ///
     /// Permanently removes a template from the system. Includes confirmation
-    /// prompt to prevent accidental deletion. Template deletion does not
-    /// affect tasks that were previously created from the template.
-    Delete {
-        /// Name of the template to delete
+    /// prompt to prevent accidental removal. Removing a template does not
+    /// affect tasks that were previously created from it.
+    Remove {
+        /// Name of the template to remove
         ///
         /// If not provided, an interactive selection interface will be
         /// presented with all available templates.
         name: Option<String>,
+
+        /// Remove without asking for confirmation
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 
     /// Search templates by name or content
@@ -143,10 +156,10 @@ enum TemplateCommand {
 ///
 /// ```bash
 /// # Create a new template interactively
-/// kasl template create
+/// kasl template add
 ///
 /// # Create template with specific name
-/// kasl template create --name daily-standup
+/// kasl template add --name daily-standup
 ///
 /// # List all templates
 /// kasl template list
@@ -162,12 +175,16 @@ enum TemplateCommand {
 /// ```
 pub fn cmd(args: TemplateArgs) -> Result<()> {
     match args.command {
-        Some(TemplateCommand::Create { name }) => handle_create(name),
+        Some(TemplateCommand::Add { name }) => handle_create(name),
         Some(TemplateCommand::List) => handle_list(),
+        Some(TemplateCommand::Show { name }) => handle_show(name),
         Some(TemplateCommand::Edit { name }) => handle_edit(name),
-        Some(TemplateCommand::Delete { name }) => handle_delete(name),
+        Some(TemplateCommand::Remove { name, yes }) => handle_delete(name, yes),
         Some(TemplateCommand::Search { query }) => handle_search(query),
-        None => handle_interactive(),
+        None => {
+            ensure_interactive("no subcommand given; run `kasl template list` or see `kasl template --help`")?;
+            handle_interactive()
+        }
     }
 }
 
@@ -272,6 +289,50 @@ fn handle_list() -> Result<()> {
 
     msg_print!(Message::TemplateListHeader, true);
     View::templates(&templates)?;
+    Ok(())
+}
+
+/// Displays a single template's stored values.
+///
+/// Reuses the same table rendering as `list` so a template reads identically
+/// whether shown alone or among others. Without a name, the template is picked
+/// interactively.
+///
+/// # Arguments
+///
+/// * `name` - Template name, or None to select one interactively
+fn handle_show(name: Option<String>) -> Result<()> {
+    let mut templates_db = Templates::new()?;
+
+    let name = match name {
+        Some(n) => n,
+        None => {
+            ensure_interactive("template name is required outside an interactive terminal")?;
+
+            let templates = templates_db.get_all()?;
+            if templates.is_empty() {
+                msg_info!(Message::NoTemplatesFound);
+                return Ok(());
+            }
+
+            let template_names: Vec<String> = templates.iter().map(|t| t.name.clone()).collect();
+            let selection = Select::with_theme(&ColorfulTheme::default())
+                .with_prompt(Message::SelectTemplate.to_string())
+                .items(&template_names)
+                .interact()?;
+
+            template_names[selection].clone()
+        }
+    };
+
+    match templates_db.get(&name)? {
+        Some(template) => {
+            msg_print!(Message::TemplateListHeader, true);
+            View::templates(&[template])?;
+        }
+        None => msg_error!(Message::TemplateNotFound(name)),
+    }
+
     Ok(())
 }
 
@@ -384,13 +445,15 @@ fn handle_edit(name: Option<String>) -> Result<()> {
 /// # Arguments
 ///
 /// * `name` - Optional template name to delete, or None for interactive selection
-fn handle_delete(name: Option<String>) -> Result<()> {
+fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
     // Get template name (direct or interactive selection)
     let name = match name {
         Some(n) => n,
         None => {
+            ensure_interactive("template name is required outside an interactive terminal")?;
+
             let templates = templates_db.get_all()?;
             if templates.is_empty() {
                 msg_info!(Message::NoTemplatesFound);
@@ -407,18 +470,23 @@ fn handle_delete(name: Option<String>) -> Result<()> {
         }
     };
 
-    // Confirm deletion with user
-    let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::ConfirmDeleteTemplate(name.clone()).to_string())
-        .default(false)
-        .interact()?;
+    if !assume_yes {
+        // Never block on a prompt when there is no one to answer it.
+        ensure_interactive(&format!("refusing to remove template '{}' without --yes outside an interactive terminal", name))?;
 
-    if confirmed {
-        templates_db.delete(&name)?;
-        msg_success!(Message::TemplateDeleted(name));
-    } else {
-        msg_info!(Message::OperationCancelled);
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::ConfirmDeleteTemplate(name.clone()).to_string())
+            .default(false)
+            .interact()?;
+
+        if !confirmed {
+            msg_info!(Message::OperationCancelled);
+            return Ok(());
+        }
     }
+
+    templates_db.delete(&name)?;
+    msg_success!(Message::TemplateDeleted(name));
 
     Ok(())
 }
@@ -490,7 +558,7 @@ fn handle_search(query: String) -> Result<()> {
 /// - Exploration of available template operations
 /// - Situations where remembering exact command syntax is inconvenient
 fn handle_interactive() -> Result<()> {
-    let options = vec!["Create new template", "List templates", "Edit template", "Delete template"];
+    let options = vec!["Add new template", "List templates", "Show template", "Edit template", "Remove template"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(Message::SelectTemplateAction.to_string())
@@ -500,8 +568,9 @@ fn handle_interactive() -> Result<()> {
     match selection {
         0 => handle_create(None),
         1 => handle_list(),
-        2 => handle_edit(None),
-        3 => handle_delete(None),
+        2 => handle_show(None),
+        3 => handle_edit(None),
+        4 => handle_delete(None, false),
         _ => Ok(()),
     }
 }

@@ -35,6 +35,7 @@ pub mod messages;
 pub mod monitor;
 pub mod pause;
 pub mod productivity;
+pub mod prompt;
 pub mod report;
 pub mod report_template;
 pub mod secret;

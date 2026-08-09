@@ -16,19 +16,19 @@
 //! # List all tags
 //! kasl tag list
 //!
-//! # Create new tag with color
-//! kasl tag create --name "urgent" --color "red"
+//! # Add a new tag with color
+//! kasl tag add urgent --color red
 //!
-//! # Delete tag
-//! kasl tag delete "old-tag"
+//! # Show a tag and the tasks that carry it
+//! kasl tag show urgent
 //!
-//! # Show tag usage statistics
-//! kasl tag stats
+//! # Remove a tag
+//! kasl tag remove old-tag
 //! ```
 
 use crate::{
     db::tags::{Tag, Tags},
-    libs::{messages::Message, view::View},
+    libs::{messages::Message, prompt::ensure_interactive, view::View},
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -53,12 +53,12 @@ pub struct TagArgs {
 /// command-line usage and interactive workflows.
 #[derive(Debug, Subcommand)]
 enum TagCommand {
-    /// Create a new tag with optional color
+    /// Add a new tag with optional color
     ///
     /// Creates a new tag that can be assigned to tasks for categorization.
     /// Tags can optionally include color information for visual organization
     /// in user interfaces and reports.
-    Create {
+    Add {
         /// Unique name for the tag
         ///
         /// Must be unique across all tags and should be descriptive
@@ -82,6 +82,15 @@ enum TagCommand {
     /// library and understanding available categorization options.
     List,
 
+    /// Show a tag and the tasks that carry it
+    ///
+    /// Displays the tag's properties along with every task currently
+    /// assigned it, regardless of completion status or creation date.
+    Show {
+        /// Tag name or ID to show
+        tag: String,
+    },
+
     /// Edit an existing tag's properties
     ///
     /// Modifies an existing tag's name and color properties. Tag editing
@@ -96,31 +105,22 @@ enum TagCommand {
         tag: String,
     },
 
-    /// Delete a tag and remove it from all tasks
+    /// Remove a tag and unassign it from all tasks
     ///
     /// Permanently removes a tag from the system and unassigns it from
     /// all tasks that currently use it. Includes safety confirmation
     /// prompts, especially when the tag is actively used by tasks.
-    Delete {
-        /// Tag name or ID to delete
+    Remove {
+        /// Tag name or ID to remove
         ///
         /// Can specify either the tag name (string) or database ID (number)
-        /// for the tag to be deleted. The system will confirm the operation
+        /// for the tag to be removed. The system will confirm the operation
         /// and show how many tasks will be affected.
         tag: String,
-    },
 
-    /// Show all tasks that have a specific tag
-    ///
-    /// Displays a filtered list of tasks that are currently assigned the
-    /// specified tag. This provides a quick way to see all work items
-    /// within a particular category or project.
-    Tasks {
-        /// Tag name to filter tasks by
-        ///
-        /// Shows all tasks that have been assigned this tag, regardless
-        /// of their completion status or creation date.
-        tag: String,
+        /// Remove without asking for confirmation
+        #[arg(long, short = 'y')]
+        yes: bool,
     },
 }
 
@@ -132,11 +132,11 @@ enum TagCommand {
 ///
 /// ## Operation Routing
 ///
-/// - **Create**: Tag creation with validation and color assignment
+/// - **Add**: Tag creation with validation and color assignment
 /// - **List**: Formatted display of all available tags
+/// - **Show**: Display the tag and the tasks assigned it
 /// - **Edit**: Interactive or direct tag modification
-/// - **Delete**: Safe tag removal with usage impact analysis
-/// - **Tasks**: Display tasks filtered by tag assignment
+/// - **Remove**: Safe tag removal with usage impact analysis
 /// - **Interactive**: Menu-driven operation selection when no subcommand given
 ///
 /// ## Error Handling
@@ -161,7 +161,7 @@ enum TagCommand {
 ///
 /// ```bash
 /// # Create a new urgent tag with red color
-/// kasl tag create urgent --color red
+/// kasl tag add urgent --color red
 ///
 /// # List all available tags
 /// kasl tag list
@@ -170,19 +170,22 @@ enum TagCommand {
 /// kasl tag edit urgent
 ///
 /// # Show all tasks tagged as "backend"
-/// kasl tag tasks backend
+/// kasl tag show backend
 ///
 /// # Interactive mode
 /// kasl tag
 /// ```
 pub async fn cmd(args: TagArgs) -> Result<()> {
     match args.command {
-        Some(TagCommand::Create { name, color }) => handle_create(name, color),
+        Some(TagCommand::Add { name, color }) => handle_create(name, color),
         Some(TagCommand::List) => handle_list(),
+        Some(TagCommand::Show { tag }) => handle_show_tasks(tag).await,
         Some(TagCommand::Edit { tag }) => handle_edit(tag),
-        Some(TagCommand::Delete { tag }) => handle_delete(tag),
-        Some(TagCommand::Tasks { tag }) => handle_show_tasks(tag).await,
-        None => handle_interactive(),
+        Some(TagCommand::Remove { tag, yes }) => handle_delete(tag, yes),
+        None => {
+            ensure_interactive("no subcommand given; run `kasl tag list` or see `kasl tag --help`")?;
+            handle_interactive()
+        }
     }
 }
 
@@ -288,6 +291,9 @@ fn handle_list() -> Result<()> {
 ///
 /// * `tag_identifier` - Tag name or ID string for flexible tag identification
 fn handle_edit(tag_identifier: String) -> Result<()> {
+    // Editing is prompt-driven; there is nothing to fall back on without a terminal.
+    ensure_interactive("`kasl tag edit` is interactive and needs a terminal")?;
+
     let mut tags_db = Tags::new()?;
 
     // Resolve tag by ID or name
@@ -363,7 +369,7 @@ fn handle_edit(tag_identifier: String) -> Result<()> {
 /// # Arguments
 ///
 /// * `tag_identifier` - Tag name or ID string for flexible tag identification
-fn handle_delete(tag_identifier: String) -> Result<()> {
+fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
     // Resolve tag by ID or name
@@ -384,24 +390,30 @@ fn handle_delete(tag_identifier: String) -> Result<()> {
     // Analyze usage impact
     let task_count = tags_db.get_tasks_by_tag(tag.id.unwrap())?.len();
 
-    // Provide appropriate confirmation prompt based on usage
-    let prompt = if task_count > 0 {
-        Message::ConfirmDeleteTagWithTasks(tag.name.clone(), task_count)
-    } else {
-        Message::ConfirmDeleteTag(tag.name.clone())
-    };
+    if !assume_yes {
+        // Never block on a prompt when there is no one to answer it.
+        ensure_interactive(&format!("refusing to remove tag '{}' without --yes outside an interactive terminal", tag.name))?;
 
-    let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-        .with_prompt(prompt.to_string())
-        .default(false)
-        .interact()?;
+        // Provide appropriate confirmation prompt based on usage
+        let prompt = if task_count > 0 {
+            Message::ConfirmDeleteTagWithTasks(tag.name.clone(), task_count)
+        } else {
+            Message::ConfirmDeleteTag(tag.name.clone())
+        };
 
-    if confirmed {
-        tags_db.delete(tag.id.unwrap())?;
-        msg_success!(Message::TagDeleted(tag.name));
-    } else {
-        msg_info!(Message::OperationCancelled);
+        let confirmed = Confirm::with_theme(&ColorfulTheme::default())
+            .with_prompt(prompt.to_string())
+            .default(false)
+            .interact()?;
+
+        if !confirmed {
+            msg_info!(Message::OperationCancelled);
+            return Ok(());
+        }
     }
+
+    tags_db.delete(tag.id.unwrap())?;
+    msg_success!(Message::TagDeleted(tag.name));
 
     Ok(())
 }
@@ -495,7 +507,7 @@ async fn handle_show_tasks(tag_name: String) -> Result<()> {
 /// - Exploration of available tag operations
 /// - Situations where remembering exact command syntax is inconvenient
 fn handle_interactive() -> Result<()> {
-    let options = vec!["Create tag", "List tags", "Edit tag", "Delete tag"];
+    let options = vec!["Add tag", "List tags", "Edit tag", "Remove tag"];
 
     let selection = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(Message::SelectTagAction.to_string())
@@ -547,7 +559,7 @@ fn handle_interactive() -> Result<()> {
                 .with_prompt(Message::SelectTagToDelete.to_string())
                 .items(&tag_names)
                 .interact()?;
-            handle_delete(tag_names[selection].clone())
+            handle_delete(tag_names[selection].clone(), false)
         }
         _ => Ok(()),
     }

@@ -41,8 +41,6 @@ Configuration files are stored in platform-specific locations:
   "productivity": {
     "min_productivity_threshold": 75.0,
     "workday_hours": 8.0,
-    "min_break_duration": 20,
-    "max_break_duration": 180,
     "min_workday_fraction_before_suggest": 0.5
   },
   "task_discovery": {
@@ -57,14 +55,14 @@ Configuration files are stored in platform-specific locations:
 
 ## Task Discovery Configuration
 
-Controls filtering for `kasl task --find`:
+Controls filtering for `kasl task find`:
 
 ### `ignore_names`
 - **Type**: `string[]`
 - **Default**: `["Merge remote-tracking branch", "Merge branch ", "update webui"]`
 - **Description**: Task/commit names (or prefixes) excluded from discovery
 - **Matching**: Case-insensitive after normalization; exact match or prefix
-- **UI**: Edit via `kasl init` (Task discovery module) or add items from `kasl task -f`
+- **UI**: Edit via `kasl init` (Task discovery module) or add items from `kasl task find`
 
 ## Monitor Configuration
 
@@ -202,8 +200,6 @@ Controls productivity tracking and reporting thresholds:
   "productivity": {
     "min_productivity_threshold": 75.0,
     "workday_hours": 8.0,
-    "min_break_duration": 20,
-    "max_break_duration": 180,
     "min_workday_fraction_before_suggest": 0.5
   }
 }

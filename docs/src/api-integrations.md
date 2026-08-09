@@ -49,7 +49,7 @@ Import commits and merge requests as completed tasks.
 
 ```bash
 # Find tasks from GitLab
-kasl task --find
+kasl task find
 
 # This will show:
 # - Incomplete local tasks
@@ -102,7 +102,7 @@ Import completed issues and track work items.
 
 ```bash
 # Find tasks from Jira
-kasl task --find
+kasl task find
 
 # This will show:
 # - Incomplete local tasks
@@ -259,7 +259,7 @@ ping gitlab.com
 Enable debug logging for API operations:
 
 ```bash
-RUST_LOG=kasl=debug kasl task --find
+RUST_LOG=kasl=debug kasl task find
 ```
 
 This will show:

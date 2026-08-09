@@ -88,19 +88,19 @@ Complete task lifecycle management:
 
 ```bash
 # Create tasks
-kasl task --name "Review PR" --comment "Security review" --completeness 0
+kasl task add --name "Review PR" --comment "Security review" --completeness 0
 
 # Read tasks
-kasl task --show
-kasl task --show --all  # Show all tasks, not just today's
+kasl task list
+kasl task list --all  # Show all tasks, not just today's
 
 # Update tasks
-kasl task --edit 1  # Interactive editing
-kasl task --edit-interactive  # Edit multiple tasks
+kasl task edit 1  # Interactive editing
+kasl task edit  # Pick several tasks to edit interactively
 
-# Delete tasks
-kasl task --delete 1
-kasl task --delete-today  # Delete all today's tasks
+# Remove tasks
+kasl task remove 1
+kasl task remove --today  # Remove all today's tasks
 ```
 
 ### Task Templates
@@ -109,11 +109,11 @@ Save frequently used tasks as reusable templates:
 
 ```bash
 # Create a template
-kasl template create --name "daily-standup"
+kasl template add --name "daily-standup"
 
 # Use a template
-kasl task --from-template
-kasl task --template "daily-standup"
+kasl task add --from-template
+kasl task add --template "daily-standup"
 ```
 
 ### Tagging System
@@ -122,14 +122,14 @@ Organize tasks with custom tags and colors:
 
 ```bash
 # Create tags
-kasl tag create --name "urgent" --color "red"
-kasl tag create --name "backend" --color "blue"
+kasl tag add "urgent" --color "red"
+kasl tag add "backend" --color "blue"
 
 # Assign tags to tasks
-kasl task --name "Fix bug" --tags "urgent,backend"
+kasl task add --name "Fix bug" --tags "urgent,backend"
 
 # Filter by tags
-kasl task --show --tag "urgent"
+kasl task list --tag "urgent"
 ```
 
 ### Progress Tracking
@@ -141,8 +141,8 @@ Track task completion with percentage-based progress:
 - **100%**: Completed
 
 ```bash
-kasl task --name "Feature implementation" --completeness 25
-kasl task --edit 1  # Update progress interactively
+kasl task add --name "Feature implementation" --completeness 25
+kasl task edit 1  # Update progress interactively
 ```
 
 ## 📊 Reporting & Analytics
@@ -289,7 +289,7 @@ Import commits as completed tasks:
 kasl init  # Interactive setup
 
 # Find tasks from GitLab
-kasl task --find
+kasl task find
 ```
 
 Features:
@@ -307,7 +307,7 @@ Import completed issues:
 kasl init  # Interactive setup
 
 # Find tasks from Jira
-kasl task --find
+kasl task find
 ```
 
 Features:

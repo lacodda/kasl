@@ -106,10 +106,10 @@ kasl autostart enable
 
 ```bash
 # Create a new task
-kasl task --name "Review pull requests" --completeness 0
+kasl task add --name "Review pull requests" --completeness 0
 
 # Update task progress
-kasl task --edit 1
+kasl task edit 1
 
 # View today's report
 kasl report
@@ -140,34 +140,36 @@ kasl watch --stop
 #### `task` - Task Management
 ```bash
 # Create task
-kasl task --name "Fix bug #123" --comment "High priority" --tags "bug,urgent"
+kasl task add --name "Fix bug #123" --comment "High priority" --tags "bug,urgent"
 
 # Create from template
-kasl task --template daily-standup
-kasl task --from-template  # Interactive selection
+kasl task add --template daily-standup
+kasl task add --from-template  # Interactive selection
 
 # View tasks
-kasl task --show              # Today's tasks
-kasl task --show --all        # All tasks
-kasl task --show --tag urgent # Tasks with specific tag
+kasl task list              # Today's tasks
+kasl task list --all        # All tasks
+kasl task list --tag urgent # Tasks with specific tag
+kasl task show 5            # Show specific task by ID
 
 # Edit tasks
-kasl task --edit 5            # Edit by ID
-kasl task --edit-interactive  # Batch edit
+kasl task edit 5   # Edit by ID
+kasl task edit     # Pick several tasks to edit interactively
 
-# Delete tasks
-kasl task --delete 1 2 3      # Delete by IDs
-kasl task --delete-today      # Delete all today's tasks
+# Remove tasks
+kasl task remove 1 2 3   # Remove by IDs
+kasl task remove --today # Remove all today's tasks
 ```
+Scripted flows can add `-y`/`--yes` to `remove` to skip the confirmation prompt, and `add` errors instead of hanging when `--name` is missing outside an interactive terminal.
 
 #### `inbox` - Jira Inbox
 ```bash
-kasl inbox                 # List assigned open Jira issues
+kasl inbox                # List assigned open Jira issues
 kasl inbox -n 5            # Top five by ranking (pin / Scoring / priority)
-kasl inbox --sync          # Poll Jira now
-kasl inbox --pin PROJ-123  # Keep an issue on top
-kasl inbox --open PROJ-123 # Open in browser
-kasl inbox --take PROJ-123 # Import into local tasks
+kasl inbox sync            # Poll Jira now
+kasl inbox pin PROJ-123    # Keep an issue on top
+kasl inbox open PROJ-123   # Open in browser
+kasl inbox take PROJ-123   # Import into local tasks
 ```
 The watcher polls Jira in the background and shows a desktop toast when a new issue is assigned to you (see the `jira_inbox` config section).
 
@@ -191,21 +193,22 @@ kasl end
 #### `template` - Task Templates
 ```bash
 # Manage templates
-kasl template create --name "standup"
+kasl template add --name "standup"
 kasl template list
+kasl template show standup
 kasl template edit standup
-kasl template delete standup
+kasl template remove standup
 kasl template search daily
 ```
 
 #### `tag` - Tag Management
 ```bash
 # Manage tags
-kasl tag create urgent --color red
+kasl tag add urgent --color red
 kasl tag list
+kasl tag show urgent   # Show tasks with tag
 kasl tag edit urgent
-kasl tag delete personal
-kasl tag tasks urgent  # Show tasks with tag
+kasl tag remove personal
 ```
 
 #### `export` - Data Export

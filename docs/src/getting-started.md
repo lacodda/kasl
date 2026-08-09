@@ -107,7 +107,7 @@ kasl autostart enable
 
 Add a task to track your work:
 ```bash
-kasl task --name "Set up kasl" --completeness 100
+kasl task add --name "Set up kasl" --completeness 100
 ```
 
 ### 4. View Your Report
@@ -128,8 +128,8 @@ kasl report
 
 2. **Create today's tasks**:
    ```bash
-   kasl task --name "Code review" --completeness 0
-   kasl task --name "Team meeting" --completeness 0
+   kasl task add --name "Code review" --completeness 0
+   kasl task add --name "Team meeting" --completeness 0
    ```
 
 3. **Start monitoring** (if not already running):
@@ -141,17 +141,17 @@ kasl report
 
 1. **Update task progress**:
    ```bash
-   kasl task --edit 1  # Edit task by ID
+   kasl task edit 1  # Edit task by ID
    ```
 
 2. **Add new tasks as needed**:
    ```bash
-   kasl task --name "Bug fix" --completeness 0
+   kasl task add --name "Bug fix" --completeness 0
    ```
 
 3. **View current status**:
    ```bash
-   kasl task --show  # Show today's tasks
+   kasl task list  # Show today's tasks
    ```
 
 ### End of Day
@@ -177,19 +177,19 @@ kasl report
 
 ```bash
 # Create a task
-kasl task --name "Task name" --comment "Description" --completeness 0
+kasl task add --name "Task name" --comment "Description" --completeness 0
 
 # List tasks
-kasl task --show
+kasl task list
 
 # Edit a task
-kasl task --edit 1
+kasl task edit 1
 
-# Delete a task
-kasl task --delete 1
+# Remove a task
+kasl task remove 1
 
 # Use templates
-kasl task --from-template
+kasl task add --from-template
 ```
 
 ### Time Adjustments

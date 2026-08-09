@@ -5,15 +5,15 @@ The `tag` command provides comprehensive tag management functionality, enabling 
 ## Usage
 
 ```bash
-kasl tag [COMMAND] [OPTIONS]
+kasl tag [COMMAND]
 ```
 
 ## Commands
 
-### `create` - Create a new tag
+### `add` - Add a new tag
 
 ```bash
-kasl tag create <NAME> [OPTIONS]
+kasl tag add <NAME> [OPTIONS]
 ```
 
 **Arguments:**
@@ -26,14 +26,14 @@ kasl tag create <NAME> [OPTIONS]
 
 **Examples:**
 ```bash
-# Create a simple tag
-kasl tag create "urgent"
+# Add a simple tag
+kasl tag add "urgent"
 
-# Create a tag with color
-kasl tag create "backend" --color "blue"
+# Add a tag with color
+kasl tag add "backend" --color "blue"
 
-# Create a tag with hex color
-kasl tag create "frontend" --color "#FF6B6B"
+# Add a tag with hex color
+kasl tag add "frontend" --color "#FF6B6B"
 ```
 
 ### `list` - List all available tags
@@ -49,59 +49,68 @@ Displays a formatted table of all existing tags with their names, colors, and cr
 kasl tag list
 ```
 
+### `show` - Show a tag and the tasks that carry it
+
+```bash
+kasl tag show <TAG>
+```
+
+**Arguments:**
+- `TAG`: Tag name or ID to show
+
+**Example:**
+```bash
+kasl tag show "urgent"
+```
+
 ### `edit` - Edit an existing tag
 
 ```bash
-kasl tag edit <TAG> [OPTIONS]
+kasl tag edit <TAG>
 ```
 
 **Arguments:**
 - `TAG`: Tag name or ID to edit
 
-**Options:**
-- `-n, --name <NAME>`: New name for the tag
-- `-c, --color <COLOR>`: New color for the tag
+Prompts interactively for the new name and color.
 
 **Examples:**
 ```bash
 # Edit tag interactively
 kasl tag edit "urgent"
 
-# Edit tag with new name
-kasl tag edit "urgent" --name "critical"
-
-# Edit tag with new color
-kasl tag edit "backend" --color "darkblue"
+# Edit by ID
+kasl tag edit 1
 ```
 
-### `delete` - Delete a tag
+### `remove` - Remove a tag
 
 ```bash
-kasl tag delete <TAG> [OPTIONS]
+kasl tag remove <TAG> [OPTIONS]
 ```
 
 **Arguments:**
-- `TAG`: Tag name or ID to delete
+- `TAG`: Tag name or ID to remove
 
 **Options:**
-- `--force`: Skip confirmation prompt
+- `-y, --yes`: Remove without asking for confirmation
 
 **Examples:**
 ```bash
-# Delete tag with confirmation
-kasl tag delete "old-tag"
+# Remove tag with confirmation
+kasl tag remove "old-tag"
 
-# Force delete without confirmation
-kasl tag delete "old-tag" --force
+# Remove without confirmation
+kasl tag remove "old-tag" -y
 ```
 
 ## Tag Features
 
 ### Tag CRUD Operations
-- **Create**: Define new tags with names and colors
+- **Add**: Define new tags with names and colors
 - **Read**: List and view existing tags
 - **Update**: Modify tag properties
-- **Delete**: Remove tags and clean up associations
+- **Remove**: Remove tags and clean up associations
 
 ### Color Coding
 Visual organization with customizable tag colors:
@@ -113,20 +122,17 @@ Visual organization with customizable tag colors:
 Link tags to tasks for categorization:
 ```bash
 # Create task with tags
-kasl task --name "Fix bug" --tags "urgent,backend"
+kasl task add --name "Fix bug" --tags "urgent,backend"
 
 # Add tags to existing task
-kasl task --edit 1 --tags "urgent,backend"
+kasl task edit 1
 ```
 
 ### Filtering
 Find tasks by tag assignments:
 ```bash
 # Show tasks with specific tag
-kasl task --show --tag "urgent"
-
-# Show tasks with multiple tags
-kasl task --show --tag "backend,urgent"
+kasl task list --tag "urgent"
 ```
 
 ## Use Cases
@@ -134,49 +140,49 @@ kasl task --show --tag "backend,urgent"
 ### Project Organization
 ```bash
 # Create project tags
-kasl tag create "frontend" --color "blue"
-kasl tag create "backend" --color "green"
-kasl tag create "mobile" --color "purple"
+kasl tag add "frontend" --color "blue"
+kasl tag add "backend" --color "green"
+kasl tag add "mobile" --color "purple"
 
 # Assign to tasks
-kasl task --name "Update UI" --tags "frontend"
-kasl task --name "Fix API bug" --tags "backend"
+kasl task add --name "Update UI" --tags "frontend"
+kasl task add --name "Fix API bug" --tags "backend"
 ```
 
 ### Priority Management
 ```bash
 # Create priority tags
-kasl tag create "urgent" --color "red"
-kasl tag create "high" --color "orange"
-kasl tag create "low" --color "gray"
+kasl tag add "urgent" --color "red"
+kasl tag add "high" --color "orange"
+kasl tag add "low" --color "gray"
 
 # Filter by priority
-kasl task --show --tag "urgent"
+kasl task list --tag "urgent"
 ```
 
 ### Task Type Categorization
 ```bash
 # Create type tags
-kasl tag create "bug" --color "red"
-kasl tag create "feature" --color "green"
-kasl tag create "documentation" --color "blue"
-kasl tag create "meeting" --color "yellow"
+kasl tag add "bug" --color "red"
+kasl tag add "feature" --color "green"
+kasl tag add "documentation" --color "blue"
+kasl tag add "meeting" --color "yellow"
 
 # Organize tasks by type
-kasl task --name "Fix login bug" --tags "bug,urgent"
-kasl task --name "Add user profile" --tags "feature,frontend"
+kasl task add --name "Fix login bug" --tags "bug,urgent"
+kasl task add --name "Add user profile" --tags "feature,frontend"
 ```
 
 ### Status Tracking
 ```bash
 # Create status tags
-kasl tag create "in-progress" --color "blue"
-kasl tag create "blocked" --color "red"
-kasl tag create "waiting-review" --color "yellow"
-kasl tag create "completed" --color "green"
+kasl tag add "in-progress" --color "blue"
+kasl tag add "blocked" --color "red"
+kasl tag add "waiting-review" --color "yellow"
+kasl tag add "completed" --color "green"
 
 # Track task status
-kasl task --name "Code review" --tags "waiting-review,backend"
+kasl task add --name "Code review" --tags "waiting-review,backend"
 ```
 
 ## Examples
@@ -185,55 +191,60 @@ kasl task --name "Code review" --tags "waiting-review,backend"
 
 ```bash
 # 1. Create tags for your project
-kasl tag create "frontend" --color "blue"
-kasl tag create "backend" --color "green"
-kasl tag create "urgent" --color "red"
-kasl tag create "bug" --color "orange"
+kasl tag add "frontend" --color "blue"
+kasl tag add "backend" --color "green"
+kasl tag add "urgent" --color "red"
+kasl tag add "bug" --color "orange"
 
 # 2. List all tags
 kasl tag list
 
 # 3. Create tasks with tags
-kasl task --name "Fix login bug" --tags "urgent,bug,frontend"
-kasl task --name "Add API endpoint" --tags "backend,feature"
+kasl task add --name "Fix login bug" --tags "urgent,bug,frontend"
+kasl task add --name "Add API endpoint" --tags "backend,feature"
 
 # 4. Filter tasks by tags
-kasl task --show --tag "urgent"
-kasl task --show --tag "frontend"
+kasl task list --tag "urgent"
+kasl task list --tag "frontend"
 ```
 
 ### Tag Management
 
 ```bash
 # Create a comprehensive tag system
-kasl tag create "project-a" --color "blue"
-kasl tag create "project-b" --color "green"
-kasl tag create "urgent" --color "red"
-kasl tag create "low-priority" --color "gray"
-kasl tag create "meeting" --color "yellow"
-kasl tag create "documentation" --color "purple"
+kasl tag add "project-a" --color "blue"
+kasl tag add "project-b" --color "green"
+kasl tag add "urgent" --color "red"
+kasl tag add "low-priority" --color "gray"
+kasl tag add "meeting" --color "yellow"
+kasl tag add "documentation" --color "purple"
 
 # Edit tag properties
-kasl tag edit "project-a" --name "main-project" --color "darkblue"
+kasl tag edit "project-a"
 
-# Delete unused tags
-kasl tag delete "old-tag"
+# Remove unused tags
+kasl tag remove "old-tag"
 ```
 
 ### Interactive Usage
 
 ```bash
-# Interactive tag creation
-kasl tag create "new-tag"
-# Prompts for color if not specified
-
 # Interactive tag editing
 kasl tag edit "existing-tag"
 # Prompts for new name and color
 
-# Interactive tag deletion
-kasl tag delete "unused-tag"
+# Interactive tag removal
+kasl tag remove "unused-tag"
 # Prompts for confirmation
+```
+
+### Scripting
+
+`add` and `remove` take their required data as arguments and flags, so they can run unattended:
+
+```bash
+kasl tag add "urgent" --color "red"
+kasl tag remove "old-tag" -y
 ```
 
 ## Sample Output
@@ -278,7 +289,7 @@ Tags are automatically created when assigned to tasks:
 
 ```bash
 # This will create the "new-tag" tag if it doesn't exist
-kasl task --name "New task" --tags "new-tag,urgent"
+kasl task add --name "New task" --tags "new-tag,urgent"
 ```
 
 ## Best Practices
@@ -299,7 +310,7 @@ kasl task --name "New task" --tags "new-tag,urgent"
 
 ### Tag Management
 
-1. **Regular cleanup**: Delete unused tags
+1. **Regular cleanup**: Remove unused tags
 2. **Consolidate similar tags**: Merge duplicate concepts
 3. **Document tag meanings**: Keep a reference of what each tag means
 4. **Review usage**: Check which tags are most/least used
@@ -345,10 +356,10 @@ kasl tag list | grep -i "tag-name"
 **Color not supported**
 ```bash
 # Use standard color names
-kasl tag create "mytag" --color "red"
+kasl tag add "mytag" --color "red"
 
 # Or use hex color codes
-kasl tag create "mytag" --color "#FF0000"
+kasl tag add "mytag" --color "#FF0000"
 ```
 
 ### Data Recovery
@@ -358,7 +369,7 @@ kasl tag create "mytag" --color "#FF0000"
 kasl export tasks --format json
 
 # Review tag usage before deletion
-kasl task --show --tag "tag-to-delete"
+kasl tag show "tag-to-delete"
 ```
 
 ## Related Commands

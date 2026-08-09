@@ -5,21 +5,84 @@ The `inbox` command manages a local inbox of open Jira issues assigned to you. T
 ## Usage
 
 ```bash
-kasl inbox [OPTIONS]
+kasl inbox [OPTIONS] [COMMAND]
 ```
 
-Running `kasl inbox` without options lists the active (non-dismissed) issues.
+Running `kasl inbox` without a subcommand lists the active (non-dismissed) issues.
 
 ## Options
 
-- `-l, --list`: List active inbox issues (default action)
 - `-n, --limit <N>`: Show only the top N issues; the list is sorted by pin state, ranking field (e.g. Scoring), and priority
-- `--sync`: Poll Jira immediately instead of waiting for the background cadence
-- `--pin <KEY>`: Pin an issue (pinned issues stay on top)
-- `--unpin <KEY>`: Remove the pin
-- `--dismiss <KEY>`: Hide an issue from the list
-- `--open <KEY>`: Open the issue in the browser
-- `--take <KEY>`: Import the issue into local tasks (creates a task named `KEY summary` and dismisses the inbox entry)
+
+## Commands
+
+### `sync` - Sync inbox from Jira
+
+```bash
+kasl inbox sync
+```
+
+Polls Jira immediately instead of waiting for the background cadence.
+
+### `list` - List active inbox issues
+
+```bash
+kasl inbox list [OPTIONS]
+```
+
+**Options:**
+- `-n, --limit <N>`: Show only the top N issues
+
+### `pin` - Pin an inbox issue
+
+```bash
+kasl inbox pin <KEY>
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`
+
+Pinned issues stay on top of the list.
+
+### `unpin` - Unpin an inbox issue
+
+```bash
+kasl inbox unpin <KEY>
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`
+
+### `dismiss` - Dismiss an inbox issue
+
+```bash
+kasl inbox dismiss <KEY>
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`
+
+Hides an issue from the list.
+
+### `open` - Open issue URL in browser
+
+```bash
+kasl inbox open <KEY>
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`
+
+### `take` - Import issue into tasks
+
+```bash
+kasl inbox take <KEY>
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`
+
+Imports the issue into local tasks (creates a task named `KEY summary` and dismisses the inbox entry).
 
 ## Background Polling
 
@@ -57,10 +120,21 @@ kasl inbox
 kasl inbox -n 5
 
 # Sync now and show the result
-kasl inbox --sync --list
+kasl inbox sync
+kasl inbox list
 
 # Work with a specific issue
-kasl inbox --pin PROJ-123
-kasl inbox --open PROJ-123
-kasl inbox --take PROJ-123
+kasl inbox pin PROJ-123
+kasl inbox open PROJ-123
+kasl inbox take PROJ-123
+```
+
+## Scripting
+
+Every subcommand takes its issue key as an argument, so the inbox can be driven from scripts without any interactive prompt:
+
+```bash
+kasl inbox sync
+kasl inbox take PROJ-123
+kasl inbox dismiss PROJ-456
 ```

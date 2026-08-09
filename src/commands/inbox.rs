@@ -10,87 +10,100 @@ use crate::libs::task::Task;
 use crate::libs::view::View;
 use crate::{msg_error, msg_info, msg_print, msg_success};
 use anyhow::Result;
-use clap::Args;
+use clap::{Args, Subcommand};
 
 /// Command-line arguments for the inbox command.
 #[derive(Debug, Args)]
 pub struct InboxArgs {
-    /// List active (non-dismissed) inbox issues
-    #[arg(long, short = 'l', help = "List active inbox issues")]
-    list: bool,
+    #[command(subcommand)]
+    command: Option<InboxCommand>,
 
+    // Kept at the top level so the bare `kasl inbox -n 5` form keeps working
+    // as a shorthand for `kasl inbox list -n 5`.
     /// Show only the top N issues (already sorted by pin / score / priority)
-    #[arg(long, short = 'n', value_name = "N", help = "Limit list to top N issues")]
+    #[arg(long, short = 'n', value_name = "N")]
     limit: Option<usize>,
+}
 
+/// Available inbox operations.
+#[derive(Debug, Subcommand)]
+enum InboxCommand {
     /// Sync assigned open issues from Jira now
-    #[arg(long, help = "Sync inbox from Jira")]
-    sync: bool,
+    #[command(about = "Sync inbox from Jira")]
+    Sync,
 
-    /// Pin an issue by key (e.g. PROJ-123)
-    #[arg(long, value_name = "KEY", help = "Pin an inbox issue")]
-    pin: Option<String>,
+    /// List active (non-dismissed) inbox issues
+    #[command(about = "List active inbox issues")]
+    List {
+        /// Show only the top N issues
+        #[arg(long, short = 'n', value_name = "N")]
+        limit: Option<usize>,
+    },
 
-    /// Unpin an issue by key
-    #[arg(long, value_name = "KEY", help = "Unpin an inbox issue")]
-    unpin: Option<String>,
+    /// Pin an issue so it stays on top
+    #[command(about = "Pin an inbox issue")]
+    Pin {
+        /// Issue key, e.g. PROJ-123
+        #[arg(value_name = "KEY")]
+        key: String,
+    },
 
-    /// Dismiss an issue by key (hide from list)
-    #[arg(long, value_name = "KEY", help = "Dismiss an inbox issue")]
-    dismiss: Option<String>,
+    /// Unpin a previously pinned issue
+    #[command(about = "Unpin an inbox issue")]
+    Unpin {
+        /// Issue key, e.g. PROJ-123
+        #[arg(value_name = "KEY")]
+        key: String,
+    },
+
+    /// Dismiss an issue, hiding it from the list
+    #[command(about = "Dismiss an inbox issue")]
+    Dismiss {
+        /// Issue key, e.g. PROJ-123
+        #[arg(value_name = "KEY")]
+        key: String,
+    },
 
     /// Open an issue in the browser
-    #[arg(long, value_name = "KEY", help = "Open issue URL in browser")]
-    open: Option<String>,
+    #[command(about = "Open issue URL in browser")]
+    Open {
+        /// Issue key, e.g. PROJ-123
+        #[arg(value_name = "KEY")]
+        key: String,
+    },
 
     /// Import an issue into local tasks
-    #[arg(long, value_name = "KEY", help = "Import issue into tasks")]
-    take: Option<String>,
+    #[command(about = "Import issue into tasks")]
+    Take {
+        /// Issue key, e.g. PROJ-123
+        #[arg(value_name = "KEY")]
+        key: String,
+    },
 }
 
 /// Entry point for `kasl inbox`.
 pub async fn cmd(args: InboxArgs) -> Result<()> {
-    let mut did_something = false;
-
-    if args.sync {
-        did_something = true;
-        let outcome = inbox_lib::sync_interactive(true).await?;
-        if !outcome.skipped {
-            msg_success!(Message::JiraInboxSynced {
-                fetched: outcome.fetched,
-                new_count: outcome.new_keys.len(),
-                updated: outcome.updated,
-            });
+    match args.command {
+        Some(InboxCommand::Sync) => {
+            let outcome = inbox_lib::sync_interactive(true).await?;
+            if !outcome.skipped {
+                msg_success!(Message::JiraInboxSynced {
+                    fetched: outcome.fetched,
+                    new_count: outcome.new_keys.len(),
+                    updated: outcome.updated,
+                });
+            }
+            Ok(())
         }
+        Some(InboxCommand::List { limit }) => list_inbox(limit.or(args.limit)),
+        Some(InboxCommand::Pin { key }) => set_pinned(&key, true),
+        Some(InboxCommand::Unpin { key }) => set_pinned(&key, false),
+        Some(InboxCommand::Dismiss { key }) => dismiss(&key),
+        Some(InboxCommand::Open { key }) => open_issue(&key),
+        Some(InboxCommand::Take { key }) => take_issue(&key),
+        // Bare `kasl inbox` shows the list, as it always has.
+        None => list_inbox(args.limit),
     }
-
-    if let Some(key) = &args.pin {
-        did_something = true;
-        set_pinned(key, true)?;
-    }
-    if let Some(key) = &args.unpin {
-        did_something = true;
-        set_pinned(key, false)?;
-    }
-    if let Some(key) = &args.dismiss {
-        did_something = true;
-        dismiss(key)?;
-    }
-    if let Some(key) = &args.open {
-        did_something = true;
-        open_issue(key)?;
-    }
-    if let Some(key) = &args.take {
-        did_something = true;
-        take_issue(key)?;
-    }
-
-    // Default action, explicit --list, or --limit: show the table.
-    if args.list || args.limit.is_some() || !did_something {
-        list_inbox(args.limit)?;
-    }
-
-    Ok(())
 }
 
 fn list_inbox(limit: Option<usize>) -> Result<()> {

@@ -1,19 +1,19 @@
 # `template` Command
 
-The `template` command provides comprehensive template management functionality for kasl, enabling users to create, edit, delete, and search reusable task templates. Templates streamline the creation of frequently used tasks by providing predefined values for name, comment, and completion status.
+The `template` command provides comprehensive template management functionality for kasl, enabling users to create, edit, remove, and search reusable task templates. Templates streamline the creation of frequently used tasks by providing predefined values for name, comment, and completion status.
 
 ## Usage
 
 ```bash
-kasl template [COMMAND] [OPTIONS]
+kasl template [COMMAND]
 ```
 
 ## Commands
 
-### `create` - Create a new task template
+### `add` - Add a new task template
 
 ```bash
-kasl template create [OPTIONS]
+kasl template add [OPTIONS]
 ```
 
 **Options:**
@@ -24,11 +24,11 @@ kasl template create [OPTIONS]
 
 **Examples:**
 ```bash
-# Create template interactively
-kasl template create
+# Add template interactively
+kasl template add
 
-# Create template with name
-kasl template create --name "daily-standup"
+# Add template with name
+kasl template add --name "daily-standup"
 ```
 
 ### `list` - List all available templates
@@ -44,10 +44,26 @@ Displays a formatted table of all existing templates with their names, task name
 kasl template list
 ```
 
+### `show` - Show a single template's contents
+
+```bash
+kasl template show [NAME]
+```
+
+**Arguments:**
+- `NAME`: Name of the template to show (optional)
+
+Displays the task name, comment, and default completeness stored in the template, so its effect on task creation is visible before use.
+
+**Example:**
+```bash
+kasl template show "daily-standup"
+```
+
 ### `edit` - Edit an existing template
 
 ```bash
-kasl template edit [NAME] [OPTIONS]
+kasl template edit [NAME]
 ```
 
 **Arguments:**
@@ -63,26 +79,26 @@ kasl template edit
 kasl template edit "daily-standup"
 ```
 
-### `delete` - Delete a template
+### `remove` - Remove a template
 
 ```bash
-kasl template delete [NAME] [OPTIONS]
+kasl template remove [OPTIONS] [NAME]
 ```
 
 **Arguments:**
-- `NAME`: Name of the template to delete (optional)
+- `NAME`: Name of the template to remove (optional)
   - If not provided, an interactive selection interface will be presented
 
 **Options:**
-- `--force`: Skip confirmation prompt
+- `-y, --yes`: Remove without asking for confirmation
 
 **Examples:**
 ```bash
-# Delete template with confirmation
-kasl template delete "old-template"
+# Remove template with confirmation
+kasl template remove "old-template"
 
-# Force delete without confirmation
-kasl template delete "old-template" --force
+# Remove without confirmation
+kasl template remove "old-template" -y
 ```
 
 ### `search` - Search templates
@@ -108,10 +124,10 @@ kasl template search "daily"
 ## Template Features
 
 ### Template CRUD Operations
-- **Create**: Define new templates with predefined task values
+- **Add**: Define new templates with predefined task values
 - **Read**: List and view existing templates
 - **Update**: Modify template properties
-- **Delete**: Remove templates from the system
+- **Remove**: Remove templates from the system
 
 ### Search Functionality
 Find templates by name or content:
@@ -123,16 +139,16 @@ Find templates by name or content:
 User-friendly interfaces for all operations:
 - **Interactive Creation**: Guided template creation process
 - **Interactive Selection**: Choose from available templates
-- **Confirmation Prompts**: Prevent accidental deletions
+- **Confirmation Prompts**: Prevent accidental removal
 
 ### Integration
 Seamless integration with task creation workflows:
 ```bash
 # Use template when creating task
-kasl task --from-template
+kasl task add --from-template
 
 # Use specific template
-kasl task --template "daily-standup"
+kasl task add --template "daily-standup"
 ```
 
 ## Use Cases
@@ -140,44 +156,44 @@ kasl task --template "daily-standup"
 ### Daily Routines
 ```bash
 # Create daily standup template
-kasl template create --name "daily-standup"
+kasl template add --name "daily-standup"
 # Template: Task name: "Daily standup", Comment: "Team sync meeting", Completeness: 0
 
 # Create daily planning template
-kasl template create --name "daily-planning"
+kasl template add --name "daily-planning"
 # Template: Task name: "Plan day", Comment: "Review and plan daily tasks", Completeness: 0
 ```
 
 ### Meeting Templates
 ```bash
 # Create client meeting template
-kasl template create --name "client-meeting"
+kasl template add --name "client-meeting"
 # Template: Task name: "Client meeting", Comment: "Discuss project requirements", Completeness: 0
 
 # Create team meeting template
-kasl template create --name "team-meeting"
+kasl template add --name "team-meeting"
 # Template: Task name: "Team meeting", Comment: "Weekly team sync", Completeness: 0
 ```
 
 ### Development Tasks
 ```bash
 # Create code review template
-kasl template create --name "code-review"
+kasl template add --name "code-review"
 # Template: Task name: "Code review", Comment: "Review pull request", Completeness: 0
 
 # Create bug fix template
-kasl template create --name "bug-fix"
+kasl template add --name "bug-fix"
 # Template: Task name: "Fix bug", Comment: "Investigate and fix reported issue", Completeness: 0
 ```
 
 ### Administrative Tasks
 ```bash
 # Create documentation template
-kasl template create --name "documentation"
+kasl template add --name "documentation"
 # Template: Task name: "Update documentation", Comment: "Update project documentation", Completeness: 0
 
 # Create email template
-kasl template create --name "email"
+kasl template add --name "email"
 # Template: Task name: "Email correspondence", Comment: "Respond to emails", Completeness: 0
 ```
 
@@ -187,29 +203,29 @@ kasl template create --name "email"
 
 ```bash
 # 1. Create templates for common tasks
-kasl template create --name "daily-standup"
-kasl template create --name "code-review"
-kasl template create --name "client-meeting"
+kasl template add --name "daily-standup"
+kasl template add --name "code-review"
+kasl template add --name "client-meeting"
 
 # 2. List all templates
 kasl template list
 
 # 3. Use templates to create tasks
-kasl task --from-template
+kasl task add --from-template
 # Select from available templates
 
 # 4. Use specific template
-kasl task --template "daily-standup"
+kasl task add --template "daily-standup"
 ```
 
 ### Template Management
 
 ```bash
 # Create comprehensive template library
-kasl template create --name "morning-routine"
-kasl template create --name "afternoon-review"
-kasl template create --name "end-of-day"
-kasl template create --name "weekly-planning"
+kasl template add --name "morning-routine"
+kasl template add --name "afternoon-review"
+kasl template add --name "end-of-day"
+kasl template add --name "weekly-planning"
 
 # Edit template properties
 kasl template edit "morning-routine"
@@ -217,23 +233,23 @@ kasl template edit "morning-routine"
 # Search for specific templates
 kasl template search "meeting"
 
-# Delete unused templates
-kasl template delete "old-template"
+# Remove unused templates
+kasl template remove "old-template"
 ```
 
 ### Interactive Usage
 
 ```bash
 # Interactive template creation
-kasl template create
+kasl template add
 # Prompts for template name, task name, comment, and completeness
 
 # Interactive template selection
 kasl template edit
 # Shows list of available templates to choose from
 
-# Interactive template deletion
-kasl template delete
+# Interactive template removal
+kasl template remove
 # Shows list and prompts for confirmation
 ```
 
@@ -297,7 +313,7 @@ New completeness (press Enter to keep current): 0
 ### Interactive Template Selection
 ```bash
 # Create task using template selection
-kasl task --from-template
+kasl task add --from-template
 
 # The command will show available templates:
 # 1. daily-standup
@@ -309,19 +325,19 @@ kasl task --from-template
 ### Direct Template Usage
 ```bash
 # Use specific template
-kasl task --template "daily-standup"
+kasl task add --template "daily-standup"
 
 # Use template with additional options
-kasl task --template "code-review" --tags "urgent,backend"
+kasl task add --template "code-review" --tags "urgent,backend"
 ```
 
 ### Template with Customization
 ```bash
 # Use template but override task name
-kasl task --template "bug-fix" --name "Fix login bug"
+kasl task add --template "bug-fix" --name "Fix login bug"
 
 # Use template but add custom comment
-kasl task --template "client-meeting" --comment "Discuss new feature requirements"
+kasl task add --template "client-meeting" --comment "Discuss new feature requirements"
 ```
 
 ## Best Practices
@@ -343,7 +359,7 @@ kasl task --template "client-meeting" --comment "Discuss new feature requirement
 ### Template Organization
 
 1. **Group related templates**: Use consistent naming patterns
-2. **Regular cleanup**: Delete unused templates
+2. **Regular cleanup**: Remove unused templates
 3. **Document template purposes**: Keep track of when to use each template
 4. **Review and update**: Keep templates current with your workflow
 
