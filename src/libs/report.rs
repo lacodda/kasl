@@ -17,13 +17,16 @@
 //! use kasl::libs::report::{calculate_work_intervals, filter_short_intervals, WorkInterval};
 //! use kasl::db::workdays::Workday;
 //! use kasl::libs::pause::Pause;
+//! use chrono::Local;
 //!
 //! let workday = Workday {
-//!     start: start_time,
-//!     end: Some(end_time),
+//!     id: 1,
+//!     date: Local::now().date_naive(),
+//!     start: Local::now().naive_local(),
+//!     end: Some(Local::now().naive_local()),
 //! };
 //!
-//! let pauses = vec![/* pause data */];
+//! let pauses: Vec<Pause> = vec![/* pause data */];
 //! let intervals = calculate_work_intervals(&workday, &pauses);
 //!
 //! // Filter short intervals for cleaner reporting
@@ -139,8 +142,9 @@ impl WorkInterval {
     ///
     /// ```rust
     /// use kasl::libs::report::WorkInterval;
-    /// use chrono::{Duration, NaiveDateTime};
+    /// use chrono::{Duration, Local};
     ///
+    /// let start_time = Local::now().naive_local();
     /// let interval = WorkInterval {
     ///     start: start_time,
     ///     end: start_time + Duration::minutes(20),
@@ -280,8 +284,17 @@ pub struct ShortIntervalsInfo {
 /// use kasl::libs::report::calculate_work_intervals;
 /// use kasl::db::workdays::Workday;
 /// use kasl::libs::pause::Pause;
+/// use chrono::{Local, Duration};
+///
+/// let start_time = Local::now().naive_local();
+/// let end_time = start_time + Duration::hours(8);
+/// let lunch_start = start_time + Duration::hours(4);
+/// let lunch_end = lunch_start + Duration::minutes(30);
+/// let lunch_duration = Duration::minutes(30);
 ///
 /// let workday = Workday {
+///     id: 1,
+///     date: start_time.date(),
 ///     start: start_time,
 ///     end: Some(end_time),
 ///     // ... other fields
@@ -293,6 +306,7 @@ pub struct ShortIntervalsInfo {
 ///         start: lunch_start,
 ///         end: Some(lunch_end),
 ///         duration: Some(lunch_duration),
+///         protected: false,
 ///     },
 ///     // ... more pauses
 /// ];
@@ -306,9 +320,37 @@ pub struct ShortIntervalsInfo {
 /// - **Time Complexity**: O(n log n) due to pause sorting
 /// - **Space Complexity**: O(n) for interval storage
 /// - **Memory Usage**: Minimal allocation during processing
+///
+/// Resolves the effective end of a workday that has no recorded end time.
+///
+/// A workday stays open when the daemon was killed or the machine slept before
+/// `kasl end` ran. "Now" is only a sensible stand-in while the day is still
+/// today; for any earlier date it would stretch the day across every hour since,
+/// which is how an unclosed August day reported 8425 hours. For a past date the
+/// day is closed at the last evidence of activity - the end of its final pause,
+/// or its start when nothing else is known.
+pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDateTime {
+    if let Some(end) = workday.end {
+        return end;
+    }
+
+    let now = chrono::Local::now().naive_local();
+    if workday.date == now.date() {
+        return now;
+    }
+
+    // A past day that was never closed: fall back to the last thing we observed.
+    pauses
+        .iter()
+        .filter_map(|pause| pause.end)
+        .max()
+        .filter(|last| *last > workday.start)
+        .unwrap_or(workday.start)
+}
+
 pub fn calculate_work_intervals(workday: &Workday, pauses: &[Pause]) -> Vec<WorkInterval> {
     // Determine workday end time (current time if still ongoing)
-    let end_time = workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
+    let end_time = workday_end_time(workday, pauses);
 
     // Initialize interval collection and current time tracker
     let mut intervals = vec![];
@@ -486,7 +528,18 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
 /// # Examples
 ///
 /// ```rust
-/// use kasl::libs::report::filter_short_intervals;
+/// use kasl::libs::report::{calculate_work_intervals, filter_short_intervals};
+/// use kasl::db::workdays::Workday;
+/// use kasl::libs::pause::Pause;
+/// use chrono::Local;
+///
+/// let workday = Workday {
+///     id: 1,
+///     date: Local::now().date_naive(),
+///     start: Local::now().naive_local(),
+///     end: Some(Local::now().naive_local()),
+/// };
+/// let pauses: Vec<Pause> = vec![];
 ///
 /// let intervals = calculate_work_intervals(&workday, &pauses);
 /// let (filtered, info) = filter_short_intervals(&intervals, 30);
@@ -561,9 +614,25 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```rust,no_run
+/// # fn f() -> anyhow::Result<()> {
+/// use kasl::libs::report::{report_with_intervals, WorkInterval};
+/// use kasl::libs::formatter::format_duration;
+/// use kasl::db::workdays::Workday;
+/// use chrono::Local;
+///
+/// let workday = Workday {
+///     id: 1,
+///     date: Local::now().date_naive(),
+///     start: Local::now().naive_local(),
+///     end: Some(Local::now().naive_local()),
+/// };
+/// let filtered_intervals: Vec<WorkInterval> = vec![];
+///
 /// let (duration, productivity) = report_with_intervals(&workday, &filtered_intervals)?;
-/// println!("Work time: {}, Productivity: {:.1}%", format_duration(duration), productivity);
+/// println!("Work time: {}, Productivity: {:.1}%", format_duration(&duration), productivity);
+/// # Ok(())
+/// # }
 /// ```
 pub fn report_with_intervals(workday: &Workday, intervals: &[WorkInterval]) -> Result<(Duration, f64)> {
     // Calculate filtered duration based on provided intervals (for display purposes)
@@ -573,4 +642,69 @@ pub fn report_with_intervals(workday: &Workday, intervals: &[WorkInterval]) -> R
     let productivity = Productivity::new(workday)?.calculate_productivity();
 
     Ok((filtered_duration, productivity))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::{Duration, NaiveDate, NaiveDateTime};
+
+    fn at(date: NaiveDate, h: u32, m: u32) -> NaiveDateTime {
+        date.and_hms_opt(h, m, 0).unwrap()
+    }
+
+    fn workday(date: NaiveDate, start_h: u32, end: Option<NaiveDateTime>) -> Workday {
+        Workday {
+            id: 1,
+            date,
+            start: at(date, start_h, 0),
+            end,
+        }
+    }
+
+    fn pause(date: NaiveDate, from: (u32, u32), to: (u32, u32)) -> Pause {
+        let start = at(date, from.0, from.1);
+        let end = at(date, to.0, to.1);
+        Pause::detected(1, start, Some(end), Some(end - start))
+    }
+
+    #[test]
+    fn recorded_end_is_used_as_is() {
+        let date = NaiveDate::from_ymd_opt(2025, 8, 22).unwrap();
+        let end = at(date, 18, 0);
+        let wd = workday(date, 9, Some(end));
+        assert_eq!(workday_end_time(&wd, &[]), end);
+    }
+
+    #[test]
+    fn unclosed_past_day_ends_at_last_pause_not_now() {
+        // Regression: "now" as the fallback stretched an unclosed August day
+        // across every hour since, reporting thousands of hours.
+        let date = NaiveDate::from_ymd_opt(2025, 8, 22).unwrap();
+        let wd = workday(date, 9, None);
+        let pauses = [pause(date, (12, 0), (12, 30)), pause(date, (16, 0), (16, 43))];
+
+        let end = workday_end_time(&wd, &pauses);
+
+        assert_eq!(end, at(date, 16, 43));
+        assert!(end - wd.start < Duration::hours(24));
+    }
+
+    #[test]
+    fn unclosed_past_day_without_pauses_collapses_to_start() {
+        let date = NaiveDate::from_ymd_opt(2025, 8, 22).unwrap();
+        let wd = workday(date, 9, None);
+        assert_eq!(workday_end_time(&wd, &[]), wd.start);
+    }
+
+    #[test]
+    fn unclosed_today_still_runs_to_now() {
+        let today = chrono::Local::now().naive_local();
+        let wd = workday(today.date(), 0, None);
+
+        let end = workday_end_time(&wd, &[]);
+
+        // Ongoing day: end tracks the current moment rather than a past pause.
+        assert!((end - today).num_seconds().abs() < 5);
+    }
 }

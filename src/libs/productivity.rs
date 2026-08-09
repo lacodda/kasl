@@ -87,10 +87,19 @@ impl Productivity {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn f() -> anyhow::Result<()> {
+    /// use kasl::libs::productivity::Productivity;
+    /// use kasl::db::workdays::Workdays;
+    /// use chrono::Local;
+    ///
+    /// let mut workdays = Workdays::new()?;
+    /// let workday = workdays.fetch(Local::now().date_naive())?.unwrap();
     /// let productivity = Productivity::new(&workday)?;
     /// let current_productivity = productivity.calculate_productivity();
     /// println!("Current productivity: {:.1}%", current_productivity);
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(workday: &Workday) -> Result<Self> {
         let config = Config::read()?;
@@ -114,20 +123,31 @@ impl Productivity {
     /// # Arguments
     ///
     /// * `workday` - The workday record to analyze
-    /// * `breaks` - Manual breaks to include in calculations
     /// * `short_pauses` - Short automatic pauses (< threshold)
     /// * `long_pauses` - Long automatic pauses (>= threshold)
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```rust,no_run
+    /// # fn f() {
+    /// use kasl::libs::productivity::Productivity;
+    /// use kasl::db::workdays::Workday;
+    /// use chrono::Local;
+    ///
+    /// let workday = Workday {
+    ///     id: 1,
+    ///     date: Local::now().date_naive(),
+    ///     start: Local::now().naive_local(),
+    ///     end: None,
+    /// };
     /// let productivity = Productivity::with_test_data(
     ///     &workday,
-    ///     vec![],
     ///     vec![],
     ///     vec![]
     /// );
     /// let result = productivity.calculate_productivity();
+    /// # let _ = result;
+    /// # }
     /// ```
     pub fn with_test_data(workday: &Workday, short_pauses: Vec<Pause>, long_pauses: Vec<Pause>) -> Self {
         Self {
@@ -208,6 +228,17 @@ impl Productivity {
     /// # Examples
     ///
     /// ```rust
+    /// use kasl::libs::productivity::Productivity;
+    /// use kasl::db::workdays::Workday;
+    /// use chrono::Local;
+    ///
+    /// let workday = Workday {
+    ///     id: 1,
+    ///     date: Local::now().date_naive(),
+    ///     start: Local::now().naive_local(),
+    ///     end: None,
+    /// };
+    /// let productivity_instance = Productivity::with_test_data(&workday, vec![], vec![]);
     /// let productivity = productivity_instance.calculate_productivity();
     ///
     /// if productivity >= 75.0 {
@@ -217,7 +248,7 @@ impl Productivity {
     /// }
     /// ```
     pub fn calculate_productivity(&self) -> f64 {
-        let end_time = self.workday.end.unwrap_or_else(|| chrono::Local::now().naive_local());
+        let end_time = crate::libs::report::workday_end_time(&self.workday, &self.long_pauses);
         let gross_duration = end_time - self.workday.start;
 
         // Long pauses: detected absences above the threshold, plus any manual

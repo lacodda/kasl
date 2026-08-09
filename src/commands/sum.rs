@@ -99,7 +99,10 @@ pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
 
     // Step 3: Process each workday to calculate durations and productivity
     for workday in workdays {
-        let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
+        // Now only while the day is still today; an unclosed past day ends at
+        // its last observed activity - see report::workday_end_time.
+        let workday_pauses = Pauses::new()?.get_workday_pauses(&workday)?;
+        let end_time = crate::libs::report::workday_end_time(&workday, &workday_pauses);
         let gross_duration = end_time.signed_duration_since(workday.start);
 
         // Note: All pauses data now handled by Productivity module

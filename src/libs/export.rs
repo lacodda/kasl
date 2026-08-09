@@ -14,11 +14,14 @@
 //! ## Usage
 //!
 //! ```rust,no_run
+//! # async fn f() -> anyhow::Result<()> {
 //! use kasl::libs::export::{Exporter, ExportFormat, ExportData};
 //! use chrono::NaiveDate;
 //!
 //! let exporter = Exporter::new(ExportFormat::Csv, None);
-//! exporter.export(ExportData::Report, NaiveDate::from_ymd(2025, 1, 15)).await?;
+//! exporter.export(ExportData::Report, NaiveDate::from_ymd_opt(2025, 1, 15).unwrap()).await?;
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::{
@@ -330,12 +333,15 @@ impl Exporter {
     /// # Examples
     ///
     /// ```rust,no_run
+    /// # async fn f() -> anyhow::Result<()> {
     /// use kasl::libs::export::{Exporter, ExportFormat, ExportData};
     /// use chrono::NaiveDate;
     ///
     /// let exporter = Exporter::new(ExportFormat::Json, None);
-    /// let date = NaiveDate::from_ymd(2025, 1, 15);
+    /// let date = NaiveDate::from_ymd_opt(2025, 1, 15).unwrap();
     /// exporter.export(ExportData::Report, date).await?;
+    /// # Ok(())
+    /// # }
     /// ```
     pub async fn export(&self, data_type: ExportData, date: NaiveDate) -> Result<()> {
         match data_type {
@@ -645,7 +651,7 @@ impl Exporter {
         let pauses = Pauses::new()?.get_workday_pauses(&workday)?;
 
         // Determine end time (use current time if workday is still active)
-        let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
+        let end_time = report::workday_end_time(&workday, &pauses);
 
         // Calculate work intervals by analyzing workday and pause data
         let intervals = report::calculate_work_intervals(&workday, &pauses);
@@ -734,8 +740,10 @@ impl Exporter {
 
         // Process each workday to calculate duration and accumulate statistics
         for workday in &workdays {
-            // Determine end time (use current time if workday is still active)
-            let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
+            // Determine end time (now while the day is still today, otherwise
+            // the last observed activity - see report::workday_end_time).
+            let day_pauses = Pauses::new()?.get_workday_pauses(workday)?;
+            let end_time = report::workday_end_time(workday, &day_pauses);
             let duration = end_time - workday.start;
             total_duration += duration;
 
@@ -1110,8 +1118,9 @@ impl Exporter {
         let intervals = report::calculate_work_intervals(&workday, &pauses);
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
 
-        // End of the workday (fall back to "now" if the session is still open).
-        let end_time = workday.end.unwrap_or_else(|| Local::now().naive_local());
+        // End of the workday (now while it is still today, otherwise the last
+        // observed activity - see report::workday_end_time).
+        let end_time = report::workday_end_time(&workday, &pauses);
 
         let slots = classify_hour_slots(workday.start, end_time, &intervals, &pauses);
         let task_texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
@@ -1152,7 +1161,8 @@ impl Exporter {
         // Resolve localization and design template from the report config.
         let config = Config::read()?;
         let report_config = config.report.clone().unwrap_or_default();
-        let language = Language::from_code(report_config.language.as_deref().unwrap_or("ru"));
+        // English unless the config asks otherwise; `from_code` defaults to it too.
+        let language = Language::from_code(report_config.language.as_deref().unwrap_or("en"));
         let locale = Locale::for_language(language);
         let template = ReportTemplate::load(report_config.template.as_deref().unwrap_or("siserver"));
 
