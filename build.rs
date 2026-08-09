@@ -72,8 +72,9 @@ fn main() -> io::Result<()> {
     // Windows-specific: Embed application icon as a resource
     #[cfg(windows)]
     {
+        println!("cargo:rerun-if-changed=assets/icon.ico");
         let mut res = winres::WindowsResource::new();
-        res.set_icon("icon.ico");
+        res.set_icon("assets/icon.ico");
         res.compile().unwrap();
     }
 

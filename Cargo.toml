@@ -17,7 +17,20 @@ license = "MIT"
 keywords = ["cli", "tool", "work", "time", "flow"]
 categories = ["command-line-utilities"]
 build = "build.rs"
-exclude = ["docs/", "tools/", ".github/", ".changeset/", "kasl.webp", "CNAME"]
+# assets/icon.ico is required by build.rs on Windows; the rest of the brand
+# artwork only serves GitHub and the docs site.
+exclude = [
+    "docs/",
+    "tools/",
+    ".github/",
+    ".changeset/",
+    "kasl.webp",
+    "CNAME",
+    "assets/social-preview.png",
+    "assets/logo-512.png",
+    "assets/apple-touch-icon.png",
+    "assets/favicon-32.png",
+]
 
 [lib]
 name = "kasl"
