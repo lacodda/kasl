@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.1] - 2026-08-09
+
+### Bug Fixes
+- Let `task add --name` run without a terminal
+
+### Documentation
+- Rewrite in the turnout style
+- Bring the landing in line with turnout
+- Use the L tile for the header mark
 ## [1.0.0] - 2026-08-09
 
 ### Breaking Changes
