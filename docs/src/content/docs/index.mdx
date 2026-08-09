@@ -5,7 +5,22 @@ template: splash
 hero:
   tagline: Your workday, recorded while you work - not remembered afterwards.
   image:
-    file: ../../assets/logo.svg
+    html: |
+      <div class="tn-install">
+        <div class="tn-install__bar">
+          <span class="tn-install__dot"></span>
+          <span class="tn-install__dot"></span>
+          <span class="tn-install__dot"></span>
+          <span class="tn-install__os">install &amp; set up</span>
+        </div>
+        <pre class="tn-install__body"><span class="tn-install__prompt">$</span> npm i -g kasl-cli
+      <span class="tn-install__prompt">$</span> cargo install kasl-cli
+
+      <span class="tn-install__comment"># then, once:</span>
+      <span class="tn-install__prompt">$</span> kasl init
+      <span class="tn-install__prompt">$</span> kasl autostart enable
+      <span class="tn-install__prompt">$</span> kasl watch</pre>
+      </div>
   actions:
     - text: Get started
       link: /getting-started/
@@ -17,6 +32,23 @@ hero:
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## A day in the life
+
+```console
+$ kasl report
+ ID | START | END   | DURATION
+----+-------+-------+----------
+ 1  | 09:12 | 12:41 | 3h 29m
+ 2  | 13:18 | 18:04 | 4h 46m
+    |       |       |
+ TOTAL        |     | 8h 15m
+ PRODUCTIVITY |     | 94.2%
+```
+
+You never started a timer or stopped one. The daemon has been watching activity since you logged in - `report` just asks it what the day looked like, and `report --send` files it.
+
+## What kasl does
 
 <CardGrid stagger>
 	<Card title="Tracks itself" icon="laptop">
