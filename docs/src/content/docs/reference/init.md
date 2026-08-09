@@ -1,5 +1,5 @@
 ---
-title: "`init` - Initialize Application Configuration"
+title: "init"
 ---
 
 The `init` command sets up kasl configuration interactively, guiding you through the initial setup process.
