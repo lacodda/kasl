@@ -121,13 +121,21 @@ npm i -g kasl-cli
 cargo install kasl-cli
 ```
 
-**Install script.** macOS / Linux:
+**One-line installers.** Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.ps1 | iex
+```
+
+macOS / Linux:
 
 ```bash
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"
+curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh
 ```
 
 **Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` on your `PATH`.
+
+Both installers take the newest release by default; set `KASL_VERSION` to a tag to pin one, `KASL_INSTALL_DIR` to choose where the binary lands, and `KASL_NO_ALIAS=1` to skip the `ka` alias.
 
 ## Quick start
 
