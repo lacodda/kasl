@@ -26,7 +26,7 @@ fi
 case "$TAG" in
     v[0-9]*) ;;
     *)
-        echo "Cannot resolve the latest release of $REPO - set KASL_VERSION to a tag like v1.0.2" >&2
+        echo "Cannot resolve the latest release of $REPO - set KASL_VERSION to a tag like v1.0.3" >&2
         exit 1
         ;;
 esac

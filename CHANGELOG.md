@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.3] - 2026-08-12
+
+### Bug Fixes
+- Declare the MSRV that actually builds
+- Make the installer work at all, and add one for Windows
+
+### Documentation
+- Title the init page like every other command page
+
+### Features
+- Tier the exe icon by level and show the logo on toasts
 ## [1.0.2] - 2026-08-09
 
 ### Bug Fixes
