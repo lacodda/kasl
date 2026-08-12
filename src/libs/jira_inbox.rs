@@ -154,17 +154,36 @@ fn toast_body(item: &JiraInboxItem) -> String {
     }
 }
 
+/// Materializes the embedded brand logo for toast notifications.
+///
+/// Toast XML references images by file path, so the PNG compiled into the
+/// binary is written to the data directory on first use. A logo failure only
+/// degrades the toast, so all errors collapse to `None`.
+#[cfg(windows)]
+fn toast_logo_path() -> Option<std::path::PathBuf> {
+    const LOGO: &[u8] = include_bytes!("../../assets/toast-96.png");
+    let path = crate::libs::data_storage::DataStorage::new().get_path("toast-logo.png").ok()?;
+    // Rewrite when the embedded logo changes (e.g. after a self-update).
+    if std::fs::metadata(&path).map(|m| m.len() != LOGO.len() as u64).unwrap_or(true) {
+        std::fs::write(&path, LOGO).ok()?;
+    }
+    Some(path)
+}
+
 #[cfg(windows)]
 fn show_toast_windows(item: &JiraInboxItem) -> bool {
     let title = format!("Jira {}", item.issue_key);
     let body = toast_body(item);
 
-    match win_toast_notify::WinToastNotify::new()
+    let mut toast = win_toast_notify::WinToastNotify::new()
         .set_title(&title)
         .set_messages(vec![&body])
-        .set_open(&item.url)
-        .show()
-    {
+        .set_open(&item.url);
+    if let Some(logo) = toast_logo_path() {
+        toast = toast.set_logo(&logo.to_string_lossy(), win_toast_notify::CropCircle::False);
+    }
+
+    match toast.show() {
         Ok(()) => {
             debug!("Showed toast for {}", item.issue_key);
             true

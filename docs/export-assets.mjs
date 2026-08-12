@@ -9,10 +9,21 @@ const ASSETS = "C:/Projects/kasl/assets";
 
 // The S tile (filled hex, bold code) is what reads at icon sizes.
 const S = path.join(ASSETS, "logo-s.svg");
+const M = path.join(ASSETS, "logo-m.svg");
 const L = path.join(ASSETS, "logo.svg");
 const BANNER = path.join(ASSETS, "banner.svg");
 
-const ICO_SIZES = [16, 24, 32, 48, 64, 128, 256];
+// Each .ico entry is rendered from the brand level designed for its size:
+// S (filled hex) up to 27px, M (code only) 28-63, L (code + metaphor) 64+.
+const ICO_SIZES = [
+  [16, S],
+  [24, S],
+  [32, M],
+  [48, M],
+  [64, L],
+  [128, L],
+  [256, L],
+];
 
 async function png(src, size, out) {
   await sharp(src, { density: 384 }).resize(size, size).png().toFile(out);
@@ -46,16 +57,24 @@ function buildIco(pngBuffers, sizes) {
 }
 
 const icoParts = [];
-for (const size of ICO_SIZES) {
-  icoParts.push(await sharp(S, { density: 384 }).resize(size, size).png().toBuffer());
+for (const [size, src] of ICO_SIZES) {
+  icoParts.push(await sharp(src, { density: 384 }).resize(size, size).png().toBuffer());
 }
-fs.writeFileSync(path.join(ASSETS, "icon.ico"), buildIco(icoParts, ICO_SIZES));
+fs.writeFileSync(
+  path.join(ASSETS, "icon.ico"),
+  buildIco(
+    icoParts,
+    ICO_SIZES.map(([size]) => size),
+  ),
+);
 console.log("wrote icon.ico");
 
 // Favicon + docs logo.
 await png(S, 32, path.join(ASSETS, "favicon-32.png"));
 await png(S, 180, path.join(ASSETS, "apple-touch-icon.png"));
 await png(L, 512, path.join(ASSETS, "logo-512.png"));
+// Toast appLogoOverride renders at 48 DIPs; 96px covers 200% scaling. M level.
+await png(M, 96, path.join(ASSETS, "toast-96.png"));
 console.log("wrote pngs");
 
 // GitHub social preview: 1280x640. Two adjustments to the banner: its plate

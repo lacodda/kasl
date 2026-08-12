@@ -17,14 +17,14 @@ license = "MIT"
 keywords = ["cli", "tool", "work", "time", "flow"]
 categories = ["command-line-utilities"]
 build = "build.rs"
-# assets/icon.ico is required by build.rs on Windows; the rest of the brand
-# artwork only serves GitHub and the docs site.
+# assets/icon.ico is required by build.rs on Windows and assets/toast-96.png
+# is compiled into the binary; the rest of the brand artwork only serves
+# GitHub and the docs site.
 exclude = [
     "docs/",
     "tools/",
     ".github/",
     ".changeset/",
-    "kasl.webp",
     "CNAME",
     "assets/social-preview.png",
     "assets/logo-512.png",
