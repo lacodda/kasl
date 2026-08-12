@@ -116,7 +116,7 @@ nix = { version = "0.31.3", features = ["process", "poll"] }
 
 # Desktop toasts on Linux/macOS (XDG / NSUserNotification)
 [target.'cfg(not(windows))'.dependencies]
-notify-rust = "=4.11.0"
+notify-rust = "4.18.0"
 
 # Platform-specific dependencies for Windows
 [target.'cfg(windows)'.dependencies]
