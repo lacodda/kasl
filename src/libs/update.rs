@@ -35,7 +35,6 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use flate2::read::GzDecoder;
 use reqwest::Client;
-use serde::Deserialize;
 use std::env;
 use std::fs::{self, File};
 use std::path::PathBuf;
@@ -62,31 +61,6 @@ const DAILY_CHECK_INTERVAL: i64 = 1;
 /// Before replacing the current executable, it's backed up with this extension
 /// to enable rollback in case of update failures.
 const BACKUP_EXTENSION: &str = "bak";
-
-/// Represents a GitHub release response from the API.
-///
-/// This structure deserializes the JSON response from GitHub's releases API,
-/// containing version information and download assets for the latest release.
-#[derive(Deserialize, Debug)]
-struct GitHubRelease {
-    /// The version tag name (e.g., "v1.2.3" or "1.2.3")
-    tag_name: String,
-    /// Array of downloadable assets for this release
-    assets: Vec<GitHubAsset>,
-}
-
-/// Represents a single downloadable asset within a GitHub release.
-///
-/// Each release typically contains multiple assets for different platforms
-/// and architectures. This structure provides the information needed to
-/// identify and download the appropriate asset.
-#[derive(Deserialize, Debug)]
-struct GitHubAsset {
-    /// Direct download URL for this asset
-    browser_download_url: String,
-    /// Filename of the asset (used for platform identification)
-    name: String,
-}
 
 /// Manages the complete application update process from version checking to binary replacement.
 ///
@@ -145,10 +119,12 @@ pub struct Updater {
     /// downloading the appropriate binary for the current system configuration.
     pub download_url: Option<String>,
 
-    /// Complete URL for fetching latest release information from GitHub API.
+    /// URL of the repository's `releases/latest` page.
     ///
-    /// Constructed from repository information and GitHub's API format.
-    /// Used for all version checking and asset discovery operations.
+    /// The latest tag is read from this page's redirect `Location` header
+    /// instead of `api.github.com`: the API allows only 60 anonymous
+    /// requests per hour per IP, which starves every machine behind a
+    /// shared NAT (the same failure the installers hit).
     releases_url: String,
 
     /// Path to file storing the timestamp of the last update check.
@@ -210,8 +186,8 @@ impl Updater {
         // Set up cache file for update check throttling
         let last_check_file = DataStorage::new().get_path(LAST_CHECK_FILE)?;
 
-        // Construct GitHub API endpoint for latest release information
-        let releases_url = format!("https://api.github.com/repos/{}/{}/releases/latest", owner, name);
+        // Release page whose redirect reveals the latest tag (no API quota)
+        let releases_url = format!("https://github.com/{}/{}/releases/latest", owner, name);
 
         Ok(Self {
             client: Client::new(),
@@ -411,19 +387,12 @@ impl Updater {
     /// 3. **Update Detection**: Identifies when remote version is greater than current
     /// 4. **State Population**: Stores version and download information for later use
     ///
-    /// ## API Communication
+    /// ## Release Discovery
     ///
-    /// ### Request Configuration
-    /// - **User Agent**: Identifies requests with application name
-    /// - **Rate Limiting**: Respects GitHub's API rate limits
-    /// - **Error Handling**: Gracefully handles API errors and timeouts
-    /// - **JSON Parsing**: Deserializes GitHub's release response format
-    ///
-    /// ### Response Processing
-    /// - **Version Extraction**: Parses tag_name from release information
-    /// - **Asset Discovery**: Finds platform-appropriate download assets
-    /// - **URL Resolution**: Determines correct download URL for current platform
-    /// - **Cache Update**: Records check timestamp for throttling
+    /// The latest tag comes from the `releases/latest` redirect rather than
+    /// `api.github.com` (anonymous API quota is 60 requests/hour per IP and
+    /// starves shared NATs). The download URL is constructed from the tag and
+    /// the platform identifier, matching the release asset naming scheme.
     ///
     /// ## State Updates
     ///
@@ -460,22 +429,28 @@ impl Updater {
     /// # }
     /// ```
     pub async fn check_for_latest_release(&mut self) -> Result<bool> {
-        // Fetch latest release information from GitHub API
-        let release = self.fetch_latest_github_release().await?;
+        // Read the latest tag from the release page redirect
+        let tag = self.fetch_latest_tag().await?;
 
         // Update check timestamp for throttling future checks
         self.update_last_check_time();
 
         // Normalize version string by removing 'v' prefix if present
-        let latest_version = release.tag_name.trim_start_matches('v').to_string();
+        let latest_version = tag.trim_start_matches('v').to_string();
 
         // Compare versions using string comparison (works for semantic versioning)
         if latest_version > self.version {
-            // Store the newer version information
+            // Asset names follow the release convention: {name}-{tag}-{platform}.tar.gz
+            self.download_url = Some(format!(
+                "https://github.com/{}/{}/releases/download/{}/{}-{}-{}.tar.gz",
+                self.owner,
+                self.name,
+                tag,
+                self.name,
+                tag,
+                self.get_platform_identifier()
+            ));
             self.latest_version = Some(latest_version);
-
-            // Find and store the download URL for the current platform
-            self.download_url = self.find_platform_asset_url(&release.assets).map(|url| url.to_string());
 
             Ok(true) // Update is available
         } else {
@@ -483,68 +458,28 @@ impl Updater {
         }
     }
 
-    /// Fetches release data from the GitHub releases API.
+    /// Reads the latest release tag from the `releases/latest` redirect.
     ///
-    /// This method handles the low-level communication with GitHub's API,
-    /// including proper request headers and JSON deserialization. It's designed
-    /// to be reliable and follow GitHub's API best practices.
-    ///
-    /// ## Request Configuration
-    ///
-    /// - **User-Agent Header**: Required by GitHub API, set to application name
-    /// - **Accept Header**: Implicitly requests JSON response format
-    /// - **Timeout Handling**: Uses client default timeouts for reliability
-    /// - **Error Propagation**: Network errors are propagated to caller
-    ///
-    /// # Returns
-    ///
-    /// Returns the parsed GitHub release information or an error if the
-    /// request fails or the response cannot be parsed.
-    async fn fetch_latest_github_release(&self) -> Result<GitHubRelease, reqwest::Error> {
-        self.client
-            .get(&self.releases_url)
-            .header("User-Agent", &self.name) // Required by GitHub API
-            .send()
-            .await?
-            .json::<GitHubRelease>()
-            .await
-    }
+    /// GitHub answers this page with a `302` to `.../releases/tag/<tag>`;
+    /// the tag is taken from the `Location` header. Unlike `api.github.com`,
+    /// this endpoint has no anonymous rate limit, so it keeps working for
+    /// every machine behind a shared NAT.
+    async fn fetch_latest_tag(&self) -> Result<String> {
+        // The shared client follows redirects (needed for asset downloads),
+        // so the redirect probe uses its own non-following client.
+        let client = Client::builder().redirect(reqwest::redirect::Policy::none()).build()?;
+        let response = client.get(&self.releases_url).header("User-Agent", &self.name).send().await?;
 
-    /// Finds the download URL for an asset matching the current platform.
-    ///
-    /// This method searches through release assets to find the binary that
-    /// matches the current platform's architecture and operating system.
-    /// It uses platform identification to select the appropriate asset.
-    ///
-    /// ## Asset Selection Logic
-    ///
-    /// 1. **Platform Identification**: Generate current platform identifier
-    /// 2. **Asset Filtering**: Search assets for matching platform identifier
-    /// 3. **URL Extraction**: Return download URL for matching asset
-    /// 4. **Fallback Handling**: Return None if no matching asset found
-    ///
-    /// ## Platform Matching
-    ///
-    /// The method looks for assets containing platform identifiers like:
-    /// - `x86_64-pc-windows-msvc` for Windows
-    /// - `x86_64-apple-darwin` for macOS Intel
-    /// - `aarch64-apple-darwin` for macOS Apple Silicon
-    /// - `x86_64-unknown-linux-musl` for Linux
-    ///
-    /// # Arguments
-    ///
-    /// * `assets` - Array of release assets from GitHub API response
-    ///
-    /// # Returns
-    ///
-    /// Returns the download URL for the matching asset, or None if no
-    /// compatible asset is found for the current platform.
-    fn find_platform_asset_url<'a>(&self, assets: &'a [GitHubAsset]) -> Option<&'a str> {
-        let platform_name = self.get_platform_identifier();
-        assets
-            .iter()
-            .find(|asset| asset.name.contains(&platform_name))
-            .map(|asset| asset.browser_download_url.as_str())
+        let location = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .ok_or_else(|| msg_error_anyhow!(Message::UpdateLatestTagNotFound(self.releases_url.clone())))?;
+
+        match location.rsplit_once("/releases/tag/") {
+            Some((_, tag)) if !tag.is_empty() => Ok(tag.to_string()),
+            _ => Err(msg_error_anyhow!(Message::UpdateLatestTagNotFound(self.releases_url.clone()))),
+        }
     }
 
     /// Extracts the new binary from the downloaded archive and replaces the current executable.
@@ -670,7 +605,7 @@ impl Updater {
     /// ### Operating System Mapping
     /// - `windows` → `pc-windows-msvc`: Windows with MSVC toolchain
     /// - `macos` → `apple-darwin`: macOS with Darwin ABI
-    /// - Other → `unknown-linux-musl`: Linux with statically linked musl
+    /// - Other → `unknown-linux-gnu`: Linux with glibc
     ///
     /// # Returns
     ///
@@ -683,13 +618,15 @@ impl Updater {
     /// - Windows: `"x86_64-pc-windows-msvc"`
     /// - macOS Intel: `"x86_64-apple-darwin"`
     /// - macOS Apple Silicon: `"aarch64-apple-darwin"`
-    /// - Linux: `"x86_64-unknown-linux-musl"`
+    /// - Linux: `"x86_64-unknown-linux-gnu"`
     fn get_platform_identifier(&self) -> String {
         let arch = env::consts::ARCH;
         let os = match env::consts::OS {
             "windows" => "pc-windows-msvc",
             "macos" => "apple-darwin",
-            _ => "unknown-linux-musl", // Default to Linux with musl for compatibility
+            // Must match the published asset triple; releases ship glibc
+            // builds (the installers hit 404s on the old musl guess).
+            _ => "unknown-linux-gnu",
         };
 
         // Construct target triple format: architecture-vendor-os-abi

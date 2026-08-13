@@ -347,6 +347,7 @@ impl Display for Message {
             }
             Message::NoUpdateRequired => "No update required. You are using the latest version!".to_string(),
             Message::UpdateDownloadUrlNotSet => "Download URL not set".to_string(),
+            Message::UpdateLatestTagNotFound(url) => format!("Could not resolve the latest release tag from {}", url),
             Message::WatcherStoppingForUpdate => "Stopping watcher for update...".to_string(),
             Message::WatcherRestartingAfterUpdate => "Restarting watcher after update...".to_string(),
             Message::WatcherStoppingForConfig => "Stopping watcher to apply new configuration...".to_string(),

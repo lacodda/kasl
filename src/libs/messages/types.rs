@@ -283,6 +283,7 @@ pub enum Message {
     },
     NoUpdateRequired,
     UpdateDownloadUrlNotSet,
+    UpdateLatestTagNotFound(String),
     WatcherStoppingForUpdate,
     WatcherRestartingAfterUpdate,
     WatcherStoppingForConfig,

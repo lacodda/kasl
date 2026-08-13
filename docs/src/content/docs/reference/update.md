@@ -14,7 +14,7 @@ kasl update
 
 The update process performs a complete workflow:
 
-1. **Version Check**: Queries GitHub API for the latest release
+1. **Version Check**: Reads the latest release tag from the `releases/latest` redirect (no GitHub API quota involved)
 2. **Platform Detection**: Identifies the correct binary for the current OS/architecture
 3. **Download**: Retrieves the latest release archive
 4. **Extraction**: Unpacks the new binary from the archive
@@ -27,7 +27,7 @@ Updates are fetched from GitHub releases at:
 
 The updater automatically selects the appropriate asset based on:
 - **Architecture**: x86_64, aarch64, etc.
-- **Operating System**: Windows (MSVC), macOS (Darwin), Linux (musl)
+- **Operating System**: Windows (MSVC), macOS (Darwin), Linux (glibc)
 
 ## Platform Support
 
@@ -35,7 +35,7 @@ Supported platform identifiers:
 - `x86_64-pc-windows-msvc` - Windows 64-bit
 - `x86_64-apple-darwin` - macOS Intel
 - `aarch64-apple-darwin` - macOS Apple Silicon
-- `x86_64-unknown-linux-musl` - Linux 64-bit
+- `x86_64-unknown-linux-gnu` - Linux 64-bit
 
 ## Safety Features
 
