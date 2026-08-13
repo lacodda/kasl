@@ -333,6 +333,16 @@ pub struct JiraInboxConfig {
     #[serde(default = "default_true")]
     pub notify: bool,
 
+    /// Whether to show a toast when an existing issue visibly changes
+    /// (status, priority, score).
+    #[serde(default = "default_true")]
+    pub notify_changes: bool,
+
+    /// Whether to show a toast when an issue leaves the inbox
+    /// (closed or reassigned). Off by default.
+    #[serde(default)]
+    pub notify_gone: bool,
+
     /// Extra Jira fields to fetch (custom fields such as Scoring).
     #[serde(default)]
     pub custom_fields: Vec<JiraCustomField>,
@@ -365,6 +375,8 @@ impl Default for JiraInboxConfig {
             enabled: true,
             poll_interval_secs: default_jira_inbox_poll_interval(),
             notify: true,
+            notify_changes: true,
+            notify_gone: false,
             custom_fields: Vec::new(),
             sort_by_field: None,
         }
@@ -1141,6 +1153,10 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
         enabled,
         poll_interval_secs: poll_interval_secs.max(30),
         notify,
+        // Change/gone toasts keep their previous (or default) values; the
+        // wizard stays short and these are tuned via the config file.
+        notify_changes: default.notify_changes,
+        notify_gone: default.notify_gone,
         custom_fields,
         sort_by_field,
     })

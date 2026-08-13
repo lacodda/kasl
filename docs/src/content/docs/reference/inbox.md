@@ -2,7 +2,9 @@
 title: "inbox"
 ---
 
-The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears. From the inbox you can pin, dismiss, open in the browser, or import issues into your local task list.
+The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, dismiss, open in the browser, or import issues into your local task list.
+
+Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
 ## Usage
 
@@ -15,6 +17,7 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 ## Options
 
 - `-n, --limit <N>`: Show only the top N issues; the list is sorted by pin state, ranking field (e.g. Scoring), and priority
+- `--all`: Include issues gone from Jira (closed or reassigned); they sort below the present ones
 
 ## Commands
 
@@ -24,7 +27,11 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 kasl inbox sync
 ```
 
-Polls Jira immediately instead of waiting for the background cadence.
+Polls Jira immediately instead of waiting for the background cadence. The summary counts fetched, new, changed, and gone issues:
+
+```
+[✓] Jira inbox synced: 7 fetched, 1 new, 2 changed, 1 gone.
+```
 
 ### `list` - List active inbox issues
 
@@ -34,6 +41,9 @@ kasl inbox list [OPTIONS]
 
 **Options:**
 - `-n, --limit <N>`: Show only the top N issues
+- `--all`: Include issues gone from Jira
+
+The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`).
 
 ### `pin` - Pin an inbox issue
 
@@ -88,7 +98,7 @@ Imports the issue into local tasks (creates a task named `KEY summary` and dismi
 
 ## Background Polling
 
-Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser (Windows). Each issue is notified about only once.
+Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser (Windows). Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled.
 
 ## Configuration
 
@@ -100,6 +110,8 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
     "enabled": true,
     "poll_interval_secs": 300,
     "notify": true,
+    "notify_changes": true,
+    "notify_gone": false,
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
     "sort_by_field": "customfield_12345"
   }
@@ -108,7 +120,9 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
 
 - `enabled`: Whether the watcher polls Jira (default `true` when the section is present)
 - `poll_interval_secs`: Seconds between polls (default `300`)
-- `notify`: Show desktop toasts for new issues (default `true`)
+- `notify`: Show desktop toasts for new issues (default `true`); when `false`, all inbox toasts are off
+- `notify_changes`: Toast when an existing issue changes status, priority, or score (default `true`)
+- `notify_gone`: Toast when an issue leaves the inbox — closed or reassigned (default `false`)
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field
 - `sort_by_field`: Field id used to rank the list in descending order
 
@@ -124,6 +138,9 @@ kasl inbox -n 5
 # Sync now and show the result
 kasl inbox sync
 kasl inbox list
+
+# Check what left the inbox
+kasl inbox list --all
 
 # Work with a specific issue
 kasl inbox pin PROJ-123

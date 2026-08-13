@@ -6,7 +6,7 @@
 //! other platforms: notify-rust action callback).
 
 use crate::api::jira::Jira;
-use crate::db::jira_inbox::{JiraInbox, JiraInboxItem, JiraInboxUpsert, UpsertBatchResult};
+use crate::db::jira_inbox::{ChangedIssue, JiraInbox, JiraInboxItem, JiraInboxUpsert, UpsertBatchResult};
 use crate::db::jira_statuses::JiraStatuses;
 use crate::libs::config::{Config, JiraInboxConfig};
 use crate::libs::messages::Message;
@@ -21,6 +21,10 @@ pub struct SyncOutcome {
     pub fetched: usize,
     pub new_keys: Vec<String>,
     pub updated: usize,
+    /// Existing issues whose status/priority/score visibly changed.
+    pub changed: Vec<ChangedIssue>,
+    /// Issues that stopped appearing in the poll this pass.
+    pub gone_keys: Vec<String>,
     pub notified: usize,
     /// True when sync was skipped (no jira config / disabled / no credentials).
     pub skipped: bool,
@@ -100,6 +104,7 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
             issue_id: issue.id.clone(),
             summary: issue.fields.summary.clone(),
             status_id,
+            status_name: issue.fields.status.name.clone(),
             priority: issue.fields.priority.as_ref().map(|p| p.name.clone()),
             priority_rank: Jira::priority_rank(&issue.fields.priority),
             sort_value,
@@ -109,7 +114,12 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
     }
 
     let db = JiraInbox::new()?;
-    let UpsertBatchResult { new_keys, updated } = db.upsert_batch(&upserts)?;
+    let UpsertBatchResult { new_keys, updated, changed } = db.upsert_batch(&upserts)?;
+
+    // Reconcile: issues missing from this poll are gone (closed, reassigned),
+    // not frozen in the list forever.
+    let present_keys: Vec<String> = upserts.iter().map(|u| u.issue_key.clone()).collect();
+    let gone_keys = db.mark_gone(&present_keys)?;
 
     let mut notified = 0;
     if notify && !new_keys.is_empty() {
@@ -123,10 +133,32 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
         db.mark_notified(&keys)?;
     }
 
+    if notify && inbox_cfg.notify_changes {
+        for change in changed.iter().filter(|c| !c.dismissed) {
+            if let Ok(Some(item)) = db.get_by_key(&change.issue_key)
+                && show_change_toast(&item, &change.change)
+            {
+                notified += 1;
+            }
+        }
+    }
+
+    if notify && inbox_cfg.notify_gone {
+        for key in &gone_keys {
+            if let Ok(Some(item)) = db.get_by_key(key)
+                && show_gone_toast(&item)
+            {
+                notified += 1;
+            }
+        }
+    }
+
     Ok(SyncOutcome {
         fetched: issues.len(),
         new_keys,
         updated,
+        changed,
+        gone_keys,
         notified,
         skipped: false,
     })
@@ -136,13 +168,30 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
 ///
 /// Clicking the toast opens [`JiraInboxItem::url`] in the default browser.
 pub fn show_toast(item: &JiraInboxItem) -> bool {
+    show_raw_toast(&format!("Jira {}", item.issue_key), &toast_body(item), &item.url, &item.issue_key)
+}
+
+/// Shows a toast for a visible change on an existing inbox item.
+pub fn show_change_toast(item: &JiraInboxItem, change: &str) -> bool {
+    let body = format!("{change} — {}", item.summary);
+    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+}
+
+/// Shows a toast for an issue that left the inbox (closed or reassigned).
+pub fn show_gone_toast(item: &JiraInboxItem) -> bool {
+    let body = format!("Left the inbox — {}", item.summary);
+    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+}
+
+/// Platform dispatch for a toast with a click-to-open URL.
+fn show_raw_toast(title: &str, body: &str, url: &str, key: &str) -> bool {
     #[cfg(windows)]
     {
-        show_toast_windows(item)
+        show_toast_windows(title, body, url, key)
     }
     #[cfg(not(windows))]
     {
-        show_toast_other(item)
+        show_toast_other(title, body, url, key)
     }
 }
 
@@ -171,38 +220,30 @@ fn toast_logo_path() -> Option<std::path::PathBuf> {
 }
 
 #[cfg(windows)]
-fn show_toast_windows(item: &JiraInboxItem) -> bool {
-    let title = format!("Jira {}", item.issue_key);
-    let body = toast_body(item);
-
-    let mut toast = win_toast_notify::WinToastNotify::new()
-        .set_title(&title)
-        .set_messages(vec![&body])
-        .set_open(&item.url);
+fn show_toast_windows(title: &str, body: &str, url: &str, key: &str) -> bool {
+    let mut toast = win_toast_notify::WinToastNotify::new().set_title(title).set_messages(vec![body]).set_open(url);
     if let Some(logo) = toast_logo_path() {
         toast = toast.set_logo(&logo.to_string_lossy(), win_toast_notify::CropCircle::False);
     }
 
     match toast.show() {
         Ok(()) => {
-            debug!("Showed toast for {}", item.issue_key);
+            debug!("Showed toast for {}", key);
             true
         }
         Err(e) => {
-            warn!("Failed to show toast for {}: {}", item.issue_key, e);
+            warn!("Failed to show toast for {}: {}", key, e);
             false
         }
     }
 }
 
 #[cfg(all(not(windows), not(target_os = "macos")))]
-fn show_toast_other(item: &JiraInboxItem) -> bool {
-    let title = format!("Jira {}", item.issue_key);
-    let body = toast_body(item);
-    let url = item.url.clone();
-    let key = item.issue_key.clone();
+fn show_toast_other(title: &str, body: &str, url: &str, key: &str) -> bool {
+    let url = url.to_string();
+    let owned_key = key.to_string();
 
-    match notify_rust::Notification::new().summary(&title).body(&body).action("default", "Open").show() {
+    match notify_rust::Notification::new().summary(title).body(body).action("default", "Open").show() {
         Ok(handle) => {
             // Wait for click off the poller thread so sync stays responsive.
             std::thread::spawn(move || {
@@ -210,15 +251,15 @@ fn show_toast_other(item: &JiraInboxItem) -> bool {
                     if action == "default"
                         && let Err(e) = open_url(&url)
                     {
-                        warn!("Failed to open {} from toast: {}", key, e);
+                        warn!("Failed to open {} from toast: {}", owned_key, e);
                     }
                 });
             });
-            debug!("Showed toast for {}", item.issue_key);
+            debug!("Showed toast for {}", key);
             true
         }
         Err(e) => {
-            warn!("Failed to show toast for {}: {}", item.issue_key, e);
+            warn!("Failed to show toast for {}: {}", key, e);
             false
         }
     }
@@ -227,16 +268,14 @@ fn show_toast_other(item: &JiraInboxItem) -> bool {
 /// macOS: notify-rust cannot wait for notification clicks (no actions API),
 /// so the toast is display-only and opening stays on the CLI (`inbox --open`).
 #[cfg(target_os = "macos")]
-fn show_toast_other(item: &JiraInboxItem) -> bool {
-    let title = format!("Jira {}", item.issue_key);
-    let body = toast_body(item);
-    match notify_rust::Notification::new().summary(&title).body(&body).show() {
+fn show_toast_other(title: &str, body: &str, _url: &str, key: &str) -> bool {
+    match notify_rust::Notification::new().summary(title).body(body).show() {
         Ok(_) => {
-            debug!("Showed toast for {}", item.issue_key);
+            debug!("Showed toast for {}", key);
             true
         }
         Err(e) => {
-            warn!("Failed to show toast for {}: {}", item.issue_key, e);
+            warn!("Failed to show toast for {}: {}", key, e);
             false
         }
     }
@@ -292,10 +331,12 @@ pub async fn run_poller() {
                     msg_info!(Message::JiraInboxNewIssues(outcome.new_keys.len()));
                 }
                 debug!(
-                    "Jira inbox sync: fetched={}, new={}, updated={}, notified={}",
+                    "Jira inbox sync: fetched={}, new={}, updated={}, changed={}, gone={}, notified={}",
                     outcome.fetched,
                     outcome.new_keys.len(),
                     outcome.updated,
+                    outcome.changed.len(),
+                    outcome.gone_keys.len(),
                     outcome.notified
                 );
             }

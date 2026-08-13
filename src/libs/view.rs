@@ -475,8 +475,13 @@ impl View {
     /// Displays active Jira inbox items (pinned, score, then priority).
     ///
     /// SUMMARY is truncated to fit the terminal width (same approach as [`View::tasks`]).
+    /// The CHANGE column shows freshness badges: `NEW`, `gone`, or the latest
+    /// visible change such as `status→In Progress`.
     pub fn jira_inbox(items: &[crate::db::jira_inbox::JiraInboxItem]) -> Result<()> {
+        let now = chrono::Local::now().naive_local();
+        let badges: Vec<String> = items.iter().map(|i| i.badge(now).unwrap_or_default()).collect();
         let pin_width = "★".width().max(1);
+        let change_width = badges.iter().map(|b| b.width()).max().unwrap_or(1).max("CHANGE".width()).min(24);
         let score_width = items
             .iter()
             .map(|i| i.sort_value.map(|v| format!("{}", v).width()).unwrap_or_else(|| "—".width()))
@@ -504,17 +509,17 @@ impl View {
             .max("STATUS".width())
             .min(18);
 
-        // "", SCORE, PRIORITY, KEY, STATUS, SUMMARY
-        let num_cols = 6;
+        // "", CHANGE, SCORE, PRIORITY, KEY, STATUS, SUMMARY
+        let num_cols = 7;
         let frame_overhead = 3 * num_cols + 1;
-        let fixed = pin_width + score_width + priority_width + key_width + status_width;
+        let fixed = pin_width + change_width + score_width + priority_width + key_width + status_width;
         let summary_width = terminal_cols().saturating_sub(frame_overhead + fixed).max(12);
 
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["", "SCORE", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
+        table.set_titles(row!["", "CHANGE", "SCORE", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
 
-        for item in items {
+        for (item, badge) in items.iter().zip(&badges) {
             let pin = if item.pinned { "★" } else { "" };
             let score = item.sort_value.map(|v| format!("{}", v)).unwrap_or_else(|| "—".to_string());
             let status_raw = if item.status_name.is_empty() {
@@ -524,6 +529,7 @@ impl View {
             };
             table.add_row(row![
                 pin,
+                truncate_to_width(badge, change_width),
                 score,
                 item.priority.as_deref().unwrap_or("—"),
                 item.issue_key,

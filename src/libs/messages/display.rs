@@ -505,8 +505,13 @@ impl Display for Message {
             Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl init` and select Jira.".to_string(),
             Message::JiraInboxEmpty => "Jira inbox is empty.".to_string(),
             Message::JiraInboxListHeader => "Jira inbox:".to_string(),
-            Message::JiraInboxSynced { fetched, new_count, updated } => {
-                format!("Jira inbox synced: {} fetched, {} new, {} updated.", fetched, new_count, updated)
+            Message::JiraInboxSynced {
+                fetched,
+                new_count,
+                changed,
+                gone,
+            } => {
+                format!("Jira inbox synced: {} fetched, {} new, {} changed, {} gone.", fetched, new_count, changed, gone)
             }
             Message::JiraInboxNewIssues(count) => format!("Jira inbox: {} new issue(s).", count),
             Message::JiraInboxNotFound(key) => format!("Issue '{}' not found in inbox.", key),

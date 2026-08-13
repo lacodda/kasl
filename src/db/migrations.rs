@@ -355,6 +355,20 @@ impl MigrationManager {
             tx.execute("DROP TABLE IF EXISTS breaks", [])?;
             Ok(())
         });
+
+        // Version 12: inbox reconciliation and change tracking.
+        //
+        // `gone_at` marks issues that stopped appearing in the Jira poll
+        // (closed, reassigned) so the list stops showing them instead of
+        // freezing on the first sync. `last_change`/`changed_at` record the
+        // most recent visible change (status, priority, score) for badges
+        // and toasts.
+        self.add_migration(12, "jira_inbox_gone_and_change_tracking", |tx| {
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN gone_at TIMESTAMP", [])?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN last_change TEXT", [])?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN changed_at TIMESTAMP", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

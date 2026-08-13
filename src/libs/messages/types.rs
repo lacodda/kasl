@@ -440,7 +440,8 @@ pub enum Message {
     JiraInboxSynced {
         fetched: usize,
         new_count: usize,
-        updated: usize,
+        changed: usize,
+        gone: usize,
     },
     JiraInboxNewIssues(usize),
     JiraInboxNotFound(String),

@@ -23,6 +23,10 @@ pub struct InboxArgs {
     /// Show only the top N issues (already sorted by pin / score / priority)
     #[arg(long, short = 'n', value_name = "N")]
     limit: Option<usize>,
+
+    /// Include issues gone from Jira (closed or reassigned)
+    #[arg(long)]
+    all: bool,
 }
 
 /// Available inbox operations.
@@ -38,6 +42,10 @@ enum InboxCommand {
         /// Show only the top N issues
         #[arg(long, short = 'n', value_name = "N")]
         limit: Option<usize>,
+
+        /// Include issues gone from Jira (closed or reassigned)
+        #[arg(long)]
+        all: bool,
     },
 
     /// Pin an issue so it stays on top
@@ -90,24 +98,25 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
                 msg_success!(Message::JiraInboxSynced {
                     fetched: outcome.fetched,
                     new_count: outcome.new_keys.len(),
-                    updated: outcome.updated,
+                    changed: outcome.changed.len(),
+                    gone: outcome.gone_keys.len(),
                 });
             }
             Ok(())
         }
-        Some(InboxCommand::List { limit }) => list_inbox(limit.or(args.limit)),
+        Some(InboxCommand::List { limit, all }) => list_inbox(limit.or(args.limit), all || args.all),
         Some(InboxCommand::Pin { key }) => set_pinned(&key, true),
         Some(InboxCommand::Unpin { key }) => set_pinned(&key, false),
         Some(InboxCommand::Dismiss { key }) => dismiss(&key),
         Some(InboxCommand::Open { key }) => open_issue(&key),
         Some(InboxCommand::Take { key }) => take_issue(&key),
         // Bare `kasl inbox` shows the list, as it always has.
-        None => list_inbox(args.limit),
+        None => list_inbox(args.limit, args.all),
     }
 }
 
-fn list_inbox(limit: Option<usize>) -> Result<()> {
-    let mut items = JiraInbox::new()?.list_active()?;
+fn list_inbox(limit: Option<usize>, include_gone: bool) -> Result<()> {
+    let mut items = JiraInbox::new()?.list_active(include_gone)?;
     if items.is_empty() {
         msg_info!(Message::JiraInboxEmpty);
         return Ok(());
