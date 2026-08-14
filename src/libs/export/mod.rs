@@ -1,10 +1,5 @@
-//! Data export functionality for external analysis and backup.
-//!
-//! Provides a comprehensive data export system that enables users to extract
-//! their work tracking data in multiple formats for external analysis, backup,
-//! integration with other tools, or compliance reporting.
-//!
-//! ## Usage
+//! Exports reports, tasks and summaries to CSV, JSON and Excel,
+//! including the hourly (SiServer-style) Excel layout.
 //!
 //! ```rust,no_run
 //! # async fn f() -> anyhow::Result<()> {
@@ -24,87 +19,47 @@ use crate::{
         formatter::format_duration,
         locale::{Language, Locale},
         messages::Message,
-        pause::Pause,
-        report::{self, WorkInterval},
+        report,
         report_template::{FontSpec, ReportTemplate},
-        task::{Task, TaskFilter},
+        task::TaskFilter,
     },
     msg_error_anyhow, msg_info, msg_success,
 };
 use anyhow::Result;
-use chrono::{Datelike, Duration, Local, NaiveDate, NaiveDateTime, Timelike};
+use chrono::{Datelike, Duration, Local, NaiveDate};
 use rust_xlsxwriter::{Format, FormatAlign, FormatBorder, Workbook};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 
-/// Enumeration of supported export output formats.
-///
-/// This enum defines the available output formats for data export operations.
-/// Each format is optimized for different use cases and provides different
-/// levels of functionality and compatibility.
+mod hourly;
+use hourly::{HourlyReport, assign_tasks_to_hour_slots, build_hourly_rows, classify_hour_slots};
+
+/// Output formats for exports.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum ExportFormat {
-    /// Comma-separated values format for universal compatibility.
-    ///
-    /// CSV exports provide maximum compatibility with spreadsheet applications,
-    /// data analysis tools, and simple parsing libraries. The format uses
-    /// standard CSV conventions with proper quoting and escaping.
     Csv,
-
-    /// JavaScript Object Notation for structured data exchange.
-    ///
-    /// JSON exports preserve data types and structure, making them ideal for
-    /// programmatic processing, API integrations, and backup/restore operations.
-    /// All exports use pretty-printing for human readability.
+    /// Pretty-printed JSON.
     Json,
-
-    /// Microsoft Excel format with advanced formatting capabilities.
-    ///
-    /// Excel exports provide rich formatting, multiple worksheets, auto-sizing,
-    /// and professional presentation quality. Ideal for business reports and
-    /// executive presentations.
+    /// One worksheet per export, headers and autofit applied.
     Excel,
 }
 
-/// Enumeration of data types available for export.
-///
-/// This enum defines the different categories of information that can be
-/// exported from the kasl application. Each data type provides different
-/// levels of detail and serves different analytical purposes.
+/// What gets exported.
 #[derive(Debug, Clone, Copy, clap::ValueEnum)]
 pub enum ExportData {
-    /// Export daily work report with intervals and productivity metrics.
-    ///
-    /// Includes detailed work intervals, break periods, task associations,
-    /// and calculated productivity statistics for a specific date.
+    /// The daily report: intervals, tasks, productivity.
     Report,
-
-    /// Export task records with completion status and metadata.
-    ///
-    /// Includes all tasks for a specific date with their names, descriptions,
-    /// completion percentages, and associated metadata.
+    /// The date's tasks.
     Tasks,
-
-    /// Export monthly summary with aggregated statistics.
-    ///
-    /// Includes daily work hour totals, averages, and productivity trends
-    /// for the month containing the specified date.
+    /// The month's totals and per-day hours.
     Summary,
-
-    /// Export comprehensive dataset including all available information.
-    ///
-    /// Combines reports, tasks, and summaries into a single export for
-    /// complete data backup or comprehensive analysis.
+    /// Report + tasks + summary: one JSON file, or suffixed files for CSV/Excel.
     All,
 }
 
-/// Serializable structure representing a daily work report for export.
-///
-/// This structure contains all the information needed to represent a complete
-/// daily work report in export formats. All fields use string representations
-/// for format compatibility and consistent presentation.
+/// A daily report as exported; fields are pre-formatted strings.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportReport {
     /// Date of the work report in YYYY-MM-DD format
@@ -123,10 +78,7 @@ pub struct ExportReport {
     pub tasks: Vec<ExportTask>,
 }
 
-/// Serializable structure representing a work interval within a daily report.
-///
-/// Work intervals represent continuous periods of activity without breaks.
-/// They are calculated by analyzing work start/end times and pause periods.
+/// One work interval row in the exported report.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportInterval {
     /// Sequential index of the interval (1-based)
@@ -139,10 +91,7 @@ pub struct ExportInterval {
     pub duration: String,
 }
 
-/// Serializable structure representing a task record for export.
-///
-/// This structure contains all relevant task information in a format
-/// suitable for external systems and analysis tools.
+/// One task row in the exported report.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportTask {
     /// Unique task identifier from the database
@@ -155,10 +104,7 @@ pub struct ExportTask {
     pub completeness: i32,
 }
 
-/// Serializable structure representing a monthly summary for export.
-///
-/// This structure aggregates work data for an entire month, providing
-/// overview statistics and daily breakdowns for analysis purposes.
+/// A monthly summary as exported.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportSummary {
     /// Month and year in "Month YYYY" format (e.g., "January 2025")
@@ -173,10 +119,7 @@ pub struct ExportSummary {
     pub total_days: usize,
 }
 
-/// Serializable structure representing a single day within a monthly summary.
-///
-/// This structure provides daily-level statistics within the broader
-/// monthly summary context.
+/// One day's line in the exported monthly summary.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportDaySum {
     /// Date in YYYY-MM-DD format
@@ -187,16 +130,9 @@ pub struct ExportDaySum {
     pub is_workday: bool,
 }
 
-/// Main export handler responsible for orchestrating data export operations.
-///
-/// The Exporter struct encapsulates the export format, output destination,
-/// and provides methods for exporting different types of data. It handles
-/// the complete export pipeline from data gathering to file generation.
-///
+/// Gathers data and writes it in the chosen format.
 pub struct Exporter {
-    /// The desired output format for the export operation
     format: ExportFormat,
-    /// The destination path for the exported file
     output_path: PathBuf,
     /// Whether to render the daily report as an hourly (SiServer-style) breakdown.
     ///
@@ -208,32 +144,8 @@ pub struct Exporter {
 }
 
 impl Exporter {
-    /// Creates a new Exporter instance with specified format and optional output path.
-    ///
-    /// This constructor sets up the export configuration and determines the output
-    /// file path. If no custom path is provided, it generates a default filename
-    /// based on the current timestamp and selected format.
-    ///
-    /// ## Default File Naming
-    ///
-    /// When no output path is specified, the constructor generates a filename using:
-    /// - **Prefix**: "kasl_export_"
-    /// - **Timestamp**: YYYYMMDD_HHMMSS format
-    /// - **Extension**: Format-appropriate extension (.csv, .json, .xlsx)
-    ///
-    /// Example default names:
-    /// - `kasl_export_20250115_143022.csv`
-    /// - `kasl_export_20250115_143022.json`
-    /// - `kasl_export_20250115_143022.xlsx`
-    ///
-    /// ## Path Validation
-    ///
-    /// The constructor validates that:
-    /// - Custom paths have appropriate file extensions
-    /// - Parent directories exist or can be created
-    /// - Write permissions are available
-    ///
-    /// # Examples
+    /// Builds an exporter; without a path the file is named
+    /// `kasl_export_{YYYYMMDD_HHMMSS}.{ext}` in the current directory.
     ///
     /// ```rust,no_run
     /// use kasl::libs::export::{Exporter, ExportFormat};
@@ -267,32 +179,14 @@ impl Exporter {
         }
     }
 
-    /// Enables or disables the hourly (SiServer-style) daily report layout.
-    ///
-    /// This builder-style method toggles the hourly breakdown rendering for
-    /// daily reports. It only affects Excel report exports; other formats and
-    /// data types ignore this flag.
-    ///
+    /// Toggles the hourly (SiServer-style) layout; only Excel report
+    /// exports honor it.
     pub fn hourly(mut self, hourly: bool) -> Self {
         self.hourly = hourly;
         self
     }
 
-    /// Main export dispatcher that routes to appropriate export handlers based on data type.
-    ///
-    /// This method serves as the primary interface for export operations, determining
-    /// which specific export handler to invoke based on the requested data type.
-    /// It provides a unified interface while delegating to specialized methods.
-    ///
-    /// ## Export Process Flow
-    ///
-    /// 1. **Data Type Analysis**: Determine which export handler to invoke
-    /// 2. **Data Gathering**: Collect relevant information from the database
-    /// 3. **Format Processing**: Apply format-specific transformations
-    /// 4. **File Generation**: Write the formatted data to the output file
-    /// 5. **Validation**: Verify export completeness and file integrity
-    ///
-    /// # Examples
+    /// Runs the export for the requested data type.
     ///
     /// ```rust,no_run
     /// # async fn f() -> anyhow::Result<()> {
@@ -314,27 +208,7 @@ impl Exporter {
         }
     }
 
-    /// Exports a comprehensive daily work report with intervals, tasks, and productivity metrics.
-    ///
-    /// This method generates a detailed daily report that includes all work intervals,
-    /// associated tasks, productivity calculations, and summary statistics. The report
-    /// provides a complete picture of work activity for the specified date.
-    ///
-    /// ## Report Components
-    ///
-    /// The generated report includes:
-    /// - **Work Intervals**: Detailed start/end times and durations for each work period
-    /// - **Productivity Metrics**: Calculated productivity percentage based on active work time
-    /// - **Task Information**: All tasks associated with the specified date
-    /// - **Summary Statistics**: Total hours, break time, and other key metrics
-    ///
-    /// ## Data Sources
-    ///
-    /// The report combines data from multiple database sources:
-    /// - Workday records for overall work boundaries
-    /// - Pause records for break period calculations
-    /// - Task records for work content and completion status
-    ///
+    /// Exports the daily report (hourly Excel layout when requested).
     async fn export_report(&self, date: NaiveDate) -> Result<()> {
         // Hourly (SiServer-style) layout is only meaningful for Excel output.
         // When requested, delegate to the dedicated renderer and skip the
@@ -362,20 +236,7 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports task records with completion status and metadata for the specified date.
-    ///
-    /// This method extracts all tasks associated with a particular date and formats
-    /// them for export. Task exports are useful for project management integration,
-    /// productivity analysis, and task completion tracking.
-    ///
-    /// ## Task Information
-    ///
-    /// Each exported task includes:
-    /// - **Identification**: Unique database ID for reference
-    /// - **Content**: Task name and description/comments
-    /// - **Status**: Completion percentage and metadata
-    /// - **Timing**: Association with the specified date
-    ///
+    /// Exports the date's tasks.
     async fn export_tasks(&self, date: NaiveDate) -> Result<()> {
         // Retrieve tasks for the specified date from the database
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
@@ -406,21 +267,7 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports monthly summary with aggregated statistics and daily breakdowns.
-    ///
-    /// This method generates a comprehensive monthly overview that includes daily
-    /// work hour totals, averages, productivity trends, and other aggregate
-    /// statistics. Monthly summaries are valuable for long-term analysis and
-    /// productivity tracking.
-    ///
-    /// ## Summary Components
-    ///
-    /// The monthly summary includes:
-    /// - **Daily Breakdown**: Individual day statistics with work hours
-    /// - **Aggregate Metrics**: Total and average work hours for the month
-    /// - **Productivity Trends**: Patterns and variations in work activity
-    /// - **Calendar Context**: Work day vs. rest day classifications
-    ///
+    /// Exports the monthly summary.
     async fn export_summary(&self, date: NaiveDate) -> Result<()> {
         // Gather and aggregate monthly data from workday records
         let summary_data = self.gather_summary_data(date)?;
@@ -440,29 +287,8 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports comprehensive dataset including all available information types.
-    ///
-    /// This method provides a complete data export that combines reports, tasks,
-    /// and summaries into a single export operation. It's designed for comprehensive
-    /// backup operations, data migration, or complete analysis requirements.
-    ///
-    /// ## Export Strategy
-    ///
-    /// The method uses different strategies based on the selected format:
-    ///
-    /// ### JSON Format
-    /// Creates a single JSON file with nested structure containing:
-    /// - Export metadata (timestamp, version)
-    /// - Daily report data
-    /// - Task records
-    /// - Monthly summary
-    ///
-    /// ### CSV and Excel Formats
-    /// Creates multiple files with descriptive suffixes:
-    /// - `{base}_report.{ext}` - Daily report data
-    /// - `{base}_tasks.{ext}` - Task records
-    /// - `{base}_summary.{ext}` - Monthly summary
-    ///
+    /// Exports everything: one nested JSON file, or three suffixed files
+    /// (`_report`, `_tasks`, `_summary`) for CSV/Excel.
     async fn export_all(&self, date: NaiveDate) -> Result<()> {
         msg_info!(Message::ExportingAllData);
 
@@ -521,34 +347,11 @@ impl Exporter {
         Ok(())
     }
 
-    /// Gathers comprehensive report data from multiple database sources and calculates metrics.
+    /// Assembles the daily report from workday, tasks and pauses.
     ///
-    /// This method orchestrates data collection from workdays, tasks, and pauses
-    /// databases to create a complete daily report. It performs calculations for
-    /// productivity metrics, work intervals, and summary statistics.
-    ///
-    /// ## Data Integration Process
-    ///
-    /// 1. **Workday Retrieval**: Fetch the primary workday record for date validation
-    /// 2. **Task Collection**: Gather all tasks associated with the specified date
-    /// 3. **Pause Analysis**: Retrieve and analyze break periods for interval calculation
-    /// 4. **Interval Calculation**: Compute work intervals by analyzing gaps and pauses
-    /// 5. **Metric Calculation**: Calculate productivity percentages and summary statistics
-    ///
-    /// ## Productivity Calculation
-    ///
-    /// For export purposes, a simplified productivity calculation is used:
-    /// ```text
-    /// Export Productivity = (Net Work Time / Gross Work Time) × 100
-    ///
-    /// Where:
-    /// - Net Work Time = Total Time - Pause Duration
-    /// - Gross Work Time = End Time - Start Time
-    /// ```
-    ///
-    /// Note: This differs from the comprehensive calculation in `libs::productivity::Productivity`
-    /// which handles breaks, different pause types, and overlap scenarios.
-    ///
+    /// The productivity here is the simplified `net/gross` ratio, not the
+    /// full [`crate::libs::productivity::Productivity`] calculation - an
+    /// export must not differ depending on which thresholds are configured.
     fn gather_report_data(&self, date: NaiveDate) -> Result<ExportReport> {
         // Retrieve the primary workday record or fail if none exists
         let workday = Workdays::new()?
@@ -610,20 +413,7 @@ impl Exporter {
         })
     }
 
-    /// Gathers monthly summary data by aggregating workday records and calculating statistics.
-    ///
-    /// This method processes all workday records for the month containing the specified
-    /// date and generates aggregate statistics including totals, averages, and daily
-    /// breakdowns for comprehensive monthly analysis.
-    ///
-    /// ## Aggregation Process
-    ///
-    /// 1. **Month Identification**: Extract month boundaries from the specified date
-    /// 2. **Workday Collection**: Retrieve all workday records within the month
-    /// 3. **Duration Calculation**: Calculate work duration for each day
-    /// 4. **Statistical Analysis**: Compute totals, averages, and distributions
-    /// 5. **Summary Generation**: Format results for export consumption
-    ///
+    /// Aggregates the month's workdays into totals and per-day rows.
     fn gather_summary_data(&self, date: NaiveDate) -> Result<ExportSummary> {
         // Retrieve all workday records for the month containing the specified date
         let workdays = Workdays::new()?.fetch_month(date)?;
@@ -666,22 +456,8 @@ impl Exporter {
         })
     }
 
-    /// Exports daily report data to CSV format with structured sections and headers.
-    ///
-    /// This method creates a CSV file with multiple sections for different types of
-    /// information, using headers and empty rows to create visual separation and
-    /// improve readability in spreadsheet applications.
-    ///
-    /// ## CSV Structure
-    ///
-    /// The generated CSV includes the following sections:
-    /// 1. **Work Intervals**: Detailed timing for each work period
-    /// 2. **Summary Information**: Key metrics and totals
-    /// 3. **Task Details**: Associated tasks with completion status
-    ///
-    /// Each section is separated by empty rows and includes descriptive headers
-    /// for easy identification and processing.
-    ///
+    /// Writes the report as three labelled CSV sections (intervals,
+    /// summary, tasks) separated by blank rows.
     fn export_report_csv(&self, report: &ExportReport) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
 
@@ -716,11 +492,6 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports task records to CSV format with standard table structure.
-    ///
-    /// This method creates a simple CSV table with task information, suitable
-    /// for import into spreadsheet applications or database systems.
-    ///
     fn export_tasks_csv(&self, tasks: &[ExportTask]) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
         wtr.write_record(["ID", "Name", "Comment", "Completeness"])?;
@@ -733,11 +504,6 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports monthly summary to CSV format with hierarchical structure.
-    ///
-    /// This method creates a CSV file with a title header, daily breakdown table,
-    /// and summary statistics section for comprehensive monthly analysis.
-    ///
     fn export_summary_csv(&self, summary: &ExportSummary) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
 
@@ -763,32 +529,13 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports daily report data to JSON format with pretty printing.
-    ///
-    /// This method serializes the report data structure to JSON with formatting
-    /// that makes it human-readable and suitable for both programmatic processing
-    /// and manual inspection.
-    ///
     fn export_report_json(&self, report: &ExportReport) -> Result<()> {
         let json = serde_json::to_string_pretty(report)?;
         File::create(&self.output_path)?.write_all(json.as_bytes())?;
         Ok(())
     }
 
-    /// Exports daily report to Excel format with professional formatting and multiple sections.
-    ///
-    /// This method creates a comprehensive Excel worksheet with formatted headers,
-    /// auto-sized columns, and structured sections for work intervals, summary
-    /// information, and task details. The Excel format provides the richest
-    /// presentation quality with professional formatting.
-    ///
-    /// ## Excel Features
-    ///
-    /// - **Formatted Headers**: Bold text with gray background for section identification
-    /// - **Auto-sizing**: Columns automatically sized for optimal readability
-    /// - **Section Separation**: Visual spacing between different data sections
-    /// - **Data Types**: Appropriate formatting for numbers, percentages, and text
-    ///
+    /// Writes the report worksheet: the same three sections as the CSV.
     fn export_report_excel(&self, report: &ExportReport) -> Result<()> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
@@ -850,11 +597,6 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports task records to Excel format with formatted table structure.
-    ///
-    /// This method creates a clean Excel table with task information, suitable
-    /// for further analysis or integration with other Excel-based workflows.
-    ///
     fn export_tasks_excel(&self, tasks: &[ExportTask]) -> Result<()> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
@@ -881,11 +623,6 @@ impl Exporter {
         Ok(())
     }
 
-    /// Exports monthly summary to Excel format with title formatting and statistics.
-    ///
-    /// This method creates a professional monthly summary report with a formatted
-    /// title, daily breakdown table, and summary statistics section.
-    ///
     fn export_summary_excel(&self, summary: &ExportSummary) -> Result<()> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
@@ -1124,344 +861,5 @@ impl Exporter {
 
         workbook.save(&self.output_path)?;
         Ok(())
-    }
-}
-
-/// A single rendered row of the hourly report (one hour of the workday).
-struct HourlyRow {
-    /// Hour slot start in "HH:MM" format.
-    start: String,
-    /// Hour slot end in "HH:MM" format.
-    end: String,
-    /// Description of what happened during the hour ("Перерыв" for breaks).
-    description: String,
-}
-
-/// Aggregated data required to render an hourly daily report.
-struct HourlyReport {
-    /// Report date.
-    date: NaiveDate,
-    /// Localized weekday name.
-    weekday: String,
-    /// Localized month name.
-    month: String,
-    /// Whole worked hours, used for the "workday length" header cell.
-    day_hours: i64,
-    /// Total net worked time formatted as "HH:MM".
-    worked: String,
-    /// Hour-by-hour rows.
-    rows: Vec<HourlyRow>,
-}
-
-/// One hour-aligned slot of the workday with work/break classification flags.
-#[derive(Debug, Clone)]
-struct HourSlot {
-    /// Grid start of the hour (minutes/seconds zeroed).
-    start: NaiveDateTime,
-    /// Slot end (may be earlier than `start + 1h` on the last hour).
-    end: NaiveDateTime,
-    /// Whether the slot overlaps any work interval.
-    has_work: bool,
-    /// Whether the slot overlaps any break/pause.
-    has_break: bool,
-}
-
-/// Truncates a timestamp down to the start of its hour (zeroing minutes/seconds).
-fn floor_to_hour(dt: NaiveDateTime) -> NaiveDateTime {
-    dt.with_minute(0)
-        .and_then(|d| d.with_second(0))
-        .and_then(|d| d.with_nanosecond(0))
-        .unwrap_or(dt)
-}
-
-/// Returns `true` when `[a_start, a_end)` overlaps `[b_start, b_end)`.
-fn ranges_overlap(a_start: NaiveDateTime, a_end: NaiveDateTime, b_start: NaiveDateTime, b_end: NaiveDateTime) -> bool {
-    a_start < b_end && b_start < a_end
-}
-
-/// Builds hour-aligned slots covering `[work_start, work_end)` and classifies
-/// each slot by overlap with work intervals and interruptions.
-fn classify_hour_slots(work_start: NaiveDateTime, work_end: NaiveDateTime, intervals: &[WorkInterval], interruptions: &[Pause]) -> Vec<HourSlot> {
-    let mut slots = Vec::new();
-    if work_end <= work_start {
-        return slots;
-    }
-
-    let mut slot_start = floor_to_hour(work_start);
-    while slot_start < work_end {
-        let slot_grid_end = slot_start + Duration::hours(1);
-        let slot_end = slot_grid_end.min(work_end);
-        let window_start = slot_start.max(work_start);
-
-        let has_work = intervals
-            .iter()
-            .any(|interval| ranges_overlap(window_start, slot_end, interval.start, interval.end));
-        let has_break = interruptions.iter().any(|pause| {
-            let Some(pause_end) = pause.end else {
-                return false;
-            };
-            let start = pause.start.max(work_start);
-            let end = pause_end.min(work_end);
-            start < end && ranges_overlap(window_start, slot_end, start, end)
-        });
-
-        slots.push(HourSlot {
-            start: slot_start,
-            end: slot_end,
-            has_work,
-            has_break,
-        });
-
-        slot_start = slot_grid_end;
-    }
-
-    slots
-}
-
-/// Distributes task descriptions across hour slots (one primary task per work hour).
-///
-/// - Work hours receive task labels; pure break hours stay empty (`None`).
-/// - When there are fewer tasks than work hours, each task occupies a contiguous
-///   block of consecutive work hours.
-/// - When there are more tasks than work hours, each work hour gets one task and
-///   surplus tasks are appended (joined with `". "`) only to hours without a break.
-///   If every work hour has a break, surplus tasks fall back onto work hours in order.
-/// - With no tasks, work hours use the locale's generic work label.
-fn assign_tasks_to_hour_slots(tasks: &[Task], slots: &[HourSlot], locale: &Locale) -> Vec<Option<String>> {
-    let mut texts: Vec<Option<String>> = vec![None; slots.len()];
-    let work_indices: Vec<usize> = slots.iter().enumerate().filter(|(_, s)| s.has_work).map(|(i, _)| i).collect();
-
-    if work_indices.is_empty() {
-        return texts;
-    }
-
-    if tasks.is_empty() {
-        for &idx in &work_indices {
-            texts[idx] = Some(locale.work_generic.to_string());
-        }
-        return texts;
-    }
-
-    let num_work = work_indices.len();
-    let num_tasks = tasks.len();
-
-    if num_tasks <= num_work {
-        // Contiguous blocks: A A A B B C …
-        let base = num_work / num_tasks;
-        let mut extra = num_work % num_tasks;
-        let mut cursor = 0usize;
-
-        for task in tasks {
-            let count = base + if extra > 0 { 1 } else { 0 };
-            extra = extra.saturating_sub(1);
-            let text = locale.work_text(&task.name);
-            for _ in 0..count {
-                if cursor < num_work {
-                    texts[work_indices[cursor]] = Some(text.clone());
-                    cursor += 1;
-                }
-            }
-        }
-    } else {
-        // One task per work hour, then append surplus into no-break hours.
-        let mut parts: Vec<Vec<String>> = work_indices.iter().enumerate().map(|(i, _)| vec![locale.work_text(&tasks[i].name)]).collect();
-
-        let surplus: Vec<String> = tasks[num_work..].iter().map(|t| locale.work_text(&t.name)).collect();
-        let mut no_break_local: Vec<usize> = work_indices
-            .iter()
-            .enumerate()
-            .filter(|&(_, &slot_idx)| !slots[slot_idx].has_break)
-            .map(|(local_i, _)| local_i)
-            .collect();
-
-        if no_break_local.is_empty() {
-            // Fallback so surplus task names are not dropped from the report.
-            no_break_local = (0..num_work).collect();
-        }
-
-        let base = surplus.len() / no_break_local.len();
-        let mut rem = surplus.len() % no_break_local.len();
-        let mut iter = surplus.into_iter();
-
-        for &local_i in &no_break_local {
-            let count = base + if rem > 0 { 1 } else { 0 };
-            rem = rem.saturating_sub(1);
-            for _ in 0..count {
-                if let Some(text) = iter.next() {
-                    parts[local_i].push(text);
-                }
-            }
-        }
-
-        for (local_i, &slot_idx) in work_indices.iter().enumerate() {
-            texts[slot_idx] = Some(parts[local_i].join(". "));
-        }
-    }
-
-    texts
-}
-
-/// Builds rendered hourly rows from classified slots and assigned task texts.
-///
-/// - Pure break / empty slots → `break_label`
-/// - Work without break → task text
-/// - Work with break → `"{task}. {break_label}"`
-fn build_hourly_rows(slots: &[HourSlot], task_texts: &[Option<String>], break_label: &str) -> Vec<HourlyRow> {
-    slots
-        .iter()
-        .enumerate()
-        .map(|(i, slot)| {
-            let description = if !slot.has_work {
-                break_label.to_string()
-            } else {
-                let work = task_texts.get(i).and_then(|t| t.as_ref()).map(String::as_str).unwrap_or("");
-                if slot.has_break {
-                    if work.is_empty() {
-                        break_label.to_string()
-                    } else {
-                        format!("{work}. {break_label}")
-                    }
-                } else if work.is_empty() {
-                    break_label.to_string()
-                } else {
-                    work.to_string()
-                }
-            };
-
-            HourlyRow {
-                start: slot.start.format("%H:%M").to_string(),
-                end: slot.end.format("%H:%M").to_string(),
-                description,
-            }
-        })
-        .collect()
-}
-
-#[cfg(test)]
-mod hourly_tests {
-    use super::*;
-    use chrono::NaiveDate;
-
-    fn dt(hour: u32, min: u32) -> NaiveDateTime {
-        NaiveDate::from_ymd_opt(2025, 1, 15).unwrap().and_hms_opt(hour, min, 0).unwrap()
-    }
-
-    fn interval(start_h: u32, start_m: u32, end_h: u32, end_m: u32) -> WorkInterval {
-        let start = dt(start_h, start_m);
-        let end = dt(end_h, end_m);
-        WorkInterval {
-            start,
-            end,
-            duration: end - start,
-            pause_after: None,
-        }
-    }
-
-    fn pause(start_h: u32, start_m: u32, end_h: u32, end_m: u32) -> Pause {
-        let start = dt(start_h, start_m);
-        let end = dt(end_h, end_m);
-        Pause::detected(1, start, Some(end), Some(end - start))
-    }
-
-    fn task(name: &str) -> Task {
-        Task::new(name, "", Some(0))
-    }
-
-    #[test]
-    fn fewer_tasks_fill_contiguous_blocks() {
-        let locale = Locale::for_language(Language::En);
-        // 09:00–14:00 continuous work → 5 work hours
-        let intervals = vec![interval(9, 0, 14, 0)];
-        let slots = classify_hour_slots(dt(9, 0), dt(14, 0), &intervals, &[]);
-        assert_eq!(slots.len(), 5);
-        assert!(slots.iter().all(|s| s.has_work && !s.has_break));
-
-        let tasks = vec![task("A"), task("B"), task("C")];
-        let texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
-        let names: Vec<&str> = texts.iter().map(|t| t.as_deref().unwrap()).collect();
-
-        // 5 / 3 → base 1, extra 2 → A A B B C
-        assert_eq!(
-            names,
-            vec![
-                "Work on task [A]",
-                "Work on task [A]",
-                "Work on task [B]",
-                "Work on task [B]",
-                "Work on task [C]",
-            ]
-        );
-    }
-
-    #[test]
-    fn surplus_tasks_go_to_no_break_hours() {
-        let locale = Locale::for_language(Language::En);
-        // work 09–12, break 12:00–12:30, work 12:30–14 → hours 09–11/13 no-break, 12 mixed
-        let intervals = vec![interval(9, 0, 12, 0), interval(12, 30, 14, 0)];
-        let interruptions = vec![pause(12, 0, 12, 30)];
-        let slots = classify_hour_slots(dt(9, 0), dt(14, 0), &intervals, &interruptions);
-
-        assert_eq!(slots.len(), 5);
-        assert!(slots[0].has_work && !slots[0].has_break); // 09
-        assert!(slots[1].has_work && !slots[1].has_break); // 10
-        assert!(slots[2].has_work && !slots[2].has_break); // 11
-        assert!(slots[3].has_work && slots[3].has_break); // 12 mixed
-        assert!(slots[4].has_work && !slots[4].has_break); // 13
-
-        // 5 tasks for 5 work hours → one each, no surplus
-        let tasks = vec![task("A"), task("B"), task("C"), task("D"), task("E")];
-        let texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
-        assert_eq!(texts[3].as_deref(), Some("Work on task [D]"));
-
-        // 6 tasks → surplus F must not land on mixed hour 12 (index 3)
-        let tasks = vec![task("A"), task("B"), task("C"), task("D"), task("E"), task("F")];
-        let texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
-        assert_eq!(texts[3].as_deref(), Some("Work on task [D]"));
-        assert!(texts.iter().enumerate().any(|(i, t)| i != 3 && t.as_ref().is_some_and(|s| s.contains("[F]"))));
-        assert!(!texts[3].as_ref().unwrap().contains("[F]"));
-    }
-
-    #[test]
-    fn surplus_distributed_across_no_break_hours() {
-        let locale = Locale::for_language(Language::En);
-        let intervals = vec![interval(9, 0, 12, 0)];
-        let slots = classify_hour_slots(dt(9, 0), dt(12, 0), &intervals, &[]);
-        let tasks = vec![task("A"), task("B"), task("C"), task("D"), task("E")];
-        let texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
-
-        // 5 tasks / 3 hours → base 1 each, then 2 surplus into first hours
-        // base surplus=0, rem=2 → first two no-break hours get +1
-        assert_eq!(texts[0].as_deref(), Some("Work on task [A]. Work on task [D]"));
-        assert_eq!(texts[1].as_deref(), Some("Work on task [B]. Work on task [E]"));
-        assert_eq!(texts[2].as_deref(), Some("Work on task [C]"));
-    }
-
-    #[test]
-    fn pure_break_hour_has_only_break_label() {
-        let locale = Locale::for_language(Language::En);
-        let intervals = vec![interval(9, 0, 12, 0), interval(13, 0, 14, 0)];
-        let interruptions = vec![pause(12, 0, 13, 0)];
-        let slots = classify_hour_slots(dt(9, 0), dt(14, 0), &intervals, &interruptions);
-        let tasks = vec![task("A"), task("B"), task("C")];
-        let texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
-        let rows = build_hourly_rows(&slots, &texts, locale.break_label);
-
-        assert!(!slots[3].has_work && slots[3].has_break);
-        assert_eq!(rows[3].description, "Break");
-        assert!(texts[3].is_none());
-    }
-
-    #[test]
-    fn mixed_hour_shows_task_and_break() {
-        let locale = Locale::for_language(Language::En);
-        let intervals = vec![interval(9, 0, 12, 0), interval(12, 30, 13, 0)];
-        let interruptions = vec![pause(12, 0, 12, 30)];
-        let slots = classify_hour_slots(dt(9, 0), dt(13, 0), &intervals, &interruptions);
-        let tasks = vec![task("A"), task("B"), task("C"), task("D")];
-        let texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);
-        let rows = build_hourly_rows(&slots, &texts, locale.break_label);
-
-        assert!(slots[3].has_work && slots[3].has_break);
-        assert_eq!(rows[3].description, "Work on task [D]. Break");
     }
 }
