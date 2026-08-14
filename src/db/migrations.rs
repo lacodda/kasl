@@ -55,7 +55,6 @@ struct Migration {
 /// The `MigrationManager` maintains the complete registry of available migrations
 /// and provides the logic for applying them in the correct order. It ensures
 /// that migrations are applied atomically and tracks their completion status.
-///
 pub struct MigrationManager {
     /// Ordered list of all available migrations
     ///
@@ -73,10 +72,6 @@ impl Default for MigrationManager {
 
 impl MigrationManager {
     /// Creates a new migration manager with all registered migrations.
-    ///
-    /// This constructor automatically registers all available migrations
-    /// in the correct order. The registration process is deterministic
-    /// and ensures consistent schema evolution across all environments.
     ///
     /// # Example
     ///
@@ -96,17 +91,6 @@ impl MigrationManager {
     }
 
     /// Registers all database migrations in chronological order.
-    ///
-    /// This method defines the complete schema evolution history by registering
-    /// each migration version with its transformation logic. Migrations must
-    /// be registered in sequential version order to ensure correct application.
-    ///
-    /// ## Migration Design Principles
-    ///
-    /// - **Incremental**: Each migration makes small, focused changes
-    /// - **Idempotent**: Migrations can be safely re-run if needed
-    /// - **Forward-Only**: No backward compatibility requirements
-    /// - **Atomic**: Each migration succeeds or fails completely
     fn register_migrations(&mut self) {
         // Initial schema - version 0 is implicit (empty database)
         // Base tables are created by individual modules as needed
@@ -362,19 +346,6 @@ impl MigrationManager {
 
     /// Executes all pending migrations in the correct order.
     ///
-    /// This method performs the complete migration process:
-    /// 1. Creates the migrations tracking table if needed
-    /// 2. Determines current database version
-    /// 3. Identifies pending migrations
-    /// 4. Applies each migration within a transaction
-    /// 5. Records successful migrations in the tracking table
-    ///
-    /// ## Transaction Safety
-    ///
-    /// Each migration runs in its own transaction, ensuring that partial
-    /// failures don't leave the database in an inconsistent state. If any
-    /// migration fails, all changes are rolled back automatically.
-    ///
     /// # Example
     ///
     /// ```rust
@@ -438,11 +409,6 @@ impl MigrationManager {
     }
 
     /// Retrieves the current database schema version.
-    ///
-    /// This method queries the migrations table to determine the highest
-    /// version number that has been successfully applied. It handles the
-    /// case where no migrations have been applied yet (version 0).
-    ///
     fn get_current_version(&self, conn: &Connection) -> Result<u32> {
         let version: Option<u32> = conn.query_row("SELECT MAX(version) FROM migrations", [], |row| row.get(0)).unwrap_or(Some(0));
 
@@ -479,10 +445,6 @@ impl MigrationManager {
 
     /// Retrieves the complete migration history with timestamps.
     ///
-    /// This method returns a chronological list of all applied migrations,
-    /// including their version numbers, names, and application timestamps.
-    /// Useful for auditing and debugging schema evolution.
-    ///
     /// # Example
     ///
     /// ```rust
@@ -514,13 +476,6 @@ impl MigrationManager {
     ///
     /// This development utility allows rolling back migrations to a previous
     /// schema version by removing migration records from the tracking table.
-    ///
-    /// ## ⚠️ Important Notes
-    ///
-    /// - Only available in debug builds for safety
-    /// - This is a simplified rollback that removes migration records
-    /// - Does not actually reverse schema changes (no down() functions)
-    /// - Primarily useful for development and testing scenarios
     ///
     /// # Example
     ///

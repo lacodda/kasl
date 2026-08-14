@@ -37,11 +37,6 @@ pub struct ExportArgs {
     /// Type of data to export
     ///
     /// Specifies which category of information to include in the export:
-    /// - **report**: Daily work report with intervals and productivity
-    /// - **tasks**: Task records with completion status and metadata
-    /// - **summary**: Monthly summary with aggregate statistics
-    /// - **all**: Complete data export including all available information
-    ///
     /// Each data type provides different levels of detail and is suitable
     /// for different analysis purposes.
     #[arg(value_enum, default_value = "report")]
@@ -50,10 +45,6 @@ pub struct ExportArgs {
     /// Output format for the exported data
     ///
     /// Controls the structure and format of the exported file:
-    /// - **csv**: Comma-separated values, compatible with Excel and other spreadsheet tools
-    /// - **json**: Structured JSON data, ideal for programmatic processing
-    /// - **excel**: Native Excel format with formatting, charts, and multiple worksheets
-    ///
     /// Format selection affects both file structure and available features.
     #[arg(short, long, value_enum, default_value = "csv")]
     format: ExportFormat,
@@ -120,10 +111,6 @@ pub struct ExportArgs {
 /// # Output Files
 ///
 /// Generated files include:
-/// - **Metadata**: Export timestamp, data range, format version
-/// - **Data Records**: Requested information in chosen format
-/// - **Summary Statistics**: Totals, averages, and key metrics
-/// - **Format-Specific Features**: Charts (Excel), structured nesting (JSON)
 pub async fn cmd(args: ExportArgs) -> Result<()> {
     let date = parse_date(&args.date)?;
 
@@ -203,11 +190,6 @@ fn resolve_report_output(data: ExportData, format: ExportFormat, date: NaiveDate
 ///
 /// This utility function provides consistent date parsing across the export
 /// command, handling both user-friendly keywords and explicit date specifications.
-///
-/// ## Supported Formats
-///
-/// - **today** (case-insensitive): Returns current local date
-/// - **YYYY-MM-DD**: ISO 8601 date format (e.g., 2025-01-15)
 ///
 /// # Examples
 ///

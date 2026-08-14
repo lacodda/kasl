@@ -50,10 +50,6 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 /// Enumeration for identifying task suggestion sources.
-///
-/// This enum helps distinguish between different sources of task suggestions
-/// during the interactive task finding process, allowing for appropriate
-/// handling and user feedback for each source type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum TaskSource {
     /// Previously created but incomplete local tasks
@@ -221,25 +217,6 @@ pub struct RemoveArgs {
 
 /// Main entry point for the comprehensive task management command.
 ///
-/// This function serves as a large dispatcher that handles the various task management
-/// operations based on provided command-line flags. It supports everything from simple
-/// task creation to complex batch operations and external service integrations.
-///
-/// ## External Integrations
-///
-/// When find mode is activated, the function integrates with:
-/// - **GitLab API**: Fetches today's commits as potential completed tasks
-/// - **Jira API**: Retrieves completed issues for the current day
-/// - **Local Database**: Finds incomplete tasks that can be continued
-///
-/// ## Safety Features
-///
-/// Destructive operations include multiple safety measures:
-/// - Preview of changes before applying
-/// - Multiple confirmation prompts for bulk operations
-/// - Detailed information about affected items
-/// - Option to cancel operations at multiple points
-///
 /// # Examples
 ///
 /// ```bash
@@ -334,7 +311,6 @@ fn show_tasks(filter: TaskFilter) -> Result<()> {
 /// issues into a single filtered MultiSelect. Shows a spinner while fetching,
 /// deduplicates near-identical names, and prioritizes incomplete tasks above
 /// external imports.
-///
 async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
     // Discovery ends in a MultiSelect of what to import.
     ensure_interactive("`kasl task find` is interactive and needs a terminal")?;
@@ -583,12 +559,6 @@ fn looks_like_issue_key(name: &str) -> bool {
 }
 
 /// Handles manual task creation with interactive prompts.
-///
-/// This function manages the standard task creation workflow, collecting
-/// task information either from command-line arguments or interactive prompts.
-/// It also handles tag assignment and provides immediate feedback about
-/// the created task.
-///
 async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
     // Anything not supplied on the command line is asked for, so a missing name
     // means prompting - which must not happen with no one at the terminal.
@@ -673,19 +643,6 @@ async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
 }
 
 /// Handles deletion of multiple tasks by their IDs.
-///
-/// This function provides a safe deletion interface with preview and confirmation
-/// for removing multiple tasks simultaneously. It includes validation to ensure
-/// all specified task IDs exist before performing any deletions.
-///
-/// ## Safety Features
-///
-/// - Validates all task IDs exist before deletion
-/// - Shows preview of tasks to be deleted
-/// - Requires explicit user confirmation
-/// - Provides clear feedback about deletion results
-/// - Handles non-existent IDs gracefully
-///
 async fn handle_delete_by_ids(ids: Vec<i32>, assume_yes: bool) -> Result<()> {
     if ids.is_empty() {
         msg_error!(Message::NoTaskIdsProvided);
@@ -739,14 +696,6 @@ async fn handle_delete_by_ids(ids: Vec<i32>, assume_yes: bool) -> Result<()> {
 /// This is a dangerous operation that removes all tasks created today.
 /// It includes multiple confirmation steps and detailed previews to
 /// prevent accidental data loss.
-///
-/// ## Safety Measures
-///
-/// - Shows complete list of tasks to be deleted
-/// - Requires two separate confirmations
-/// - Uses clear warning language
-/// - Defaults to "No" for all confirmations
-/// - Provides escape points throughout the process
 async fn handle_delete_today(assume_yes: bool) -> Result<()> {
     let mut tasks_db = Tasks::new()?;
     let today = Local::now().date_naive();
@@ -802,7 +751,6 @@ async fn handle_delete_today(assume_yes: bool) -> Result<()> {
 /// Provides an interactive editing interface for modifying task properties
 /// including name, comment, and completion status. Includes preview of
 /// changes before applying them to the database.
-///
 async fn handle_edit_by_id(id: i32) -> Result<()> {
     // Editing prompts for each field with the current value as default.
     ensure_interactive("`kasl task edit` is interactive and needs a terminal")?;
@@ -918,7 +866,6 @@ async fn handle_edit_interactive() -> Result<()> {
 /// Provides a consistent interactive interface for editing task properties.
 /// Used by both single and batch editing operations to ensure uniform
 /// user experience and validation.
-///
 fn edit_task_interactive(task: &Task) -> Result<Task> {
     let name = collapse_whitespace(
         &Input::with_theme(&ColorfulTheme::default())
@@ -961,7 +908,6 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
 /// Loads the specified template and allows the user to modify the template
 /// values before creating the final task. This streamlines creation of
 /// frequently used task types while maintaining flexibility.
-///
 async fn handle_create_from_template(template_name: String) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let template = match templates_db.get(&template_name)? {

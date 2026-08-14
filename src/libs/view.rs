@@ -58,7 +58,6 @@ impl View {
     ///
     /// Renders a detailed table showing task information including identification numbers,
     /// names, completion status, comments, and associated tags.
-    ///
     pub fn tasks(tasks: &[Task]) -> Result<()> {
         let show_task_id = tasks.iter().any(|t| t.task_id.is_some_and(|id| id != 0));
         let show_comment = tasks.iter().any(|t| !t.comment.trim().is_empty());
@@ -154,21 +153,6 @@ impl View {
     }
 
     /// Displays a formatted daily work report using pre-calculated intervals.
-    ///
-    /// This method displays the core report data in a structured table format,
-    /// including work intervals, total time, and productivity metrics calculated
-    /// using the centralized Productivity module.
-    ///
-    /// ## Display Components
-    ///
-    /// 1. **Work Intervals**: Detailed breakdown of focused work periods
-    /// 2. **Total Duration**: Sum of all work intervals (may be filtered)
-    /// 3. **Productivity Percentage**: Calculated using comprehensive Productivity logic
-    /// 4. **Associated Tasks**: Tasks completed during the workday for context
-    ///
-    /// The productivity value displayed here is calculated using the same centralized
-    /// logic used throughout the application for consistency.
-    ///
     pub fn report(workday: &Workday, intervals: &[report::WorkInterval], filtered_duration: &TimeDelta, productivity: &f64, tasks: &[Task]) -> Result<()> {
         // Display formatted report header with readable date
         msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
@@ -206,25 +190,6 @@ impl View {
     }
 
     /// Displays a monthly summary of working hours with daily breakdowns.
-    ///
-    /// This method renders a comprehensive monthly view that shows daily work
-    /// patterns, totals, and averages. It provides both detailed daily data
-    /// and aggregate statistics to help users understand their work patterns
-    /// over the entire month.
-    ///
-    /// ## Summary Structure
-    ///
-    /// The monthly summary includes:
-    /// - **Daily Breakdown**: Each day with date, hours worked, and workday status
-    /// - **Total Hours**: Cumulative time worked across all days in the month
-    /// - **Average Hours**: Mean daily working time for better pattern analysis
-    /// - **Work Days**: Count of days with recorded work activity
-    ///
-    /// ## Data Interpretation
-    ///
-    /// - **Workday Hours**: Actual time recorded for productive work days
-    /// - **Rest Day Hours**: Default hours applied to weekends and holidays
-    /// - **Missing Days**: Days without any recorded activity (shown as 0:00)
     ///
     /// # Examples
     ///
@@ -274,7 +239,6 @@ impl View {
     }
 
     /// Displays a table of pauses for a given day with total pause time.
-    ///
     pub fn pauses(pauses: &[Pause], total_pause_time: Duration) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -302,18 +266,6 @@ impl View {
     }
 
     /// Displays a formatted table of task templates for reusable task creation.
-    ///
-    /// This method renders a comprehensive view of all available task templates,
-    /// showing their configuration and usage information. Templates provide a
-    /// convenient way to create commonly used tasks with pre-filled parameters.
-    ///
-    /// ## Template Information
-    ///
-    /// The table displays essential template metadata:
-    /// - **Template Name**: Unique identifier for template selection
-    /// - **Task Name**: Default task title that will be used
-    /// - **Comment**: Pre-configured task description or notes
-    /// - **Completeness**: Default completion percentage for new tasks
     ///
     /// # Examples
     ///
@@ -349,30 +301,6 @@ impl View {
     }
 
     /// Displays a formatted table of tags for task categorization and organization.
-    ///
-    /// This method provides a comprehensive view of all available tags that can
-    /// be applied to tasks for organization and filtering purposes. The table
-    /// shows both the functional and visual aspects of each tag.
-    ///
-    /// ## Tag Information
-    ///
-    /// The table displays key tag metadata:
-    /// - **ID**: Unique database identifier for programmatic reference
-    /// - **NAME**: Human-readable tag name used for categorization
-    /// - **COLOR**: Optional color coding for visual organization (if supported)
-    ///
-    /// ## Organizational Benefits
-    ///
-    /// Tags provide several organizational advantages:
-    /// - **Categorization**: Group related tasks by project, priority, or type
-    /// - **Filtering**: Quickly find tasks based on specific criteria
-    /// - **Visual Organization**: Color coding for rapid visual identification
-    /// - **Reporting**: Generate reports filtered by specific tag categories
-    ///
-    /// ## Color Display
-    ///
-    /// Colors are displayed as text values (hex codes, names, etc.) since
-    /// terminal color support varies. A dash (-) indicates no color assigned.
     ///
     /// # Examples
     ///

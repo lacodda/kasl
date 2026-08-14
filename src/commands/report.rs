@@ -4,14 +4,6 @@
 //! daily work reports, automatic filtering of short work intervals, integration with
 //! external APIs, and comprehensive productivity analysis using the centralized
 //! Productivity module.
-//!
-//! ## Productivity Integration
-//!
-//! This module leverages the centralized `libs::productivity::Productivity` module for:
-//! - Consistent productivity calculations across display and submission
-//! - Break recommendations based on productivity thresholds  
-//! - Validation before report submission to external APIs
-//! - Real-time productivity feedback during report generation
 
 use crate::{
     api::si::Si,
@@ -108,7 +100,6 @@ pub async fn cmd(args: ReportArgs) -> Result<()> {
 /// Calculates whether to generate a report for today or yesterday
 /// based on user preferences. This allows flexible reporting timing
 /// to accommodate different organizational workflows.
-///
 fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
     if is_last_day { Local::now() - Duration::days(1) } else { Local::now() }
 }
@@ -118,7 +109,6 @@ fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
 /// Routes to either display or submission mode based on user preferences.
 /// This separation allows for different handling of local viewing versus
 /// API integration scenarios.
-///
 async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result<()> {
     if should_send {
         send_daily_report(date).await
@@ -132,14 +122,6 @@ async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result
 /// Generates and submits aggregate monthly statistics to the configured
 /// reporting API. This is typically used for organizational reporting
 /// requirements and payroll integration.
-///
-/// ## Monthly Report Contents
-///
-/// - Total hours worked in the month
-/// - Number of working days
-/// - Average daily hours
-/// - Productivity trends (if available)
-///
 async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     let mut si = get_si_service()?;
     let naive_date = date.date_naive();
@@ -160,26 +142,6 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 
 /// Fetches data and displays a formatted daily report in the terminal.
 ///
-/// This function generates a comprehensive daily work report including:
-/// - Work intervals with start/end times and durations (filtered by min_work_interval)
-/// - Productivity calculations based on actual work vs. presence time
-/// - Task completion summary
-/// - Break analysis and total pause time
-/// - Information about filtered short intervals
-///
-/// ## Report Components
-///
-/// 1. **Work Intervals Table**: Shows continuous work periods with breaks (short intervals filtered out)
-/// 2. **Summary Statistics**: Total hours, productivity percentage
-/// 3. **Task List**: Completed tasks with progress indicators
-/// 4. **Filter Information**: Details about intervals filtered due to being too short
-///
-/// ## Interval Filtering
-///
-/// Short intervals are automatically filtered from display based on the
-/// `min_work_interval` configuration setting. Users are informed about
-/// the number and total duration of filtered intervals.
-///
 /// ## Productivity Calculation
 ///
 /// Productivity is calculated as:
@@ -194,10 +156,6 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 /// # Data Sources
 ///
 /// The report integrates multiple data sources:
-/// - **Workdays**: Start and end times for the work session
-/// - **Pauses**: Automatically detected breaks and manual pauses
-/// - **Tasks**: Completed work items and progress tracking
-/// - **Configuration**: Thresholds for filtering and analysis
 async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let workday = match Workdays::new()?.fetch(naive_date)? {
@@ -250,35 +208,6 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
 }
 
 /// Handles the complete process of sending a daily report to external API.
-///
-/// This function manages the full workflow for daily report submission:
-/// 1. **Workday Finalization**: Ensures the workday is properly closed
-/// 2. **Data Validation**: Verifies required data is available
-/// 3. **Interval Filtering**: Applies min_work_interval filtering to remove short intervals
-/// 4. **Report Generation**: Creates JSON payload for API submission using filtered intervals
-/// 5. **API Submission**: Sends report to configured external service
-/// 6. **Monthly Trigger**: Automatically submits monthly report if needed
-///
-/// ## Report Payload Structure
-///
-/// The generated JSON includes:
-/// - Work intervals with start/end times and durations (short intervals filtered out)
-/// - Task assignments distributed across filtered intervals
-/// - Summary statistics and metadata
-/// - Formatted time strings for external system compatibility
-///
-/// ## Interval Filtering
-///
-/// Same filtering logic as display reports - short intervals are automatically
-/// removed based on the `min_work_interval` configuration setting before
-/// sending to the external API.
-///
-/// ## Auto-Monthly Reporting
-///
-/// If the current date is the last working day of the month,
-/// this function will automatically trigger monthly report submission
-/// after successful daily report processing.
-///
 async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let mut workdays_db = Workdays::new()?;
@@ -350,37 +279,6 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 }
 
 /// Builds the JSON payload for API submission.
-///
-/// This function creates a structured JSON report that distributes tasks
-/// across work intervals in a logical manner. The distribution algorithm
-/// ensures that all tasks are included and work intervals are properly
-/// represented in the external reporting system.
-///
-/// ## Task Distribution Algorithm
-///
-/// The function handles two scenarios:
-///
-/// 1. **More Tasks than Intervals**: Distributes multiple tasks per interval
-///    - Calculates base tasks per interval
-///    - Distributes remainder tasks evenly
-///    - Ensures all tasks are included
-///
-/// 2. **More Intervals than Tasks**: Assigns intervals to tasks
-///    - Distributes multiple intervals per task
-///    - Creates separate entries for each interval
-///    - Maintains interval granularity
-///
-/// ## JSON Structure
-///
-/// Each report entry contains:
-/// - `from`: Start time in HH:MM format
-/// - `to`: End time in HH:MM format
-/// - `total_ts`: Formatted duration string
-/// - `task`: Formatted task description with completion percentage
-/// - `index`: Sequential numbering for external system ordering
-/// - `result`: Empty field for external system use
-/// - `time`: Empty field for external system use
-///
 fn build_report_payload(_workday: &Workday, tasks: &mut [Task], intervals: &[report::WorkInterval]) -> serde_json::Value {
     let num_tasks = tasks.len();
     let num_intervals = intervals.len();
@@ -454,7 +352,6 @@ fn build_report_payload(_workday: &Workday, tasks: &mut [Task], intervals: &[rep
 /// This helper function encapsulates the configuration loading and service
 /// initialization logic, providing proper error handling for missing or
 /// invalid SiServer configuration.
-///
 fn get_si_service() -> Result<Si> {
     Config::read()?
         .si

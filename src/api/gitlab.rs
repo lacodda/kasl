@@ -74,10 +74,6 @@ struct CompareResult {
 }
 
 /// Simplified commit information for task creation.
-///
-/// This structure represents the essential information extracted from GitLab
-/// commits that's needed for generating task entries. It focuses on human-readable
-/// content rather than technical Git metadata.
 #[derive(Debug)]
 pub struct CommitInfo {
     /// Full SHA hash of the commit for unique identification

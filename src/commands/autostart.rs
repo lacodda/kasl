@@ -21,9 +21,6 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 
 /// Command-line arguments for autostart management.
-///
-/// The autostart command uses subcommands to provide different operations
-/// for managing the autostart configuration.
 #[derive(Debug, Args)]
 pub struct AutostartArgs {
     #[command(subcommand)]
@@ -31,11 +28,6 @@ pub struct AutostartArgs {
 }
 
 /// Available autostart operations.
-///
-/// Each variant provides a specific autostart management function:
-/// - Enable: Set up automatic startup
-/// - Disable: Remove automatic startup
-/// - Status: Check current autostart state
 #[derive(Debug, Subcommand)]
 enum AutostartCommand {
     /// Enable autostart on system boot
@@ -69,7 +61,6 @@ enum AutostartCommand {
 ///
 /// Delegates to the appropriate autostart library function based on the user's choice,
 /// handling platform-specific implementations transparently.
-///
 pub fn cmd(args: AutostartArgs) -> Result<()> {
     match args.command {
         AutostartCommand::Enable => {

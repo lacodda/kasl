@@ -24,11 +24,6 @@ use std::fmt::{Display, Formatter, Result};
 impl Display for Message {
     /// Converts a `Message` enum variant into human-readable text.
     ///
-    /// This method implements the core message-to-text conversion logic for
-    /// the entire kasl application. It provides consistent, professional
-    /// text formatting for all user-facing messages while maintaining
-    /// type safety and parameter interpolation.
-    ///
     /// # Examples
     ///
     /// ```rust

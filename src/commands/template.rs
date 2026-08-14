@@ -28,10 +28,6 @@ use clap::{Args, Subcommand};
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 
 /// Command-line arguments for template management operations.
-///
-/// The template command uses subcommands to organize different template
-/// management operations, providing a clean and intuitive interface for
-/// users to manage their template library.
 #[derive(Debug, Args)]
 pub struct TemplateArgs {
     #[command(subcommand)]
@@ -39,10 +35,6 @@ pub struct TemplateArgs {
 }
 
 /// Available template management operations.
-///
-/// Each subcommand provides specific functionality for template lifecycle
-/// management, from creation through deletion, with support for both
-/// direct command-line usage and interactive operation.
 #[derive(Debug, Subcommand)]
 enum TemplateCommand {
     /// Add a new task template
@@ -122,10 +114,6 @@ enum TemplateCommand {
 
 /// Executes template management operations based on the specified subcommand.
 ///
-/// This function serves as the main dispatcher for template operations,
-/// routing to appropriate handlers based on user input. When no subcommand
-/// is provided, it enters interactive mode for operation selection.
-///
 /// # Examples
 ///
 /// ```bash
@@ -163,22 +151,6 @@ pub fn cmd(args: TemplateArgs) -> Result<()> {
 }
 
 /// Handles template creation with validation and uniqueness checking.
-///
-/// This function manages the complete template creation workflow:
-/// 1. **Name Collection**: Gets template name from args or interactive prompt
-/// 2. **Uniqueness Validation**: Ensures template name doesn't already exist
-/// 3. **Property Collection**: Gathers task name, comment, and completion values
-/// 4. **Validation**: Ensures all required fields are properly formatted
-/// 5. **Database Storage**: Saves the new template with proper error handling
-///
-/// ## Template Properties
-///
-/// Templates store these key properties:
-/// - **Name**: Unique identifier for referencing the template
-/// - **Task Name**: Default name for tasks created from this template
-/// - **Comment**: Default comment/description for tasks
-/// - **Completeness**: Default completion percentage (0-100)
-///
 fn handle_create(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -224,16 +196,6 @@ fn handle_create(name: Option<String>) -> Result<()> {
 }
 
 /// Displays all available templates in a formatted table.
-///
-/// This function retrieves all templates from the database and presents
-/// them in a user-friendly table format showing all relevant properties.
-/// The display helps users understand their available templates and
-/// their configurations.
-///
-/// ## Empty State Handling
-///
-/// When no templates exist, the function provides helpful guidance
-/// about creating the first template rather than displaying an empty table.
 fn handle_list() -> Result<()> {
     let mut templates_db = Templates::new()?;
     let templates = templates_db.get_all()?;
@@ -253,7 +215,6 @@ fn handle_list() -> Result<()> {
 /// Reuses the same table rendering as `list` so a template reads identically
 /// whether shown alone or among others. Without a name, the template is picked
 /// interactively.
-///
 fn handle_show(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -290,27 +251,6 @@ fn handle_show(name: Option<String>) -> Result<()> {
 }
 
 /// Handles template editing with interactive or direct name specification.
-///
-/// This function provides comprehensive template editing capabilities:
-/// 1. **Template Selection**: Uses provided name or interactive selection
-/// 2. **Current State Display**: Shows existing template values
-/// 3. **Interactive Editing**: Prompts for new values with current values as defaults
-/// 4. **Validation**: Ensures edited values meet requirements
-/// 5. **Database Update**: Saves changes with proper error handling
-///
-/// ## Selection Methods
-///
-/// - **Direct**: When template name is provided via command line
-/// - **Interactive**: When no name is provided, presents selection interface
-///
-/// ## Editing Interface
-///
-/// For each editable property, the interface:
-/// - Shows the current value as the default
-/// - Allows the user to accept current value or enter new one
-/// - Validates new values according to template rules
-/// - Provides clear feedback about validation errors
-///
 fn handle_edit(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -375,23 +315,6 @@ fn handle_edit(name: Option<String>) -> Result<()> {
 }
 
 /// Handles safe template deletion with confirmation.
-///
-/// This function manages the template deletion process with appropriate
-/// safety measures to prevent accidental data loss:
-/// 1. **Template Selection**: Direct name or interactive selection
-/// 2. **Existence Validation**: Ensures template exists before attempting deletion
-/// 3. **Confirmation Prompt**: Requires explicit user confirmation
-/// 4. **Safe Deletion**: Removes template only after confirmation
-/// 5. **User Feedback**: Provides clear feedback about operation result
-///
-/// ## Safety Features
-///
-/// - Confirms template exists before showing deletion prompt
-/// - Uses clear, unambiguous confirmation language
-/// - Defaults to "No" for safety
-/// - Provides escape opportunity before actual deletion
-/// - Clear feedback about cancellation vs. completion
-///
 fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -439,20 +362,6 @@ fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
 }
 
 /// Handles template search functionality.
-///
-/// This function performs text-based searching across template names and
-/// task names, returning all matches in a formatted display. The search
-/// is case-insensitive and supports partial matching for user convenience.
-///
-/// ## Search Scope
-///
-/// The search covers these template fields:
-/// - **Template Name**: The unique identifier
-/// - **Task Name**: The default task name
-///
-/// Comments and completion values are not included in search to focus
-/// on the most relevant identifying information.
-///
 fn handle_search(query: String) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let templates = templates_db.search(&query)?;
@@ -468,23 +377,6 @@ fn handle_search(query: String) -> Result<()> {
 }
 
 /// Handles interactive template management when no subcommand is provided.
-///
-/// This function provides a menu-driven interface for users who prefer
-/// interactive operation over command-line arguments. It presents all
-/// available template operations in an easy-to-navigate menu format.
-///
-/// ## Interactive Menu
-///
-/// The menu presents these options:
-/// 1. **Create new template**: Launches template creation workflow
-/// 2. **List templates**: Shows all available templates
-/// 3. **Edit template**: Template selection and editing interface
-/// 4. **Delete template**: Template selection and safe deletion
-///
-/// Each menu option delegates to the appropriate specialized handler
-/// function, ensuring consistent behavior between interactive and
-/// command-line usage.
-///
 fn handle_interactive() -> Result<()> {
     let options = vec!["Add new template", "List templates", "Show template", "Edit template", "Remove template"];
 

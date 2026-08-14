@@ -32,9 +32,6 @@ use chrono::Local;
 use clap::{Parser, Subcommand};
 
 /// Defines the main subcommands that the application can execute.
-///
-/// Each variant corresponds to a specific command with its own argument structure.
-/// Commands are organized by functionality and frequency of use.
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Manage autostart configuration for system boot

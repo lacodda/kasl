@@ -4,26 +4,6 @@
 //! Windows, Keychain on macOS, the Secret Service on Linux - so they are
 //! protected by the user's login session rather than by this program.
 //!
-//! ## Why not the previous scheme
-//!
-//! Until 1.0 credentials lived in AES-256-CBC files under the data directory,
-//! encrypted with a key compiled into the binary. Because release builds were
-//! produced without build-time key material, every published binary shared one
-//! key that is derivable from the public source - so the stored ciphertext was
-//! only obfuscation. The key also had to be identical across versions, which
-//! made rotating it impossible. Both problems disappear once the OS holds the
-//! secret.
-//!
-//! ## Migration
-//!
-//! Existing AES files are read once, transparently: on the first lookup that
-//! misses the keyring, [`Secret::get_or_prompt`] decrypts the legacy file,
-//! stores the value in the keyring, and deletes the file. Users keep working
-//! without re-entering anything. Decryption uses the same compiled-in key as
-//! before, so a binary can always read what it previously wrote; when that
-//! fails - a file written by a differently-keyed build - the user is prompted
-//! instead, which is the same recovery path a corrupted file always had.
-//!
 //! ## Usage
 //!
 //! ```rust,no_run

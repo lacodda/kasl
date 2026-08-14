@@ -27,10 +27,6 @@ use anyhow::Result;
 use clap::{Args, Subcommand};
 
 /// Command-line arguments for database migration management.
-///
-/// This command provides essential tools for database schema inspection
-/// and management during development. All operations are read-only or
-/// carefully controlled to prevent accidental data loss.
 #[cfg(debug_assertions)]
 #[derive(Debug, Args)]
 pub struct MigrationsArgs {
@@ -39,10 +35,6 @@ pub struct MigrationsArgs {
 }
 
 /// Available migration management operations.
-///
-/// Each subcommand provides specific functionality for database schema
-/// inspection and management. Operations are designed to be safe and
-/// informative for development workflows.
 #[cfg(debug_assertions)]
 #[derive(Debug, Subcommand)]
 enum MigrationsCommand {
@@ -77,7 +69,6 @@ enum MigrationsCommand {
 /// # View complete migration history
 /// kasl migrations history
 /// ```
-///
 #[cfg(debug_assertions)]
 pub fn cmd(args: MigrationsArgs) -> Result<()> {
     // Create direct database connection without running migrations

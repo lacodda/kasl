@@ -58,7 +58,6 @@ pub struct WatchArgs {
 ///
 /// Acts as a dispatcher that routes to the appropriate operation based on the
 /// provided command-line arguments, handling the three main operational modes.
-///
 #[instrument]
 pub async fn cmd(args: WatchArgs) -> Result<()> {
     if args.stop {
@@ -76,30 +75,6 @@ pub async fn cmd(args: WatchArgs) -> Result<()> {
 }
 
 /// Core monitoring logic that initializes and runs the activity monitor.
-///
-/// This function is called either directly for foreground mode or by the daemon
-/// process for background operation. It performs the following steps:
-///
-/// 1. **Configuration Loading**: Reads monitor settings from config file
-/// 2. **Monitor Initialization**: Sets up input device listeners and database connections
-/// 3. **Main Loop Execution**: Runs the continuous activity monitoring loop
-///
-/// ## Monitor Configuration
-///
-/// The monitor behavior is controlled by configuration settings:
-/// - `pause_threshold`: Seconds of inactivity before recording a pause
-/// - `poll_interval`: Milliseconds between activity checks
-/// - `activity_threshold`: Seconds of activity needed to start a workday
-/// - `min_pause_duration`: Minimum pause length to record (filters noise)
-///
-/// ## Activity Detection
-///
-/// The monitor tracks these input events:
-/// - Keyboard presses and releases
-/// - Mouse button clicks
-/// - Mouse movement
-/// - Mouse wheel scrolling
-///
 #[instrument]
 async fn run_monitor() -> Result<()> {
     // Load configuration with defaults for missing values
@@ -121,15 +96,7 @@ async fn run_monitor() -> Result<()> {
 
 /// Entry point for daemon mode execution.
 ///
-/// This function is called when the application is started with the `--daemon-run`
-/// flag, which happens when the main process spawns a background daemon. It sets
-/// up proper signal handling for graceful shutdown and runs the monitoring loop.
-///
 /// # Usage
-///
-/// This function is called internally by the application and should not be
-/// called directly. It's triggered by the `--daemon-run` argument which is
-/// used when spawning the background process.
 #[instrument]
 pub async fn run_as_daemon() -> Result<()> {
     daemon::run_with_signal_handling().await

@@ -28,10 +28,6 @@ use clap::{Args, Subcommand};
 use dialoguer::{Confirm, Input, Select, theme::ColorfulTheme};
 
 /// Command-line arguments for tag management operations.
-///
-/// The tag command uses subcommands to organize different tag management
-/// operations, providing a clean and intuitive interface for users to
-/// manage their tag library and task associations.
 #[derive(Debug, Args)]
 pub struct TagArgs {
     #[command(subcommand)]
@@ -39,10 +35,6 @@ pub struct TagArgs {
 }
 
 /// Available tag management operations.
-///
-/// Each subcommand provides specific functionality for tag lifecycle
-/// management and task association operations, supporting both direct
-/// command-line usage and interactive workflows.
 #[derive(Debug, Subcommand)]
 enum TagCommand {
     /// Add a new tag with optional color
@@ -118,10 +110,6 @@ enum TagCommand {
 
 /// Executes tag management operations based on the specified subcommand.
 ///
-/// This function serves as the main dispatcher for tag operations, routing
-/// to appropriate handlers based on user input. When no subcommand is provided,
-/// it enters interactive mode for operation selection.
-///
 /// # Examples
 ///
 /// ```bash
@@ -163,13 +151,6 @@ fn resolve_tag(tag: Option<String>, prompt: &str) -> Result<String> {
 }
 
 /// Handles tag creation with validation and uniqueness checking.
-///
-/// This function manages the complete tag creation workflow:
-/// 1. **Uniqueness Validation**: Ensures tag name doesn't already exist
-/// 2. **Tag Creation**: Creates new tag with specified name and optional color
-/// 3. **Database Storage**: Saves the new tag with proper error handling
-/// 4. **User Feedback**: Provides confirmation of successful creation
-///
 fn handle_create(name: String, color: Option<String>) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -188,16 +169,6 @@ fn handle_create(name: String, color: Option<String>) -> Result<()> {
 }
 
 /// Displays all available tags in a formatted table.
-///
-/// This function retrieves all tags from the database and presents them
-/// in a user-friendly table format showing all relevant properties.
-/// The display helps users understand their available tags and their
-/// configurations for effective task categorization.
-///
-/// ## Empty State Handling
-///
-/// When no tags exist, the function provides helpful guidance about
-/// creating the first tag rather than displaying an empty table.
 fn handle_list() -> Result<()> {
     let mut tags_db = Tags::new()?;
     let tags = tags_db.get_all()?;
@@ -213,29 +184,6 @@ fn handle_list() -> Result<()> {
 }
 
 /// Handles tag editing with flexible identifier support.
-///
-/// This function provides comprehensive tag editing capabilities:
-/// 1. **Tag Resolution**: Finds tag by name or ID
-/// 2. **Current State Display**: Shows existing tag properties
-/// 3. **Interactive Editing**: Prompts for new values with current values as defaults
-/// 4. **Validation**: Ensures edited values meet tag requirements
-/// 5. **Database Update**: Saves changes with proper error handling
-///
-/// ## Identifier Resolution
-///
-/// The function accepts flexible tag identification:
-/// - **Numeric Input**: Treated as database ID
-/// - **String Input**: Treated as tag name
-/// - **Automatic Detection**: Parses input to determine type
-///
-/// ## Editing Interface
-///
-/// For each editable property, the interface:
-/// - Shows the current value as the default
-/// - Allows the user to accept current value or enter new one
-/// - Validates new values according to tag rules
-/// - Provides clear feedback about validation errors
-///
 fn handle_edit(tag_identifier: String) -> Result<()> {
     // Editing is prompt-driven; there is nothing to fall back on without a terminal.
     ensure_interactive("`kasl tag edit` is interactive and needs a terminal")?;
@@ -286,32 +234,6 @@ fn handle_edit(tag_identifier: String) -> Result<()> {
 }
 
 /// Handles safe tag deletion with usage impact analysis.
-///
-/// This function manages the tag deletion process with comprehensive
-/// safety measures to prevent accidental data loss and inform users
-/// about the impact of deletion:
-/// 1. **Tag Resolution**: Finds tag by name or ID
-/// 2. **Usage Analysis**: Counts how many tasks currently use the tag
-/// 3. **Impact Communication**: Informs user about affected tasks
-/// 4. **Confirmation Prompt**: Requires explicit user confirmation
-/// 5. **Safe Deletion**: Removes tag and updates task associations
-///
-/// ## Safety Features
-///
-/// - Confirms tag exists before showing deletion prompt
-/// - Analyzes and reports impact on existing tasks
-/// - Uses different confirmation messages based on usage
-/// - Defaults to "No" for safety
-/// - Provides escape opportunity before actual deletion
-/// - Clear feedback about cancellation vs. completion
-///
-/// ## Usage Impact
-///
-/// The function provides different confirmation prompts based on tag usage:
-/// - **Unused Tags**: Simple confirmation for deletion
-/// - **Used Tags**: Enhanced warning showing number of affected tasks
-/// - **Heavily Used Tags**: Additional emphasis on impact scope
-///
 fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -362,19 +284,6 @@ fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
 }
 
 /// Displays all tasks associated with a specific tag.
-///
-/// This function provides filtered task viewing based on tag assignment,
-/// allowing users to see all work items within a particular category.
-/// It's useful for project management and understanding work distribution
-/// across different areas.
-///
-/// ## Display Features
-///
-/// - **Tag Validation**: Ensures the specified tag exists
-/// - **Task Filtering**: Shows only tasks with the specified tag
-/// - **Standard Format**: Uses the same task display format as other commands
-/// - **Empty State Handling**: Provides helpful message when no tasks found
-///
 async fn handle_show_tasks(tag_name: String) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -406,31 +315,6 @@ async fn handle_show_tasks(tag_name: String) -> Result<()> {
 }
 
 /// Handles interactive tag management when no subcommand is provided.
-///
-/// This function provides a menu-driven interface for users who prefer
-/// interactive operation over command-line arguments. It presents all
-/// available tag operations in an easy-to-navigate menu format.
-///
-/// ## Interactive Menu
-///
-/// The menu presents these options:
-/// 1. **Create tag**: Launches tag creation workflow with prompts for name and color
-/// 2. **List tags**: Shows all available tags in formatted table
-/// 3. **Edit tag**: Tag selection interface followed by editing prompts
-/// 4. **Delete tag**: Tag selection interface with safety confirmations
-///
-/// Each menu option delegates to the appropriate specialized handler
-/// function, ensuring consistent behavior between interactive and
-/// command-line usage.
-///
-/// ## Tag Selection Interface
-///
-/// For edit and delete operations, the interactive mode provides:
-/// - **Tag List Display**: Shows all available tags for selection
-/// - **Empty State Handling**: Graceful handling when no tags exist
-/// - **User-Friendly Selection**: Clear presentation of tag options
-/// - **Operation Cancellation**: Easy way to exit without changes
-///
 fn handle_interactive() -> Result<()> {
     let options = vec!["Add tag", "List tags", "Edit tag", "Remove tag"];
 

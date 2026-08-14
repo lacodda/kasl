@@ -5,19 +5,6 @@
 //! [`crate::libs::export`]. This module externalizes that style into a
 //! serializable [`ReportTemplate`] so it can be customized without recompiling.
 //!
-//! ## Resolution
-//!
-//! Templates are looked up by name (`config.report.template`, default
-//! `siserver`) in `<data>/report_templates/<name>.json`. When the file is
-//! missing or fails to parse, the built-in [`ReportTemplate::siserver`] default
-//! is used, guaranteeing the report always renders. On first use the default
-//! `siserver.json` is materialized to disk so users have a concrete example to
-//! copy and edit.
-//!
-//! ## Colors
-//!
-//! Colors are stored as `#RRGGBB` hex strings and converted to
-//! [`rust_xlsxwriter::Color`] via [`ReportTemplate::parse_color`].
 
 use crate::libs::data_storage::DataStorage;
 use anyhow::Result;

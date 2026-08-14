@@ -20,14 +20,6 @@
 //! # Ok(())
 //! # }
 //! ```
-//!
-//! ## Implementation Notes
-//!
-//! ### macOS Implementation
-//! - Uses Property List (plist) files for Launch Services
-//! - Integrates with macOS security and sandboxing
-//! - Handles code signing and notarization requirements
-//! - Supports both GUI and CLI application launching
 
 use crate::libs::messages::Message;
 #[cfg(target_os = "windows")]
@@ -39,10 +31,6 @@ use anyhow::Result;
 use std::env;
 
 /// Windows-specific autostart implementation module.
-///
-/// This module contains all Windows-specific code for managing autostart
-/// functionality. It handles both Task Scheduler integration and Registry
-/// autostart methods, with automatic privilege detection and fallback.
 #[cfg(target_os = "windows")]
 mod windows {
     use super::*;
@@ -67,13 +55,6 @@ mod windows {
     /// Windows command-line tools often output text in the OEM codepage
     /// rather than UTF-8. This function attempts proper conversion to
     /// ensure error messages and output are correctly displayed.
-    ///
-    /// ## Conversion Strategy
-    ///
-    /// 1. **UTF-8 First**: Try interpreting as UTF-8 directly
-    /// 2. **Windows-1252 Fallback**: Use Windows-1252 encoding
-    /// 3. **Lossy Conversion**: Accept some character loss if necessary
-    ///
     pub(crate) fn decode_windows_output(bytes: &[u8]) -> String {
         // Try UTF-8 interpretation first
         if let Ok(utf8) = String::from_utf8(bytes.to_vec()) {
@@ -86,32 +67,9 @@ mod windows {
 
     /// Enables system-level autostart using Windows Task Scheduler.
     ///
-    /// This function creates a scheduled task that runs kasl automatically
-    /// when any user logs into the system. It requires administrative
-    /// privileges to create system-level tasks.
-    ///
-    /// ## Task Configuration
-    ///
-    /// The created task has the following properties:
-    /// - **Trigger**: On user logon (any user)
-    /// - **Action**: Run kasl with 'watch' command
-    /// - **Privileges**: Limited (non-administrative)
-    /// - **Persistence**: Survives system restarts and updates
-    ///
-    /// ## Administrative Requirements
-    ///
-    /// System-level task creation requires:
-    /// - Current user has administrative privileges
-    /// - UAC elevation (if UAC is enabled)
-    /// - Write access to Task Scheduler store
-    ///
     /// # Errors
     ///
     /// Common error scenarios:
-    /// - **Access Denied**: Insufficient privileges for system-level task
-    /// - **Service Unavailable**: Task Scheduler service not running
-    /// - **Invalid Path**: Executable path cannot be resolved
-    /// - **Configuration Error**: Task definition is invalid
     pub fn enable() -> Result<()> {
         // Get current executable path for task configuration
         let exe_path = env::current_exe()?;
@@ -164,11 +122,6 @@ mod windows {
     }
 
     /// Disables system-level autostart by removing the scheduled task.
-    ///
-    /// This function removes the kasl autostart task from Windows Task
-    /// Scheduler. It attempts to remove the task regardless of current
-    /// privileges, falling back gracefully if the task doesn't exist.
-    ///
     pub fn disable() -> Result<()> {
         msg_debug!("Removing scheduled task");
         // Attempt to delete the scheduled task
@@ -198,10 +151,6 @@ mod windows {
     }
 
     /// Checks if system-level autostart is currently enabled.
-    ///
-    /// This function queries Windows Task Scheduler to determine if the
-    /// kasl autostart task exists and is enabled.
-    ///
     pub fn is_enabled() -> Result<bool> {
         // Query task scheduler for the specific task
         let output = Command::new("schtasks")
@@ -214,11 +163,6 @@ mod windows {
     }
 
     /// Checks if the current process is running with administrative privileges.
-    ///
-    /// This function uses Windows APIs to determine the current privilege
-    /// level. It's used to decide whether system-level autostart is possible
-    /// or if user-level fallback methods should be used.
-    ///
     pub fn is_admin() -> bool {
         use std::ptr;
         use winapi::um::handleapi::CloseHandle;
@@ -254,11 +198,6 @@ mod windows {
 }
 
 /// Unix-specific autostart implementation module.
-///
-/// This module provides autostart functionality for Unix-like systems
-/// including Linux and macOS. Currently, it serves as a placeholder
-/// for future implementation of XDG autostart specification and
-/// platform-specific autostart mechanisms.
 #[cfg(not(target_os = "windows"))]
 mod unix {
     use super::*;
@@ -468,25 +407,6 @@ mod unix {
 
 /// Enables autostart on system boot with automatic fallback handling.
 ///
-/// This function attempts to enable autostart using the most appropriate
-/// method for the current platform and privilege level. It automatically
-/// handles privilege detection and provides fallback options when
-/// system-level autostart is not possible.
-///
-/// ## Platform Behavior
-///
-/// ### Windows
-/// 1. **Privilege Check**: Determines if running with admin privileges
-/// 2. **System-Level Attempt**: Tries Task Scheduler if admin
-/// 3. **User-Level Fallback**: Uses Registry autostart if not admin
-/// 4. **Error Reporting**: Provides clear feedback on results
-///
-/// ### Unix (Future)
-/// 1. **Desktop Detection**: Identifies current desktop environment
-/// 2. **System Integration**: Uses systemd or equivalent if available
-/// 3. **User Session**: Falls back to user-level autostart
-/// 4. **Manual Guidance**: Provides setup instructions if needed
-///
 /// # Examples
 ///
 /// ```rust
@@ -514,19 +434,6 @@ pub fn enable() -> Result<()> {
 }
 
 /// Enables user-level autostart via Windows Registry.
-///
-/// This function provides a fallback autostart method for Windows when
-/// administrative privileges are not available. It adds an entry to the
-/// current user's Registry autostart location.
-///
-/// ## Registry Location
-///
-/// The function adds an entry to:
-/// `HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run`
-///
-/// This location is automatically processed by Windows during user login,
-/// starting the application without requiring administrative privileges.
-///
 #[cfg(target_os = "windows")]
 fn enable_user_autostart() -> Result<()> {
     use std::os::windows::process::CommandExt;
@@ -566,19 +473,6 @@ fn enable_user_autostart() -> Result<()> {
 }
 
 /// Disables autostart on system boot with comprehensive cleanup.
-///
-/// This function attempts to disable autostart using all available methods
-/// to ensure complete removal of autostart configuration. It tries both
-/// system-level and user-level removal to handle various installation scenarios.
-///
-/// ## Cleanup Strategy
-///
-/// The function performs cleanup in multiple locations:
-/// 1. **System-Level**: Removes Task Scheduler tasks (Windows)
-/// 2. **User-Level**: Removes Registry entries (Windows)
-/// 3. **Desktop Files**: Removes .desktop files (Unix future)
-/// 4. **Service Files**: Removes systemd units (Unix future)
-///
 pub fn disable() -> Result<()> {
     #[cfg(target_os = "windows")]
     {
@@ -593,10 +487,6 @@ pub fn disable() -> Result<()> {
 }
 
 /// Disables user-level autostart via Windows Registry cleanup.
-///
-/// This function removes the kasl entry from the current user's Registry
-/// autostart location. It's used as part of comprehensive autostart cleanup.
-///
 #[cfg(target_os = "windows")]
 fn disable_user_autostart() -> Result<()> {
     use std::os::windows::process::CommandExt;
@@ -629,19 +519,6 @@ fn disable_user_autostart() -> Result<()> {
 }
 
 /// Checks if autostart is currently enabled using any available method.
-///
-/// This function checks all possible autostart locations to provide a
-/// comprehensive status report. It checks both system-level and user-level
-/// autostart configurations.
-///
-/// ## Check Strategy
-///
-/// The function checks multiple locations:
-/// 1. **System-Level**: Task Scheduler (Windows) or systemd (Unix future)
-/// 2. **User-Level**: Registry autostart (Windows) or user session (Unix future)
-/// 3. **Legacy Methods**: Older autostart mechanisms for compatibility
-///
-/// If any method indicates autostart is enabled, the function returns `true`.
 ///
 /// # Examples
 ///
@@ -683,9 +560,6 @@ pub fn is_enabled() -> Result<bool> {
 }
 
 /// Gets the current autostart status as a human-readable string.
-///
-/// This function provides a simple way to get autostart status information
-/// suitable for display in user interfaces or command-line output.
 ///
 /// # Examples
 ///

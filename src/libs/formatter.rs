@@ -20,20 +20,6 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// Represents a formatted time-based event for display purposes.
 ///
-/// This structure holds string representations of event properties, making it
-/// suitable for direct use with table-rendering libraries and data export
-/// systems. All time values are pre-formatted for consistent display.
-///
-/// ## Design Rationale
-///
-/// Rather than storing raw time values and formatting them at display time,
-/// this structure pre-formats all values to strings. This approach provides:
-///
-/// - **Performance**: No repeated formatting calculations
-/// - **Consistency**: All instances use identical formatting
-/// - **Simplicity**: Direct use in templates and display systems
-/// - **Serialization**: Easy JSON/CSV export without custom formatters
-///
 /// ## Examples
 ///
 /// ```rust
@@ -88,25 +74,6 @@ pub struct FormattedEvent {
 
 /// Formats a chrono::Duration into a standardized "HH:MM" string.
 ///
-/// This function converts a time duration into a human-readable format
-/// suitable for display in reports, tables, and user interfaces. It ensures
-/// consistent formatting across the entire application.
-///
-/// ## Formatting Rules
-///
-/// - **Hours**: Always displayed with at least 2 digits (zero-padded)
-/// - **Minutes**: Always displayed with exactly 2 digits (zero-padded)
-/// - **Seconds**: Not displayed (rounded to nearest minute)
-/// - **Negative**: Treated as zero duration ("00:00")
-/// - **Overflow**: Large durations handled gracefully
-///
-/// ## Algorithm
-///
-/// 1. Extract total hours from the duration
-/// 2. Extract remaining minutes (after removing full hours)
-/// 3. Clamp negative values to zero
-/// 4. Format with zero-padding
-///
 /// # Examples
 ///
 /// ```rust
@@ -123,7 +90,6 @@ pub struct FormattedEvent {
 /// assert_eq!(format_duration(&Duration::hours(-1)), "00:00");
 /// assert_eq!(format_duration(&Duration::hours(24)), "24:00");
 /// ```
-///
 pub fn format_duration(duration: &Duration) -> String {
     // Extract hours and minutes from the duration
     let hours = duration.num_hours();

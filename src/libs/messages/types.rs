@@ -18,12 +18,6 @@
 //! ```
 
 /// Comprehensive message enumeration for all user-facing communication.
-///
-/// This enum represents every type of message that the kasl application can
-/// present to users. It provides a type-safe way to handle all application
-/// communication while ensuring consistent formatting and proper parameter
-/// handling across all components.
-///
 #[derive(Debug, Clone)]
 pub enum Message {
     // === AUTOSTART MESSAGES ===

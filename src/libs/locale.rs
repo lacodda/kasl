@@ -1,17 +1,5 @@
 //! Built-in localization for hourly (SiServer-style) daily reports.
 //!
-//! This module centralizes every user-facing string, month name, weekday name
-//! and date format used when rendering the hourly report. Previously all of
-//! these were hardcoded in Russian inside [`crate::libs::export`]; they now live
-//! in language-specific [`Locale`] tables so the report can be produced in
-//! different languages selected via `config.report.language`.
-//!
-//! ## Scope
-//!
-//! Only the hourly report (`kasl export report --hourly`) consumes these
-//! locales. Other exports (CSV/JSON/plain Excel) keep their existing English
-//! wording and are intentionally not affected.
-//!
 //! ## Usage
 //!
 //! ```rust,no_run

@@ -1,8 +1,5 @@
 //! Productivity calculation utilities for work time analysis.
 //!
-//! This module provides centralized productivity calculations that distinguish
-//! brief interruptions from full absences to give accurate productivity metrics.
-//!
 //! ## Productivity Formula
 //!
 //! ```text
@@ -105,7 +102,6 @@ impl Productivity {
     /// ratio swing wildly on a single pause, so warning then would be noise. Once
     /// `min_workday_fraction_before_suggest` of the expected workday has passed,
     /// the figure is stable enough to act on.
-    ///
     pub fn is_below_threshold(&self) -> bool {
         let now = chrono::Local::now().naive_local();
         let elapsed = now - self.workday.start;
