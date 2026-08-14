@@ -1,9 +1,5 @@
-//! Internal SiServer API client for company reporting and calendar integration.
-//!
-//! Provides integration with an internal company API system that handles employee
-//! time tracking reports and company calendar information.
-//!
-//! ## Usage
+//! SiServer client: daily/monthly report submission and the company
+//! rest-date calendar.
 //!
 //! ```rust,no_run
 //! # use kasl::api::si::{Si, SiConfig};
@@ -39,71 +35,35 @@ use reqwest::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-/// Maximum number of authentication retries before giving up.
-/// SiServer has more complex auth flow, so we use the same conservative limit.
 const MAX_RETRY_COUNT: i32 = 3;
-
-/// Cookie name prefix used by SiServer for session identification.
 const COOKIE_KEY: &str = "PORTALSESSID=";
-
-/// Filename for storing SiServer session tokens in the user data directory.
 const SESSION_ID_FILE: &str = ".si_session_id";
-
-/// Filename for storing encrypted SiServer credentials for password caching.
 const SECRET_FILE: &str = ".si_secret";
-
-/// SiServer API endpoint for LDAP authentication (first stage).
 const AUTH_URL: &str = "auth/ldap";
-
-/// SiServer API endpoint for token-to-session exchange (second stage).
 const LOGIN_URL: &str = "auth/login-by-token";
-
-/// SiServer API endpoint for submitting daily time reports.
 const REPORT_URL: &str = "report-card/send-daily-report";
-
-/// SiServer API endpoint for submitting monthly summary reports.
 const MONTHLY_REPORT_URL: &str = "report-card/send-monthly-report";
-
-/// SiServer API endpoint for fetching company rest dates and holidays.
 const REST_DATES_URL: &str = "report-card/get-rest-dates";
 
-/// User credentials for SiServer authentication.
-///
-/// SiServer requires special password encoding (double base64) for security.
-/// Credentials are only held in memory during the authentication process.
+/// Login and the double-base64-encoded password SiServer expects.
 #[derive(Serialize, Clone, Debug)]
 pub struct LoginCredentials {
-    /// Username for LDAP authentication
     login: String,
-    /// Double base64-encoded password for enhanced security
     password: String,
 }
 
-/// Response structure for SiServer LDAP authentication.
-///
-/// The first stage of authentication returns a temporary token that must
-/// be exchanged for a session cookie in the second stage.
+/// First-stage (LDAP) response carrying the temporary token.
 #[derive(Deserialize)]
 pub struct AuthSession {
-    /// Payload containing the authentication token
     payload: AuthPayload,
 }
 
-/// Authentication payload containing the temporary token.
-///
-/// This token is used to authenticate the second stage of the login process
-/// where it's exchanged for a session cookie.
 #[derive(Deserialize)]
 pub struct AuthPayload {
-    /// Temporary authentication token for session exchange
     token: String,
 }
 
-/// Response structure for SiServer rest dates API.
-///
-/// SiServer provides company calendar information including various types
-/// of non-working days such as holidays, vacation days, and weekend days.
-/// Different date arrays represent different types of rest periods.
+/// Rest-date calendar response: three categories of non-working days.
 #[derive(Debug, Deserialize)]
 pub struct RestDatesResponse {
     /// Regular rest dates (general holidays)
@@ -115,25 +75,11 @@ pub struct RestDatesResponse {
 }
 
 impl RestDatesResponse {
-    /// Parses and combines all rest dates into a single unified set.
-    ///
-    /// This method processes all three categories of rest dates and combines them
-    /// into a single `HashSet` for easy lookup operations. Duplicate dates across
-    /// categories are automatically deduplicated.
-    ///
-    /// ## Date Format Handling
-    ///
-    /// The API returns dates in "YYYY-MM-DD" format. Invalid date strings are
-    /// silently ignored to handle potential API inconsistencies gracefully.
-    ///
-    /// # Errors
-    ///
-    /// Currently cannot fail, but returns `Result` for future error handling
-    /// such as date validation or API response verification.
+    /// Merges all three categories into one deduplicated set; date strings
+    /// that fail to parse are skipped rather than failing the calendar.
     pub fn unique_dates(&self) -> Result<HashSet<NaiveDate>> {
         let mut date_set = HashSet::new();
 
-        // Process all three date categories
         self.process_dates(&self.dates, &mut date_set)?;
         self.process_dates(&self.v_dates, &mut date_set)?;
         self.process_dates(&self.w_dates, &mut date_set)?;
@@ -141,12 +87,6 @@ impl RestDatesResponse {
         Ok(date_set)
     }
 
-    /// Helper function to parse date strings and add them to the result set.
-    ///
-    /// Processes a vector of date strings, attempting to parse each one into
-    /// a `NaiveDate`. Invalid dates are silently skipped to handle API
-    /// inconsistencies without failing the entire operation.
-    ///
     fn process_dates(&self, dates: &[String], date_set: &mut HashSet<NaiveDate>) -> Result<()> {
         dates
             .iter()
@@ -158,66 +98,31 @@ impl RestDatesResponse {
     }
 }
 
-/// SiServer API client with advanced session management.
-///
-/// This client handles the complex two-stage authentication flow required by
-/// SiServer and provides methods for report submission and calendar data retrieval.
-/// It implements resilient error handling to ensure application stability.
-///
-/// ## Authentication Architecture
-///
-/// SiServer uses a sophisticated authentication system:
-/// 1. **LDAP Stage**: Credentials sent to LDAP endpoint, token received
-/// 2. **Session Stage**: Token sent to session endpoint, cookie received
-/// 3. **API Usage**: Cookie included in all subsequent API requests
-///
-/// This design provides enhanced security but requires careful session management.
+/// SiServer client. Authentication is two-stage: LDAP login yields a
+/// token, the token is exchanged for a `PORTALSESSID` cookie, and the
+/// cookie rides on every API call.
 #[derive(Debug)]
 pub struct Si {
-    /// HTTP client for making API requests with connection pooling
     client: Client,
-    /// Configuration containing API endpoints and user information
     config: SiConfig,
-    /// In-memory storage for authentication credentials during auth process
+    /// Held in memory only while authenticating.
     credentials: Option<LoginCredentials>,
-    /// Counter for tracking authentication retry attempts
     retries: i32,
 }
 
 impl Session for Si {
-    /// Performs two-stage authentication with SiServer.
-    ///
-    /// This method implements SiServer's unique authentication flow which requires
-    /// two separate API calls to establish a session. The process is more complex
-    /// than standard session authentication but provides enhanced security.
-    ///
-    /// ## Authentication Process
-    ///
-    /// 1. **LDAP Authentication**: Send credentials to LDAP endpoint
-    /// 2. **Token Extraction**: Parse authentication token from response
-    /// 3. **Session Exchange**: Send token to session endpoint with Bearer auth
-    /// 4. **Cookie Extraction**: Parse session cookie from Set-Cookie header
-    /// 5. **Format Preparation**: Extract session ID for use in subsequent requests
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - No credentials have been set (programming error)
-    /// - Network requests fail
-    /// - LDAP authentication fails
-    /// - Token or cookie parsing fails
-    /// - Authentication flow completes but no valid session is established
+    /// Runs the two-stage login and returns the session id extracted from
+    /// the `Set-Cookie` header.
     async fn login(&self) -> Result<String> {
-        // Ensure credentials are available for authentication
         let credentials = self.credentials.clone().expect("Credentials not set!");
 
-        // Stage 1: LDAP Authentication
+        // Stage 1: LDAP authentication yields a bearer token.
         let auth_url = format!("{}/{}", self.config.auth_url, AUTH_URL);
         let auth_res = self.client.post(auth_url).json(&credentials).send().await?;
         let auth_body = auth_res.text().await?;
         let auth_session: AuthSession = serde_json::from_str(&auth_body)?;
 
-        // Stage 2: Token-to-Session Exchange
+        // Stage 2: the token buys a session cookie.
         let login_url = format!("{}/{}", self.config.api_url, LOGIN_URL);
         let login_res = self
             .client
@@ -226,37 +131,20 @@ impl Session for Si {
             .send()
             .await?;
 
-        // Stage 3: Cookie Extraction
         if let Some(cookie) = login_res.headers().get("Set-Cookie")
             && let Ok(cookie_val) = cookie.to_str()
+            && let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY))
         {
-            // Find the PORTALSESSID cookie in the Set-Cookie header
-            if let Some(portalsessid) = cookie_val.split(";").find(|c| c.starts_with(COOKIE_KEY)) {
-                let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
-                return Ok(session_id.to_string());
-            }
+            let session_id = portalsessid.trim_start_matches(COOKIE_KEY);
+            return Ok(session_id.to_string());
         }
 
-        // Authentication completed but no valid session cookie was found
         anyhow::bail!("Login failed")
     }
 
-    /// Sets user credentials with SiServer-specific password encoding.
-    ///
-    /// SiServer requires passwords to be double base64-encoded for security.
-    /// This method handles the encoding and stores credentials in memory for
-    /// use during the authentication process.
-    ///
-    /// ## Password Encoding
-    ///
-    /// The password undergoes double base64 encoding:
-    /// 1. First encoding: `base64(password)`
-    /// 2. Second encoding: `base64(base64(password))`
-    ///
-    /// This provides additional security layers for credential transmission.
-    ///
+    /// Stores the credentials, double-base64-encoding the password as
+    /// SiServer requires.
     fn set_credentials(&mut self, password: &str) -> Result<()> {
-        // Apply double base64 encoding as required by SiServer
         let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
 
         self.credentials = Some(LoginCredentials {
@@ -266,56 +154,29 @@ impl Session for Si {
         Ok(())
     }
 
-    /// Returns the filename for storing SiServer session tokens.
-    ///
-    /// The session file is stored in the user's application data directory
-    /// and contains the cached session token for automatic login restoration.
     fn session_id_file(&self) -> &str {
         SESSION_ID_FILE
     }
 
-    /// Returns a configured Secret instance for secure password prompting.
-    ///
-    /// The Secret manager handles secure password input with hidden characters
-    /// and optional encrypted caching in the user's data directory.
-    ///
     fn secret(&self) -> Secret {
         Secret::new(SECRET_FILE, "Enter your SiServer password")
     }
 
-    /// Returns the current authentication retry count.
-    ///
-    /// Used by the session management system to track failed authentication
-    /// attempts and implement retry limits.
     fn retry(&self) -> i32 {
         self.retries
     }
 
-    /// Increments the authentication retry counter.
-    ///
-    /// Called after each failed authentication attempt to track progress
-    /// toward the maximum retry limit.
     fn inc_retry(&mut self) {
         self.retries += 1;
     }
 
-    /// Resets the authentication retry counter to zero.
-    ///
-    /// Called after successful authentication to ensure future session
-    /// requests start with a clean slate.
     fn reset_retry(&mut self) {
         self.retries = 0;
     }
 }
 
 impl Si {
-    /// Creates a new SiServer API client instance.
-    ///
-    /// Initializes the HTTP client with default settings suitable for SiServer API
-    /// interactions. The client is configured for both JSON and multipart requests
-    /// to handle different SiServer endpoints appropriately.
-    ///
-    /// # Examples
+    /// Builds a client from the config; no network activity yet.
     ///
     /// ```rust,no_run
     /// use kasl::api::si::{Si, SiConfig};
@@ -336,29 +197,9 @@ impl Si {
         }
     }
 
-    /// Submits a daily time tracking report to SiServer.
-    ///
-    /// This method sends formatted daily report data to the SiServer API for
-    /// payroll and time tracking integration. It handles session management
-    /// and implements retry logic for authentication failures.
-    ///
-    /// ## Report Format
-    ///
-    /// The report data should be a JSON string containing:
-    /// - Work hours and break information
-    /// - Task completion details
-    /// - Productivity metrics
-    /// - Any relevant metadata for the specified date
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Session management fails persistently
-    /// - Network request fails
-    /// - Request formatting fails
-    /// - Duration conversion fails (internal error)
-    ///
-    /// # Examples
+    /// Submits the daily report (tasks as JSON) for the date. On a 401 the
+    /// cached session is dropped and the call retried up to the limit; a
+    /// network error maps to `BAD_REQUEST` so a scheduled send fails soft.
     ///
     /// ```rust,no_run
     /// # use kasl::api::si::{Si, SiConfig};
@@ -384,12 +225,10 @@ impl Si {
     pub async fn send(&mut self, data: &str, date: &NaiveDate) -> Result<StatusCode> {
         let mut local_retries = 0;
         loop {
-            // Get valid session for API request
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, REPORT_URL);
             let date = date.format("%Y-%m-%d").to_string();
 
-            // Prepare multipart form data for submission
             let form = multipart::Form::new()
                 .text("date", date)
                 .text("tasks", data.to_owned())
@@ -398,17 +237,14 @@ impl Si {
                 .text("duty", "0")
                 .text("only_save", "0");
 
-            // Set up authentication headers
             let mut headers = HeaderMap::new();
             headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
 
-            // Submit the report
             let res = match self.client.post(url).headers(headers).multipart(form).send().await {
                 Ok(response) => response,
                 Err(_) => return Ok(StatusCode::BAD_REQUEST), // Network error fallback
             };
 
-            // Handle response and potential session expiration
             match res.status() {
                 StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
                     // Session expired - clear cache and retry
@@ -422,26 +258,8 @@ impl Si {
         }
     }
 
-    /// Submits a monthly summary report to SiServer.
-    ///
-    /// Sends aggregated monthly statistics to the SiServer API for organizational
-    /// reporting and payroll integration. The report covers the entire month
-    /// containing the specified date.
-    ///
-    /// ## Monthly Report Contents
-    ///
-    /// The system automatically generates a summary containing:
-    /// - Total working hours for the month
-    /// - Number of working days
-    /// - Average daily productivity
-    /// - Compliance with company policies
-    ///
-    /// ## Last Working Day Logic
-    ///
-    /// Monthly reports are typically submitted on the last working day of each month.
-    /// The system can automatically detect this condition and prompt for submission.
-    ///
-    /// # Examples
+    /// Submits the monthly report for the month containing `date`, with
+    /// the same 401-retry and network-error behavior as [`Si::send`].
     ///
     /// ```rust,no_run
     /// # use kasl::api::si::{Si, SiConfig};
@@ -468,28 +286,22 @@ impl Si {
     pub async fn send_monthly(&mut self, date: &NaiveDate) -> Result<StatusCode> {
         let mut local_retries = 0;
         loop {
-            // Get valid session for API request
             let session_id = self.get_session_id().await?;
             let url = format!("{}/{}", self.config.api_url, MONTHLY_REPORT_URL);
             let (year, month) = (date.year(), date.month());
 
-            // Prepare monthly report form data
             let form = multipart::Form::new().text("month", month.to_string()).text("year", year.to_string());
 
-            // Set up authentication headers
             let mut headers = HeaderMap::new();
             headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
 
-            // Submit the monthly report
             let res = match self.client.post(url).headers(headers).multipart(form).send().await {
                 Ok(response) => response,
                 Err(_) => return Ok(StatusCode::BAD_REQUEST), // Network error fallback
             };
 
-            // Handle response and potential session expiration
             match res.status() {
                 StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
-                    // Session expired - clear cache and retry
                     self.delete_session_id()?;
                     tokio::time::sleep(Duration::seconds(1).to_std()?).await;
                     local_retries += 1;
@@ -500,22 +312,11 @@ impl Si {
         }
     }
 
-    /// Fetches company rest dates and holidays for the specified year.
+    /// Fetches the company rest-date calendar for the year of `date`.
     ///
-    /// This method retrieves the official company calendar including holidays,
-    /// vacation days, and extended weekend periods. The data is used for accurate
-    /// productivity calculations and report generation.
-    ///
-    /// ## Date Processing
-    ///
-    /// The API returns three categories of rest dates:
-    /// - Regular holidays (national and company holidays)
-    /// - Vacation dates (company-specific rest periods)
-    /// - Weekend extensions (long weekend periods)
-    ///
-    /// All categories are combined into a single set for unified processing.
-    ///
-    /// # Examples
+    /// Every failure path - session, network, parsing - logs and returns
+    /// an empty set: the calendar makes reports nicer, and its absence
+    /// must not break them.
     ///
     /// ```rust,no_run
     /// # use kasl::api::si::{Si, SiConfig};
@@ -533,7 +334,6 @@ impl Si {
     /// let rest_dates = si.rest_dates(this_year).await?;
     /// println!("Found {} rest dates this year", rest_dates.len());
     ///
-    /// // Check if a specific date is a rest day
     /// let today = Local::now().date_naive();
     /// if rest_dates.contains(&today) {
     ///     println!("Today is a company rest day");
@@ -544,45 +344,39 @@ impl Si {
     pub async fn rest_dates(&mut self, year: NaiveDate) -> Result<HashSet<NaiveDate>> {
         let mut local_retries = 0;
         loop {
-            // Get valid session for API request
             let session_id = match self.get_session_id().await {
                 Ok(id) => id,
                 Err(e) => {
                     msg_error!(Message::SiServerSessionFailed(e.to_string()));
-                    return Ok(HashSet::new()); // Return empty set on session failure
+                    return Ok(HashSet::new());
                 }
             };
 
-            // Prepare rest dates request
             let url = format!("{}/{}", self.config.api_url, REST_DATES_URL);
             let form = multipart::Form::new().text("year", year.format("%Y").to_string());
             let mut headers = HeaderMap::new();
             headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
 
-            // Request rest dates from API
             let res = match self.client.post(url).headers(headers).multipart(form).send().await {
                 Ok(resp) => resp,
                 Err(e) => {
                     msg_error!(Message::SiServerRestDatesFailed(e.to_string()));
-                    return Ok(HashSet::new()); // Return empty set on network error
+                    return Ok(HashSet::new());
                 }
             };
 
-            // Handle response and potential session expiration
             match res.status() {
                 StatusCode::UNAUTHORIZED if local_retries < MAX_RETRY_COUNT => {
-                    // Session expired - clear cache and retry
                     self.delete_session_id()?;
                     local_retries += 1;
                     continue;
                 }
                 _ => {
-                    // Process successful response or non-recoverable error
                     return match res.json::<RestDatesResponse>().await {
                         Ok(response) => Ok(response.unique_dates()?),
                         Err(e) => {
                             msg_error!(Message::SiServerRestDatesParsingFailed(e.to_string()));
-                            Ok(HashSet::new()) // Return empty set on parsing error
+                            Ok(HashSet::new())
                         }
                     };
                 }
@@ -590,25 +384,8 @@ impl Si {
         }
     }
 
-    /// Determines if the specified date is the last working day of its month.
-    ///
-    /// This utility function calculates whether a given date represents the final
-    /// working day in its month, which is useful for triggering monthly report
-    /// submissions and other end-of-month processing.
-    ///
-    /// ## Algorithm
-    ///
-    /// The calculation process:
-    /// 1. **Find Month End**: Determine the last calendar day of the month
-    /// 2. **Weekend Adjustment**: Move backward from weekends to find working days
-    /// 3. **Comparison**: Check if the input date matches the calculated last working day
-    ///
-    /// # Errors
-    ///
-    /// Currently cannot fail, but returns `Result` for consistency and
-    /// future enhancement with holiday integration.
-    ///
-    /// # Examples
+    /// True when `date` is the month's last working day (weekends walked
+    /// back; company holidays are not consulted).
     ///
     /// ```rust,no_run
     /// # use kasl::api::si::{Si, SiConfig};
@@ -632,63 +409,31 @@ impl Si {
     pub fn is_last_working_day_of_month(&self, date: &NaiveDate) -> Result<bool> {
         let (year, month) = (date.year(), date.month());
 
-        // Calculate the last day of the current month
         let mut last_day_of_month = NaiveDate::from_ymd_opt(year, month + 1, 1).unwrap().pred_opt().unwrap();
 
-        // Move backward from weekends to find the last working day
         while matches!(last_day_of_month.weekday(), Weekday::Sat | Weekday::Sun) {
             last_day_of_month -= Duration::days(1);
         }
 
-        // Check if the input date matches the calculated last working day
         Ok(date == &last_day_of_month)
     }
 }
 
-/// Configuration for SiServer API integration.
-///
-/// This structure holds the necessary information for connecting to internal
-/// SiServer systems. Unlike other API integrations, SiServer requires separate
-/// authentication and API endpoints due to its sophisticated security architecture.
-///
-/// ## Multi-Endpoint Architecture
-///
-/// SiServer uses different endpoints for different purposes:
-/// - **Authentication URL**: LDAP authentication endpoint
-/// - **API URL**: Main API endpoint for reports and data
-/// - **Separation Benefits**: Enhanced security, load distribution, service isolation
-///
+/// SiServer connection settings; auth and API live on separate hosts.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SiConfig {
-    /// Username for SiServer authentication.
-    ///
-    /// This should be the corporate username used for LDAP authentication.
-    /// Typically matches the username used for other company systems.
+    /// Corporate username for LDAP authentication.
     pub login: String,
 
-    /// URL for the SiServer authentication endpoint.
-    ///
-    /// This endpoint handles LDAP authentication and token generation.
-    /// Example: `https://auth.company.com`
-    ///
-    /// This is separate from the main API URL due to SiServer's security architecture.
+    /// LDAP authentication endpoint.
     pub auth_url: String,
 
-    /// Base URL for the main SiServer API endpoints.
-    ///
-    /// This endpoint handles report submission and data retrieval operations.
-    /// Example: `https://api.company.com`
-    ///
-    /// All API operations (reports, calendar) use this base URL.
+    /// Base URL for reports and calendar data.
     pub api_url: String,
 }
 
 impl SiConfig {
-    /// Returns the configuration module metadata for SiServer.
-    ///
-    /// Used by the configuration system to identify and manage
-    /// SiServer-specific settings during interactive setup.
-    ///
+    /// Module metadata for the setup wizard.
     pub fn module() -> ConfigModule {
         ConfigModule {
             key: "si".to_string(),
@@ -696,35 +441,7 @@ impl SiConfig {
         }
     }
 
-    /// Runs an interactive configuration setup for SiServer integration.
-    ///
-    /// Prompts the user for SiServer connection details including username
-    /// and both authentication and API endpoints. Uses existing configuration
-    /// values as defaults if available.
-    ///
-    /// ## Interactive Prompts
-    ///
-    /// 1. **Username**: Corporate username for LDAP authentication
-    /// 2. **Authentication URL**: LDAP endpoint for token generation
-    /// 3. **API URL**: Main API endpoint for reports and data operations
-    ///
-    /// All prompts show existing values as defaults if configuration already
-    /// exists, making it easy to update specific values without re-entering everything.
-    ///
-    /// ## Configuration Validation
-    ///
-    /// While this method doesn't validate actual connectivity, it provides
-    /// helpful prompts to guide users toward correct configuration values
-    /// for their corporate SiServer deployment.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Terminal input/output fails
-    /// - User cancels the configuration process
-    /// - Input validation fails
-    ///
-    /// # Example
+    /// Interactive setup; existing values become the prompt defaults.
     ///
     /// ```rust,no_run
     /// # use kasl::api::SiConfig;
@@ -741,17 +458,14 @@ impl SiConfig {
     /// # }
     /// ```
     pub fn init(config: &Option<SiConfig>) -> Result<Self> {
-        // Use existing configuration as defaults, or create empty defaults
         let config = config.clone().unwrap_or(Self {
             login: "".to_string(),
             auth_url: "".to_string(),
             api_url: "".to_string(),
         });
 
-        // Display configuration module header
         msg_print!(Message::ConfigModuleSiServer);
 
-        // Interactive configuration with existing values as defaults
         Ok(Self {
             login: Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your SiServer login")

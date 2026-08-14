@@ -29,19 +29,10 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-/// GitLab API client for retrieving user activity and commit information.
-///
-/// This client handles authentication and data retrieval from GitLab instances,
-/// specifically focusing on user events and commit details that can be transformed
-/// into task entries for time tracking purposes.
-///
-/// The client is stateless and thread-safe, making it suitable for concurrent
-/// operations and long-running applications.
+/// GitLab client; stateless - the token rides on every request.
 #[derive(Debug)]
 pub struct GitLab {
-    /// HTTP client for making API requests with connection pooling
     client: Client,
-    /// Configuration containing API endpoint and authentication details
     config: GitLabConfig,
 }
 
@@ -124,13 +115,7 @@ struct User {
 }
 
 impl GitLab {
-    /// Creates a new GitLab API client instance.
-    ///
-    /// Initializes the HTTP client with default settings suitable for GitLab API
-    /// interactions. The client is configured for JSON responses and includes
-    /// reasonable timeout settings.
-    ///
-    /// # Example
+    /// Builds a client from the config; no network activity yet.
     ///
     /// ```rust,no_run
     /// # use kasl::api::gitlab::{GitLab, GitLabConfig};
@@ -147,21 +132,7 @@ impl GitLab {
         }
     }
 
-    /// Retrieves the current user's GitLab ID.
-    ///
-    /// Makes a request to GitLab's `/user` endpoint to fetch the authenticated user's
-    /// information. The user ID is required for subsequent calls to the events API.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Network request fails
-    /// - Authentication token is invalid
-    /// - GitLab returns an unexpected response format
-    ///
-    /// # API Endpoint
-    ///
-    /// `GET /api/v4/user` - Requires `read_user` scope
+    /// The authenticated user's numeric id (`GET /user`, `read_user` scope).
     pub async fn get_user_id(&self) -> Result<u32> {
         Ok(self.get_current_user().await?.id)
     }
@@ -174,21 +145,8 @@ impl GitLab {
         Ok(response.json::<User>().await?)
     }
 
-    /// Fetches all commits made by the authenticated user today.
-    ///
-    /// This is the primary method for discovering development activity that can be
-    /// converted into time tracking tasks. It retrieves user events from yesterday
-    /// to tomorrow (to handle timezone issues) and filters for push events containing
-    /// commit information.
-    ///
-    /// # Example
-    ///
-    /// ```text
-    /// let commits = gitlab_client.get_today_commits().await?;
-    /// for commit in commits {
-    ///     println!("Commit {}: {}", commit.sha, commit.message);
-    /// }
-    /// ```
+    /// Today's commits by the authenticated user, deduplicated across
+    /// pushes, first message line only - the feed for task discovery.
     pub async fn get_today_commits(&self) -> Result<Vec<CommitInfo>> {
         // Events window is wider (yesterday..tomorrow) to absorb timezone skew;
         // individual commits are then filtered to local today + current author.
@@ -321,23 +279,7 @@ impl GitLab {
         Ok(response.json::<CompareResult>().await?.commits)
     }
 
-    /// Fetches detailed information for a specific commit.
-    ///
-    /// Retrieves the complete commit object from GitLab's commits API, including
-    /// the full commit message and metadata. This is used to get detailed information
-    /// about commits identified through the events API.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - The commit doesn't exist or isn't accessible
-    /// - Network request fails
-    /// - GitLab returns an unexpected response format
-    /// - The user lacks permission to access the project
-    ///
-    /// # API Endpoint
-    ///
-    /// `GET /api/v4/projects/{project_id}/repository/commits/{commit_sha}`
+    /// Fetches one commit's full object from the commits API.
     async fn get_commit_detail(&self, project_id: u32, commit_sha: &str) -> Result<Commit> {
         let url = format!("{}/api/v4/projects/{}/repository/commits/{}", self.config.api_url, project_id, commit_sha);
         let response = self.client.get(&url).header("PRIVATE-TOKEN", &self.config.access_token).send().await?;
@@ -385,51 +327,19 @@ fn is_commit_on_date(commit: &Commit, date: NaiveDate) -> bool {
         .unwrap_or(false)
 }
 
-/// Configuration for GitLab API integration.
-///
-/// This structure holds the necessary information for connecting to GitLab
-/// instances, including both GitLab.com and self-hosted installations.
-///
-/// ## Security Notes
-///
-/// - Personal Access Tokens are stored in configuration files
-/// - Tokens should be generated with minimal required scopes (`read_user`, `read_repository`)
-/// - Consider using project-specific tokens for enhanced security
-/// - Tokens can be revoked through GitLab's interface if compromised
-///
-/// ## Supported Instances
-///
-/// - **GitLab.com**: Use `https://gitlab.com` as the API URL
-/// - **Self-hosted**: Use your instance URL (e.g., `https://gitlab.company.com`)
-/// - **GitLab Enterprise**: Same as self-hosted with enterprise features
+/// GitLab connection settings. The token IS stored in the config file -
+/// keep its scopes minimal (`read_user`, `read_repository`).
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct GitLabConfig {
-    /// Personal Access Token for GitLab API authentication.
-    ///
-    /// This token must have the following scopes:
-    /// - `read_user`: To fetch user information and user ID
-    /// - `read_repository`: To access commit data and repository events
-    ///
-    /// Generate tokens at: GitLab → User Settings → Access Tokens
+    /// Personal Access Token with `read_user` + `read_repository` scopes.
     pub access_token: String,
 
-    /// Base URL of the GitLab instance.
-    ///
-    /// Examples:
-    /// - GitLab.com: `https://gitlab.com`
-    /// - Self-hosted: `https://gitlab.example.com`
-    /// - Local development: `http://localhost:8080`
-    ///
-    /// Do not include the `/api/v4` path - it will be added automatically.
+    /// Instance root URL, without the `/api/v4` path.
     pub api_url: String,
 }
 
 impl GitLabConfig {
-    /// Returns the configuration module metadata for GitLab.
-    ///
-    /// Used by the configuration system to identify and manage
-    /// GitLab-specific settings during interactive setup.
-    ///
+    /// Module metadata for the setup wizard.
     pub fn module() -> ConfigModule {
         ConfigModule {
             key: "gitlab".to_string(),
@@ -437,29 +347,7 @@ impl GitLabConfig {
         }
     }
 
-    /// Runs an interactive configuration setup for GitLab integration.
-    ///
-    /// Prompts the user for GitLab instance URL and personal access token,
-    /// using existing configuration values as defaults if available. This method
-    /// provides a user-friendly way to configure GitLab integration during
-    /// initial setup or reconfiguration.
-    ///
-    /// ## Interactive Prompts
-    ///
-    /// 1. **Personal Access Token**: Prompts for GitLab PAT with hidden input
-    /// 2. **API URL**: Prompts for GitLab instance URL with validation
-    ///
-    /// Both prompts will show existing values as defaults if configuration
-    /// already exists, making it easy to update only specific values.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Terminal input/output fails
-    /// - User cancels the configuration process
-    /// - Input validation fails
-    ///
-    /// # Example
+    /// Interactive setup; existing values become the prompt defaults.
     ///
     /// ```rust,no_run
     /// # use kasl::api::gitlab::GitLabConfig;
