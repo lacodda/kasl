@@ -3,12 +3,6 @@
 //! This module provides centralized productivity calculations that distinguish
 //! brief interruptions from full absences to give accurate productivity metrics.
 //!
-//! ## Key Concepts
-//!
-//! - **Short Pauses**: Brief interruptions below `min_pause_duration`
-//! - **Long Pauses**: Full absences at or above `min_pause_duration`, plus any
-//!   manual pauses the user recorded (protected records bypass the threshold)
-//!
 //! ## Productivity Formula
 //!
 //! ```text

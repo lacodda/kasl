@@ -225,17 +225,6 @@ pub struct RemoveArgs {
 /// operations based on provided command-line flags. It supports everything from simple
 /// task creation to complex batch operations and external service integrations.
 ///
-/// ## Operation Modes
-///
-/// The function handles these primary modes:
-///
-/// 1. **Deletion Operations**: Remove tasks individually or in bulk
-/// 2. **Editing Operations**: Modify existing tasks individually or in batches
-/// 3. **Template Operations**: Create tasks from predefined templates
-/// 4. **Display Operations**: Show tasks with various filtering options
-/// 5. **Discovery Operations**: Find and import tasks from multiple sources
-/// 6. **Creation Operations**: Create new tasks manually or interactively
-///
 /// ## External Integrations
 ///
 /// When find mode is activated, the function integrates with:

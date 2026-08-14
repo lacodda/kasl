@@ -181,23 +181,6 @@ impl GitLab {
     /// to tomorrow (to handle timezone issues) and filters for push events containing
     /// commit information.
     ///
-    /// ## Process Flow
-    ///
-    /// 1. **Date Range Calculation**: Creates a date range around today to handle timezone differences
-    /// 2. **User ID Retrieval**: Gets the authenticated user's ID for events API
-    /// 3. **Events Fetching**: Retrieves user events within the date range
-    /// 4. **Event Filtering**: Processes only "pushed to" events with commit data
-    /// 5. **Commit Details**: Fetches detailed commit information for each push
-    /// 6. **Message Processing**: Extracts and cleans commit messages for task names
-    ///
-    /// ## Error Resilience
-    ///
-    /// This method is designed to be fault-tolerant in production environments:
-    /// - Network failures return empty results instead of errors
-    /// - Individual commit fetch failures are skipped
-    /// - API parsing errors are logged and don't interrupt processing
-    /// - Missing or malformed data is handled gracefully
-    ///
     /// # Example
     ///
     /// ```text

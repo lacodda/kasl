@@ -27,11 +27,7 @@ use parking_lot::Mutex;
 use rusqlite::{Connection, params};
 use std::sync::Arc;
 
-/// SQL schema for the pauses table.
-///
-/// Defines the structure for storing pause/break records with temporal data.
-/// The schema supports both ongoing pauses (end IS NULL) and completed pauses
-/// with calculated durations for reporting and analysis.
+// An open pause has end IS NULL; duration is stored in seconds on close.
 const SCHEMA_PAUSES: &str = "CREATE TABLE IF NOT EXISTS pauses (
     id INTEGER NOT NULL PRIMARY KEY,
     start TIMESTAMP NOT NULL,
@@ -41,28 +37,12 @@ const SCHEMA_PAUSES: &str = "CREATE TABLE IF NOT EXISTS pauses (
     reason TEXT
 )";
 
-/// Insert a new pause start record with the current timestamp.
-///
-/// This query creates a new pause record with only the start time set,
-/// leaving end and duration as NULL until the pause is completed.
 const INSERT_PAUSE: &str = "INSERT INTO pauses (start) VALUES (datetime(CURRENT_TIMESTAMP, 'localtime'))";
 
-/// Insert a new pause start record with a specific timestamp.
-///
-/// Used for manually adding pauses or when importing historical data
-/// where the exact start time is known.
 const INSERT_PAUSE_WITH_TIME: &str = "INSERT INTO pauses (start) VALUES (?1)";
 
-/// Update the most recent open pause with end time and calculated duration.
-///
-/// Completes a pause record by setting the end timestamp and storing
-/// the calculated duration in seconds for later analysis.
 const UPDATE_PAUSE: &str = "UPDATE pauses SET end = (datetime(CURRENT_TIMESTAMP, 'localtime')), duration = ?1 WHERE id = ?2";
 
-/// Select the most recent uncompleted pause record.
-///
-/// Finds the last pause that has a start time but no end time,
-/// indicating an ongoing pause that needs to be completed.
 const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL ORDER BY id DESC LIMIT 1";
 
 /// Select all completed pauses for a specific date.
@@ -80,67 +60,31 @@ const SELECT_DAILY_PAUSES: &str =
 /// record is exempt from threshold filtering and merging.
 const INSERT_MANUAL_PAUSE: &str = "INSERT INTO pauses (start, end, duration, protected, reason) VALUES (?1, ?2, ?3, ?4, ?5)";
 
-/// Delete a single pause record by ID.
-///
-/// Removes a pause record from the database, typically used for
-/// correcting incorrectly recorded pauses or data cleanup.
 const DELETE_PAUSE: &str = "DELETE FROM pauses WHERE id = ?";
 
-/// Database manager for pause/break tracking operations.
-///
-/// The `Pauses` struct provides a high-level interface for managing work break
-/// records in the database. It uses thread-safe connection handling to support
-/// concurrent access from the activity monitor and user commands.
-///
-/// ## Connection Management
-///
-/// Each `Pauses` instance maintains its own database connection and ensures
-/// the pauses table schema is properly initialized on creation.
+/// Pause table access. The connection sits behind a mutex because the
+/// monitor thread and user commands write concurrently.
 pub struct Pauses {
-    /// Thread-safe database connection wrapper.
-    ///
-    /// The connection is protected by a mutex to prevent race conditions
-    /// when multiple threads attempt to record or query pause data
-    /// simultaneously.
     pub conn: Arc<Mutex<Connection>>,
     pub min_duration: Option<String>,
     pub max_duration: Option<String>,
 }
 
 impl Pauses {
-    /// Creates a new `Pauses` instance and initializes the database schema.
-    ///
-    /// This constructor establishes a database connection, ensures the pauses
-    /// table exists with the proper schema, and wraps the connection for
-    /// thread-safe access. The schema creation is idempotent and safe to
-    /// call multiple times.
-    ///
-    /// # Example
+    /// Opens the database and ensures the pauses table exists.
     ///
     /// ```rust,no_run
     /// # fn main() -> anyhow::Result<()> {
     /// use kasl::db::pauses::Pauses;
     ///
     /// let pauses = Pauses::new()?;
-    /// // Ready to track pauses
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Database connection cannot be established
-    /// - Schema creation fails due to permissions or corruption
-    /// - Table initialization encounters SQL errors
     pub fn new() -> Result<Pauses> {
-        // Establish database connection through the central Db manager
         let db_conn = Db::new()?.conn;
-
-        // Initialize the pauses table schema if it doesn't exist
         db_conn.execute(SCHEMA_PAUSES, [])?;
 
-        // Wrap connection for thread-safe access
         Ok(Pauses {
             conn: Arc::new(Mutex::new(db_conn)),
             min_duration: None,
@@ -227,14 +171,7 @@ impl Pauses {
         self.min_duration.as_ref().or(self.max_duration.as_ref()).and_then(|d| d.parse::<i64>().ok())
     }
 
-    /// Records the start of a new pause with the current timestamp.
-    ///
-    /// This method creates a new pause record using the current system time
-    /// as the start timestamp. The pause remains "open" (end IS NULL) until
-    /// it's completed with `insert_end()`. Multiple open pauses are allowed
-    /// to handle edge cases in activity detection.
-    ///
-    /// # Example
+    /// Opens a pause at the current time; `insert_end` closes it later.
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -244,21 +181,13 @@ impl Pauses {
     /// # Ok(())
     /// # }
     /// ```
-    ///
     pub fn insert_start(&self) -> rusqlite::Result<()> {
         let conn_guard = self.conn.lock();
         conn_guard.execute(INSERT_PAUSE, [])?;
         Ok(())
     }
 
-    /// Records the start of a new pause with a specific timestamp.
-    ///
-    /// This method allows manual insertion of pause records with exact
-    /// timestamps, useful for importing historical data or correcting
-    /// activity tracking records. The specified time should be in the
-    /// local timezone for consistency with other records.
-    ///
-    /// # Example
+    /// Opens a pause at a stated local time (imports, corrections).
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -274,11 +203,6 @@ impl Pauses {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Data Integrity
-    ///
-    /// The caller is responsible for ensuring the timestamp is reasonable
-    /// and doesn't conflict with existing work session boundaries.
     pub fn insert_start_with_time(&self, start_time: NaiveDateTime) -> Result<()> {
         let conn_guard = self.conn.lock();
         let start_str = start_time.format("%Y-%m-%d %H:%M:%S").to_string();
@@ -286,21 +210,8 @@ impl Pauses {
         Ok(())
     }
 
-    /// Completes the most recent open pause with duration calculation.
-    ///
-    /// This method finds the last pause record that has a start time but no
-    /// end time, then updates it with the current timestamp and the provided
-    /// duration. The duration is typically calculated by the activity monitor
-    /// based on the actual inactive period.
-    ///
-    /// ## Duration Calculation
-    ///
-    /// While the end timestamp is set to the current time, the duration
-    /// parameter contains the actual pause length in seconds. This allows
-    /// for accurate tracking even when there's a delay between activity
-    /// resumption and pause recording.
-    ///
-    /// # Example
+    /// Closes the most recent open pause, computing its duration; a no-op
+    /// when no pause is open.
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -312,12 +223,6 @@ impl Pauses {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Behavior Notes
-    ///
-    /// - Only affects the most recent open pause record
-    /// - If no open pause exists, the operation may fail silently
-    /// - Duration should be a positive number of seconds
     pub fn insert_end(&self) -> Result<()> {
         let end = Local::now().naive_local();
         let conn_guard = self.conn.lock();
@@ -339,7 +244,6 @@ impl Pauses {
     /// closed later by `insert_end`, a manual pause is written in one shot: the
     /// user knows when they left and how long they were gone. No placement is
     /// inferred and no time is invented.
-    ///
     pub fn insert_manual(&self, start: NaiveDateTime, duration: TimeDelta, protected: bool, reason: Option<&str>) -> Result<i64> {
         let end = start + duration;
         let conn_guard = self.conn.lock();
@@ -365,21 +269,9 @@ impl Pauses {
         Ok(pauses.into_iter().find(|p| p.end.map(|p_end| p.start < end && start < p_end).unwrap_or(false)))
     }
 
-    /// Retrieves all pause records for a specific date with duration filtering.
-    ///
-    /// This method fetches all completed pause records for the given date that
-    /// meet or exceed the specified minimum duration threshold. It's commonly
-    /// used for daily reporting and work time calculations where very short
-    /// pauses (e.g., under 5 minutes) may be ignored.
-    ///
-    /// ## Filtering Logic
-    ///
-    /// - Only includes pauses that started on the specified date
-    /// - Filters out pauses shorter than the minimum duration
-    /// - Includes ongoing pauses (duration IS NULL) regardless of threshold
-    /// - Results are ordered by start time for chronological display
-    ///
-    /// # Example
+    /// Returns the date's completed pauses: fetched chronologically, merged
+    /// across insignificant gaps, then filtered by the configured threshold
+    /// (see the comments in the body for the exact rules).
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -397,11 +289,6 @@ impl Pauses {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Performance Notes
-    ///
-    /// This query uses date functions and may be slower on large datasets.
-    /// Consider adding indices on the start column for better performance.
     pub fn get_daily_pauses(&self, date: NaiveDate) -> Result<Vec<Pause>> {
         let date_str = date.format("%Y-%m-%d").to_string();
         let conn_guard = self.conn.lock();
@@ -474,14 +361,7 @@ impl Pauses {
         Ok(filter_pauses_to_workday(pauses, workday))
     }
 
-    /// Deletes a single pause record by its unique identifier.
-    ///
-    /// This method removes a specific pause record from the database,
-    /// typically used for correcting erroneous pause recordings or
-    /// user-requested deletions. The operation is permanent and cannot
-    /// be undone without database backups.
-    ///
-    /// # Example
+    /// Deletes one pause by id.
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -491,31 +371,14 @@ impl Pauses {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Safety Considerations
-    ///
-    /// - Deletion is immediate and permanent
-    /// - No confirmation prompts are provided at this level
-    /// - Callers should implement appropriate confirmation flows
     pub fn delete(&self, id: i32) -> Result<()> {
         let conn_guard = self.conn.lock();
         conn_guard.execute(DELETE_PAUSE, params![id])?;
         Ok(())
     }
 
-    /// Deletes multiple pause records efficiently in a batch operation.
-    ///
-    /// This method removes multiple pause records in a single transaction,
-    /// providing better performance than individual deletions and ensuring
-    /// atomicity. If any deletion fails, all changes are rolled back.
-    ///
-    /// ## Transaction Handling
-    ///
-    /// All deletions are performed within a single database transaction
-    /// to ensure consistency. Either all specified records are deleted
-    /// or none are deleted if any error occurs.
-    ///
-    /// # Example
+    /// Deletes several pauses under one lock; unknown ids are not counted,
+    /// an empty slice is a no-op.
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -527,18 +390,6 @@ impl Pauses {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// # Performance Benefits
-    ///
-    /// - Single transaction reduces database overhead
-    /// - More efficient than individual delete operations
-    /// - Atomic operation ensures data consistency
-    ///
-    /// # Edge Cases
-    ///
-    /// - Empty input slice returns 0 without database interaction
-    /// - Non-existent IDs are silently ignored
-    /// - Partial failures result in complete rollback
     pub fn delete_many(&self, ids: &[i32]) -> Result<usize> {
         // Handle empty input early to avoid unnecessary database operations
         if ids.is_empty() {

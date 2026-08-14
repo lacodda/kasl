@@ -23,18 +23,6 @@
 //!
 //! ## Implementation Notes
 //!
-//! ### Windows Implementation
-//! - Uses Windows Task Scheduler XML configuration
-//! - Handles both system-wide and user-specific tasks
-//! - Includes proper error code interpretation
-//! - Supports various Windows versions and configurations
-//!
-//! ### Unix Implementation
-//! - Implements XDG autostart specification
-//! - Creates .desktop files in appropriate directories
-//! - Handles desktop environment variations
-//! - Supports both system and user installation paths
-//!
 //! ### macOS Implementation
 //! - Uses Property List (plist) files for Launch Services
 //! - Integrates with macOS security and sandboxing
@@ -181,12 +169,6 @@ mod windows {
     /// Scheduler. It attempts to remove the task regardless of current
     /// privileges, falling back gracefully if the task doesn't exist.
     ///
-    /// # Error Handling
-    ///
-    /// The function handles several scenarios:
-    /// - **Task Not Found**: Treated as success (already disabled)
-    /// - **Access Denied**: May indicate insufficient privileges
-    /// - **Service Error**: Task Scheduler service issues
     pub fn disable() -> Result<()> {
         msg_debug!("Removing scheduled task");
         // Attempt to delete the scheduled task
@@ -236,13 +218,6 @@ mod windows {
     /// This function uses Windows APIs to determine the current privilege
     /// level. It's used to decide whether system-level autostart is possible
     /// or if user-level fallback methods should be used.
-    ///
-    /// ## Implementation Details
-    ///
-    /// The function uses the Windows Token API to:
-    /// 1. Get the current process token
-    /// 2. Query token elevation information
-    /// 3. Determine if the token has administrative privileges
     ///
     pub fn is_admin() -> bool {
         use std::ptr;
@@ -551,14 +526,6 @@ pub fn enable() -> Result<()> {
 ///
 /// This location is automatically processed by Windows during user login,
 /// starting the application without requiring administrative privileges.
-///
-/// ## Security Considerations
-///
-/// User-level autostart:
-/// - Only affects the current user account
-/// - Can be modified without administrative privileges
-/// - Is less persistent than system-level autostart
-/// - May be affected by user profile issues
 ///
 #[cfg(target_os = "windows")]
 fn enable_user_autostart() -> Result<()> {

@@ -1,9 +1,6 @@
-//! Daemon management functionality for the kasl watch command.
-//!
-//! Provides comprehensive background process management for the kasl activity
-//! monitoring system including spawning, signal handling, and graceful shutdown.
-//!
-//! ## Usage
+//! Background process management for `kasl watch`: spawn detached,
+//! track by PID file, stop, and the daemon's own signal-handled entry
+//! point.
 //!
 //! ```rust,no_run
 //! # async fn f() -> anyhow::Result<()> {
@@ -25,30 +22,13 @@ use anyhow::Result;
 use std::time::Duration;
 use tracing::{debug, info, instrument, warn};
 
-/// PID file name used for tracking the daemon process.
-///
-/// This constant defines the filename used to store the process ID of the
-/// running daemon. The file is created in the application data directory
-/// when the daemon starts and removed when it shuts down gracefully.
-///
-/// The PID file serves multiple purposes:
-/// - **Process Tracking**: Allows the main process to find and communicate with the daemon
-/// - **Duplicate Prevention**: Prevents multiple daemon instances from running simultaneously
-/// - **Status Checking**: Enables status queries about the daemon's running state
-/// - **Cleanup Detection**: Helps identify when the daemon terminates unexpectedly
+/// PID file in the app data directory; written on spawn, removed on
+/// shutdown, and the single source of "is a daemon running".
 const PID_FILE: &str = "kasl-watch.pid";
 
-/// Runs the daemon with proper signal handling for graceful shutdown.
-///
-/// Sets up comprehensive signal handling and runs the activity monitor in a
-/// controlled environment. Designed to be the main entry point for daemon operation.
-///
-/// # Usage Context
-///
-/// This function is typically called from:
-/// - Background daemon processes spawned by [`spawn()`]
-/// - Foreground monitoring mode for debugging
-/// - Test environments requiring controlled shutdown
+/// The daemon entry point: runs the monitor and the Jira inbox poller,
+/// shutting both down on SIGTERM/SIGINT (Ctrl+C on Windows) and removing
+/// the PID file on the way out.
 #[instrument]
 pub async fn run_with_signal_handling() -> Result<()> {
     info!("Starting daemon with signal handling");
@@ -152,116 +132,19 @@ pub async fn run_with_signal_handling() -> Result<()> {
     Ok(())
 }
 
-/// The core logic that initializes and runs the activity monitor.
-///
-/// This function handles the complete lifecycle of the activity monitoring
-/// system, from configuration loading through monitor initialization to
-/// the main monitoring loop execution.
-///
-/// ## Initialization Process
-///
-/// 1. **Configuration Loading**: Reads monitor settings from the config file
-/// 2. **Default Application**: Applies sensible defaults for missing configuration
-/// 3. **Monitor Creation**: Initializes the monitor with the loaded configuration
-/// 4. **Loop Execution**: Starts the continuous activity monitoring loop
-///
-/// ## Configuration Handling
-///
-/// The function uses a robust configuration loading strategy:
-/// - **Primary Source**: User configuration file
-/// - **Fallback**: Built-in default values
-/// - **Validation**: Ensures configuration values are within valid ranges
-/// - **Error Recovery**: Continues with defaults if configuration is invalid
-///
-/// ## Monitor Components
-///
-/// The initialized monitor includes:
-/// - **Input Detection**: Keyboard and mouse activity tracking
-/// - **Database Interface**: Connection to SQLite database for data storage
-/// - **State Management**: Activity state tracking and transition logic
-/// - **Timing Control**: Configurable polling intervals and thresholds
-///
-/// ## Error Propagation
-///
-/// This function properly propagates errors from:
-/// - Configuration loading failures
-/// - Database connection issues
-/// - Monitor initialization problems
-/// - Runtime monitoring errors
-///
-/// # Usage Context
-///
-/// This function is called by:
-/// - [`run_with_signal_handling()`] for daemon operation
-/// - Foreground monitoring mode for interactive debugging
-/// - Test environments for controlled monitoring scenarios
+/// Loads config (defaults for missing sections) and runs the monitor loop.
 async fn run_monitor() -> Result<()> {
-    // Load configuration with defaults for missing values
-    // This ensures the monitor can start even with minimal configuration
     let config = Config::read()?;
     let monitor_config = config.monitor.unwrap_or_default();
 
-    // Initialize the activity monitor with configuration
-    // This sets up all necessary components for activity tracking
     let mut monitor = Monitor::new(monitor_config)?;
-
-    // Start the main monitoring loop
-    // This will run indefinitely until stopped or an error occurs
     monitor.run().await
 }
 
-/// Spawns the application as a detached background process.
-///
-/// This function creates a new background process that runs independently
-/// of the parent process. It handles platform-specific process creation,
-/// PID file management, and ensures only one daemon instance runs at a time.
-///
-/// ## Process Management
-///
-/// 1. **Existing Process Check**: Verifies no daemon is already running
-/// 2. **Process Termination**: Stops any existing daemon before starting new one
-/// 3. **Process Creation**: Spawns new daemon with platform-specific flags
-/// 4. **PID Recording**: Saves the new process ID for future management
-/// 5. **Status Reporting**: Provides feedback about the spawning operation
-///
-/// ## Platform-Specific Spawning
-///
-/// ### Unix Systems
-/// ```text
-/// std::process::Command::new(current_exe)
-///     .arg("--daemon-run")
-///     .pre_exec(|| {
-///         nix::unistd::setsid()?; // Create new session
-///         Ok(())
-///     })
-///     .spawn()?;
-/// ```
-///
-/// ### Windows
-/// ```text
-/// std::process::Command::new(current_exe)
-///     .arg("--daemon-run")
-///     .creation_flags(CREATE_NO_WINDOW) // Hide console window
-///     .spawn()?;
-/// ```
-///
-/// ## Duplicate Prevention
-///
-/// The function prevents multiple daemon instances by:
-/// - Checking for existing PID files
-/// - Validating that the process in the PID file is actually running
-/// - Terminating stale processes before starting new ones
-/// - Cleaning up orphaned PID files
-///
-/// ## Error Recovery
-///
-/// If stopping an existing daemon fails:
-/// - Issues a warning but continues with spawning
-/// - Removes stale PID files to prevent conflicts
-/// - Allows a brief delay for process cleanup
-/// - Proceeds with new daemon creation
-///
-/// # Usage Examples
+/// Re-launches the current executable detached (`--daemon-run`), first
+/// stopping any daemon the PID file points at, and records the new PID.
+/// Detachment is `setsid` on Unix, `CREATE_NO_WINDOW` on Windows; a
+/// failed stop of the old daemon is a warning, not a blocker.
 ///
 /// ```rust,no_run
 /// # fn main() -> anyhow::Result<()> {
@@ -273,13 +156,6 @@ async fn run_monitor() -> Result<()> {
 /// # Ok(())
 /// # }
 /// ```
-///
-/// # Security Considerations
-///
-/// - The spawned process runs with the same privileges as the parent
-/// - PID files are created with user-readable permissions only
-/// - No sensitive information is passed via command line arguments
-/// - Process isolation is maintained through session separation (Unix)
 #[instrument]
 pub fn spawn() -> Result<()> {
     debug!("Attempting to spawn daemon process");
@@ -357,59 +233,7 @@ pub fn spawn() -> Result<()> {
     Ok(())
 }
 
-/// Finds and stops the running daemon process.
-///
-/// This function provides a user-friendly interface for stopping the daemon
-/// process. It handles cases where no daemon is running gracefully and
-/// provides appropriate feedback to the user.
-///
-/// ## Operation Flow
-///
-/// 1. **Process Lookup**: Searches for running daemon using PID file
-/// 2. **Termination**: Attempts to terminate the found process
-/// 3. **Cleanup**: Removes PID file and other resources
-/// 4. **Status Reporting**: Provides feedback about the operation result
-///
-/// ## Error Handling Strategy
-///
-/// This function uses a forgiving error handling approach:
-/// - **Process Not Found**: Reports "not running" instead of error
-/// - **Stale PID File**: Cleans up orphaned files without complaint
-/// - **Permission Issues**: Reports specific error details
-/// - **Cleanup Failures**: Continues operation, reports warnings
-///
-/// ## User Experience
-///
-/// The function prioritizes clear user communication:
-/// - Success messages confirm the daemon was stopped
-/// - "Not running" messages avoid unnecessary error reports
-/// - Specific error messages help with troubleshooting
-/// - Consistent behavior across multiple invocations
-///
-/// # Usage Examples
-///
-/// ```rust,no_run
-/// # fn main() -> anyhow::Result<()> {
-/// use kasl::libs::daemon;
-///
-/// // Stop background monitoring
-/// daemon::stop()?;
-/// println!("Monitoring stopped");
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Idempotent Operation
-///
-/// This function is safe to call multiple times and will not produce
-/// errors if called when no daemon is running. This makes it suitable
-/// for use in cleanup scripts and automated scenarios.
-/// Checks if the daemon is currently running.
-///
-/// This function determines whether a daemon process is currently active by
-/// checking for the existence and validity of the PID file and verifying
-/// that the corresponding process is still running.
-///
+/// True when the PID file exists, parses, and names a live process.
 pub fn is_running() -> bool {
     let pid_path = match DataStorage::new().get_path(PID_FILE) {
         Ok(path) => path,
@@ -436,12 +260,7 @@ pub fn is_running() -> bool {
     is_process_running(pid)
 }
 
-/// Checks if a process with the given PID is currently running.
-///
-/// This function uses platform-specific methods to verify if a process
-/// exists and is running. It's used internally by daemon management
-/// functions to validate process state.
-///
+/// Platform-specific "does this PID exist" probe.
 fn is_process_running(pid: u32) -> bool {
     #[cfg(windows)]
     {
@@ -480,6 +299,18 @@ fn is_process_running(pid: u32) -> bool {
     }
 }
 
+/// Stops the daemon; "already stopped" counts as success, so cleanup
+/// scripts can call it unconditionally.
+///
+/// ```rust,no_run
+/// # fn main() -> anyhow::Result<()> {
+/// use kasl::libs::daemon;
+///
+/// daemon::stop()?;
+/// println!("Monitoring stopped");
+/// # Ok(())
+/// # }
+/// ```
 pub fn stop() -> Result<()> {
     match stop_internal() {
         Ok(()) => Ok(()),
@@ -496,40 +327,8 @@ pub fn stop() -> Result<()> {
     }
 }
 
-/// Internal function to stop the daemon, used by both stop and spawn.
-///
-/// This function performs the actual daemon termination logic without
-/// the user-friendly error handling of the public [`stop()`] function.
-/// It's used internally when precise error information is needed.
-///
-/// ## Termination Process
-///
-/// 1. **PID File Validation**: Checks that PID file exists and is readable
-/// 2. **PID Parsing**: Validates that PID file contains a valid process ID
-/// 3. **Process Termination**: Uses platform-specific termination methods
-/// 4. **File Cleanup**: Removes PID file regardless of termination result
-/// 5. **Result Validation**: Confirms the process was actually terminated
-///
-/// ## Error Propagation
-///
-/// Unlike the public interface, this function propagates all errors:
-/// - **File Not Found**: PID file doesn't exist
-/// - **Invalid Content**: PID file contains invalid data
-/// - **Process Not Found**: Process ID is not running
-/// - **Termination Failed**: Process couldn't be terminated
-///
-/// ## Cleanup Guarantee
-///
-/// The function guarantees PID file cleanup even if process termination
-/// fails. This prevents stale PID files from interfering with future
-/// daemon operations.
-///
-/// # Usage Context
-///
-/// This function is used internally by:
-/// - [`stop()`] for user-initiated daemon termination
-/// - [`spawn()`] for replacing existing daemon instances
-/// - Test utilities for controlled daemon lifecycle management
+/// Termination with precise errors, shared by [`stop`] and [`spawn`];
+/// the PID file is removed even when the process is already gone.
 fn stop_internal() -> Result<()> {
     let pid_path = DataStorage::new().get_path(PID_FILE)?;
 
@@ -566,43 +365,9 @@ fn stop_internal() -> Result<()> {
     Ok(())
 }
 
-/// Cross-platform process termination for Windows systems.
-///
-/// This function uses Windows-specific APIs to terminate a process by its
-/// process ID. It handles Windows process management through the WinAPI
-/// and provides detailed error information for troubleshooting.
-///
-/// ## Windows Process Management
-///
-/// The function uses these WinAPI functions:
-/// - `OpenProcess()`: Opens a handle to the target process
-/// - `TerminateProcess()`: Forcibly terminates the process
-/// - `CloseHandle()`: Releases the process handle
-/// - `GetLastError()`: Retrieves detailed error information
-///
-/// ## Error Handling
-///
-/// Windows-specific error codes are handled:
-/// - **ERROR_INVALID_PARAMETER (87)**: Process doesn't exist
-/// - **ACCESS_DENIED**: Insufficient privileges
-/// - **INVALID_HANDLE**: Process handle creation failed
-///
-/// ## Termination Strategy
-///
-/// The function uses forceful termination (`TerminateProcess`) rather than
-/// graceful shutdown signals. While less elegant than Unix signals, this
-/// ensures reliable process termination on Windows systems.
-///
-/// ## Safety Considerations
-///
-/// - Process handles are properly closed to prevent resource leaks
-/// - Error conditions are checked after each API call
-/// - Brief delay allows for process cleanup before returning
-///
-/// # Platform Availability
-///
-/// This function is only available on Windows platforms and will not
-/// compile on Unix-like systems.
+/// Terminates the process via `TerminateProcess` - Windows has no
+/// SIGTERM equivalent, so forceful is the reliable option. Returns
+/// `Ok(false)` when the process does not exist.
 #[cfg(windows)]
 fn kill_process(pid: u32) -> Result<bool> {
     use winapi::um::errhandlingapi::GetLastError;
@@ -640,46 +405,9 @@ fn kill_process(pid: u32) -> Result<bool> {
     }
 }
 
-/// Cross-platform process termination for Unix-like systems.
-///
-/// This function uses Unix command-line tools to terminate a process by its
-/// process ID. It implements a graceful termination strategy that attempts
-/// polite shutdown before resorting to forceful termination.
-///
-/// ## Termination Strategy
-///
-/// 1. **Process Validation**: Uses `ps` to verify the process exists
-/// 2. **Graceful Termination**: Sends SIGTERM for clean shutdown
-/// 3. **Wait Period**: Allows time for graceful shutdown (1 second)
-/// 4. **Forced Termination**: Sends SIGKILL if graceful shutdown fails
-/// 5. **Final Validation**: Confirms the process was terminated
-///
-/// ## Signal Handling
-///
-/// - **SIGTERM**: Requests graceful shutdown, allows cleanup
-/// - **SIGKILL**: Forces immediate termination, no cleanup possible
-///
-/// ## Command Dependencies
-///
-/// This function requires standard Unix utilities:
-/// - `ps`: Process status checking
-/// - `kill`: Signal sending
-///
-/// These are available on virtually all Unix-like systems including
-/// Linux, macOS, BSD variants, and Solaris.
-///
-/// ## Graceful Shutdown Benefits
-///
-/// The graceful termination approach provides several advantages:
-/// - Allows proper cleanup of resources
-/// - Enables database transaction completion
-/// - Provides opportunity for state saving
-/// - Reduces risk of data corruption
-///
-/// # Platform Availability
-///
-/// This function is only available on Unix-like platforms and will not
-/// compile on Windows systems.
+/// SIGTERM first, up to a second of grace, then SIGKILL; uses `ps` and
+/// `kill` rather than raw syscalls. Returns `Ok(false)` when the process
+/// does not exist.
 #[cfg(unix)]
 fn kill_process(pid: u32) -> Result<bool> {
     use std::process::Command;

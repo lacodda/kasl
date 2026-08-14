@@ -209,13 +209,6 @@ fn resolve_report_output(data: ExportData, format: ExportFormat, date: NaiveDate
 /// - **today** (case-insensitive): Returns current local date
 /// - **YYYY-MM-DD**: ISO 8601 date format (e.g., 2025-01-15)
 ///
-/// ## Use Cases
-///
-/// Different date specifications serve different purposes:
-/// - `today`: Quick exports of current work data
-/// - Specific dates: Historical analysis, backup creation, data migration
-/// - Recent dates: Weekly or monthly review processes
-///
 /// # Examples
 ///
 /// ```text

@@ -350,14 +350,6 @@ impl Si {
     /// - Productivity metrics
     /// - Any relevant metadata for the specified date
     ///
-    /// ## Session Management
-    ///
-    /// The method implements automatic session handling:
-    /// 1. **Session Retrieval**: Get or create a valid session token
-    /// 2. **Report Submission**: Send report data with session authentication
-    /// 3. **Error Handling**: Detect expired sessions and retry with re-authentication
-    /// 4. **Status Return**: Return HTTP status for caller handling
-    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -514,17 +506,6 @@ impl Si {
     /// vacation days, and extended weekend periods. The data is used for accurate
     /// productivity calculations and report generation.
     ///
-    /// ## Error Resilience
-    ///
-    /// This function prioritizes application stability over data completeness:
-    /// - Network errors return empty results rather than failing
-    /// - Authentication failures are logged but don't interrupt operation
-    /// - API parsing errors result in empty calendar (graceful degradation)
-    /// - Session failures are handled with automatic retry
-    ///
-    /// This design ensures that calendar integration enhances functionality
-    /// without breaking core time tracking features when services are unavailable.
-    ///
     /// ## Date Processing
     ///
     /// The API returns three categories of rest dates:
@@ -622,12 +603,6 @@ impl Si {
     /// 2. **Weekend Adjustment**: Move backward from weekends to find working days
     /// 3. **Comparison**: Check if the input date matches the calculated last working day
     ///
-    /// ## Limitations
-    ///
-    /// Currently only considers weekends (Saturday/Sunday) as non-working days.
-    /// Future versions may integrate with the rest dates API to consider holidays
-    /// and company-specific non-working days for more accurate calculations.
-    ///
     /// # Errors
     ///
     /// Currently cannot fail, but returns `Result` for consistency and
@@ -683,12 +658,6 @@ impl Si {
 /// - **API URL**: Main API endpoint for reports and data
 /// - **Separation Benefits**: Enhanced security, load distribution, service isolation
 ///
-/// ## Security Considerations
-///
-/// - Passwords are never stored in configuration files
-/// - Only username and endpoints are persisted
-/// - Session tokens are cached separately with encryption
-/// - Double base64 password encoding for transmission security
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct SiConfig {
     /// Username for SiServer authentication.

@@ -315,14 +315,6 @@ impl View {
     /// - **Comment**: Pre-configured task description or notes
     /// - **Completeness**: Default completion percentage for new tasks
     ///
-    /// ## Usage Context
-    ///
-    /// Templates are particularly useful for:
-    /// - Recurring tasks with standard parameters
-    /// - Team workflows with consistent task structures
-    /// - Quick task creation with minimal input required
-    /// - Standardized task naming and completion patterns
-    ///
     /// # Examples
     ///
     /// ```rust,no_run

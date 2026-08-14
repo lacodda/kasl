@@ -99,13 +99,6 @@ pub trait Session {
     /// This is the main entry point for session management. It handles the complete
     /// session lifecycle including cache restoration, authentication, and retry logic.
     ///
-    /// ## Process Flow
-    ///
-    /// 1. **Cache Check**: Attempt to restore session from encrypted storage
-    /// 2. **Authentication Loop**: If no cache, prompt for credentials and authenticate
-    /// 3. **Retry Logic**: Handle failures with limited retry attempts
-    /// 4. **Session Storage**: Cache successful sessions for future use
-    ///
     /// # Errors
     ///
     /// Returns an error if:

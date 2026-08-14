@@ -199,11 +199,6 @@ pub struct ReportConfig {
 /// custom company APIs or third-party time tracking services that accept
 /// HTTP-based report submissions.
 ///
-/// ## Security Considerations
-///
-/// - API URLs should use HTTPS in production environments
-/// - Auth tokens are stored in plain text in configuration files
-/// - Consider using environment variables for sensitive tokens in production
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ServerConfig {
     /// Base URL of the external reporting API server.
@@ -509,12 +504,6 @@ impl Config {
     /// - **macOS**: `~/Library/Application Support/lacodda/kasl/config.json`
     /// - **Linux**: `~/.local/share/lacodda/kasl/config.json`
     ///
-    /// ## Error Handling
-    ///
-    /// - **Missing file**: Returns default configuration (not an error)
-    /// - **Corrupted file**: Returns parsing error
-    /// - **Permission issues**: Returns filesystem error
-    ///
     /// # Errors
     ///
     /// Returns an error if the configuration file exists but cannot be read or parsed.
@@ -651,13 +640,6 @@ impl Config {
     /// - **Jira**: Issue tracking integration for task management
     /// - **Monitor**: Activity monitoring and pause detection settings
     /// - **Server**: External reporting API configuration
-    ///
-    /// ## User Experience
-    ///
-    /// - Uses colored prompts for better visual feedback
-    /// - Pre-fills existing values as defaults to simplify updates
-    /// - Provides helpful descriptions for each configuration parameter
-    /// - Allows partial configuration (users can skip unwanted modules)
     ///
     /// # Errors
     ///
@@ -888,12 +870,6 @@ impl Config {
     /// 2. Checks if the directory is already in the PATH
     /// 3. Updates the registry to add the directory if needed
     /// 4. Requires administrative privileges for system-wide changes
-    ///
-    /// ## Security Considerations
-    ///
-    /// - Modifying the system PATH requires elevated privileges on Windows
-    /// - Changes affect all users on the system
-    /// - The operation is reversible by manually editing the PATH
     ///
     /// # Errors
     ///

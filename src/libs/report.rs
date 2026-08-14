@@ -55,13 +55,6 @@ use chrono::{Duration, NaiveDateTime};
 /// - Identification of interruption causes
 /// - Optimization recommendations for pause timing
 ///
-/// ## Usage Context
-///
-/// Work intervals are used for:
-/// - Productivity calculation and analysis
-/// - Generating detailed work reports
-/// - Identifying optimization opportunities
-/// - Visualizing work patterns in charts and graphs
 #[derive(Debug, Clone)]
 pub struct WorkInterval {
     /// The timestamp when this work interval began.
@@ -163,13 +156,6 @@ impl WorkInterval {
 /// - **Merge Opportunities**: Intervals that could be combined
 /// - **Productivity Impact**: Potential time savings from optimization
 ///
-/// ## Usage Context
-///
-/// This analysis is used for:
-/// - Generating optimization recommendations in reports
-/// - Identifying patterns of work fragmentation
-/// - Calculating potential productivity improvements
-/// - Providing actionable feedback to users
 #[derive(Debug)]
 pub struct ShortIntervalsInfo {
     /// The number of intervals that fall below the minimum duration threshold.
@@ -290,20 +276,6 @@ pub struct ShortIntervalsInfo {
 /// println!("Generated {} work intervals", intervals.len());
 /// ```
 ///
-/// # Performance Considerations
-///
-/// - **Time Complexity**: O(n log n) due to pause sorting
-/// - **Space Complexity**: O(n) for interval storage
-/// - **Memory Usage**: Minimal allocation during processing
-///
-/// Resolves the effective end of a workday that has no recorded end time.
-///
-/// A workday stays open when the daemon was killed or the machine slept before
-/// `kasl end` ran. "Now" is only a sensible stand-in while the day is still
-/// today; for any earlier date it would stretch the day across every hour since,
-/// which is how an unclosed August day reported 8425 hours. For a past date the
-/// day is closed at the last evidence of activity - the end of its final pause,
-/// or its start when nothing else is known.
 pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDateTime {
     if let Some(end) = workday.end {
         return end;
@@ -471,13 +443,6 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
 /// new approach for handling short intervals - filtering at display time
 /// instead of modifying the database.
 ///
-/// ## Filtering Logic
-///
-/// - Intervals shorter than `min_minutes` are excluded from the result
-/// - Remaining intervals maintain their original timing and properties
-/// - No database changes are made - this is purely a display/API filter
-/// - Used by both `kasl report` (display) and `kasl report --send` (API submission)
-///
 /// ## Return Value
 ///
 /// Returns a tuple containing:
@@ -542,16 +507,6 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
 /// This function handles the data processing for daily work reports, calculating
 /// productivity metrics and work durations. It leverages the centralized `Productivity`
 /// module for consistent calculations across the application.
-///
-/// ## Calculation Method
-///
-/// The function uses two different approaches for different metrics:
-/// - **Filtered Duration**: Summed directly from provided intervals (for display purposes)
-/// - **Productivity**: Calculated using the comprehensive `Productivity::calculate_productivity()`
-///   method which properly handles all pause types, breaks, and overlaps
-///
-/// This separation allows for interval-based filtering (for clean reports) while maintaining
-/// accurate productivity calculations that account for all time categories.
 ///
 /// ## Data Consistency
 ///

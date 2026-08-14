@@ -56,13 +56,6 @@ struct Migration {
 /// and provides the logic for applying them in the correct order. It ensures
 /// that migrations are applied atomically and tracks their completion status.
 ///
-/// ## Architecture
-///
-/// - **Migration Registry**: Stores all available migrations in version order
-/// - **Version Control**: Tracks current schema version and pending changes  
-/// - **Transaction Management**: Ensures each migration is atomic
-/// - **Error Recovery**: Provides rollback on migration failures
-///
 pub struct MigrationManager {
     /// Ordered list of all available migrations
     ///

@@ -34,14 +34,6 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 /// - **Simplicity**: Direct use in templates and display systems
 /// - **Serialization**: Easy JSON/CSV export without custom formatters
 ///
-/// ## Usage Context
-///
-/// This structure is primarily used for:
-/// - Console table display of work intervals
-/// - CSV export of time-based data
-/// - JSON serialization for API responses
-/// - Report generation and data visualization
-///
 /// ## Examples
 ///
 /// ```rust
@@ -131,13 +123,6 @@ pub struct FormattedEvent {
 /// assert_eq!(format_duration(&Duration::hours(-1)), "00:00");
 /// assert_eq!(format_duration(&Duration::hours(24)), "24:00");
 /// ```
-///
-/// ## Performance Notes
-///
-/// This function is designed for frequent use and has minimal overhead:
-/// - Single allocation for the result string
-/// - Simple arithmetic operations only
-/// - No complex parsing or validation
 ///
 pub fn format_duration(duration: &Duration) -> String {
     // Extract hours and minutes from the duration

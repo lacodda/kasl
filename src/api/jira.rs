@@ -62,11 +62,6 @@ const SEARCH_URL: &str = "rest/api/2/search";
 /// a session with the Jira API. Credentials are only held in memory
 /// during the authentication process and are never persisted to disk.
 ///
-/// ## Security Considerations
-///
-/// - Passwords are stored in plain text only during authentication
-/// - Credentials are cleared from memory after session establishment
-/// - No persistence to avoid credential theft from configuration files
 #[derive(Serialize, Clone, Debug)]
 pub struct LoginCredentials {
     /// Jira username (not email address unless configured as such)
@@ -380,15 +375,6 @@ impl Jira {
     /// The search uses the following criteria:
     /// - **Resolution Date**: Issues resolved within the full day range (00:00 to 23:59)
     /// - **Assignee Filter**: Only issues assigned to the current user (`currentUser()`)
-    ///
-    /// ## Session Management
-    ///
-    /// The method implements sophisticated session handling:
-    /// 1. **Session Retrieval**: Get or create a valid session token using the Session trait
-    /// 2. **API Request**: Execute the JQL search with session cookie authentication
-    /// 3. **Error Handling**: Detect HTTP 401 (Unauthorized) responses indicating expired sessions
-    /// 4. **Automatic Retry**: Clear cached session and retry authentication up to the limit
-    /// 5. **Graceful Degradation**: Return empty results on persistent authentication failures
     ///
     /// ## Error Recovery Strategy
     ///

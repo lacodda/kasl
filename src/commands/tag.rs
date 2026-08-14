@@ -122,24 +122,6 @@ enum TagCommand {
 /// to appropriate handlers based on user input. When no subcommand is provided,
 /// it enters interactive mode for operation selection.
 ///
-/// ## Operation Routing
-///
-/// - **Add**: Tag creation with validation and color assignment
-/// - **List**: Formatted display of all available tags
-/// - **Show**: Display the tag and the tasks assigned it
-/// - **Edit**: Interactive or direct tag modification
-/// - **Remove**: Safe tag removal with usage impact analysis
-/// - **Interactive**: Menu-driven operation selection when no subcommand given
-///
-/// ## Error Handling
-///
-/// Each operation includes appropriate error handling for:
-/// - Tag not found scenarios
-/// - Database connectivity issues
-/// - Validation failures
-/// - User input errors
-/// - Concurrent modification conflicts
-///
 /// # Examples
 ///
 /// ```bash
@@ -188,19 +170,6 @@ fn resolve_tag(tag: Option<String>, prompt: &str) -> Result<String> {
 /// 3. **Database Storage**: Saves the new tag with proper error handling
 /// 4. **User Feedback**: Provides confirmation of successful creation
 ///
-/// ## Tag Properties
-///
-/// New tags are created with these properties:
-/// - **Name**: Unique identifier provided by user
-/// - **Color**: Optional visual indicator (defaults to system-assigned if not provided)
-/// - **Creation Date**: Automatically set to current timestamp
-///
-/// ## Validation Rules
-///
-/// - Tag names must be unique across the entire tag library
-/// - Tag names cannot be empty or contain only whitespace
-/// - Color values are optional and accept standard color names or hex codes
-///
 fn handle_create(name: String, color: Option<String>) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -224,13 +193,6 @@ fn handle_create(name: String, color: Option<String>) -> Result<()> {
 /// in a user-friendly table format showing all relevant properties.
 /// The display helps users understand their available tags and their
 /// configurations for effective task categorization.
-///
-/// ## Display Format
-///
-/// The table includes these columns:
-/// - **ID**: Database identifier for the tag
-/// - **Name**: The tag's unique name
-/// - **Color**: Visual color indicator (if assigned)
 ///
 /// ## Empty State Handling
 ///
@@ -413,14 +375,6 @@ fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
 /// - **Standard Format**: Uses the same task display format as other commands
 /// - **Empty State Handling**: Provides helpful message when no tasks found
 ///
-/// ## Use Cases
-///
-/// This functionality supports various workflows:
-/// - **Project Review**: See all tasks for a specific project
-/// - **Priority Management**: View all urgent or high-priority tasks
-/// - **Sprint Planning**: Review tasks by type or area
-/// - **Progress Tracking**: Monitor completion within categories
-///
 async fn handle_show_tasks(tag_name: String) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -477,13 +431,6 @@ async fn handle_show_tasks(tag_name: String) -> Result<()> {
 /// - **User-Friendly Selection**: Clear presentation of tag options
 /// - **Operation Cancellation**: Easy way to exit without changes
 ///
-/// ## User Experience
-///
-/// The interactive mode is designed for:
-/// - Users new to the command-line interface
-/// - Occasional tag management tasks
-/// - Exploration of available tag operations
-/// - Situations where remembering exact command syntax is inconvenient
 fn handle_interactive() -> Result<()> {
     let options = vec!["Add tag", "List tags", "Edit tag", "Remove tag"];
 

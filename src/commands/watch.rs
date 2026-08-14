@@ -100,14 +100,6 @@ pub async fn cmd(args: WatchArgs) -> Result<()> {
 /// - Mouse movement
 /// - Mouse wheel scrolling
 ///
-/// ## Database Operations
-///
-/// During monitoring, the system automatically:
-/// - Creates workday records when sustained activity is detected
-/// - Records pause start times when inactivity threshold is exceeded
-/// - Records pause end times when activity resumes
-/// - Updates workday end times when monitoring stops
-///
 #[instrument]
 async fn run_monitor() -> Result<()> {
     // Load configuration with defaults for missing values
@@ -132,21 +124,6 @@ async fn run_monitor() -> Result<()> {
 /// This function is called when the application is started with the `--daemon-run`
 /// flag, which happens when the main process spawns a background daemon. It sets
 /// up proper signal handling for graceful shutdown and runs the monitoring loop.
-///
-/// ## Signal Handling
-///
-/// The daemon process responds to these signals:
-/// - **SIGTERM**: Graceful shutdown (Unix)
-/// - **SIGINT**: Interrupt signal (Unix)
-/// - **Ctrl+C**: Console interrupt (Windows)
-///
-/// ## Process Management
-///
-/// The daemon:
-/// - Detaches from the parent process
-/// - Creates a PID file for process tracking
-/// - Handles cleanup on shutdown
-/// - Logs operations for debugging
 ///
 /// # Usage
 ///

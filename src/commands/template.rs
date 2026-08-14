@@ -126,15 +126,6 @@ enum TemplateCommand {
 /// routing to appropriate handlers based on user input. When no subcommand
 /// is provided, it enters interactive mode for operation selection.
 ///
-/// ## Operation Routing
-///
-/// - **Create**: Template creation with validation and uniqueness checking
-/// - **List**: Formatted display of all available templates
-/// - **Edit**: Interactive or direct template modification
-/// - **Delete**: Safe template removal with confirmation
-/// - **Search**: Text-based template discovery
-/// - **Interactive**: Menu-driven operation selection when no subcommand given
-///
 /// # Examples
 ///
 /// ```bash
@@ -188,13 +179,6 @@ pub fn cmd(args: TemplateArgs) -> Result<()> {
 /// - **Comment**: Default comment/description for tasks
 /// - **Completeness**: Default completion percentage (0-100)
 ///
-/// ## Validation Rules
-///
-/// - Template names must be unique across the entire template library
-/// - Task names are required and cannot be empty
-/// - Completion values must be between 0 and 100 inclusive
-/// - Comments are optional and can be empty
-///
 fn handle_create(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -245,14 +229,6 @@ fn handle_create(name: Option<String>) -> Result<()> {
 /// them in a user-friendly table format showing all relevant properties.
 /// The display helps users understand their available templates and
 /// their configurations.
-///
-/// ## Display Format
-///
-/// The table includes these columns:
-/// - **Template Name**: Unique identifier for the template
-/// - **Task Name**: Default task name that will be used
-/// - **Comment**: Default comment or description
-/// - **Completeness**: Default completion percentage
 ///
 /// ## Empty State Handling
 ///
@@ -468,15 +444,6 @@ fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
 /// task names, returning all matches in a formatted display. The search
 /// is case-insensitive and supports partial matching for user convenience.
 ///
-/// ## Search Algorithm
-///
-/// The search functionality:
-/// - Performs case-insensitive matching
-/// - Searches both template names and task names
-/// - Supports partial string matching
-/// - Returns all matching templates
-/// - Displays results in standard template table format
-///
 /// ## Search Scope
 ///
 /// The search covers these template fields:
@@ -518,13 +485,6 @@ fn handle_search(query: String) -> Result<()> {
 /// function, ensuring consistent behavior between interactive and
 /// command-line usage.
 ///
-/// ## User Experience
-///
-/// The interactive mode is designed for:
-/// - Users new to the command-line interface
-/// - Occasional template management tasks
-/// - Exploration of available template operations
-/// - Situations where remembering exact command syntax is inconvenient
 fn handle_interactive() -> Result<()> {
     let options = vec!["Add new template", "List templates", "Show template", "Edit template", "Remove template"];
 

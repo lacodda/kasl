@@ -624,13 +624,6 @@ impl Exporter {
     /// 4. **Statistical Analysis**: Compute totals, averages, and distributions
     /// 5. **Summary Generation**: Format results for export consumption
     ///
-    /// ## Statistical Calculations
-    ///
-    /// - **Total Hours**: Sum of all work durations in the month
-    /// - **Average Hours**: Mean work duration per working day
-    /// - **Working Days**: Count of days with recorded work activity
-    /// - **Daily Breakdown**: Individual day statistics with classifications
-    ///
     fn gather_summary_data(&self, date: NaiveDate) -> Result<ExportSummary> {
         // Retrieve all workday records for the month containing the specified date
         let workdays = Workdays::new()?.fetch_month(date)?;

@@ -140,11 +140,6 @@ async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result
 /// - Average daily hours
 /// - Productivity trends (if available)
 ///
-/// # Error Handling
-///
-/// Network errors are handled gracefully with user-friendly messages
-/// rather than application crashes, allowing continued local operation
-/// even when API services are unavailable.
 async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
     let mut si = get_si_service()?;
     let naive_date = date.date_naive();
@@ -284,13 +279,6 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
 /// this function will automatically trigger monthly report submission
 /// after successful daily report processing.
 ///
-/// # Error Handling
-///
-/// The function handles several error scenarios gracefully:
-/// - Missing workday data (warns user, doesn't crash)
-/// - No tasks for the day (prevents submission, shows warning)
-/// - Network connectivity issues (reports error, continues operation)
-/// - API authentication failures (provides user-friendly messages)
 async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let mut workdays_db = Workdays::new()?;
