@@ -34,6 +34,7 @@ use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
 use crate::libs::config::Config;
 use crate::libs::messages::Message;
+use crate::libs::pick;
 use crate::libs::view::View;
 use crate::{msg_error, msg_print, msg_success};
 use anyhow::{Result, bail};
@@ -119,8 +120,12 @@ struct ListArgs {
 #[derive(Debug, Args)]
 struct RemoveArgs {
     /// Identifier of the pause to remove
-    #[arg(value_name = "ID", help = "Id of the pause to remove")]
-    id: i32,
+    #[arg(value_name = "ID", help = "Id of the pause to remove; omit to pick from the day")]
+    id: Option<i32>,
+
+    /// Date to pick a pause from, when no id was given
+    #[arg(long, short, default_value = "today", help = "Date to pick from (YYYY-MM-DD or 'today')")]
+    date: String,
 
     /// Remove without asking for confirmation
     #[arg(long, short = 'y', help = "Do not ask for confirmation")]
@@ -205,14 +210,25 @@ fn add(args: AddArgs) -> Result<()> {
 fn remove(args: RemoveArgs) -> Result<()> {
     let pauses = Pauses::new()?;
 
+    // With no id there is nothing to confirm yet: the picker shows the day and
+    // the choice made there is the confirmation.
+    let id = match args.id {
+        Some(id) => id,
+        None => {
+            let date = parse_date(&args.date)?;
+            let listed = pauses.get_daily_pauses(date)?;
+            return remove_picked(&pauses, pick::pause(&listed, "Remove which pause?")?);
+        }
+    };
+
     if !args.yes {
         // Never block on a prompt when there is no one to answer it.
         if !std::io::stdin().is_terminal() {
-            bail!("refusing to remove pause {} without --yes outside an interactive terminal", args.id);
+            bail!("refusing to remove pause {} without --yes outside an interactive terminal", id);
         }
 
         let confirmed = Confirm::with_theme(&ColorfulTheme::default())
-            .with_prompt(format!("Remove pause {}?", args.id))
+            .with_prompt(format!("Remove pause {}?", id))
             .default(false)
             .interact()?;
 
@@ -221,11 +237,15 @@ fn remove(args: RemoveArgs) -> Result<()> {
         }
     }
 
-    let deleted = pauses.delete_many(&[args.id])?;
-    if deleted == 0 {
-        msg_error!(Message::ManualPauseNotFound(args.id));
+    remove_picked(&pauses, id)
+}
+
+/// Deletes the pause with `id` and reports what happened.
+fn remove_picked(pauses: &Pauses, id: i32) -> Result<()> {
+    if pauses.delete_many(&[id])? == 0 {
+        msg_error!(Message::ManualPauseNotFound(id));
     } else {
-        msg_success!(Message::ManualPauseRemoved(args.id));
+        msg_success!(Message::ManualPauseRemoved(id));
     }
 
     Ok(())

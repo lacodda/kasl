@@ -28,7 +28,7 @@
 
 use crate::{
     db::tags::{Tag, Tags},
-    libs::{messages::Message, prompt::ensure_interactive, view::View},
+    libs::{messages::Message, pick, prompt::ensure_interactive, view::View},
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -97,12 +97,12 @@ enum TagCommand {
     /// affects all tasks that currently use the tag, so changes should be
     /// made carefully to maintain consistent categorization.
     Edit {
-        /// Tag name or ID to edit
+        /// Tag name or ID to edit; omit to pick from the list
         ///
         /// Can specify either the tag name (string) or database ID (number)
         /// for the tag to be edited. If the input can be parsed as a number,
         /// it will be treated as an ID; otherwise, it's treated as a name.
-        tag: String,
+        tag: Option<String>,
     },
 
     /// Remove a tag and unassign it from all tasks
@@ -111,12 +111,12 @@ enum TagCommand {
     /// all tasks that currently use it. Includes safety confirmation
     /// prompts, especially when the tag is actively used by tasks.
     Remove {
-        /// Tag name or ID to remove
+        /// Tag name or ID to remove; omit to pick from the list
         ///
         /// Can specify either the tag name (string) or database ID (number)
         /// for the tag to be removed. The system will confirm the operation
         /// and show how many tasks will be affected.
-        tag: String,
+        tag: Option<String>,
 
         /// Remove without asking for confirmation
         #[arg(long, short = 'y')]
@@ -180,12 +180,20 @@ pub async fn cmd(args: TagArgs) -> Result<()> {
         Some(TagCommand::Add { name, color }) => handle_create(name, color),
         Some(TagCommand::List) => handle_list(),
         Some(TagCommand::Show { tag }) => handle_show_tasks(tag).await,
-        Some(TagCommand::Edit { tag }) => handle_edit(tag),
-        Some(TagCommand::Remove { tag, yes }) => handle_delete(tag, yes),
+        Some(TagCommand::Edit { tag }) => handle_edit(resolve_tag(tag, "Edit which tag?")?),
+        Some(TagCommand::Remove { tag, yes }) => handle_delete(resolve_tag(tag, "Remove which tag?")?, yes),
         None => {
             ensure_interactive("no subcommand given; run `kasl tag list` or see `kasl tag --help`")?;
             handle_interactive()
         }
+    }
+}
+
+/// Returns the tag to act on, opening a picker when none was given.
+fn resolve_tag(tag: Option<String>, prompt: &str) -> Result<String> {
+    match tag {
+        Some(tag) => Ok(tag),
+        None => pick::tag(&Tags::new()?.get_all()?, prompt),
     }
 }
 

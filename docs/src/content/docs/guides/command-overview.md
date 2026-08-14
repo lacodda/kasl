@@ -152,6 +152,18 @@ Commands for application configuration and maintenance:
 
 ## Getting Help
 
+### Omitting an identifier
+
+Commands that act on one thing - an inbox issue, a pause, a tag, a task - take
+its identifier as an argument. Leave the argument out on a terminal and kasl
+lists what is there and lets you choose, showing summaries and durations rather
+than bare keys and ids.
+
+This is a convenience for interactive use only. With no terminal attached -
+under the watch daemon, in CI, behind a pipe - the same command fails and names
+the argument it wanted, so an unattended run reports the problem instead of
+hanging on a prompt nobody can answer.
+
 ### Command Help
 
 Get help for any command:

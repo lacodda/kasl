@@ -48,51 +48,51 @@ The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly 
 ### `pin` - Pin an inbox issue
 
 ```bash
-kasl inbox pin <KEY>
+kasl inbox pin [KEY]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
 Pinned issues stay on top of the list.
 
 ### `unpin` - Unpin an inbox issue
 
 ```bash
-kasl inbox unpin <KEY>
+kasl inbox unpin [KEY]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
 ### `dismiss` - Dismiss an inbox issue
 
 ```bash
-kasl inbox dismiss <KEY>
+kasl inbox dismiss [KEY]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
 Hides an issue from the list.
 
 ### `open` - Open issue URL in browser
 
 ```bash
-kasl inbox open <KEY>
+kasl inbox open [KEY]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
 ### `take` - Import issue into tasks
 
 ```bash
-kasl inbox take <KEY>
+kasl inbox take [KEY]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
 Imports the issue into local tasks (creates a task named `KEY summary` and dismisses the inbox entry).
 

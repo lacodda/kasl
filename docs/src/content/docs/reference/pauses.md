@@ -60,10 +60,11 @@ kasl pauses add --start 16:20 --minutes 10 --keep --reason "stand-up in the othe
 ## `kasl pauses remove`
 
 ```bash
-kasl pauses remove <ID> [-y]
+kasl pauses remove [ID] [OPTIONS]
 ```
 
-- `<ID>`: Id of the pause to remove, as shown by `kasl pauses list`.
+- `ID`: Id of the pause to remove, as shown by `kasl pauses list`. Omit it on a terminal to pick from the day.
+- `-d, --date <DATE>`: Day to pick from when no id was given (`YYYY-MM-DD` or `today`, the default). Ignored when an id is passed.
 - `-y, --yes`: Remove without asking for confirmation.
 
 Without `-y` the command asks before deleting. Outside an interactive terminal it refuses instead of prompting, so scripts fail loudly rather than hang.

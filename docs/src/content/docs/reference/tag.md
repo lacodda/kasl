@@ -68,11 +68,11 @@ kasl tag show "urgent"
 ### `edit` - Edit an existing tag
 
 ```bash
-kasl tag edit <TAG>
+kasl tag edit [TAG]
 ```
 
 **Arguments:**
-- `TAG`: Tag name or ID to edit
+- `TAG`: Tag name or ID to edit. Omit it on a terminal to pick from the list.
 
 Prompts interactively for the new name and color.
 
@@ -88,11 +88,11 @@ kasl tag edit 1
 ### `remove` - Remove a tag
 
 ```bash
-kasl tag remove <TAG> [OPTIONS]
+kasl tag remove [TAG] [OPTIONS]
 ```
 
 **Arguments:**
-- `TAG`: Tag name or ID to remove
+- `TAG`: Tag name or ID to remove. Omit it on a terminal to pick from the list.
 
 **Options:**
 - `-y, --yes`: Remove without asking for confirmation

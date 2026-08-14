@@ -37,6 +37,7 @@ pub mod locale;
 pub mod messages;
 pub mod monitor;
 pub mod pause;
+pub mod pick;
 pub mod productivity;
 pub mod prompt;
 pub mod report;

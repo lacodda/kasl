@@ -48,11 +48,11 @@ kasl task list [OPTIONS]
 ### `show` - Show tasks by id
 
 ```bash
-kasl task show <ID>...
+kasl task show [ID]...
 ```
 
 **Arguments:**
-- `<ID>...`: One or more task ids to show
+- `ID...`: One or more task ids to show. Omit them on a terminal to pick from today's tasks.
 
 ### `edit` - Edit a task by id, or several interactively
 

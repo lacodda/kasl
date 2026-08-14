@@ -41,6 +41,7 @@ use crate::{
     libs::{
         config::Config,
         messages::Message,
+        pick,
         prompt::{ensure_interactive, is_interactive},
         stdin_drain::drain_available_stdin_lines,
         task::{Task, TaskFilter, collapse_whitespace, is_ignored_name, normalize_task_name},
@@ -148,8 +149,8 @@ enum TaskCommand {
     /// Show tasks by id
     #[command(about = "Show tasks by id")]
     Show {
-        /// Task ids to show
-        #[arg(value_name = "ID", required = true, num_args = 1..)]
+        /// Task ids to show; omit to pick from today's tasks
+        #[arg(value_name = "ID", num_args = 1..)]
         id: Vec<i32>,
     },
 
@@ -315,7 +316,15 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
             };
             show_tasks(filter)
         }
-        Some(TaskCommand::Show { id }) => show_tasks(TaskFilter::ByIds(id)),
+        Some(TaskCommand::Show { id }) => {
+            let ids = if id.is_empty() {
+                let today = Tasks::new()?.fetch(TaskFilter::Date(Local::now().date_naive()))?;
+                pick::tasks(&today, "Show which tasks?")?
+            } else {
+                id
+            };
+            show_tasks(TaskFilter::ByIds(ids))
+        }
         Some(TaskCommand::Edit { id }) => match id {
             Some(id) => handle_edit_by_id(id).await,
             None => handle_edit_interactive().await,
