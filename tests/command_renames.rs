@@ -95,4 +95,58 @@ mod tests {
             assert_ne!(word, "update", "deprecated `update` is offered by completions:\n{top_level}");
         }
     }
+
+    #[test]
+    fn every_shell_gets_the_current_names() {
+        let dir = TempDir::new().unwrap();
+
+        // Each generator writes its own syntax, so a name landing in bash says
+        // nothing about zsh. Only the words are checked, not the shape.
+        for shell in ["bash", "zsh", "fish", "powershell", "elvish"] {
+            let script = output_of(dir.path(), &["completions", shell]);
+            assert!(!script.trim().is_empty(), "{shell}: empty completion script");
+
+            assert!(script.contains("setup"), "{shell}: setup missing from completions");
+            assert!(script.contains("self-update"), "{shell}: self-update missing from completions");
+
+            // Only what the shell would offer counts. The generators also mint
+            // internal state names from the command names - bash turns
+            // `self-update` into `kasl__subcmd__self__subcmd__update` - and a
+            // bare-word scan over the whole script reads those as an offered
+            // `update`. Candidates sit next to the other command names, so
+            // checking lines that mention a command nobody renamed keeps the
+            // search on the lists a user actually sees.
+            let candidate_lines = script.lines().filter(|l| l.contains("autostart")).count();
+            assert!(candidate_lines > 0, "{shell}: found no candidate lines, so the check below proves nothing");
+
+            for old in ["init", "update"] {
+                let offered = script
+                    .lines()
+                    .filter(|l| l.contains("autostart"))
+                    .any(|line| line.split(|c: char| !c.is_ascii_alphanumeric() && c != '-').any(|word| word == old));
+                assert!(!offered, "{shell}: deprecated `{old}` is offered by completions");
+            }
+        }
+    }
+
+    #[test]
+    fn completions_cover_every_command_in_help() {
+        let dir = TempDir::new().unwrap();
+        let help = output_of(dir.path(), &["--help"]);
+        let script = output_of(dir.path(), &["completions", "bash"]);
+
+        // A command added without a thought for completion would otherwise
+        // ship with Tab silently not knowing it.
+        let listed = help
+            .lines()
+            .skip_while(|l| !l.starts_with("Commands:"))
+            .skip(1)
+            .take_while(|l| l.starts_with("  "))
+            .filter_map(|l| l.split_whitespace().next())
+            .filter(|name| *name != "help");
+
+        for name in listed {
+            assert!(script.contains(name), "`{name}` is in --help but missing from completions");
+        }
+    }
 }
