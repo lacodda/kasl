@@ -1,9 +1,5 @@
-//! Work interval calculation and productivity analysis for daily reports.
-//!
-//! Provides core logic for analyzing work patterns and generating detailed reports
-//! about productivity, work intervals, and break patterns.
-//!
-//! ## Usage
+//! Work-interval math for the daily report: the day sliced at its
+//! pauses, short-interval filtering, and the end-time fallbacks.
 //!
 //! ```rust
 //! use kasl::libs::report::{calculate_work_intervals, filter_short_intervals, WorkInterval};
@@ -30,92 +26,25 @@ use crate::{db::workdays::Workday, libs::productivity::Productivity};
 use anyhow::Result;
 use chrono::{Duration, NaiveDateTime};
 
-/// Represents a single continuous work interval between breaks.
-///
-/// This structure captures a period of uninterrupted work time, providing
-/// the foundation for productivity analysis and reporting. Each interval
-/// represents a focused work session bounded by either the workday start/end
-/// or pause periods.
-///
-/// ## Interval Boundaries
-///
-/// Work intervals are defined by:
-/// - **Start Time**: When focused work began (workday start or end of previous pause)
-/// - **End Time**: When focused work ended (start of next pause or workday end)
-/// - **Duration**: Total time spent in focused work during this period
-///
-/// ## Pause Association
-///
-/// Each interval can be associated with the pause that follows it:
-/// - **Some(index)**: Index of the pause that ended this work interval
-/// - **None**: This interval extends to the end of the workday
-///
-/// This association enables:
-/// - Analysis of work-break patterns
-/// - Identification of interruption causes
-/// - Optimization recommendations for pause timing
-///
+/// One uninterrupted stretch of work between pauses (or day bounds).
 #[derive(Debug, Clone)]
 pub struct WorkInterval {
-    /// The timestamp when this work interval began.
-    ///
-    /// This is either the workday start time (for the first interval)
-    /// or the end time of the previous pause (for subsequent intervals).
-    /// Represents the moment when focused work activity resumed.
+    /// Workday start, or the end of the previous pause.
     pub start: NaiveDateTime,
 
-    /// The timestamp when this work interval ended.
-    ///
-    /// This is either the start time of the next pause (for most intervals)
-    /// or the workday end time (for the final interval). Represents the
-    /// moment when focused work was interrupted or completed.
+    /// Start of the next pause, or the workday end.
     pub end: NaiveDateTime,
 
-    /// The total duration of focused work during this interval.
-    ///
-    /// Calculated as `end - start`, this represents the net productive
-    /// time during this period. Used for productivity calculations,
-    /// efficiency analysis, and time accounting in reports.
+    /// `end - start`.
     pub duration: Duration,
 
-    /// Optional reference to the pause that follows this interval.
-    ///
-    /// Contains the index of the pause in the original pause collection
-    /// that ended this work interval. `None` indicates this interval
-    /// extends to the end of the workday without interruption.
-    ///
-    /// ## Usage Notes
-    /// - Used for analyzing work-break patterns
-    /// - Enables identification of frequent interruption points
-    /// - Supports optimization recommendations for pause timing
-    /// - Links intervals to specific causes of work interruption
-    pub pause_after: Option<usize>, // Index of pause after this interval
+    /// Index (into the original pause list) of the pause that ended this
+    /// interval; `None` for the day's final interval.
+    pub pause_after: Option<usize>,
 }
 
 impl WorkInterval {
-    /// Determines if this interval is shorter than the specified minimum duration.
-    ///
-    /// This method is used to identify "short intervals" that may indicate
-    /// excessive interruptions or poor work habits. Short intervals often
-    /// represent brief periods of work between frequent breaks, which can
-    /// significantly impact overall productivity.
-    ///
-    /// ## Usage in Analysis
-    ///
-    /// Short intervals are identified for:
-    /// - **Productivity Analysis**: Understanding interruption patterns
-    /// - **Optimization Recommendations**: Suggesting pause consolidation
-    /// - **Work Habit Assessment**: Identifying areas for improvement
-    /// - **Focus Period Analysis**: Measuring sustained work capability
-    ///
-    /// ## Threshold Considerations
-    ///
-    /// Common minimum duration thresholds:
-    /// - **15 minutes**: Very strict, identifies micro-interruptions
-    /// - **30 minutes**: Moderate, focuses on meaningful work blocks
-    /// - **60 minutes**: Lenient, identifies only major fragmentation
-    ///
-    /// # Examples
+    /// True when the interval is under `min_minutes`.
     ///
     /// ```rust
     /// use kasl::libs::report::WorkInterval;
@@ -137,145 +66,27 @@ impl WorkInterval {
     }
 }
 
-/// Information about short intervals detected in a workday.
-///
-/// This structure provides comprehensive analysis of work intervals that
-/// fall below the minimum duration threshold. It includes both statistical
-/// information about the impact of short intervals and actionable
-/// recommendations for optimization.
-///
-/// ## Analysis Components
-///
-/// ### Statistical Information
-/// - **Count**: Number of short intervals detected
-/// - **Total Duration**: Cumulative time spent in short work periods
-/// - **Individual Intervals**: Specific intervals with their details
-///
-/// ### Optimization Recommendations
-/// - **Pauses to Remove**: Specific pauses that could be eliminated
-/// - **Merge Opportunities**: Intervals that could be combined
-/// - **Productivity Impact**: Potential time savings from optimization
-///
+/// What fell under the short-interval threshold, and which pauses would
+/// have to go to merge the fragments back together.
 #[derive(Debug)]
 pub struct ShortIntervalsInfo {
-    /// The number of intervals that fall below the minimum duration threshold.
-    ///
-    /// This count provides a quick assessment of work fragmentation:
-    /// - **0**: No fragmentation issues detected
-    /// - **1-3**: Minor fragmentation, limited impact
-    /// - **4+**: Significant fragmentation, optimization recommended
     pub count: usize,
 
-    /// The cumulative duration of all short intervals combined.
-    ///
-    /// Represents the total amount of time spent in fragmented work
-    /// periods. This metric helps quantify the impact of work
-    /// interruptions and provides context for optimization efforts.
-    ///
-    /// ## Impact Assessment
-    /// - **< 30 minutes**: Minor impact on overall productivity
-    /// - **30-60 minutes**: Moderate impact, optimization beneficial
-    /// - **> 60 minutes**: Significant impact, optimization essential
+    /// Combined length of all short intervals.
     pub total_duration: Duration,
 
-    /// Detailed information about each short interval detected.
-    ///
-    /// Each tuple contains:
-    /// - **Index**: Position of the interval in the original collection
-    /// - **WorkInterval**: Complete interval data with timing information
-    ///
-    /// This detailed information enables:
-    /// - Specific analysis of each fragmented period
-    /// - Identification of patterns in interruption timing
-    /// - Targeted recommendations for specific intervals
-    pub intervals: Vec<(usize, WorkInterval)>, // (index, interval)
+    /// `(index in the original interval list, interval)` pairs.
+    pub intervals: Vec<(usize, WorkInterval)>,
 
-    /// Indices of pauses that could be removed to merge short intervals.
-    ///
-    /// These pause indices represent optimization opportunities where
-    /// removing or consolidating breaks could create longer, more
-    /// productive work intervals. The indices correspond to positions
-    /// in the original pause collection.
-    ///
-    /// ## Optimization Strategy
-    /// - **Pause Removal**: Eliminate unnecessary short breaks
-    /// - **Pause Consolidation**: Combine multiple short breaks into fewer, longer ones
-    /// - **Timing Adjustment**: Shift break timing to create better work blocks
-    ///
-    /// ## Implementation Notes
-    /// To remove a short interval, remove the pause that created it by
-    /// separating it from the previous interval. This effectively merges
-    /// the short interval with its predecessor.
-    pub pauses_to_remove: Vec<usize>, // Indices of pauses that create short intervals
+    /// Pause indices whose removal would merge each short interval into
+    /// its predecessor; empty when only display filtering was requested.
+    pub pauses_to_remove: Vec<usize>,
 }
 
-/// Calculates work intervals for a given workday based on pause records.
-///
-/// This function performs the core algorithm for converting raw workday and
-/// pause data into a structured collection of work intervals. It handles the
-/// complexity of time calculations, pause filtering, and interval boundary
-/// determination to produce accurate work period analysis.
-///
-/// ## Algorithm Overview
-///
-/// 1. **Initialization**: Start with workday boundaries and empty interval list
-/// 2. **Pause Filtering**: Remove incomplete pauses and sort chronologically
-/// 3. **Interval Generation**: Create work periods between consecutive pauses
-/// 4. **Boundary Handling**: Handle workday start/end as interval boundaries
-/// 5. **Duration Calculation**: Compute accurate durations for each interval
-///
-/// ## Pause Processing
-///
-/// The function handles various pause scenarios:
-/// - **Complete Pauses**: Have both start and end times
-/// - **Incomplete Pauses**: Missing end times (filtered out)
-/// - **Overlapping Pauses**: Handled through chronological sorting
-/// - **Out-of-bounds Pauses**: Pauses outside workday boundaries
-///
-/// ## Edge Cases Handled
-///
-/// - **No Pauses**: Single interval covering entire workday
-/// - **Workday Boundaries**: Pauses at start/end of workday
-/// - **Consecutive Pauses**: Multiple pauses with no work time between
-/// - **Invalid Times**: Pauses with end time before start time
-///
-/// # Examples
-///
-/// ```rust
-/// use kasl::libs::report::calculate_work_intervals;
-/// use kasl::db::workdays::Workday;
-/// use kasl::libs::pause::Pause;
-/// use chrono::{Local, Duration};
-///
-/// let start_time = Local::now().naive_local();
-/// let end_time = start_time + Duration::hours(8);
-/// let lunch_start = start_time + Duration::hours(4);
-/// let lunch_end = lunch_start + Duration::minutes(30);
-/// let lunch_duration = Duration::minutes(30);
-///
-/// let workday = Workday {
-///     id: 1,
-///     date: start_time.date(),
-///     start: start_time,
-///     end: Some(end_time),
-///     // ... other fields
-/// };
-///
-/// let pauses = vec![
-///     Pause {
-///         id: 1,
-///         start: lunch_start,
-///         end: Some(lunch_end),
-///         duration: Some(lunch_duration),
-///         protected: false,
-///     },
-///     // ... more pauses
-/// ];
-///
-/// let intervals = calculate_work_intervals(&workday, &pauses);
-/// println!("Generated {} work intervals", intervals.len());
-/// ```
-///
+/// The moment the day effectively ends: the recorded end; else "now"
+/// for today (guarded so a start ahead of the clock cannot make the day
+/// negative); else, for an unclosed past day, the last observed pause
+/// end - falling back to the start rather than stretching to "now".
 pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDateTime {
     if let Some(end) = workday.end {
         return end;
@@ -299,6 +110,43 @@ pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDat
         .unwrap_or(workday.start)
 }
 
+/// Slices the workday at its completed pauses into work intervals.
+///
+/// Pauses without an end are skipped; the rest are processed in
+/// chronological order, and the tail interval runs to [`workday_end_time`].
+///
+/// ```rust
+/// use kasl::libs::report::calculate_work_intervals;
+/// use kasl::db::workdays::Workday;
+/// use kasl::libs::pause::Pause;
+/// use chrono::{Local, Duration};
+///
+/// let start_time = Local::now().naive_local();
+/// let end_time = start_time + Duration::hours(8);
+/// let lunch_start = start_time + Duration::hours(4);
+/// let lunch_end = lunch_start + Duration::minutes(30);
+/// let lunch_duration = Duration::minutes(30);
+///
+/// let workday = Workday {
+///     id: 1,
+///     date: start_time.date(),
+///     start: start_time,
+///     end: Some(end_time),
+/// };
+///
+/// let pauses = vec![
+///     Pause {
+///         id: 1,
+///         start: lunch_start,
+///         end: Some(lunch_end),
+///         duration: Some(lunch_duration),
+///         protected: false,
+///     },
+/// ];
+///
+/// let intervals = calculate_work_intervals(&workday, &pauses);
+/// println!("Generated {} work intervals", intervals.len());
+/// ```
 pub fn calculate_work_intervals(workday: &Workday, pauses: &[Pause]) -> Vec<WorkInterval> {
     // Determine workday end time (current time if still ongoing)
     let end_time = workday_end_time(workday, pauses);
@@ -345,33 +193,8 @@ pub fn calculate_work_intervals(workday: &Workday, pauses: &[Pause]) -> Vec<Work
     intervals
 }
 
-/// Analyzes work intervals to identify short periods that may indicate poor productivity.
-///
-/// This function performs comprehensive analysis of work intervals to identify
-/// periods that fall below the minimum duration threshold. It provides both
-/// statistical analysis and actionable optimization recommendations to help
-/// users improve their work patterns and productivity.
-///
-/// ## Analysis Process
-///
-/// 1. **Threshold Filtering**: Identify intervals shorter than minimum duration
-/// 2. **Statistical Calculation**: Compute total count and cumulative duration
-/// 3. **Optimization Analysis**: Identify pauses that could be removed
-/// 4. **Recommendation Generation**: Provide specific improvement suggestions
-///
-/// ## Optimization Logic
-///
-/// Short intervals are typically created by pauses that interrupt focused work:
-/// - **Pause Identification**: Find pauses that create short intervals
-/// - **Merge Opportunities**: Identify intervals that could be combined
-/// - **Impact Assessment**: Calculate potential productivity improvements
-///
-/// ## Return Value Analysis
-///
-/// - **Some(info)**: Short intervals detected, optimization possible
-/// - **None**: No short intervals found, work patterns are optimal
-///
-/// # Examples
+/// Finds intervals under the threshold and the pauses whose removal
+/// would merge them away; `None` when there are none.
 ///
 /// ```rust
 /// use kasl::libs::report::{analyze_short_intervals, WorkInterval};
@@ -391,12 +214,6 @@ pub fn calculate_work_intervals(workday: &Workday, pauses: &[Pause]) -> Vec<Work
 /// }
 /// ```
 ///
-/// # Optimization Recommendations
-///
-/// The function provides specific recommendations:
-/// - **Pause Removal**: Eliminate unnecessary short breaks
-/// - **Break Consolidation**: Combine multiple short breaks
-/// - **Timing Adjustment**: Reschedule breaks to preserve focus periods
 pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> Option<ShortIntervalsInfo> {
     // Collect all intervals that fall below the minimum duration threshold
     let mut short_intervals = Vec::new();
@@ -435,21 +252,8 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
     }
 }
 
-/// Filters out short work intervals from the provided interval list.
-///
-/// This function removes work intervals that are shorter than the specified
-/// minimum duration, providing cleaner reporting by eliminating brief
-/// interruptions that don't represent meaningful work periods. This is the
-/// new approach for handling short intervals - filtering at display time
-/// instead of modifying the database.
-///
-/// ## Return Value
-///
-/// Returns a tuple containing:
-/// - **Filtered intervals**: Only intervals meeting the minimum duration
-/// - **Filtered intervals info**: Analysis of what was filtered out (if any)
-///
-/// # Examples
+/// Splits intervals into (kept, dropped-as-short) at display time - the
+/// database is never modified by this filter.
 ///
 /// ```rust
 /// use kasl::libs::report::{calculate_work_intervals, filter_short_intervals};
@@ -502,20 +306,10 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
     (filtered_intervals, filtered_info)
 }
 
-/// Process daily work report data using pre-calculated intervals.
-///
-/// This function handles the data processing for daily work reports, calculating
-/// productivity metrics and work durations. It leverages the centralized `Productivity`
-/// module for consistent calculations across the application.
-///
-/// ## Data Consistency
-///
-/// By using `Productivity::new()`, this function automatically:
-/// - Loads the same data used throughout the application
-/// - Applies consistent calculation logic
-/// - Handles all edge cases and data integrity issues
-///
-/// # Examples
+/// Returns `(displayed duration, productivity)` for the report: the
+/// duration sums the (already filtered) intervals, while productivity
+/// comes from the central [`Productivity`] calculation so every command
+/// shows the same figure.
 ///
 /// ```rust,no_run
 /// # fn f() -> anyhow::Result<()> {
