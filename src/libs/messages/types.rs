@@ -71,25 +71,18 @@ pub enum Message {
     AutostartEnableFailed(String),
     AutostartDisableFailed(String),
     AutostartStatus(String),
-    AutostartNotImplemented,
     AutostartRequiresAdmin,
     AutostartCheckingAlternative,
 
     // === TASK MESSAGES ===
     TaskCreated,
     TaskUpdated,
-    TaskDeleted,
     TaskNotFound,
-    TaskCreateFailed,
     TaskUpdateFailed,
-    TaskDeleteFailed,
     TasksDeletedCount(usize),
     TasksNotFoundForDate(String),
     TasksNotFoundSad,
     TasksHeader,
-    TasksIncompleteHeader,
-    TasksGitlabHeader,
-    TasksJiraHeader,
     /// Summary line before unified discovery MultiSelect
     TasksDiscoverySummary {
         incomplete: usize,
@@ -126,7 +119,6 @@ pub enum Message {
 
     // === WORKDAY MESSAGES ===
     WorkdayEnded,
-    WorkdayNotFound,
     WorkdayNotFoundForDate(String),
     WorkdayCreateFailed,
     WorkdayStarting(String),                    // date
@@ -135,8 +127,6 @@ pub enum Message {
     // === CONFIGURATION MESSAGES ===
     ConfigSaved,
     ConfigDeleted,
-    ConfigLoaded,
-    ConfigFileNotFound,
     ConfigParseError,
     ConfigSaveError,
     ConfigModuleGitLab,
@@ -166,7 +156,6 @@ pub enum Message {
     ExportingData(String, String), // data type, format
     ExportCompleted(String),       // file path
     ExportingAllData,
-    ExportFailed(String), // error
 
     // === TEMPLATE MESSAGES ===
     TemplateCreated(String),
@@ -214,23 +203,9 @@ pub enum Message {
 
     // === SHORT INTERVALS MESSAGES ===
     ShortIntervalsDetected(usize, String), // count, total duration
-    NoShortIntervalsFound(u64),            // min_minutes
-    ShortIntervalsToRemove(usize),         // count
-    RemovingPauses(usize),                 // count
-    ShortIntervalsCleared(usize),          // deleted count
-    NoRemovablePausesFound,
-    UpdatedReport,
     PromptMinWorkInterval,
 
     // === TIME ADJUSTMENT MESSAGES ===
-    SelectAdjustmentMode,
-    PromptAdjustmentMinutes,
-    PromptPauseStartTime,
-    ConfirmTimeAdjustment,
-    TimeAdjustmentApplied,
-    AdjustmentPreview,
-    InvalidAdjustmentTooMuchTime,
-    InvalidPauseOutsideWorkday,
     WorkdayUpdateFailed,
 
     // === PAUSE MESSAGES ===
@@ -242,9 +217,6 @@ pub enum Message {
         poll_interval: u64,
         activity_threshold: u64,
     },
-    MonitorStopped,
-    MonitorStartFailed,
-    MonitorStopFailed,
     MonitorExitedNormally,
     MonitorShuttingDown,
     MonitorError(String),
@@ -255,13 +227,11 @@ pub enum Message {
     // === WATCHER/DAEMON MESSAGES ===
     WatcherStarted(u32), // PID
     WatcherStopped(u32), // PID
-    WatcherStoppedSuccessfully,
     WatcherNotRunning,
     WatcherNotRunningPidNotFound,
     WatcherStartingForeground,
     WatcherStoppingExisting(String),     // PID
     WatcherFailedToStopExisting(String), // error
-    WatcherFailedToStop(u32),            // PID
     WatcherReceivedSigterm,
     WatcherReceivedSigint,
     WatcherReceivedCtrlC,
@@ -296,17 +266,8 @@ pub enum Message {
 
     // === AUTHENTICATION MESSAGES ===
     WrongPassword(i32), // attempt count
-    InvalidCredentials,
-    SessionExpired,
-    AuthenticationFailed(String), // service name
-    JiraAuthenticateFailed,
-    LoginFailed,
-    CredentialsNotSet,
 
     // === API MESSAGES ===
-    ApiConnectionFailed,
-    ApiAuthFailed,
-    ApiRequestFailed,
     GitlabFetchFailed(String),  // error message
     GitlabUserIdFailed(String), // error message
     JiraFetchFailed(String),    // error message
@@ -316,9 +277,6 @@ pub enum Message {
     SiServerRestDatesParsingFailed(String), // error message
 
     // === DATABASE MESSAGES ===
-    DbConnectionFailed,
-    DbQueryFailed,
-    DbMigrationFailed,
     DatabaseOperationFailed {
         operation: String,
         error: String,
@@ -327,18 +285,13 @@ pub enum Message {
 
     // === FILE SYSTEM MESSAGES ===
     FileNotFound,
-    FileReadError,
-    FileWriteError,
     InvalidPidFileContent,
-    DataStoragePathError,
 
     // === SYSTEM/PATH MESSAGES ===
     PathConfigured,
     PathConfigWarning {
         error: String,
     },
-    PathQueryFailed(String), // status
-    PathSetFailed,
     PathRegistryQueryError {
         status: String,
     },
@@ -353,7 +306,6 @@ pub enum Message {
     FailedToExecuteRegSet,
     FailedToOpenProcess(u32),      // error code
     FailedToTerminateProcess(u32), // error code
-    ProcessNotFound,
     ProcessTerminationNotSupported,
 
     // === PRODUCTIVITY MESSAGES ===
@@ -377,26 +329,14 @@ pub enum Message {
     },
     ManualPauseRemoved(i32),
     ManualPauseNotFound(i32),
-    ProductivityRecalculated(f64),
 
     // === ENCRYPTION/SECRET MESSAGES ===
-    EncryptionKeyMustBeSet,
-    EncryptionIvMustBeSet,
 
     // === PROMPTS ===
     PromptTaskName,
     TaskNameMergedFromPaste,
     PromptTaskComment,
     PromptTaskCompleteness,
-    PromptGitlabToken,
-    PromptGitlabUrl,
-    PromptJiraLogin,
-    PromptJiraUrl,
-    PromptJiraPassword,
-    PromptSiLogin,
-    PromptSiAuthUrl,
-    PromptSiApiUrl,
-    PromptSiPassword,
     PromptMinPauseDuration,
     PromptPauseThreshold,
     PromptPollInterval,
@@ -406,11 +346,7 @@ pub enum Message {
     PromptMinWorkdayFraction,
     PromptServerApiUrl,
     PromptServerAuthToken,
-    PromptConfirmDelete,
-    PromptSelectOptions,
     PromptSelectModules,
-    PromptSelectTasks,
-    PromptSelectTasksToEdit,
     PromptSelectTasksToImport,
     PromptSelectTasksToIgnore,
     PromptSelectIgnoreNamesToRemove,
@@ -419,8 +355,6 @@ pub enum Message {
     // === GENERAL MESSAGES ===
     OperationCompleted,
     OperationCancelled,
-    DataExported,
-    BackupCreated,
     InvalidInput,
     PermissionDenied,
     DeprecatedCommand(&'static str, &'static str), // old name, new name
@@ -432,8 +366,7 @@ pub enum Message {
     ErrorRequestingRestDates(String),  // error message
 
     // === SPECIFIC UI MESSAGES ===
-    SelectingTask(String),           // task name
-    SelectedTaskFormat(String, i32), // task name, completeness
+    SelectingTask(String), // task name
 
     // === JIRA INBOX MESSAGES ===
     JiraInboxRequiresJiraConfig,

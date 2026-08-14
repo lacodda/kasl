@@ -109,25 +109,18 @@ impl Display for Message {
             Message::AutostartEnableFailed(error) => format!("Failed to enable autostart: {}", error),
             Message::AutostartDisableFailed(error) => format!("Failed to disable autostart: {}", error),
             Message::AutostartStatus(status) => format!("Autostart is currently: {}", status),
-            Message::AutostartNotImplemented => "Autostart is not yet implemented for this operating system.".to_string(),
             Message::AutostartRequiresAdmin => "Administrator privileges required for system-level autostart. Trying user-level alternative...".to_string(),
             Message::AutostartCheckingAlternative => "Checking alternative autostart method...".to_string(),
 
             // === TASK MESSAGES ===
             Message::TaskCreated => "Task created successfully".to_string(),
             Message::TaskUpdated => "Task updated successfully".to_string(),
-            Message::TaskDeleted => "Task deleted successfully".to_string(),
             Message::TaskNotFound => "Task not found".to_string(),
-            Message::TaskCreateFailed => "Failed to create task".to_string(),
             Message::TaskUpdateFailed => "Failed to update task".to_string(),
-            Message::TaskDeleteFailed => "Failed to delete task".to_string(),
             Message::TasksDeletedCount(count) => format!("Deleted {} task(s) successfully.", count),
             Message::TasksNotFoundForDate(date) => format!("Tasks not found for {}, report not sent.", date),
             Message::TasksNotFoundSad => "No tasks found.".to_string(),
             Message::TasksHeader => "Tasks:".to_string(),
-            Message::TasksIncompleteHeader => "Incomplete tasks".to_string(),
-            Message::TasksGitlabHeader => "Gitlab commits".to_string(),
-            Message::TasksJiraHeader => "Jira issues".to_string(),
             Message::TasksDiscoverySummary { incomplete, jira, gitlab } => {
                 let mut parts = Vec::new();
                 if *incomplete > 0 {
@@ -170,7 +163,6 @@ impl Display for Message {
 
             // === WORKDAY MESSAGES ===
             Message::WorkdayEnded => "Workday ended for today.".to_string(),
-            Message::WorkdayNotFound => "No workday record found".to_string(),
             Message::WorkdayNotFoundForDate(date) => format!("No workday record found for {}", date),
             Message::WorkdayCreateFailed => "Failed to create workday".to_string(),
             Message::WorkdayStarting(date) => format!("Starting workday for {}", date),
@@ -181,8 +173,6 @@ impl Display for Message {
             // === CONFIGURATION MESSAGES ===
             Message::ConfigSaved => "Configuration saved successfully".to_string(),
             Message::ConfigDeleted => "Configuration deleted successfully".to_string(),
-            Message::ConfigLoaded => "Configuration loaded successfully".to_string(),
-            Message::ConfigFileNotFound => "Configuration file not found".to_string(),
             Message::ConfigParseError => "Failed to parse configuration".to_string(),
             Message::ConfigSaveError => "Failed to save configuration".to_string(),
             Message::ConfigModuleGitLab => "GitLab settings".to_string(),
@@ -224,7 +214,6 @@ impl Display for Message {
             Message::ExportingData(data, format) => format!("Exporting {} in {} format...", data, format),
             Message::ExportCompleted(path) => format!("Export completed successfully: {}", path),
             Message::ExportingAllData => "Exporting all data...".to_string(),
-            Message::ExportFailed(error) => format!("Export failed: {}", error),
 
             // === TEMPLATE MESSAGES ===
             Message::TemplateCreated(name) => format!("Template '{}' created successfully.", name),
@@ -272,23 +261,9 @@ impl Display for Message {
 
             // === SHORT INTERVALS MESSAGES ===
             Message::ShortIntervalsDetected(count, duration) => format!("Found {} short work intervals (total: {})", count, duration),
-            Message::NoShortIntervalsFound(min) => format!("No work intervals shorter than {} minutes found.", min),
-            Message::ShortIntervalsToRemove(count) => format!("Found {} short intervals to remove:", count),
-            Message::RemovingPauses(count) => format!("Removing {} pauses to merge intervals...", count),
-            Message::ShortIntervalsCleared(count) => format!("Successfully removed {} pauses and merged intervals.", count),
-            Message::NoRemovablePausesFound => "No pauses found that can be removed to clear short intervals.".to_string(),
-            Message::UpdatedReport => "Updated report:".to_string(),
             Message::PromptMinWorkInterval => "Minimum work interval (minutes)".to_string(),
 
             // === TIME ADJUSTMENT MESSAGES ===
-            Message::SelectAdjustmentMode => "Select adjustment mode".to_string(),
-            Message::PromptAdjustmentMinutes => "How many minutes to adjust?".to_string(),
-            Message::PromptPauseStartTime => "When should the pause start? (HH:MM)".to_string(),
-            Message::ConfirmTimeAdjustment => "Apply this time adjustment?".to_string(),
-            Message::TimeAdjustmentApplied => "Time adjustment applied successfully.".to_string(),
-            Message::AdjustmentPreview => "Time adjustment preview:".to_string(),
-            Message::InvalidAdjustmentTooMuchTime => "Cannot adjust that much time - would result in invalid workday.".to_string(),
-            Message::InvalidPauseOutsideWorkday => "Pause must be within workday hours.".to_string(),
             Message::WorkdayUpdateFailed => "Failed to update workday.".to_string(),
 
             // === PAUSE MESSAGES ===
@@ -305,9 +280,6 @@ impl Display for Message {
                     pause_threshold, poll_interval, activity_threshold
                 )
             }
-            Message::MonitorStopped => "Monitor stopped".to_string(),
-            Message::MonitorStartFailed => "Failed to start monitor".to_string(),
-            Message::MonitorStopFailed => "Failed to stop monitor".to_string(),
             Message::MonitorExitedNormally => "Monitor exited normally".to_string(),
             Message::MonitorShuttingDown => "Shutting down monitor...".to_string(),
             Message::MonitorError(error) => format!("Monitor error: {}", error),
@@ -318,13 +290,11 @@ impl Display for Message {
             // === WATCHER/DAEMON MESSAGES ===
             Message::WatcherStarted(pid) => format!("Watcher started in the background (PID: {}).", pid),
             Message::WatcherStopped(pid) => format!("Watcher process (PID: {}) stopped successfully.", pid),
-            Message::WatcherStoppedSuccessfully => "Watcher stopped successfully".to_string(),
             Message::WatcherNotRunning => "Watcher is not running.".to_string(),
             Message::WatcherNotRunningPidNotFound => "Watcher does not appear to be running (PID file not found).".to_string(),
             Message::WatcherStartingForeground => "Starting watcher in foreground... Press Ctrl+C to exit.".to_string(),
             Message::WatcherStoppingExisting(pid) => format!("Stopping existing watcher (PID: {})...", pid),
             Message::WatcherFailedToStopExisting(error) => format!("Warning: Failed to stop existing daemon: {}", error),
-            Message::WatcherFailedToStop(pid) => format!("Failed to stop watcher process (PID: {})", pid),
             Message::WatcherReceivedSigterm => "Received SIGTERM, shutting down gracefully...".to_string(),
             Message::WatcherReceivedSigint => "Received SIGINT, shutting down gracefully...".to_string(),
             Message::WatcherReceivedCtrlC => "Received Ctrl+C, shutting down gracefully...".to_string(),
@@ -358,17 +328,8 @@ impl Display for Message {
 
             // === AUTHENTICATION MESSAGES ===
             Message::WrongPassword(count) => format!("You entered the wrong password {} times!", count),
-            Message::InvalidCredentials => "Invalid credentials".to_string(),
-            Message::SessionExpired => "Session expired".to_string(),
-            Message::AuthenticationFailed(service) => format!("Authentication failed: {}", service),
-            Message::JiraAuthenticateFailed => "Jira authenticate failed".to_string(),
-            Message::LoginFailed => "Login failed".to_string(),
-            Message::CredentialsNotSet => "Credentials not set!".to_string(),
 
             // === API MESSAGES ===
-            Message::ApiConnectionFailed => "Failed to connect to API".to_string(),
-            Message::ApiAuthFailed => "API authentication failed".to_string(),
-            Message::ApiRequestFailed => "API request failed".to_string(),
             Message::GitlabFetchFailed(error) => format!("[kasl] Failed to get GitLab events: {}", error),
             Message::GitlabUserIdFailed(error) => format!("[kasl] Failed to get GitLab user ID: {}", error),
             Message::JiraFetchFailed(error) => format!("[kasl] Failed to get Jira issues: {}", error),
@@ -378,9 +339,6 @@ impl Display for Message {
             Message::SiServerRestDatesParsingFailed(error) => format!("[kasl] Failed to parse rest dates response: {}", error),
 
             // === DATABASE MESSAGES ===
-            Message::DbConnectionFailed => "Failed to connect to database".to_string(),
-            Message::DbQueryFailed => "Database query failed".to_string(),
-            Message::DbMigrationFailed => "Database migration failed".to_string(),
             Message::DatabaseOperationFailed { operation, error } => {
                 format!("Database operation '{}' failed (continuing monitoring): {}", operation, error)
             }
@@ -388,10 +346,7 @@ impl Display for Message {
 
             // === FILE SYSTEM MESSAGES ===
             Message::FileNotFound => "File not found".to_string(),
-            Message::FileReadError => "Failed to read file".to_string(),
-            Message::FileWriteError => "Failed to write file".to_string(),
             Message::InvalidPidFileContent => "Invalid PID file content".to_string(),
-            Message::DataStoragePathError => "DataStorage get_path error".to_string(),
 
             // === SYSTEM/PATH MESSAGES ===
             Message::PathConfigured => "PATH successfully configured for system-wide access".to_string(),
@@ -399,8 +354,6 @@ impl Display for Message {
                 "Warning: Could not configure PATH automatically. {}\nYou may need to run as administrator or manually add kasl to your PATH.",
                 error
             ),
-            Message::PathQueryFailed(status) => format!("Failed to query PATH from registry: {:?}", status),
-            Message::PathSetFailed => "Failed to set PATH in registry".to_string(),
             Message::PathRegistryQueryError { status } => format!("Registry query failed (exit code: {})", status),
             Message::PathRegistryUpdateError { status, stderr } => {
                 if stderr.trim().is_empty() {
@@ -416,7 +369,6 @@ impl Display for Message {
             Message::FailedToExecuteRegSet => "Failed to execute reg set".to_string(),
             Message::FailedToOpenProcess(code) => format!("Failed to open process: error code {}", code),
             Message::FailedToTerminateProcess(code) => format!("Failed to terminate process: error code {}", code),
-            Message::ProcessNotFound => "Process doesn't exist".to_string(),
             Message::ProcessTerminationNotSupported => "Process termination not supported on this platform".to_string(),
 
             // === PRODUCTIVITY MESSAGES ===
@@ -445,26 +397,14 @@ impl Display for Message {
             }
             Message::ManualPauseRemoved(id) => format!("Pause {} removed", id),
             Message::ManualPauseNotFound(id) => format!("no pause with id '{}' - see `kasl pauses list`", id),
-            Message::ProductivityRecalculated(percentage) => format!("Productivity recalculated: {:.1}%", percentage),
 
             // === ENCRYPTION/SECRET MESSAGES ===
-            Message::EncryptionKeyMustBeSet => "ENCRYPTION_KEY must be set".to_string(),
-            Message::EncryptionIvMustBeSet => "ENCRYPTION_IV must be set".to_string(),
 
             // === PROMPTS ===
             Message::PromptTaskName => "Enter task name (multi-line paste OK)".to_string(),
             Message::TaskNameMergedFromPaste => "Merged pasted lines into the task name.".to_string(),
             Message::PromptTaskComment => "Enter comment".to_string(),
             Message::PromptTaskCompleteness => "Enter completeness".to_string(),
-            Message::PromptGitlabToken => "Enter your GitLab private token".to_string(),
-            Message::PromptGitlabUrl => "Enter the GitLab API URL".to_string(),
-            Message::PromptJiraLogin => "Enter your Jira login".to_string(),
-            Message::PromptJiraUrl => "Enter the Jira API URL".to_string(),
-            Message::PromptJiraPassword => "Enter your Jira password".to_string(),
-            Message::PromptSiLogin => "Enter your SiServer login".to_string(),
-            Message::PromptSiAuthUrl => "Enter your SiServer login URL".to_string(),
-            Message::PromptSiApiUrl => "Enter the SiServer API URL".to_string(),
-            Message::PromptSiPassword => "Enter your SiServer password".to_string(),
             Message::PromptMinPauseDuration => "Enter minimum pause duration (minutes)".to_string(),
             Message::PromptPauseThreshold => "Enter pause threshold (seconds)".to_string(),
             Message::PromptPollInterval => "Enter poll interval (milliseconds)".to_string(),
@@ -474,11 +414,7 @@ impl Display for Message {
             Message::PromptMinWorkdayFraction => "Enter minimum workday fraction before suggesting breaks (0.0-1.0)".to_string(),
             Message::PromptServerApiUrl => "Enter server API URL".to_string(),
             Message::PromptServerAuthToken => "Enter server auth token".to_string(),
-            Message::PromptConfirmDelete => "Are you sure you want to delete this item?".to_string(),
-            Message::PromptSelectOptions => "Select options".to_string(),
             Message::PromptSelectModules => "Select nodes to configure".to_string(),
-            Message::PromptSelectTasks => "Select tasks".to_string(),
-            Message::PromptSelectTasksToEdit => "Select tasks to edit".to_string(),
             Message::PromptSelectTasksToImport => "Select tasks to import".to_string(),
             Message::PromptSelectTasksToIgnore => "Select tasks to ignore (optional)".to_string(),
             Message::PromptSelectIgnoreNamesToRemove => "Select ignore names to remove (optional)".to_string(),
@@ -487,8 +423,6 @@ impl Display for Message {
             // === GENERAL MESSAGES ===
             Message::OperationCompleted => "Operation completed successfully".to_string(),
             Message::OperationCancelled => "Operation cancelled".to_string(),
-            Message::DataExported => "Data exported successfully".to_string(),
-            Message::BackupCreated => "Backup created successfully".to_string(),
             Message::InvalidInput => "Invalid input provided".to_string(),
             Message::PermissionDenied => "Permission denied".to_string(),
             Message::DeprecatedCommand(old, new) => {
@@ -503,7 +437,6 @@ impl Display for Message {
 
             // === SPECIFIC UI MESSAGES ===
             Message::SelectingTask(name) => format!("Selected task: {}", name),
-            Message::SelectedTaskFormat(name, completeness) => format!("{} - {}%", name, completeness),
 
             // === JIRA INBOX MESSAGES ===
             Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl setup` and select Jira.".to_string(),
