@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.2.0] - 2026-08-14
+
+### Documentation
+- Resync the docs with what the program actually does
+
+### Features
+- Rename init to setup and update to self-update
+- Pick an identifier interactively when none was given
+
+### Testing
+- Check completions across all five shells
 ## [1.1.1] - 2026-08-13
 
 ### Bug Fixes
