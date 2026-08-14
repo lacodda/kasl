@@ -156,11 +156,11 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 Everything above works today, on Windows, macOS and Linux. What is next:
 
-- [ ] **Doctor and notifications** - `kasl doctor`, a nudge when a break is due or the day is still open
+- [ ] **The inbox as a loop** - `take` marks an issue as started instead of severing the link, plus triage, snooze and actionable toasts
+- [ ] **Scriptable output** - `--json` and `NO_COLOR`/`--plain`, then `kasl status` for status bars and `kasl standup` for a markdown summary
+- [ ] **Doctor and notifications** - `kasl doctor` with `--fix`, a nudge when a break is due or the day is still open, quiet hours
 - [ ] **Smarter time** - overnight tracking and a configurable day boundary, so work past midnight belongs to the right day
-- [ ] **Backup and quick views** - automatic database backups, `kasl now` for status bars, `kasl standup` for a markdown summary
-- [ ] **Live TUI** - a persistent view of the day while you work
-- [ ] **Plugins** - `kasl-plugin-*` subprocesses, with Jira and GitLab moving behind the same interface
+- [ ] **Beyond the terminal** - a live TUI, a companion in the tray, and `kasl-plugin-*` subprocesses with Jira and GitLab behind the same interface
 
 Released versions and what landed in each: [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 

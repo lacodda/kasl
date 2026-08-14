@@ -148,32 +148,46 @@ kasl export --date 2024-11-30 --format excel
 ## Sample Output
 
 ### CSV Export (Report)
+
+A report export is written in three sections - intervals, summary, tasks -
+separated by blank rows, so one file holds the whole day:
+
 ```csv
-Date,Start Time,End Time,Duration,Productivity,Task Count
-2024-12-15,09:00:00,17:30:00,8h 30m,92%,5
+WORK INTERVALS,,,
+Index,Start,End,Duration
+1,09:12,13:30,04:18
+2,14:18,16:02,01:44
+3,16:29,18:04,01:35
+,,,
+SUMMARY,,,
+Date,2026-08-08,,
+Total Hours,07:37,,
+Productivity,96.1%,,
+,,,
+TASKS,,,
+ID,Name,Comment,Completeness
+1,PROJ-412 Fix session timeout on the settings page,stale cookie jar,100%
 ```
 
 ### JSON Export (Tasks)
+
+Tasks export as a plain array - no wrapper object:
+
 ```json
-{
-  "date": "2024-12-15",
-  "tasks": [
-    {
-      "id": 1,
-      "name": "Code review",
-      "comment": "Review pull request #123",
-      "completeness": 100,
-      "tags": ["urgent", "backend"]
-    }
-  ]
-}
+[
+  {
+    "id": 1,
+    "name": "PROJ-412 Fix session timeout on the settings page",
+    "comment": "stale cookie jar",
+    "completeness": 100
+  }
+]
 ```
 
-### Excel Export (Summary)
-- **Sheet 1**: Daily breakdown with charts
-- **Sheet 2**: Task completion statistics
-- **Sheet 3**: Productivity analysis
-- **Sheet 4**: Monthly totals and trends
+### Excel Export
+
+Each export writes a single worksheet holding the same rows the CSV export
+would contain. No charts are generated.
 
 ## File Naming Convention
 

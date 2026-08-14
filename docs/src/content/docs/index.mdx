@@ -37,13 +37,18 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 ```console
 $ kasl report
- ID | START | END   | DURATION
-----+-------+-------+----------
- 1  | 09:12 | 12:41 | 3h 29m
- 2  | 13:18 | 18:04 | 4h 46m
-    |       |       |
- TOTAL        |     | 8h 15m
- PRODUCTIVITY |     | 94.2%
+Report for August 8, 2026
+
++--------------+-------+-------+----------+
+| ID           | START | END   | DURATION |
++--------------+-------+-------+----------+
+| 1            | 09:12 | 13:30 | 04:18    |
+| 2            | 14:18 | 16:02 | 01:44    |
+| 3            | 16:29 | 18:04 | 01:35    |
+|              |       |       |          |
+| TOTAL        |       |       | 07:37    |
+| PRODUCTIVITY |       |       | 96.1%    |
++--------------+-------+-------+----------+
 ```
 
 You never started a timer or stopped one. The daemon has been watching activity since you logged in - `report` just asks it what the day looked like, and `report --send` files it.

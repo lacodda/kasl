@@ -2,7 +2,7 @@
 title: "self-update"
 ---
 
-The `self-update` command handles checking for and installing newer versions of kasl from GitHub releases. It provides automatic binary replacement with backup and rollback capabilities.
+The `self-update` command handles checking for and installing newer versions of kasl from GitHub releases. It replaces the binary in place, keeping the previous one alongside it as `kasl.bak`.
 
 :::note[Renamed in 1.2]
 This command used to be called `update`. The old name still works and does the
@@ -48,9 +48,9 @@ The update process is designed to be safe and atomic:
 
 - **Backup Creation**: Creates backups of the current executable before replacement
 - **Archive Validation**: Validates downloaded archives before extraction
-- **Clear Feedback**: Provides detailed information about the update process
+- **Quiet Until Done**: The download and swap print nothing; the result line says which version is now installed
 - **Error Handling**: Handles network errors and other issues gracefully
-- **Rollback Capability**: Can restore from backup if update fails
+- **Manual Rollback**: The replaced binary is kept as `kasl.bak`, so a bad update can be undone by hand
 
 ## Examples
 
@@ -76,39 +76,36 @@ kasl --version
 
 ## Sample Output
 
-### No Update Required
+### Already Up To Date
 ```
-ℹ️  kasl is already up to date
-Current version: 0.8.0
-Latest version: 0.8.0
-No update required.
+ℹ️ No update required. You are using the latest version!
+```
+
+### Update Installed
+```
+✅ The kasl application has been successfully updated to version 1.2.0!
+```
+
+The download and the binary swap are silent; only the result is printed.
+
+### With The Watcher Running
+
+The daemon holds the executable, so it is stopped first and started again
+afterwards:
+
+```
+ℹ️ Stopping watcher for update...
+ℹ️ Restarting watcher after update...
+✅ The kasl application has been successfully updated to version 1.2.0!
 ```
 
 ### Update Available
+
+Other commands mention a newer release when they notice one:
+
 ```
-🔄 Checking for updates...
-✅ New version available: 0.8.1
-
-📥 Downloading update...
-├── Platform: x86_64-pc-windows-msvc
-├── Size: 2.5 MB
-└── Progress: 100%
-
-🔧 Installing update...
-├── Creating backup: kasl.exe.backup
-├── Extracting binary
-└── Replacing executable
-
-✅ Update completed successfully!
-Version: 0.8.1
-Backup: kasl.exe.backup
-```
-
-### Update Error
-```
-❌ Update failed: Network error
-Error: Failed to download release archive
-Suggestion: Check your internet connection and try again
+A new version of kasl is available: v1.2.0
+Upgrade now by running: kasl self-update
 ```
 
 ## Use Cases
@@ -191,10 +188,10 @@ kasl self-update
 **Extraction failed**
 ```bash
 # Check if backup exists
-ls -la kasl.exe.backup
+ls -la kasl.bak
 
 # Restore from backup manually
-cp kasl.exe.backup kasl.exe
+cp kasl.bak kasl.exe
 ```
 
 **Binary replacement failed**
@@ -241,10 +238,12 @@ kasl --help
 
 ### Backup Management
 
-1. **Preserve backups**: Keep backup files for potential rollback
-2. **Clean up old backups**: Remove backups older than a few versions
-3. **Verify backup integrity**: Test backup restoration periodically
-4. **Document rollback procedures**: Know how to restore from backup
+There is exactly one backup, `kasl.bak`, sitting next to the binary. Each
+update overwrites it, so it always holds the version you were running before
+the most recent update - and nothing older.
+
+1. **Keep it until the new version is proven**: it is the only way back
+2. **Restore by copying it over the binary**: nothing reverts automatically
 
 ## Integration with Other Commands
 

@@ -13,6 +13,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 - **[`task`](/reference/task/)** - Manage tasks and work items
 - **[`report`](/reference/report/)** - Generate and submit reports
 - **[`sum`](/reference/sum/)** - View monthly summaries
+- **[`end`](/reference/end/)** - Close today's workday by hand
 
 ### Data Management
 

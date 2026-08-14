@@ -338,7 +338,7 @@ impl Display for Message {
             // === UPDATE MESSAGES ===
             Message::UpdateAvailable { app_name, latest } => {
                 format!(
-                    "A new version of {} is available: v{}\nUpgrade now by running: {} update",
+                    "A new version of {} is available: v{}\nUpgrade now by running: {} self-update",
                     app_name, latest, app_name
                 )
             }
