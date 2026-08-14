@@ -221,4 +221,4 @@ The `watch` command works with other kasl commands:
 - **[`report`](/reference/report/)** - Generate work reports
 - **[`pauses`](/reference/pauses/)** - Record absences the monitor missed
 - **[`pauses`](/reference/pauses/)** - View recorded breaks
-- **[`init`](/reference/init/)** - Configure monitoring settings
+- **[`setup`](/reference/setup/)** - Configure monitoring settings

@@ -701,7 +701,7 @@ impl Config {
     pub fn init() -> Result<Self> {
         // The whole wizard is prompts: every module below asks for values, and
         // several read secrets. Without a terminal there is nobody to answer.
-        crate::libs::prompt::ensure_interactive("`kasl init` is an interactive wizard and needs a terminal")?;
+        crate::libs::prompt::ensure_interactive("`kasl setup` is an interactive wizard and needs a terminal")?;
 
         // Load existing configuration to use as defaults for the setup wizard
         let mut config = Self::read().unwrap_or_default();

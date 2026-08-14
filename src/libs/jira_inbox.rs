@@ -301,7 +301,7 @@ pub fn open_url(url: &str) -> Result<()> {
 /// Background poll loop used by `kasl watch`.
 ///
 /// Idle when `jira_inbox` is absent or disabled; re-reads config each wake so
-/// `kasl init` can enable polling without restarting the watcher in most cases
+/// `kasl setup` can enable polling without restarting the watcher in most cases
 /// (restart still recommended after config changes).
 pub async fn run_poller() {
     loop {

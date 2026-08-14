@@ -32,7 +32,7 @@ pub mod template;
 pub mod update;
 pub mod watch;
 
-use crate::{db::workdays::Workdays, libs::messages::types::Message, msg_info};
+use crate::{db::workdays::Workdays, libs::messages::types::Message, msg_info, msg_warning};
 use anyhow::Result;
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -50,12 +50,16 @@ enum Commands {
     #[command(about = "Manage autostart on system boot")]
     Autostart(autostart::AutostartArgs),
 
-    /// Initialize application configuration interactively
+    /// Set up application configuration interactively
     ///
     /// Guides the user through setting up API credentials, monitor settings,
     /// and other configuration options required for kasl to function properly.
-    #[command(about = "Configuration initialization")]
-    Init(init::InitArgs),
+    ///
+    /// `init` stays as a deprecated alias until 2.0. An alias rather than a
+    /// hidden variant: clap_complete emits hidden subcommands into the
+    /// completion scripts, so Tab would keep teaching the old spelling.
+    #[command(about = "Set up configuration", alias = "init")]
+    Setup(init::SetupArgs),
 
     /// Comprehensive task management command
     ///
@@ -78,12 +82,15 @@ enum Commands {
     #[command(about = "Get summary")]
     Sum(sum::SumArgs),
 
-    /// Update application to the latest version
+    /// Update kasl itself to the latest release
     ///
     /// Checks GitHub releases for newer versions and automatically downloads
     /// and installs updates if available.
-    #[command(about = "Update the application to the latest version")]
-    Update,
+    ///
+    /// `update` stays as a deprecated alias until 2.0; it read as "update my
+    /// data", which is what every other command does.
+    #[command(name = "self-update", about = "Update kasl itself to the latest release", alias = "update")]
+    SelfUpdate,
 
     /// Generate and optionally submit work reports
     ///
@@ -202,7 +209,10 @@ impl Cli {
 
         match cli.command {
             Commands::Autostart(args) => autostart::cmd(args),
-            Commands::Init(args) => init::cmd(args),
+            Commands::Setup(args) => {
+                warn_if_deprecated_alias();
+                init::cmd(args)
+            }
             Commands::Task(args) => task::cmd(args).await,
             Commands::End => {
                 // Manually end the current workday
@@ -215,7 +225,10 @@ impl Cli {
             Commands::Export(args) => export::cmd(args).await,
             Commands::Template(args) => template::cmd(args),
             Commands::Tag(args) => tag::cmd(args).await,
-            Commands::Update => update::cmd().await,
+            Commands::SelfUpdate => {
+                warn_if_deprecated_alias();
+                update::cmd().await
+            }
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
             Commands::Completions { shell } => {
@@ -229,5 +242,24 @@ impl Cli {
             #[cfg(debug_assertions)]
             Commands::Migrations(args) => migrations::cmd(args),
         }
+    }
+}
+
+/// Old command names still accepted as aliases, with their replacements.
+///
+/// Removed in 2.0; until then the alias works and says so.
+const DEPRECATED_ALIASES: [(&str, &str); 2] = [("init", "setup"), ("update", "self-update")];
+
+/// Prints a rename notice when the command was invoked by its old name.
+///
+/// clap resolves an alias to the canonical variant without recording which
+/// spelling was typed, so the first non-flag argument is what tells them
+/// apart.
+fn warn_if_deprecated_alias() {
+    let Some(typed) = std::env::args().nth(1) else {
+        return;
+    };
+    if let Some((old, new)) = DEPRECATED_ALIASES.iter().find(|(old, _)| *old == typed) {
+        msg_warning!(Message::DeprecatedCommand(old, new));
     }
 }

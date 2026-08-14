@@ -423,6 +423,7 @@ pub enum Message {
     BackupCreated,
     InvalidInput,
     PermissionDenied,
+    DeprecatedCommand(&'static str, &'static str), // old name, new name
 
     // === ERROR LOGGING ===
     ErrorSendingEvents(String),        // error message

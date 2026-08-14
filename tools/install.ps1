@@ -71,4 +71,4 @@ if (-not $env:KASL_NO_ALIAS) {
 
 # `init` is an interactive wizard, so it cannot run from here: this script is
 # usually piped into iex, which leaves no terminal for prompts.
-Write-Host "Next: run 'kasl init' to set up monitoring, integrations and credentials."
+Write-Host "Next: run 'kasl setup' to set up monitoring, integrations and credentials."

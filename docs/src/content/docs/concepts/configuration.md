@@ -64,7 +64,7 @@ Controls filtering for `kasl task find`:
 - **Default**: `["Merge remote-tracking branch", "Merge branch ", "update webui"]`
 - **Description**: Task/commit names (or prefixes) excluded from discovery
 - **Matching**: Case-insensitive after normalization; exact match or prefix
-- **UI**: Edit via `kasl init` (Task discovery module) or add items from `kasl task find`
+- **UI**: Edit via `kasl setup` (Task discovery module) or add items from `kasl task find`
 
 ## Monitor Configuration
 
@@ -214,7 +214,7 @@ Controls productivity tracking and reporting thresholds:
 Run the interactive configuration wizard:
 
 ```bash
-kasl init
+kasl setup
 ```
 
 This guides you through:
@@ -228,7 +228,7 @@ This guides you through:
 Remove existing configuration:
 
 ```bash
-kasl init --delete
+kasl setup --delete
 ```
 
 This will:
@@ -342,7 +342,7 @@ export KASL_JIRA_API_URL=https://jira.company.com
 ls ~/.local/share/lacodda/kasl/config.json
 
 # Recreate configuration
-kasl init
+kasl setup
 ```
 
 **Problem**: Invalid configuration

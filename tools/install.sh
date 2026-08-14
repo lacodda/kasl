@@ -67,4 +67,4 @@ esac
 
 # `init` is an interactive wizard, so it cannot run from here: piping this
 # script into sh leaves stdin pointing at the script itself, not at a terminal.
-echo "Next: run 'kasl init' to set up monitoring, integrations and credentials."
+echo "Next: run 'kasl setup' to set up monitoring, integrations and credentials."

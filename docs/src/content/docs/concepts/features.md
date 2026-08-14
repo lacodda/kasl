@@ -288,7 +288,7 @@ Import commits as completed tasks:
 
 ```bash
 # Configure GitLab
-kasl init  # Interactive setup
+kasl setup  # Interactive setup
 
 # Find tasks from GitLab
 kasl task find
@@ -306,7 +306,7 @@ Import completed issues:
 
 ```bash
 # Configure Jira
-kasl init  # Interactive setup
+kasl setup  # Interactive setup
 
 # Find tasks from Jira
 kasl task find
@@ -324,7 +324,7 @@ Submit reports to internal systems:
 
 ```bash
 # Configure SiServer
-kasl init  # Interactive setup
+kasl setup  # Interactive setup
 
 # Submit daily report
 kasl report --send

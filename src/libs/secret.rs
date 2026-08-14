@@ -170,7 +170,7 @@ impl Secret {
         // Reached whenever a stored credential is missing or stale, including
         // from a scheduled run. Fail loudly rather than hang there.
         crate::libs::prompt::ensure_interactive(&format!(
-            "{} - but there is no terminal to ask; run `kasl init` interactively first",
+            "{} - but there is no terminal to ask; run `kasl setup` interactively first",
             self.prompt
         ))?;
 

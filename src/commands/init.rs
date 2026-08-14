@@ -14,10 +14,10 @@
 //!
 //! ```bash
 //! # Run interactive setup wizard
-//! kasl init
+//! kasl setup
 //!
 //! # Reset configuration (remove existing settings)
-//! kasl init --delete
+//! kasl setup --delete
 //! ```
 
 use crate::{
@@ -27,12 +27,12 @@ use crate::{
 use anyhow::Result;
 use clap::Args;
 
-/// Command-line arguments for the initialization command.
+/// Command-line arguments for the setup command.
 ///
-/// The init command supports an optional `--delete` flag for removing
+/// The setup command supports an optional `--delete` flag for removing
 /// existing configuration, which can be useful for testing or troubleshooting.
 #[derive(Debug, Args)]
-pub struct InitArgs {
+pub struct SetupArgs {
     /// Remove existing configuration instead of creating new one
     ///
     /// When specified, this flag will delete the current configuration file
@@ -42,19 +42,19 @@ pub struct InitArgs {
     delete: bool,
 }
 
-/// Executes the initialization command.
+/// Executes the setup command.
 ///
 /// Handles configuration setup with interactive wizard for first-time setup,
 /// or configuration removal when `--delete` is used.
 ///
 /// # Arguments
 ///
-/// * `init_args` - Parsed command-line arguments containing options
+/// * `setup_args` - Parsed command-line arguments containing options
 ///
 /// # Returns
 ///
 /// Returns `Ok(())` on successful configuration, or an error if the setup fails.
-pub fn cmd(init_args: InitArgs) -> Result<()> {
+pub fn cmd(setup_args: SetupArgs) -> Result<()> {
     // Check if watcher is currently running before making changes
     let watcher_was_running = daemon::is_running();
     if watcher_was_running {
@@ -74,7 +74,7 @@ pub fn cmd(init_args: InitArgs) -> Result<()> {
     }
 
     // Handle deletion mode - exit early after cleanup
-    if init_args.delete {
+    if setup_args.delete {
         // Don't restart watcher after deleting configuration
         msg_info!(Message::ConfigDeleted);
         return Ok(());

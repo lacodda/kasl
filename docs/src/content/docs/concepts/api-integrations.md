@@ -25,7 +25,7 @@ Import commits and merge requests as completed tasks.
 
 2. **Configure Integration**:
    ```bash
-   kasl init
+   kasl setup
    # Follow prompts to configure GitLab
    ```
 
@@ -78,7 +78,7 @@ Import completed issues and track work items.
 
 2. **Configure Integration**:
    ```bash
-   kasl init
+   kasl setup
    # Follow prompts to configure Jira
    ```
 
@@ -133,7 +133,7 @@ Submit reports to internal company systems.
 
 2. **Configure Integration**:
    ```bash
-   kasl init
+   kasl setup
    # Follow prompts to configure SiServer
    ```
 
@@ -237,7 +237,7 @@ rm ~/.local/share/lacodda/kasl/.jira_session
 rm ~/.local/share/lacodda/kasl/.si_session
 
 # Reconfigure integration
-kasl init
+kasl setup
 ```
 
 **Problem**: API connection errors

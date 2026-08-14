@@ -140,7 +140,7 @@ Both installers take the newest release by default; set `KASL_VERSION` to a tag 
 ## Quick start
 
 ```bash
-kasl init                 # first-run wizard: monitor settings, integrations, credentials
+kasl setup                # first-run wizard: monitor settings, integrations, credentials
 kasl watch                # start monitoring in the background
 kasl autostart enable     # and have it start at login
 kasl task find            # pick up today's commits and issues

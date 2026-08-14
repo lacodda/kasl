@@ -8,7 +8,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 ### Core Commands
 
-- **[`init`](/reference/init/)** - Initialize application configuration
+- **[`setup`](/reference/setup/)** - Set up application configuration
 - **[`watch`](/reference/watch/)** - Start activity monitoring
 - **[`task`](/reference/task/)** - Manage tasks and work items
 - **[`report`](/reference/report/)** - Generate and submit reports
@@ -27,7 +27,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 ### System Integration
 
 - **[`autostart`](/reference/autostart/)** - Configure automatic startup
-- **[`update`](/reference/update/)** - Update application to latest version
+- **[`self-update`](/reference/self-update/)** - Update application to latest version
 - **[`completions`](/reference/completions/)** - Print a shell completion script
 
 ## Quick Reference
@@ -146,9 +146,9 @@ Commands for generating insights and reports:
 
 ### System Management
 Commands for application configuration and maintenance:
-- `init` - Initial setup and configuration
+- `setup` - Initial setup and configuration
 - `autostart` - System integration
-- `update` - Application updates
+- `self-update` - Application updates
 
 ## Getting Help
 

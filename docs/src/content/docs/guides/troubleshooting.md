@@ -56,7 +56,7 @@ This guide helps you resolve common issues with kasl.
 
 1. **Adjust configuration**:
    ```bash
-   kasl init  # Reconfigure monitor settings
+   kasl setup  # Reconfigure monitor settings
    ```
 
 2. **Increase thresholds**:
@@ -166,7 +166,7 @@ This guide helps you resolve common issues with kasl.
 
 2. **Recreate configuration**:
    ```bash
-   kasl init
+   kasl setup
    ```
 
 3. **Create directory manually**:
@@ -198,8 +198,8 @@ This guide helps you resolve common issues with kasl.
 
 2. **Reset configuration**:
    ```bash
-   kasl init --delete
-   kasl init
+   kasl setup --delete
+   kasl setup
    ```
 
 3. **Check for syntax errors**:
@@ -232,7 +232,7 @@ This guide helps you resolve common issues with kasl.
 
 2. **Reconfigure integration**:
    ```bash
-   kasl init
+   kasl setup
    ```
 
 3. **Check credentials**:
@@ -418,7 +418,7 @@ Debug mode shows:
 
 ```bash
 # Check configuration
-RUST_LOG=kasl=debug kasl init
+RUST_LOG=kasl=debug kasl setup
 
 # Debug task operations
 RUST_LOG=kasl=debug kasl task list

@@ -491,6 +491,9 @@ impl Display for Message {
             Message::BackupCreated => "Backup created successfully".to_string(),
             Message::InvalidInput => "Invalid input provided".to_string(),
             Message::PermissionDenied => "Permission denied".to_string(),
+            Message::DeprecatedCommand(old, new) => {
+                format!("`kasl {}` is now `kasl {}`. The old name still works but will be removed in 2.0.", old, new)
+            }
 
             // === ERROR LOGGING ===
             Message::ErrorSendingEvents(error) => format!("[kasl] Error sending events: {}", error),
@@ -503,7 +506,7 @@ impl Display for Message {
             Message::SelectedTaskFormat(name, completeness) => format!("{} - {}%", name, completeness),
 
             // === JIRA INBOX MESSAGES ===
-            Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl init` and select Jira.".to_string(),
+            Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl setup` and select Jira.".to_string(),
             Message::JiraInboxEmpty => "Jira inbox is empty.".to_string(),
             Message::JiraInboxListHeader => "Jira inbox:".to_string(),
             Message::JiraInboxSynced {

@@ -44,7 +44,7 @@ kasl --version
 
 Run the interactive configuration wizard:
 ```bash
-kasl init
+kasl setup
 ```
 
 This will guide you through setting up:
@@ -250,7 +250,7 @@ KASL_DEBUG=1 kasl watch --foreground
 
 If you need to start over:
 ```bash
-kasl init --delete
+kasl setup --delete
 ```
 
 ## Next Steps

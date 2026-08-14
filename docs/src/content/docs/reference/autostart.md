@@ -297,11 +297,11 @@ kasl watch --stop
 The `autostart` command works with other kasl commands:
 
 - **`watch`**: The monitoring command that gets started automatically
-- **`init`**: Configure kasl before enabling autostart
+- **`setup`**: Configure kasl before enabling autostart
 - **`status`**: Check if monitoring is running after autostart
 
 ## Related Commands
 
 - **[`watch`](/reference/watch/)** - The monitoring command that autostart enables
-- **[`init`](/reference/init/)** - Configure kasl before setting up autostart
-- **[`update`](/reference/update/)** - Update kasl while preserving autostart settings
+- **[`setup`](/reference/setup/)** - Configure kasl before setting up autostart
+- **[`self-update`](/reference/self-update/)** - Update kasl while preserving autostart settings

@@ -14,7 +14,7 @@
 //!
 //! ```bash
 //! # Check for and install updates
-//! kasl update
+//! kasl self-update
 //! ```
 
 use crate::{

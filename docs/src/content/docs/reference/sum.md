@@ -99,7 +99,7 @@ December 2024
 To enable rest day integration, configure SiServer in your settings:
 
 ```bash
-kasl init --si-server-url "https://your-server.com" --si-server-token "your-token"
+kasl setup --si-server-url "https://your-server.com" --si-server-token "your-token"
 ```
 
 ### Default Work Hours
@@ -108,7 +108,7 @@ Configure default hours for rest days:
 
 ```bash
 # Set default hours for rest days (default is 8 hours)
-kasl init --default-hours 8
+kasl setup --default-hours 8
 ```
 
 ## Integration with Other Commands
@@ -160,7 +160,7 @@ kasl report --last
 **API submission fails**
 ```bash
 # Check API configuration
-kasl init --show-config
+kasl setup --show-config
 
 # Test API connection
 kasl report --send
@@ -169,10 +169,10 @@ kasl report --send
 **Incorrect rest days**
 ```bash
 # Verify SiServer configuration
-kasl init --si-server-url "https://your-server.com"
+kasl setup --si-server-url "https://your-server.com"
 
 # Check rest day settings
-kasl init --show-config
+kasl setup --show-config
 ```
 
 ### Data Validation
@@ -214,4 +214,4 @@ kasl report --show-all
 - **[`watch`](/reference/watch/)** - Monitor activity for data collection
 - **[`pauses`](/reference/pauses/)** - Record absences the monitor missed
 - **[`export`](/reference/export/)** - Export data for external analysis
-- **[`init`](/reference/init/)** - Configure API integration
+- **[`setup`](/reference/setup/)** - Configure API integration
