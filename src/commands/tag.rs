@@ -2,14 +2,6 @@
 //!
 //! Provides comprehensive tag management functionality, enabling users to create, organize, and utilize tags for better task categorization.
 //!
-//! ## Features
-//!
-//! - **Tag CRUD Operations**: Create, read, update, and delete tag definitions
-//! - **Color Coding**: Visual organization with customizable tag colors
-//! - **Task Association**: Link tags to tasks for categorization
-//! - **Filtering**: Find tasks by tag assignments
-//! - **Auto-Creation**: Automatically create tags when assigned to tasks
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -148,15 +140,6 @@ enum TagCommand {
 /// - User input errors
 /// - Concurrent modification conflicts
 ///
-/// # Arguments
-///
-/// * `args` - Parsed command-line arguments containing operation specification
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful operation completion, or an error if
-/// the requested operation fails due to validation, database, or user input issues.
-///
 /// # Examples
 ///
 /// ```bash
@@ -218,10 +201,6 @@ fn resolve_tag(tag: Option<String>, prompt: &str) -> Result<String> {
 /// - Tag names cannot be empty or contain only whitespace
 /// - Color values are optional and accept standard color names or hex codes
 ///
-/// # Arguments
-///
-/// * `name` - Unique name for the new tag
-/// * `color` - Optional color specification for visual organization
 fn handle_create(name: String, color: Option<String>) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -295,9 +274,6 @@ fn handle_list() -> Result<()> {
 /// - Validates new values according to tag rules
 /// - Provides clear feedback about validation errors
 ///
-/// # Arguments
-///
-/// * `tag_identifier` - Tag name or ID string for flexible tag identification
 fn handle_edit(tag_identifier: String) -> Result<()> {
     // Editing is prompt-driven; there is nothing to fall back on without a terminal.
     ensure_interactive("`kasl tag edit` is interactive and needs a terminal")?;
@@ -374,9 +350,6 @@ fn handle_edit(tag_identifier: String) -> Result<()> {
 /// - **Used Tags**: Enhanced warning showing number of affected tasks
 /// - **Heavily Used Tags**: Additional emphasis on impact scope
 ///
-/// # Arguments
-///
-/// * `tag_identifier` - Tag name or ID string for flexible tag identification
 fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
@@ -448,9 +421,6 @@ fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
 /// - **Sprint Planning**: Review tasks by type or area
 /// - **Progress Tracking**: Monitor completion within categories
 ///
-/// # Arguments
-///
-/// * `tag_name` - Name of the tag to filter tasks by
 async fn handle_show_tasks(tag_name: String) -> Result<()> {
     let mut tags_db = Tags::new()?;
 

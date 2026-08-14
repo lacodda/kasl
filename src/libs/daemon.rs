@@ -3,15 +3,6 @@
 //! Provides comprehensive background process management for the kasl activity
 //! monitoring system including spawning, signal handling, and graceful shutdown.
 //!
-//! ## Features
-//!
-//! - **Process Spawning**: Creates detached background processes for continuous monitoring
-//! - **Signal Handling**: Responds to system signals for graceful shutdown and restart
-//! - **PID Management**: Tracks running processes and prevents duplicate instances
-//! - **Cross-Platform Support**: Handles platform differences between Unix and Windows
-//! - **Resource Cleanup**: Ensures proper cleanup of database connections and system resources
-//! - **Error Recovery**: Manages process failures and provides meaningful error messages
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -51,16 +42,6 @@ const PID_FILE: &str = "kasl-watch.pid";
 ///
 /// Sets up comprehensive signal handling and runs the activity monitor in a
 /// controlled environment. Designed to be the main entry point for daemon operation.
-///
-/// # Returns
-///
-/// Returns `Ok(())` when the daemon shuts down cleanly, or an error if
-/// initialization fails or a critical error occurs during operation.
-///
-/// - **Signal Handler Setup**: Platform signal APIs not available
-/// - **Monitor Initialization**: Database connection or configuration errors
-/// - **Runtime Errors**: Critical failures during monitoring operation
-/// - **Cleanup Failures**: Unable to remove PID file or close resources
 ///
 /// # Usage Context
 ///
@@ -208,18 +189,6 @@ pub async fn run_with_signal_handling() -> Result<()> {
 /// - Monitor initialization problems
 /// - Runtime monitoring errors
 ///
-/// # Returns
-///
-/// Returns `Ok(())` when monitoring completes successfully, or an error
-/// if any part of the initialization or execution process fails.
-///
-/// # Error Scenarios
-///
-/// - **Configuration Errors**: Invalid or corrupted configuration file
-/// - **Database Errors**: Cannot connect to or initialize the SQLite database
-/// - **Permission Errors**: Insufficient privileges for input device monitoring
-/// - **Resource Errors**: System resource exhaustion or availability issues
-///
 /// # Usage Context
 ///
 /// This function is called by:
@@ -291,19 +260,6 @@ async fn run_monitor() -> Result<()> {
 /// - Removes stale PID files to prevent conflicts
 /// - Allows a brief delay for process cleanup
 /// - Proceeds with new daemon creation
-///
-/// # Returns
-///
-/// Returns `Ok(())` if the daemon was successfully spawned and the PID file
-/// was created, or an error if the spawning process fails.
-///
-/// # Error Scenarios
-///
-/// - **Executable Not Found**: Cannot locate the current executable
-/// - **Permission Denied**: Insufficient privileges for process creation
-/// - **Resource Exhaustion**: System cannot create new processes
-/// - **PID File Creation**: Cannot write PID file to application directory
-/// - **Platform Unsupported**: Daemon mode not available on the current platform
 ///
 /// # Usage Examples
 ///
@@ -430,18 +386,6 @@ pub fn spawn() -> Result<()> {
 /// - Specific error messages help with troubleshooting
 /// - Consistent behavior across multiple invocations
 ///
-/// # Returns
-///
-/// Returns `Ok(())` in most cases, including when no daemon is running.
-/// Only returns errors for serious system-level failures that require
-/// user attention.
-///
-/// # Error Scenarios
-///
-/// - **Permission Denied**: Insufficient privileges to terminate the process
-/// - **System Errors**: Platform-specific process management failures
-/// - **Resource Issues**: System resource exhaustion during termination
-///
 /// # Usage Examples
 ///
 /// ```rust,no_run
@@ -466,11 +410,6 @@ pub fn spawn() -> Result<()> {
 /// checking for the existence and validity of the PID file and verifying
 /// that the corresponding process is still running.
 ///
-/// # Returns
-///
-/// Returns `true` if the daemon is running, `false` otherwise.
-/// This function does not return errors - it treats any failure to
-/// verify the daemon as "not running".
 pub fn is_running() -> bool {
     let pid_path = match DataStorage::new().get_path(PID_FILE) {
         Ok(path) => path,
@@ -503,13 +442,6 @@ pub fn is_running() -> bool {
 /// exists and is running. It's used internally by daemon management
 /// functions to validate process state.
 ///
-/// # Arguments
-///
-/// * `pid` - The process ID to check
-///
-/// # Returns
-///
-/// Returns `true` if the process is running, `false` otherwise.
 fn is_process_running(pid: u32) -> bool {
     #[cfg(windows)]
     {
@@ -592,18 +524,6 @@ pub fn stop() -> Result<()> {
 /// fails. This prevents stale PID files from interfering with future
 /// daemon operations.
 ///
-/// # Returns
-///
-/// Returns `Ok(())` if the daemon was successfully terminated, or an
-/// error describing the specific failure encountered.
-///
-/// # Error Scenarios
-///
-/// - **No PID File**: Daemon is not running or PID file was removed
-/// - **Invalid PID**: PID file contains corrupted or invalid data
-/// - **Process Not Found**: Process ID does not correspond to running process
-/// - **Termination Failed**: Process exists but couldn't be terminated
-///
 /// # Usage Context
 ///
 /// This function is used internally by:
@@ -678,21 +598,6 @@ fn stop_internal() -> Result<()> {
 /// - Process handles are properly closed to prevent resource leaks
 /// - Error conditions are checked after each API call
 /// - Brief delay allows for process cleanup before returning
-///
-/// # Arguments
-///
-/// * `pid` - The process ID of the target process to terminate
-///
-/// # Returns
-///
-/// Returns `Ok(true)` if the process was successfully terminated,
-/// `Ok(false)` if the process doesn't exist, or an error if termination fails.
-///
-/// # Error Scenarios
-///
-/// - **Access Denied**: Insufficient privileges to terminate the process
-/// - **Invalid Handle**: Cannot open process handle
-/// - **Termination Failed**: Process exists but termination failed
 ///
 /// # Platform Availability
 ///
@@ -770,22 +675,6 @@ fn kill_process(pid: u32) -> Result<bool> {
 /// - Enables database transaction completion
 /// - Provides opportunity for state saving
 /// - Reduces risk of data corruption
-///
-/// # Arguments
-///
-/// * `pid` - The process ID of the target process to terminate
-///
-/// # Returns
-///
-/// Returns `Ok(true)` if the process was successfully terminated,
-/// `Ok(false)` if the process doesn't exist, or an error if termination fails.
-///
-/// # Error Scenarios
-///
-/// - **Process Not Found**: Process ID doesn't correspond to running process
-/// - **Permission Denied**: Insufficient privileges to send signals
-/// - **Command Failed**: `ps` or `kill` commands not available or failed
-/// - **Persistent Process**: Process survives both SIGTERM and SIGKILL
 ///
 /// # Platform Availability
 ///

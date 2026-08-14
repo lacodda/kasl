@@ -3,13 +3,6 @@
 //! Provides interface for rendering application data in well-formatted console tables.
 //! Handles presentation layer for work reports, task lists, summaries, templates, and tags.
 //!
-//! ## Features
-//!
-//! - **Structured Data Display**: Converts complex data structures into readable tables
-//! - **Consistent Formatting**: Maintains uniform appearance across all table types
-//! - **Report Visualization**: Displays pre-calculated productivity and work metrics
-//! - **Duration Formatting**: Handles time duration display in human-readable formats
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -66,14 +59,6 @@ impl View {
     /// Renders a detailed table showing task information including identification numbers,
     /// names, completion status, comments, and associated tags.
     ///
-    /// # Arguments
-    ///
-    /// * `tasks` - A slice of `Task` structs to display in the table
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful table rendering, or an error if
-    /// the table cannot be displayed due to terminal or formatting issues.
     pub fn tasks(tasks: &[Task]) -> Result<()> {
         let show_task_id = tasks.iter().any(|t| t.task_id.is_some_and(|id| id != 0));
         let show_comment = tasks.iter().any(|t| !t.comment.trim().is_empty());
@@ -184,13 +169,6 @@ impl View {
     /// The productivity value displayed here is calculated using the same centralized
     /// logic used throughout the application for consistency.
     ///
-    /// # Arguments
-    ///
-    /// * `workday` - The workday record containing start/end times
-    /// * `intervals` - Pre-calculated and optionally filtered work intervals for display
-    /// * `filtered_duration` - Sum of displayed interval durations
-    /// * `productivity` - Productivity percentage from centralized Productivity calculation
-    /// * `tasks` - Tasks completed during the workday for context
     pub fn report(workday: &Workday, intervals: &[report::WorkInterval], filtered_duration: &TimeDelta, productivity: &f64, tasks: &[Task]) -> Result<()> {
         // Display formatted report header with readable date
         msg_print!(Message::ReportHeader(workday.date.format("%B %-d, %Y").to_string()), true);
@@ -248,18 +226,6 @@ impl View {
     /// - **Rest Day Hours**: Default hours applied to weekends and holidays
     /// - **Missing Days**: Days without any recorded activity (shown as 0:00)
     ///
-    /// # Arguments
-    ///
-    /// * `summary_data` - A tuple containing:
-    ///   - `HashMap<NaiveDate, (String, String)>`: Daily durations and productivity data
-    ///   - `String`: Total duration for the entire month
-    ///   - `String`: Average daily duration across all days
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful summary display, or an error if
-    /// table formatting or rendering fails.
-    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -309,12 +275,6 @@ impl View {
 
     /// Displays a table of pauses for a given day with total pause time.
     ///
-    /// # Arguments
-    /// * `pauses` - A slice of `Pause` records to display.
-    /// * `total_pause_time` - The total duration of all pauses.
-    ///
-    /// # Returns
-    /// A `Result` indicating success.
     pub fn pauses(pauses: &[Pause], total_pause_time: Duration) -> Result<()> {
         let mut table = Table::new();
         table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
@@ -362,15 +322,6 @@ impl View {
     /// - Team workflows with consistent task structures
     /// - Quick task creation with minimal input required
     /// - Standardized task naming and completion patterns
-    ///
-    /// # Arguments
-    ///
-    /// * `templates` - A slice of `TaskTemplate` structs to display
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful table rendering, or an error if
-    /// display operations fail.
     ///
     /// # Examples
     ///
@@ -430,15 +381,6 @@ impl View {
     ///
     /// Colors are displayed as text values (hex codes, names, etc.) since
     /// terminal color support varies. A dash (-) indicates no color assigned.
-    ///
-    /// # Arguments
-    ///
-    /// * `tags` - A slice of `Tag` structs to display in the table
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful table rendering, or an error if
-    /// display operations fail.
     ///
     /// # Examples
     ///

@@ -2,14 +2,6 @@
 //!
 //! Generates comprehensive monthly reports showing daily work hours, productivity metrics, and calendar integration with company rest days.
 //!
-//! ## Features
-//!
-//! - **Monthly Overview**: Detailed daily breakdowns with productivity metrics
-//! - **Calendar Integration**: Automatic handling of company rest days and weekends
-//! - **Productivity Analysis**: Per-day productivity calculations using centralized engine
-//! - **Report Submission**: Optional submission to external reporting systems
-//! - **Aggregate Statistics**: Total hours, working days, and average calculations
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -56,18 +48,6 @@ pub struct SumArgs {
 /// Creates a detailed analysis of work patterns for the current month, including
 /// productivity calculations, rest day integration, and daily breakdowns.
 ///
-/// # Arguments
-///
-/// * `_sum_args` - Command arguments (currently unused but reserved for future features)
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful summary generation and display, or an error
-/// if data retrieval or calculation fails.
-/// - API connectivity issues (for rest dates)
-/// - Configuration errors
-/// - Invalid date calculations
-/// - Missing workday data
 pub async fn cmd(_sum_args: SumArgs) -> Result<()> {
     let now = Local::now();
     let config = Config::read()?;

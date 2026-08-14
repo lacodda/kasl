@@ -2,14 +2,6 @@
 //!
 //! Handles the core functionality of kasl - monitoring user activity to automatically detect work sessions, breaks, and workday boundaries.
 //!
-//! ## Features
-//!
-//! - **Background Monitoring**: Runs as daemon to track activity automatically
-//! - **Real-time Detection**: Immediate response to keyboard and mouse activity
-//! - **Workday Management**: Automatic start/end detection for work sessions
-//! - **Pause Tracking**: Records breaks and inactive periods
-//! - **Foreground Debugging**: Debug mode with enhanced logging
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -67,14 +59,6 @@ pub struct WatchArgs {
 /// Acts as a dispatcher that routes to the appropriate operation based on the
 /// provided command-line arguments, handling the three main operational modes.
 ///
-/// # Arguments
-///
-/// * `args` - Parsed command-line arguments specifying the operation mode
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful operation completion, or an error if
-/// the requested operation fails.
 #[instrument]
 pub async fn cmd(args: WatchArgs) -> Result<()> {
     if args.stop {
@@ -124,17 +108,6 @@ pub async fn cmd(args: WatchArgs) -> Result<()> {
 /// - Records pause end times when activity resumes
 /// - Updates workday end times when monitoring stops
 ///
-/// # Returns
-///
-/// Returns `Ok(())` when monitoring completes normally, or an error if
-/// initialization fails or a critical error occurs during monitoring.
-///
-/// # Error Scenarios
-///
-/// - Database connection failures
-/// - Input device access denied
-/// - Invalid configuration values
-/// - System resource exhaustion
 #[instrument]
 async fn run_monitor() -> Result<()> {
     // Load configuration with defaults for missing values
@@ -174,11 +147,6 @@ async fn run_monitor() -> Result<()> {
 /// - Creates a PID file for process tracking
 /// - Handles cleanup on shutdown
 /// - Logs operations for debugging
-///
-/// # Returns
-///
-/// Returns `Ok(())` when the daemon shuts down normally, or an error if
-/// startup fails or a critical error occurs.
 ///
 /// # Usage
 ///

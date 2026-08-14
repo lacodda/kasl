@@ -2,13 +2,6 @@
 //!
 //! Provides comprehensive data export functionality supporting multiple output formats and data types for external analysis, backup, and integration.
 //!
-//! ## Features
-//!
-//! - **Export Formats**: CSV, JSON, Excel with formatting and multiple sheets
-//! - **Data Types**: Reports, tasks, summaries, and complete data export
-//! - **Flexible Output**: Custom file paths and automatic naming
-//! - **Date Filtering**: Export data for specific date ranges
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -107,15 +100,6 @@ pub struct ExportArgs {
 /// initialization, data processing, file generation, and user feedback.
 /// - Data format conversion errors
 /// - Output file write failures
-///
-/// # Arguments
-///
-/// * `args` - Parsed command-line arguments specifying export parameters
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful export completion, or an error if
-/// any step in the export process fails.
 ///
 /// # Examples
 ///
@@ -231,22 +215,6 @@ fn resolve_report_output(data: ExportData, format: ExportFormat, date: NaiveDate
 /// - `today`: Quick exports of current work data
 /// - Specific dates: Historical analysis, backup creation, data migration
 /// - Recent dates: Weekly or monthly review processes
-///
-/// # Arguments
-///
-/// * `date_str` - Date string to parse, either 'today' or 'YYYY-MM-DD'
-///
-/// # Returns
-///
-/// Returns the parsed `NaiveDate` on success, or an error if the date
-/// string is malformed or represents an invalid date.
-///
-/// # Error Scenarios
-///
-/// - Malformed date strings (e.g., `2025-13-45`, `invalid-date`)
-/// - Wrong date formats (e.g., `01/15/2025`, `15-01-2025`)
-/// - Non-existent dates (e.g., `2025-02-30`, `2025-04-31`)
-/// - Out-of-range values (e.g., month > 12, day > 31)
 ///
 /// # Examples
 ///

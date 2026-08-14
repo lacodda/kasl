@@ -4,13 +4,6 @@
 //! their work tracking data in multiple formats for external analysis, backup,
 //! integration with other tools, or compliance reporting.
 //!
-//! ## Features
-//!
-//! - **Export Formats**: CSV, JSON, Excel with formatting and multiple sheets
-//! - **Data Types**: Reports, tasks, summaries, and complete data export
-//! - **File Naming**: Intelligent naming conventions with timestamp-based uniqueness
-//! - **Error Handling**: Robust validation and error recovery
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -200,11 +193,6 @@ pub struct ExportDaySum {
 /// and provides methods for exporting different types of data. It handles
 /// the complete export pipeline from data gathering to file generation.
 ///
-/// ## Design Philosophy
-///
-/// The Exporter follows a builder pattern for configuration and uses method
-/// dispatch for different export operations. This design provides flexibility
-/// while maintaining type safety and clear separation of concerns.
 pub struct Exporter {
     /// The desired output format for the export operation
     format: ExportFormat,
@@ -244,15 +232,6 @@ impl Exporter {
     /// - Custom paths have appropriate file extensions
     /// - Parent directories exist or can be created
     /// - Write permissions are available
-    ///
-    /// # Arguments
-    ///
-    /// * `format` - The desired export format (CSV, JSON, or Excel)
-    /// * `output_path` - Optional custom output path; generates default if None
-    ///
-    /// # Returns
-    ///
-    /// Returns a configured Exporter instance ready for export operations.
     ///
     /// # Examples
     ///
@@ -294,13 +273,6 @@ impl Exporter {
     /// daily reports. It only affects Excel report exports; other formats and
     /// data types ignore this flag.
     ///
-    /// # Arguments
-    ///
-    /// * `hourly` - Whether to render the report as an hourly grid
-    ///
-    /// # Returns
-    ///
-    /// Returns the modified `Exporter` for method chaining.
     pub fn hourly(mut self, hourly: bool) -> Self {
         self.hourly = hourly;
         self
@@ -319,16 +291,6 @@ impl Exporter {
     /// 3. **Format Processing**: Apply format-specific transformations
     /// 4. **File Generation**: Write the formatted data to the output file
     /// 5. **Validation**: Verify export completeness and file integrity
-    ///
-    /// # Arguments
-    ///
-    /// * `data_type` - The category of data to export (Report, Tasks, Summary, All)
-    /// * `date` - The target date for data collection and filtering
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful export completion, or an error if any
-    /// step in the export process fails.
     ///
     /// # Examples
     ///
@@ -373,21 +335,6 @@ impl Exporter {
     /// - Pause records for break period calculations
     /// - Task records for work content and completion status
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The specific date for which to generate the report
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful report generation and file creation,
-    /// or an error if data gathering or file writing fails.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - No workday record exists for the specified date
-    /// - Database connectivity issues during data gathering
-    /// - File system errors during report generation
-    /// - Data formatting or serialization errors
     async fn export_report(&self, date: NaiveDate) -> Result<()> {
         // Hourly (SiServer-style) layout is only meaningful for Excel output.
         // When requested, delegate to the dedicated renderer and skip the
@@ -429,14 +376,6 @@ impl Exporter {
     /// - **Status**: Completion percentage and metadata
     /// - **Timing**: Association with the specified date
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The specific date for which to export tasks
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful task export and file creation,
-    /// or an error if data retrieval or file writing fails.
     async fn export_tasks(&self, date: NaiveDate) -> Result<()> {
         // Retrieve tasks for the specified date from the database
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
@@ -482,14 +421,6 @@ impl Exporter {
     /// - **Productivity Trends**: Patterns and variations in work activity
     /// - **Calendar Context**: Work day vs. rest day classifications
     ///
-    /// # Arguments
-    ///
-    /// * `date` - Any date within the month to summarize (month is extracted from this date)
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful summary generation and file creation,
-    /// or an error if data aggregation or file writing fails.
     async fn export_summary(&self, date: NaiveDate) -> Result<()> {
         // Gather and aggregate monthly data from workday records
         let summary_data = self.gather_summary_data(date)?;
@@ -532,14 +463,6 @@ impl Exporter {
     /// - `{base}_tasks.{ext}` - Task records
     /// - `{base}_summary.{ext}` - Monthly summary
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The reference date for data collection and filtering
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful comprehensive export completion,
-    /// or an error if any component export fails.
     async fn export_all(&self, date: NaiveDate) -> Result<()> {
         msg_info!(Message::ExportingAllData);
 
@@ -626,20 +549,6 @@ impl Exporter {
     /// Note: This differs from the comprehensive calculation in `libs::productivity::Productivity`
     /// which handles breaks, different pause types, and overlap scenarios.
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The specific date for which to gather report data
-    ///
-    /// # Returns
-    ///
-    /// Returns an `ExportReport` structure containing all calculated metrics
-    /// and formatted data, or an error if data retrieval or calculation fails.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - No workday record exists for the specified date
-    /// - Database connectivity issues during data retrieval
-    /// - Data inconsistencies or corruption
     fn gather_report_data(&self, date: NaiveDate) -> Result<ExportReport> {
         // Retrieve the primary workday record or fail if none exists
         let workday = Workdays::new()?
@@ -722,14 +631,6 @@ impl Exporter {
     /// - **Working Days**: Count of days with recorded work activity
     /// - **Daily Breakdown**: Individual day statistics with classifications
     ///
-    /// # Arguments
-    ///
-    /// * `date` - Any date within the target month (used to determine month boundaries)
-    ///
-    /// # Returns
-    ///
-    /// Returns an `ExportSummary` structure containing aggregated monthly statistics
-    /// and daily breakdowns, or an error if data retrieval or calculation fails.
     fn gather_summary_data(&self, date: NaiveDate) -> Result<ExportSummary> {
         // Retrieve all workday records for the month containing the specified date
         let workdays = Workdays::new()?.fetch_month(date)?;
@@ -788,14 +689,6 @@ impl Exporter {
     /// Each section is separated by empty rows and includes descriptive headers
     /// for easy identification and processing.
     ///
-    /// # Arguments
-    ///
-    /// * `report` - The report data structure to export
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful CSV generation, or an error if file
-    /// writing fails or data formatting encounters issues.
     fn export_report_csv(&self, report: &ExportReport) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
 
@@ -835,14 +728,6 @@ impl Exporter {
     /// This method creates a simple CSV table with task information, suitable
     /// for import into spreadsheet applications or database systems.
     ///
-    /// # Arguments
-    ///
-    /// * `tasks` - The task data collection to export
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful CSV generation, or an error if file
-    /// writing fails.
     fn export_tasks_csv(&self, tasks: &[ExportTask]) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
         wtr.write_record(["ID", "Name", "Comment", "Completeness"])?;
@@ -860,14 +745,6 @@ impl Exporter {
     /// This method creates a CSV file with a title header, daily breakdown table,
     /// and summary statistics section for comprehensive monthly analysis.
     ///
-    /// # Arguments
-    ///
-    /// * `summary` - The monthly summary data to export
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful CSV generation, or an error if file
-    /// writing fails.
     fn export_summary_csv(&self, summary: &ExportSummary) -> Result<()> {
         let mut wtr = csv::Writer::from_path(&self.output_path)?;
 
@@ -899,14 +776,6 @@ impl Exporter {
     /// that makes it human-readable and suitable for both programmatic processing
     /// and manual inspection.
     ///
-    /// # Arguments
-    ///
-    /// * `report` - The report data structure to serialize
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful JSON generation, or an error if
-    /// serialization or file writing fails.
     fn export_report_json(&self, report: &ExportReport) -> Result<()> {
         let json = serde_json::to_string_pretty(report)?;
         File::create(&self.output_path)?.write_all(json.as_bytes())?;
@@ -927,14 +796,6 @@ impl Exporter {
     /// - **Section Separation**: Visual spacing between different data sections
     /// - **Data Types**: Appropriate formatting for numbers, percentages, and text
     ///
-    /// # Arguments
-    ///
-    /// * `report` - The report data structure to export
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful Excel generation, or an error if
-    /// workbook creation or file writing fails.
     fn export_report_excel(&self, report: &ExportReport) -> Result<()> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
@@ -1001,14 +862,6 @@ impl Exporter {
     /// This method creates a clean Excel table with task information, suitable
     /// for further analysis or integration with other Excel-based workflows.
     ///
-    /// # Arguments
-    ///
-    /// * `tasks` - The task collection to export
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful Excel generation, or an error if
-    /// workbook creation fails.
     fn export_tasks_excel(&self, tasks: &[ExportTask]) -> Result<()> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
@@ -1040,14 +893,6 @@ impl Exporter {
     /// This method creates a professional monthly summary report with a formatted
     /// title, daily breakdown table, and summary statistics section.
     ///
-    /// # Arguments
-    ///
-    /// * `summary` - The monthly summary data to export
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful Excel generation, or an error if
-    /// workbook creation fails.
     fn export_summary_excel(&self, summary: &ExportSummary) -> Result<()> {
         let mut workbook = Workbook::new();
         let worksheet = workbook.add_worksheet();
@@ -1095,14 +940,6 @@ impl Exporter {
     /// (not across work intervals): fewer tasks span contiguous hour blocks;
     /// surplus tasks are appended only to hours without a break.
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The target date for which to build the hourly report
-    ///
-    /// # Returns
-    ///
-    /// Returns an [`HourlyReport`] describing the workday header and one row per
-    /// hour of work, or an error if no workday exists for the date.
     fn gather_hourly_data(&self, date: NaiveDate, locale: &Locale) -> Result<HourlyReport> {
         let workday = Workdays::new()?
             .fetch(date)?
@@ -1149,14 +986,6 @@ impl Exporter {
     /// length), an hourly table with start/end times and per-hour descriptions,
     /// a total worked-hours row, and an empty comment area.
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The target date for the report
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful workbook creation, or an error if data
-    /// gathering or file writing fails.
     fn export_report_excel_hourly(&self, date: NaiveDate) -> Result<()> {
         // Resolve localization and design template from the report config.
         let config = Config::read()?;

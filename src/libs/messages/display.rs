@@ -2,14 +2,6 @@
 //!
 //! Provides the core `Display` trait implementation for the `Message` enum, enabling automatic conversion of structured message data into human-readable text.
 //!
-//! ## Features
-//!
-//! - **Single Source of Truth**: All message text is defined in one location
-//! - **Type Safety**: Compile-time verification of message parameter usage
-//! - **Internationalization Ready**: Structured for future localization support
-//! - **Consistent Formatting**: Uniform message presentation across the application
-//! - **Parameter Interpolation**: Safe string formatting with typed parameters
-//!
 //! ## Usage
 //!
 //! ```rust
@@ -36,55 +28,6 @@ impl Display for Message {
     /// the entire kasl application. It provides consistent, professional
     /// text formatting for all user-facing messages while maintaining
     /// type safety and parameter interpolation.
-    ///
-    /// ## Implementation Strategy
-    ///
-    /// The method uses a comprehensive match statement to handle each message
-    /// variant individually, ensuring that:
-    /// - All message types are explicitly handled
-    /// - Parameter interpolation is type-safe
-    /// - Text formatting is consistent across message categories
-    /// - New message types require explicit formatting decisions
-    ///
-    /// ## Text Quality Standards
-    ///
-    /// All generated text adheres to these quality standards:
-    /// - **Clarity**: Messages are easily understood by users
-    /// - **Specificity**: Include relevant details and context
-    /// - **Actionability**: Provide guidance for next steps when appropriate
-    /// - **Professionalism**: Suitable for business and personal environments
-    /// - **Consistency**: Uniform tone and style across all messages
-    ///
-    /// ## Parameter Handling
-    ///
-    /// Messages with parameters use safe string interpolation:
-    /// - String parameters are inserted directly
-    /// - Numeric parameters are formatted appropriately
-    /// - Collections are joined with appropriate separators
-    /// - Optional values are handled with meaningful defaults
-    ///
-    /// ## Error Message Philosophy
-    ///
-    /// Error messages are designed to be helpful rather than technical:
-    /// - Focus on user-understandable problems
-    /// - Suggest concrete resolution steps
-    /// - Avoid intimidating technical jargon
-    /// - Provide sufficient context for troubleshooting
-    ///
-    /// # Arguments
-    ///
-    /// * `f` - The formatter for writing the text output
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the message was successfully formatted,
-    /// or an error if the formatting operation fails.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Formatter Errors**: Underlying write operations fail
-    /// - **Memory Allocation**: Insufficient memory for string operations
-    /// - **Parameter Formatting**: Invalid parameter values (rare)
     ///
     /// # Examples
     ///

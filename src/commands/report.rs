@@ -74,10 +74,6 @@ pub struct ReportArgs {
 /// date and delegating to the appropriate handler for daily, monthly, display,
 /// or send actions.
 ///
-/// # Arguments
-///
-/// * `args` - Parsed command-line arguments specifying report options
-///
 /// # Returns
 ///
 /// Returns `Ok(())` on successful report generation or processing,
@@ -113,13 +109,6 @@ pub async fn cmd(args: ReportArgs) -> Result<()> {
 /// based on user preferences. This allows flexible reporting timing
 /// to accommodate different organizational workflows.
 ///
-/// # Arguments
-///
-/// * `is_last_day` - Whether to generate report for yesterday
-///
-/// # Returns
-///
-/// Returns the target date with timezone information for report generation.
 fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
     if is_last_day { Local::now() - Duration::days(1) } else { Local::now() }
 }
@@ -130,10 +119,6 @@ fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
 /// This separation allows for different handling of local viewing versus
 /// API integration scenarios.
 ///
-/// # Arguments
-///
-/// * `should_send` - Whether to submit the report to external API
-/// * `date` - Target date for report generation
 async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result<()> {
     if should_send {
         send_daily_report(date).await
@@ -154,10 +139,6 @@ async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result
 /// - Number of working days
 /// - Average daily hours
 /// - Productivity trends (if available)
-///
-/// # Arguments
-///
-/// * `date` - Date within the target month for report generation
 ///
 /// # Error Handling
 ///
@@ -214,10 +195,6 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 ///
 /// This provides insight into work efficiency while accounting for
 /// legitimate breaks and focusing on actual productive activity.
-///
-/// # Arguments
-///
-/// * `date` - Target date for report generation
 ///
 /// # Data Sources
 ///
@@ -306,10 +283,6 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
 /// If the current date is the last working day of the month,
 /// this function will automatically trigger monthly report submission
 /// after successful daily report processing.
-///
-/// # Arguments
-///
-/// * `date` - Target date for report generation and submission
 ///
 /// # Error Handling
 ///
@@ -420,15 +393,6 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
 /// - `result`: Empty field for external system use
 /// - `time`: Empty field for external system use
 ///
-/// # Arguments
-///
-/// * `tasks` - Mutable reference to tasks for modification during processing
-/// * `intervals` - Pre-calculated work intervals (potentially filtered)
-///
-/// # Returns
-///
-/// Returns a JSON value containing the structured report payload
-/// ready for API submission.
 fn build_report_payload(_workday: &Workday, tasks: &mut [Task], intervals: &[report::WorkInterval]) -> serde_json::Value {
     let num_tasks = tasks.len();
     let num_intervals = intervals.len();
@@ -503,16 +467,6 @@ fn build_report_payload(_workday: &Workday, tasks: &mut [Task], intervals: &[rep
 /// initialization logic, providing proper error handling for missing or
 /// invalid SiServer configuration.
 ///
-/// # Returns
-///
-/// Returns a configured Si service instance ready for API operations,
-/// or an error if SiServer configuration is missing or invalid.
-///
-/// # Error Scenarios
-///
-/// - Configuration file not found or unreadable
-/// - SiServer section missing from configuration
-/// - Invalid API credentials or URLs in configuration
 fn get_si_service() -> Result<Si> {
     Config::read()?
         .si

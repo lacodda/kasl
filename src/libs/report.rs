@@ -3,14 +3,6 @@
 //! Provides core logic for analyzing work patterns and generating detailed reports
 //! about productivity, work intervals, and break patterns.
 //!
-//! ## Features
-//!
-//! - **Work Interval Analysis**: Convert workday and pause data into continuous work periods
-//! - **Productivity Metrics**: Calculate efficiency ratios and work pattern analysis
-//! - **Short Interval Detection**: Identify and analyze brief work periods that may indicate interruptions
-//! - **Interval Filtering**: Filter out short intervals for cleaner reporting (display-level, no database changes)
-//! - **Report Generation**: Comprehensive breakdown of workdays with productivity analysis
-//!
 //! ## Usage
 //!
 //! ```rust
@@ -129,14 +121,6 @@ impl WorkInterval {
     /// - **15 minutes**: Very strict, identifies micro-interruptions
     /// - **30 minutes**: Moderate, focuses on meaningful work blocks
     /// - **60 minutes**: Lenient, identifies only major fragmentation
-    ///
-    /// # Arguments
-    ///
-    /// * `min_minutes` - Minimum duration threshold in minutes
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if the interval duration is less than the threshold.
     ///
     /// # Examples
     ///
@@ -268,15 +252,6 @@ pub struct ShortIntervalsInfo {
 /// - **Workday Boundaries**: Pauses at start/end of workday
 /// - **Consecutive Pauses**: Multiple pauses with no work time between
 /// - **Invalid Times**: Pauses with end time before start time
-///
-/// # Arguments
-///
-/// * `workday` - The workday record containing start and end times
-/// * `pauses` - Collection of pause records for the workday
-///
-/// # Returns
-///
-/// A vector of `WorkInterval` objects representing continuous work periods.
 ///
 /// # Examples
 ///
@@ -424,15 +399,6 @@ pub fn calculate_work_intervals(workday: &Workday, pauses: &[Pause]) -> Vec<Work
 /// - **Some(info)**: Short intervals detected, optimization possible
 /// - **None**: No short intervals found, work patterns are optimal
 ///
-/// # Arguments
-///
-/// * `intervals` - Collection of work intervals to analyze
-/// * `min_minutes` - Minimum acceptable interval duration in minutes
-///
-/// # Returns
-///
-/// `Some(ShortIntervalsInfo)` if short intervals are found, `None` otherwise.
-///
 /// # Examples
 ///
 /// ```rust
@@ -518,17 +484,6 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
 /// - **Filtered intervals**: Only intervals meeting the minimum duration
 /// - **Filtered intervals info**: Analysis of what was filtered out (if any)
 ///
-/// # Arguments
-///
-/// * `intervals` - Original work intervals to filter
-/// * `min_minutes` - Minimum duration in minutes for intervals to keep
-///
-/// # Returns
-///
-/// Returns `(filtered_intervals, filtered_info)` where:
-/// - `filtered_intervals` contains only intervals >= min_minutes
-/// - `filtered_info` contains details about filtered intervals (None if nothing was filtered)
-///
 /// # Examples
 ///
 /// ```rust
@@ -604,17 +559,6 @@ pub fn filter_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> (
 /// - Loads the same data used throughout the application
 /// - Applies consistent calculation logic
 /// - Handles all edge cases and data integrity issues
-///
-/// # Arguments
-///
-/// * `workday` - The workday record containing start/end times
-/// * `intervals` - Pre-calculated and optionally filtered work intervals for duration calculation
-///
-/// # Returns
-///
-/// Returns a tuple containing:
-/// - **Filtered Duration**: Sum of provided work intervals (may exclude short intervals)
-/// - **Productivity**: Comprehensive productivity percentage using centralized calculation
 ///
 /// # Examples
 ///

@@ -2,14 +2,6 @@
 //!
 //! Provides an interactive setup wizard that guides users through configuring kasl for first-time use.
 //!
-//! ## Features
-//!
-//! - **Interactive Setup**: Guided configuration wizard for all settings
-//! - **API Integration**: Configure GitLab, Jira, and custom API credentials
-//! - **Monitoring Settings**: Set up activity thresholds and productivity parameters
-//! - **PATH Integration**: Automatically adds kasl to system PATH
-//! - **Reset Capability**: Remove existing configuration for troubleshooting
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -47,13 +39,6 @@ pub struct SetupArgs {
 /// Handles configuration setup with interactive wizard for first-time setup,
 /// or configuration removal when `--delete` is used.
 ///
-/// # Arguments
-///
-/// * `setup_args` - Parsed command-line arguments containing options
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful configuration, or an error if the setup fails.
 pub fn cmd(setup_args: SetupArgs) -> Result<()> {
     // Check if watcher is currently running before making changes
     let watcher_was_running = daemon::is_running();

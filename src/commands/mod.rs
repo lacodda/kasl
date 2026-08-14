@@ -3,12 +3,6 @@
 //! Contains all CLI command implementations for task management, activity monitoring,
 //! reporting, and system configuration.
 //!
-//! ## Features
-//!
-//! - **Core Commands**: Task management, activity monitoring, reporting, export
-//! - **Utility Commands**: Configuration, summaries, pauses, adjustments, updates
-//! - **Advanced Commands**: Templates, tags, database migrations
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -188,11 +182,6 @@ impl Cli {
     ///
     /// This is the main entry point for the CLI logic. It handles command
     /// routing and provides centralized error handling for all commands.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful command execution, or an error if
-    /// the command fails or invalid arguments are provided.
     ///
     /// # Examples
     ///

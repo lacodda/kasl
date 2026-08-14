@@ -3,13 +3,6 @@
 //! Provides integration with GitLab instances (both self-hosted and GitLab.com)
 //! to automatically discover and import development activities as tasks.
 //!
-//! ## Features
-//!
-//! - **Commit Discovery**: Automatically fetches today's commits for task generation
-//! - **User Activity**: Retrieves push events and commit details via GitLab API v4
-//! - **Error Resilience**: Gracefully handles network failures without crashing
-//! - **Multi-Instance Support**: Works with GitLab.com, self-hosted, and enterprise instances
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -137,10 +130,6 @@ impl GitLab {
     /// interactions. The client is configured for JSON responses and includes
     /// reasonable timeout settings.
     ///
-    /// # Arguments
-    ///
-    /// * `config` - GitLab configuration containing API endpoint and authentication token
-    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -162,10 +151,6 @@ impl GitLab {
     ///
     /// Makes a request to GitLab's `/user` endpoint to fetch the authenticated user's
     /// information. The user ID is required for subsequent calls to the events API.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<u32>` - The numeric user ID on success
     ///
     /// # Errors
     ///
@@ -212,10 +197,6 @@ impl GitLab {
     /// - Individual commit fetch failures are skipped
     /// - API parsing errors are logged and don't interrupt processing
     /// - Missing or malformed data is handled gracefully
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Vec<CommitInfo>>` - List of today's commits, or empty vector on any error
     ///
     /// # Example
     ///
@@ -363,15 +344,6 @@ impl GitLab {
     /// the full commit message and metadata. This is used to get detailed information
     /// about commits identified through the events API.
     ///
-    /// # Arguments
-    ///
-    /// * `project_id` - Numeric ID of the GitLab project containing the commit
-    /// * `commit_sha` - SHA hash of the commit to retrieve
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Commit>` - Complete commit information from GitLab
-    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -475,9 +447,6 @@ impl GitLabConfig {
     /// Used by the configuration system to identify and manage
     /// GitLab-specific settings during interactive setup.
     ///
-    /// # Returns
-    ///
-    /// A `ConfigModule` with GitLab identification information.
     pub fn module() -> ConfigModule {
         ConfigModule {
             key: "gitlab".to_string(),
@@ -499,14 +468,6 @@ impl GitLabConfig {
     ///
     /// Both prompts will show existing values as defaults if configuration
     /// already exists, making it easy to update only specific values.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Existing GitLab configuration to use as defaults (if any)
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Self>` - New GitLab configuration with user input
     ///
     /// # Errors
     ///

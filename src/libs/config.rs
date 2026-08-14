@@ -3,14 +3,6 @@
 //! Provides a comprehensive configuration management system that handles application
 //! settings, external API integrations, and activity monitoring parameters.
 //!
-//! ## Features
-//!
-//! - **Multi-Service Integration**: Manages configurations for Jira, GitLab, and custom APIs
-//! - **Activity Monitoring**: Configures behavior for work time tracking and pause detection
-//! - **Interactive Setup**: Provides guided configuration wizards for all modules
-//! - **Cross-Platform Persistence**: Handles configuration storage across Windows, macOS, and Linux
-//! - **System Integration**: Manages global PATH configuration for CLI availability
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -523,10 +515,6 @@ impl Config {
     /// - **Corrupted file**: Returns parsing error
     /// - **Permission issues**: Returns filesystem error
     ///
-    /// # Returns
-    ///
-    /// Returns the loaded configuration or a default configuration if no file exists.
-    ///
     /// # Errors
     ///
     /// Returns an error if the configuration file exists but cannot be read or parsed.
@@ -575,10 +563,6 @@ impl Config {
     /// - Overwrites any existing configuration file
     /// - Uses pretty-printing for readable JSON output
     /// - Sets appropriate file permissions for user-only access
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful save, or an error if the file cannot be written.
     ///
     /// # Errors
     ///
@@ -674,10 +658,6 @@ impl Config {
     /// - Pre-fills existing values as defaults to simplify updates
     /// - Provides helpful descriptions for each configuration parameter
     /// - Allows partial configuration (users can skip unwanted modules)
-    ///
-    /// # Returns
-    ///
-    /// Returns a fully configured `Config` instance ready for saving.
     ///
     /// # Errors
     ///
@@ -914,10 +894,6 @@ impl Config {
     /// - Modifying the system PATH requires elevated privileges on Windows
     /// - Changes affect all users on the system
     /// - The operation is reversible by manually editing the PATH
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the PATH was successfully updated or was already correct.
     ///
     /// # Errors
     ///

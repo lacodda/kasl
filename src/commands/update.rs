@@ -2,14 +2,6 @@
 //!
 //! Handles checking for and installing newer versions of kasl from GitHub releases with automatic binary replacement and backup capabilities.
 //!
-//! ## Features
-//!
-//! - **GitHub Integration**: Checks latest releases via GitHub API
-//! - **Cross-Platform Support**: Works on Windows, macOS, and Linux
-//! - **Safe Updates**: Creates backups before replacing binaries
-//! - **Watcher Management**: Automatically stops and restarts monitoring daemon
-//! - **Version Detection**: Compares current version with latest available
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -28,10 +20,6 @@ use anyhow::Result;
 /// Performs a complete update workflow including version check, platform detection,
 /// download, extraction, and safe replacement of the current executable.
 ///
-/// # Returns
-///
-/// Returns `Ok(())` on successful update or if no update is needed.
-/// Returns an error if the update process fails.
 pub async fn cmd() -> Result<()> {
     // Check if watcher is currently running before update
     let watcher_was_running = daemon::is_running();

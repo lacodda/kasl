@@ -3,14 +3,6 @@
 //! Provides integration with an internal company API system that handles employee
 //! time tracking reports and company calendar information.
 //!
-//! ## Features
-//!
-//! - **Report Submission**: Submit daily and monthly time tracking reports
-//! - **Calendar Integration**: Fetch company rest dates and holidays
-//! - **Two-Stage Authentication**: LDAP authentication followed by session token exchange
-//! - **Error Resilience**: Graceful handling of network failures and API errors
-//! - **Session Management**: Automatic session caching and renewal
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -134,10 +126,6 @@ impl RestDatesResponse {
     /// The API returns dates in "YYYY-MM-DD" format. Invalid date strings are
     /// silently ignored to handle potential API inconsistencies gracefully.
     ///
-    /// # Returns
-    ///
-    /// * `Result<HashSet<NaiveDate>>` - Unified set of all rest dates
-    ///
     /// # Errors
     ///
     /// Currently cannot fail, but returns `Result` for future error handling
@@ -159,14 +147,6 @@ impl RestDatesResponse {
     /// a `NaiveDate`. Invalid dates are silently skipped to handle API
     /// inconsistencies without failing the entire operation.
     ///
-    /// # Arguments
-    ///
-    /// * `dates` - Vector of date strings in "YYYY-MM-DD" format
-    /// * `date_set` - Mutable reference to the result set for adding parsed dates
-    ///
-    /// # Returns
-    ///
-    /// Always returns `Ok(())` as this operation cannot fail.
     fn process_dates(&self, dates: &[String], date_set: &mut HashSet<NaiveDate>) -> Result<()> {
         dates
             .iter()
@@ -183,11 +163,6 @@ impl RestDatesResponse {
 /// This client handles the complex two-stage authentication flow required by
 /// SiServer and provides methods for report submission and calendar data retrieval.
 /// It implements resilient error handling to ensure application stability.
-///
-/// ## Thread Safety
-///
-/// The client is not thread-safe due to mutable retry state. Each thread
-/// should use its own client instance for concurrent operations.
 ///
 /// ## Authentication Architecture
 ///
@@ -223,17 +198,6 @@ impl Session for Si {
     /// 3. **Session Exchange**: Send token to session endpoint with Bearer auth
     /// 4. **Cookie Extraction**: Parse session cookie from Set-Cookie header
     /// 5. **Format Preparation**: Extract session ID for use in subsequent requests
-    ///
-    /// ## Error Scenarios
-    ///
-    /// - LDAP authentication failure (invalid credentials)
-    /// - Token parsing failure (unexpected response format)
-    /// - Session exchange failure (token expired or invalid)
-    /// - Cookie extraction failure (missing or malformed Set-Cookie header)
-    ///
-    /// # Returns
-    ///
-    /// Returns the session ID string extracted from the PORTALSESSID cookie.
     ///
     /// # Errors
     ///
@@ -291,13 +255,6 @@ impl Session for Si {
     ///
     /// This provides additional security layers for credential transmission.
     ///
-    /// # Arguments
-    ///
-    /// * `password` - The user's SiServer password in plain text
-    ///
-    /// # Returns
-    ///
-    /// Always returns `Ok(())` as encoding cannot fail.
     fn set_credentials(&mut self, password: &str) -> Result<()> {
         // Apply double base64 encoding as required by SiServer
         let encoded_password = BASE64_STANDARD.encode(BASE64_STANDARD.encode(password));
@@ -322,9 +279,6 @@ impl Session for Si {
     /// The Secret manager handles secure password input with hidden characters
     /// and optional encrypted caching in the user's data directory.
     ///
-    /// # Returns
-    ///
-    /// A configured `Secret` instance with SiServer-specific prompts and file names.
     fn secret(&self) -> Secret {
         Secret::new(SECRET_FILE, "Enter your SiServer password")
     }
@@ -360,10 +314,6 @@ impl Si {
     /// Initializes the HTTP client with default settings suitable for SiServer API
     /// interactions. The client is configured for both JSON and multipart requests
     /// to handle different SiServer endpoints appropriately.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - SiServer configuration containing API endpoints and user information
     ///
     /// # Examples
     ///
@@ -407,16 +357,6 @@ impl Si {
     /// 2. **Report Submission**: Send report data with session authentication
     /// 3. **Error Handling**: Detect expired sessions and retry with re-authentication
     /// 4. **Status Return**: Return HTTP status for caller handling
-    ///
-    /// # Arguments
-    ///
-    /// * `data` - JSON string containing the formatted report data
-    /// * `date` - The date for which the report is being submitted
-    ///
-    /// # Returns
-    ///
-    /// Returns the HTTP status code from the API response, allowing callers
-    /// to determine success or specific failure modes.
     ///
     /// # Errors
     ///
@@ -509,14 +449,6 @@ impl Si {
     /// Monthly reports are typically submitted on the last working day of each month.
     /// The system can automatically detect this condition and prompt for submission.
     ///
-    /// # Arguments
-    ///
-    /// * `date` - Any date within the target month for report generation
-    ///
-    /// # Returns
-    ///
-    /// Returns the HTTP status code from the API response.
-    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -601,15 +533,6 @@ impl Si {
     /// - Weekend extensions (long weekend periods)
     ///
     /// All categories are combined into a single set for unified processing.
-    ///
-    /// # Arguments
-    ///
-    /// * `year` - Any date within the target year for calendar retrieval
-    ///
-    /// # Returns
-    ///
-    /// Returns a `HashSet<NaiveDate>` containing all rest dates for the year.
-    /// Returns an empty set on any error to ensure graceful degradation.
     ///
     /// # Examples
     ///
@@ -705,15 +628,6 @@ impl Si {
     /// Future versions may integrate with the rest dates API to consider holidays
     /// and company-specific non-working days for more accurate calculations.
     ///
-    /// # Arguments
-    ///
-    /// * `date` - The date to check against the last working day
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if the date is the last working day of its month,
-    /// `false` otherwise.
-    ///
     /// # Errors
     ///
     /// Currently cannot fail, but returns `Result` for consistency and
@@ -806,9 +720,6 @@ impl SiConfig {
     /// Used by the configuration system to identify and manage
     /// SiServer-specific settings during interactive setup.
     ///
-    /// # Returns
-    ///
-    /// A `ConfigModule` with SiServer identification information.
     pub fn module() -> ConfigModule {
         ConfigModule {
             key: "si".to_string(),
@@ -836,14 +747,6 @@ impl SiConfig {
     /// While this method doesn't validate actual connectivity, it provides
     /// helpful prompts to guide users toward correct configuration values
     /// for their corporate SiServer deployment.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Existing SiServer configuration to use as defaults (if any)
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Self>` - New SiServer configuration with user input
     ///
     /// # Errors
     ///

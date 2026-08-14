@@ -3,14 +3,6 @@
 //! Provides a comprehensive migration framework for evolving the database schema
 //! over time while maintaining data integrity and consistency.
 //!
-//! ## Features
-//!
-//! - **Version Tracking**: Maintains precise records of applied migrations
-//! - **Automatic Application**: Runs pending migrations during database initialization
-//! - **Transaction Safety**: All migrations run within database transactions
-//! - **Rollback Support**: Development-time rollback capabilities (debug builds only)
-//! - **History Tracking**: Complete audit trail of schema changes
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -71,10 +63,6 @@ struct Migration {
 /// - **Transaction Management**: Ensures each migration is atomic
 /// - **Error Recovery**: Provides rollback on migration failures
 ///
-/// ## Thread Safety
-///
-/// The migration manager is designed for single-threaded use during application
-/// startup. Multiple concurrent migration attempts should be avoided.
 pub struct MigrationManager {
     /// Ordered list of all available migrations
     ///
@@ -96,11 +84,6 @@ impl MigrationManager {
     /// This constructor automatically registers all available migrations
     /// in the correct order. The registration process is deterministic
     /// and ensures consistent schema evolution across all environments.
-    ///
-    /// # Returns
-    ///
-    /// Returns a fully initialized migration manager ready to apply
-    /// pending schema changes.
     ///
     /// # Example
     ///
@@ -377,12 +360,6 @@ impl MigrationManager {
     /// proper version ordering and validation. It ensures that migrations
     /// are stored in a consistent format for later execution.
     ///
-    /// # Arguments
-    ///
-    /// * `version` - Unique version number for this migration
-    /// * `name` - Descriptive name for the migration's purpose
-    /// * `up` - Function that performs the actual schema transformation
-    ///
     /// # Panics
     ///
     /// Panics if a migration with the same version number is already registered.
@@ -404,15 +381,6 @@ impl MigrationManager {
     /// Each migration runs in its own transaction, ensuring that partial
     /// failures don't leave the database in an inconsistent state. If any
     /// migration fails, all changes are rolled back automatically.
-    ///
-    /// # Arguments
-    ///
-    /// * `conn` - Mutable database connection for applying migrations
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if all migrations succeed, or an error if any
-    /// migration fails during application.
     ///
     /// # Example
     ///
@@ -482,14 +450,6 @@ impl MigrationManager {
     /// version number that has been successfully applied. It handles the
     /// case where no migrations have been applied yet (version 0).
     ///
-    /// # Arguments
-    ///
-    /// * `conn` - Database connection for querying migration status
-    ///
-    /// # Returns
-    ///
-    /// Returns the current schema version number, or 0 if no migrations
-    /// have been applied yet.
     fn get_current_version(&self, conn: &Connection) -> Result<u32> {
         let version: Option<u32> = conn.query_row("SELECT MAX(version) FROM migrations", [], |row| row.get(0)).unwrap_or(Some(0));
 
@@ -501,15 +461,6 @@ impl MigrationManager {
     /// This utility method allows callers to verify whether a particular
     /// migration has been successfully applied to the database. Useful
     /// for conditional logic based on schema capabilities.
-    ///
-    /// # Arguments
-    ///
-    /// * `conn` - Database connection for querying migration status  
-    /// * `version` - Migration version number to check
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if the migration has been applied, `false` otherwise.
     ///
     /// # Example
     ///
@@ -538,15 +489,6 @@ impl MigrationManager {
     /// This method returns a chronological list of all applied migrations,
     /// including their version numbers, names, and application timestamps.
     /// Useful for auditing and debugging schema evolution.
-    ///
-    /// # Arguments
-    ///
-    /// * `conn` - Database connection for querying migration history
-    ///
-    /// # Returns
-    ///
-    /// Returns a vector of tuples containing (version, name, applied_at)
-    /// for each applied migration, ordered by version number.
     ///
     /// # Example
     ///
@@ -586,15 +528,6 @@ impl MigrationManager {
     /// - This is a simplified rollback that removes migration records
     /// - Does not actually reverse schema changes (no down() functions)
     /// - Primarily useful for development and testing scenarios
-    ///
-    /// # Arguments
-    ///
-    /// * `conn` - Mutable database connection for rollback operations
-    /// * `target_version` - Target version to roll back to
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if rollback succeeds, or an error if the operation fails.
     ///
     /// # Example
     ///
@@ -639,14 +572,6 @@ impl MigrationManager {
 /// pending migrations to the provided connection. It's the recommended
 /// way to ensure a database is up to date with the latest schema.
 ///
-/// # Arguments
-///
-/// * `conn` - Mutable database connection to initialize
-///
-/// # Returns
-///
-/// Returns `Ok(())` if initialization succeeds, or an error if migration fails.
-///
 /// # Example
 ///
 /// ```rust,no_run
@@ -670,14 +595,6 @@ pub fn init_with_migrations(conn: &mut Connection) -> Result<()> {
 /// This utility function provides a simple way to check the current
 /// schema version without creating a full migration manager instance.
 ///
-/// # Arguments
-///
-/// * `conn` - Database connection to query
-///
-/// # Returns
-///
-/// Returns the current schema version number.
-///
 /// # Example
 ///
 /// ```rust
@@ -700,14 +617,6 @@ pub fn get_db_version(conn: &Connection) -> Result<u32> {
 ///
 /// This utility function compares the current database version with the
 /// latest available migration version to determine if updates are needed.
-///
-/// # Arguments
-///
-/// * `conn` - Database connection to check
-///
-/// # Returns
-///
-/// Returns `true` if migrations are needed, `false` if up to date.
 ///
 /// # Example
 ///

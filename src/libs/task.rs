@@ -1,17 +1,4 @@
-//! Task management and manipulation functionality for productivity tracking.
-//!
-//! Provides comprehensive task management capabilities including task creation,
-//! modification, filtering, and formatting for organizing work items.
-//!
-//! ## Features
-//!
-//! - **Task Structure**: Identification, description, progress tracking, categorization
-//! - **Filtering System**: Date-based, completion status, ID-based, tag-based filtering
-//! - **Formatting**: Console table rendering, export formatting, template support
-//! - **Integration**: Jira issues, GitLab commits, manual entry, template instantiation
-//! - **Database Integration**: CRUD operations, transaction safety, relationship management
-//!
-//! ## Usage
+//! The task model, its query filters, and name normalization.
 //!
 //! ```rust
 //! use kasl::libs::task::Task;
@@ -26,31 +13,11 @@
 use crate::db::tags::Tag;
 use chrono::NaiveDate;
 
-/// Represents a single task or work item in the productivity tracking system.
+/// A single work item.
 ///
-/// The Task struct encapsulates all information about a work item including
-/// its identification, description, progress status, and associated metadata.
-/// Tasks serve as the fundamental unit of work organization within kasl.
+/// `task_id` links to an external system (a Jira issue id, a GitLab MR);
+/// `timestamp` is managed by the database layer.
 ///
-/// ## Field Descriptions
-///
-/// ### Identification Fields
-/// - `id`: Database primary key for persistence and relationships
-/// - `task_id`: Reference ID for linking to external systems or parent tasks
-/// - `timestamp`: Creation/modification time for audit trails
-///
-/// ### Content Fields
-/// - `name`: Brief, descriptive title for the task
-/// - `comment`: Detailed description, notes, or additional context
-/// - `completeness`: Progress percentage (0-100) indicating work completion
-///
-/// ### Configuration Fields
-/// - `excluded_from_search`: Flag to hide tasks from general searches
-/// - `tags`: Collection of categorization labels for organization
-///
-/// ## Usage Patterns
-///
-/// ### New Task Creation
 /// ```rust
 /// use kasl::libs::task::Task;
 ///
@@ -61,17 +28,16 @@ use chrono::NaiveDate;
 /// );
 /// ```
 ///
-/// ### Task Updates
 /// ```rust
 /// use kasl::libs::task::Task;
 ///
 /// let existing_task = Task::new("Existing task", "Details", Some(50));
 /// let mut task = existing_task;
-/// task.completeness = Some(75); // 75% complete
+/// task.completeness = Some(75);
 /// task.comment = "Almost finished, testing remaining".to_string();
 /// ```
 ///
-/// ### External Integration
+/// Populating a task from an external issue:
 /// ```rust
 /// use kasl::libs::task::Task;
 ///
@@ -100,195 +66,49 @@ use chrono::NaiveDate;
 /// ```
 #[derive(Debug, Clone)]
 pub struct Task {
-    /// Database primary key for task identification and relationships.
-    ///
-    /// This field contains the unique identifier assigned by the database
-    /// when the task is first saved. It's used for:
-    /// - Database queries and updates
-    /// - Foreign key relationships (tags, time tracking)
-    /// - Cross-referencing with other application data
-    ///
-    /// **Values:**
-    /// - `Some(id)`: Task exists in database with assigned ID
-    /// - `None`: New task not yet saved to database
+    /// Database primary key; `None` until the task is saved.
     pub id: Option<i32>,
 
-    /// Reference identifier for external system integration or task linking.
-    ///
-    /// This field provides a way to link tasks to external systems or
-    /// create hierarchical relationships between tasks. Common uses include:
-    /// - Jira issue numbers for imported tasks
-    /// - GitLab merge request IDs for code review tasks
-    /// - Parent task IDs for subtask relationships
-    /// - External project management system references
-    ///
-    /// **Values:**
-    /// - `Some(id)`: Task is linked to external system or parent task
-    /// - `None`: Standalone task with no external references
+    /// External reference (Jira issue id, GitLab MR id); `None` for standalone tasks.
     pub task_id: Option<i32>,
 
-    /// ISO 8601 timestamp string indicating task creation or last modification.
-    ///
-    /// This field provides audit trail information for task management.
-    /// The timestamp is automatically managed by the database layer and
-    /// is primarily used for:
-    /// - Sorting tasks by creation or modification time
-    /// - Audit trails and change tracking
-    /// - Time-based filtering and reporting
-    /// - Synchronization with external systems
-    ///
-    /// **Format:** "YYYY-MM-DD HH:MM:SS" in local timezone
-    /// **Example:** "2025-01-15 14:30:45"
+    /// `"YYYY-MM-DD HH:MM:SS"` in local time, set by the database layer.
     pub timestamp: Option<String>,
 
-    /// Brief, descriptive title summarizing the task's purpose or objective.
-    ///
-    /// The task name should be concise yet descriptive enough to understand
-    /// the work item at a glance. It appears in task lists, reports, and
-    /// notifications throughout the application.
-    ///
-    /// **Guidelines:**
-    /// - Keep under 100 characters for display compatibility
-    /// - Use action-oriented language ("Implement", "Review", "Fix")
-    /// - Include key context ("Fix login bug in mobile app")
-    /// - Avoid technical jargon when possible
-    ///
-    /// **Examples:**
-    /// - "Implement OAuth2 authentication"
-    /// - "Review security audit findings"
-    /// - "Update API documentation for v2.0"
+    /// Task title.
     pub name: String,
 
-    /// Detailed description, notes, or additional context for the task.
-    ///
-    /// The comment field provides space for detailed information that doesn't
-    /// fit in the task name. This might include:
-    /// - Technical requirements and specifications
-    /// - Links to related resources or documentation
-    /// - Progress notes and status updates
-    /// - Dependencies and prerequisites
-    /// - Testing criteria and acceptance conditions
-    ///
-    /// **Content Guidelines:**
-    /// - Use clear, structured formatting when helpful
-    /// - Include links to relevant resources
-    /// - Update with progress notes and findings
-    /// - Keep information current and relevant
+    /// Free-form notes.
     pub comment: String,
 
-    /// Completion percentage indicating task progress from 0% to 100%.
-    ///
-    /// This field tracks the task's progress through its lifecycle,
-    /// providing quantitative measurement of work completion. The percentage
-    /// is used for:
-    /// - Progress reporting and analytics
-    /// - Filtering incomplete vs. complete tasks
-    /// - Productivity calculations and trends
-    /// - Project status tracking and reporting
-    ///
-    /// **Values:**
-    /// - `Some(0)`: Task not started
-    /// - `Some(1-99)`: Task in progress
-    /// - `Some(100)`: Task completed
-    /// - `None`: Progress not tracked or unknown
-    ///
-    /// **Default:** 100% for tasks imported from external systems
+    /// Progress 0-100; imported completed issues default to 100.
     pub completeness: Option<i32>,
 
-    /// Flag indicating whether task should be hidden from general searches.
-    ///
-    /// This field allows tasks to be excluded from default search results
-    /// while remaining accessible through direct queries. Useful for:
-    /// - Administrative or system-generated tasks
-    /// - Deprecated or obsolete tasks that shouldn't appear in normal workflow
-    /// - Sensitive tasks that require explicit access
-    /// - Archived tasks that should remain searchable but not prominent
-    ///
-    /// **Values:**
-    /// - `Some(true)`: Task excluded from general searches
-    /// - `Some(false)` or `None`: Task included in normal search results
+    /// Hidden from task discovery when true.
     pub excluded_from_search: Option<bool>,
 
-    /// Collection of categorization tags associated with this task.
-    ///
-    /// Tags provide a flexible labeling system for task organization and
-    /// filtering. They enable:
-    /// - Project-based organization ("frontend", "backend", "mobile")
-    /// - Priority classification ("urgent", "low-priority", "nice-to-have")
-    /// - Status indicators ("blocked", "waiting-review", "approved")
-    /// - Skill-based categorization ("javascript", "database", "ui-design")
-    ///
-    /// **Management:**
-    /// - Tags are created automatically when first used
-    /// - Multiple tags can be associated with a single task
-    /// - Tag associations are maintained in separate database table
-    /// - Tags can be deleted if no longer associated with any tasks
+    /// Tags, maintained through the `task_tags` relationship table.
     pub tags: Vec<Tag>,
 }
 
 impl Task {
-    /// Creates a new task with the specified name, comment, and completion status.
-    ///
-    /// This constructor initializes a new task with the provided information
-    /// and sets appropriate defaults for other fields. The task is not
-    /// automatically saved to the database - use the database layer for persistence.
-    ///
-    /// ## Default Values
-    ///
-    /// New tasks are initialized with:
-    /// - `id`: None (assigned when saved to database)
-    /// - `task_id`: None (no external reference)
-    /// - `timestamp`: None (managed by database)
-    /// - `excluded_from_search`: None (included in searches)
-    /// - `tags`: Empty vector (no initial categorization)
-    ///
-    /// ## Parameter Guidelines
-    ///
-    /// ### Task Name
-    /// - Should be concise but descriptive
-    /// - Use action-oriented language
-    /// - Include key context for clarity
-    ///
-    /// ### Comment
-    /// - Provide detailed context and requirements
-    /// - Include links to related resources
-    /// - Can be updated as work progresses
-    ///
-    /// ### Completeness
-    /// - Use `Some(0)` for new tasks that haven't started
-    /// - Use `Some(100)` for already completed imported tasks
-    /// - Use `None` if progress tracking isn't needed
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - Brief, descriptive task title
-    /// * `comment` - Detailed description or notes
-    /// * `completeness` - Optional completion percentage (0-100)
-    ///
-    /// # Returns
-    ///
-    /// A new Task instance ready for use or database persistence.
-    ///
-    /// # Examples
+    /// Creates an unsaved task; whitespace in `name` and `comment` is collapsed.
     ///
     /// ```rust
     /// use kasl::libs::task::Task;
     ///
-    /// // Create a new task that's just starting
     /// let new_task = Task::new(
     ///     "Implement user registration",
     ///     "Add email verification and password validation",
     ///     Some(0)
     /// );
     ///
-    /// // Create a completed task (e.g., imported from external system)
     /// let completed_task = Task::new(
     ///     "Fix login redirect bug",
     ///     "Resolved issue with OAuth callback URL handling",
     ///     Some(100)
     /// );
     ///
-    /// // Create a task without progress tracking
     /// let planning_task = Task::new(
     ///     "Research authentication libraries",
     ///     "Evaluate OAuth2 libraries for Node.js backend",
@@ -308,57 +128,29 @@ impl Task {
         }
     }
 
-    /// Updates task fields from another task while preserving identity fields.
+    /// Copies `name`, `comment` and `completeness` from `other`, keeping
+    /// identity fields (`id`, `task_id`, `timestamp`, search flag, tags).
     ///
-    /// This method provides a convenient way to update task content while
-    /// maintaining database identity and relationships. It's particularly
-    /// useful for implementing task editing workflows where the user modifies
-    /// task details but the task's core identity remains unchanged.
-    ///
-    /// ## Preserved Fields
-    /// The following fields are **not** updated to maintain task identity:
-    /// - `id`: Database primary key remains unchanged
-    /// - `task_id`: External reference remains unchanged
-    /// - `timestamp`: Will be updated by database on save
-    /// - `excluded_from_search`: Search visibility remains unchanged
-    /// - `tags`: Tag associations require separate management
-    ///
-    /// ## Updated Fields
-    /// The following fields are copied from the source task:
-    /// - `name`: Task title is updated
-    /// - `comment`: Description and notes are updated
-    /// - `completeness`: Progress percentage is updated
-    ///
-    /// ## Use Cases
-    ///
-    /// ### Task Editing Workflow
     /// ```rust,no_run
     /// # fn f() -> anyhow::Result<()> {
     /// use kasl::libs::task::Task;
     /// use kasl::db::tasks::Tasks;
     ///
     /// let mut tasks_db = Tasks::new()?;
-    ///
-    /// // Load existing task from database
     /// let mut existing_task = tasks_db.get_by_id(42)?.expect("task exists");
     ///
-    /// // Create updated version with user modifications
     /// let updated_task = Task::new(
     ///     "Updated task name",
     ///     "Updated description with new requirements",
     ///     Some(75)
     /// );
     ///
-    /// // Apply updates while preserving identity
     /// existing_task.update_from(&updated_task);
-    ///
-    /// // Save to database
     /// tasks_db.update(&existing_task)?;
     /// # Ok(())
     /// # }
     /// ```
     ///
-    /// ### Bulk Task Updates
     /// ```rust,no_run
     /// # fn f() -> anyhow::Result<()> {
     /// use kasl::libs::task::Task;
@@ -378,12 +170,6 @@ impl Task {
     /// # }
     /// ```
     ///
-    /// # Arguments
-    ///
-    /// * `other` - Source task containing the updated field values
-    ///
-    /// # Examples
-    ///
     /// ```rust
     /// use kasl::libs::task::Task;
     ///
@@ -392,7 +178,6 @@ impl Task {
     ///     "Original description",
     ///     Some(25)
     /// );
-    /// // Simulate database assignment
     /// original_task.id = Some(42);
     ///
     /// let updated_task = Task::new(
@@ -401,7 +186,6 @@ impl Task {
     ///     Some(75)
     /// );
     ///
-    /// // Apply updates while preserving ID
     /// original_task.update_from(&updated_task);
     ///
     /// assert_eq!(original_task.id, Some(42)); // ID preserved
@@ -409,64 +193,26 @@ impl Task {
     /// assert_eq!(original_task.completeness, Some(75)); // Progress updated
     /// ```
     pub fn update_from(&mut self, other: &Task) {
-        // Update content fields while preserving identity
         self.name = other.name.clone();
         self.comment = other.comment.clone();
         self.completeness = other.completeness;
     }
 }
 
-/// Enumeration of available task filtering criteria for database queries.
-///
-/// This enum provides a type-safe way to specify different filtering options
-/// when querying tasks from the database. It supports simple filters as well
-/// as complex multi-criteria filtering for advanced task management workflows.
-///
-/// ## Filter Categories
-///
-/// ### Scope Filters
-/// - `All`: No filtering, returns all tasks
-/// - `Date`: Time-based filtering for specific dates
-///
-/// ### Status Filters  
-/// - `Incomplete`: Tasks with progress less than 100%
-///
-/// ### Identity Filters
-/// - `ByIds`: Specific tasks by their database IDs
-///
-/// ### Categorization Filters
-/// - `ByTag`: Tasks associated with a single tag
-/// - `ByTags`: Tasks associated with multiple tags (intersection)
-///
-/// ## Query Optimization
-///
-/// Different filter types have different performance characteristics:
-/// - `All`: Fastest, no WHERE clause needed
-/// - `ByIds`: Very fast with proper indexing
-/// - `Date`: Fast with timestamp indexing
-/// - `Incomplete`: Moderate speed, depends on data distribution
-/// - `ByTag`/`ByTags`: Moderate speed, requires JOIN operations
-///
-/// ## Examples Usage
+/// Filtering criteria for task queries.
 ///
 /// ```rust
 /// use kasl::libs::task::TaskFilter;
 /// use chrono::Local;
 ///
-/// // Get all tasks
 /// let all_tasks_filter = TaskFilter::All;
 ///
-/// // Get today's tasks
 /// let today = Local::now().date_naive();
 /// let today_filter = TaskFilter::Date(today);
 ///
-/// // Get incomplete tasks
 /// let incomplete_filter = TaskFilter::Incomplete;
-///
-/// // Get specific tasks
 /// let specific_filter = TaskFilter::ByIds(vec![1, 2, 3]);
 ///
-/// // Get tagged tasks
 /// let tagged_filter = TaskFilter::ByTag("urgent".to_string());
 /// let multi_tagged_filter = TaskFilter::ByTags(vec![
 ///     "frontend".to_string(),
@@ -475,36 +221,11 @@ impl Task {
 /// ```
 #[derive(Debug, Clone)]
 pub enum TaskFilter {
-    /// Returns all tasks without any filtering restrictions.
-    ///
-    /// This filter retrieves the complete task collection from the database.
-    /// It's the most efficient filter type since it doesn't require any
-    /// WHERE clauses or complex query conditions.
-    ///
-    /// **Use Cases:**
-    /// - Complete task listings for administrative purposes
-    /// - Full data exports and backups
-    /// - Global task analysis and reporting
-    /// - Initial load for client-side filtering
-    ///
-    /// **Performance:** Excellent - simple SELECT query
+    /// Every task, no filtering.
     All,
 
-    /// Returns tasks created or modified on the specified date.
+    /// Tasks whose timestamp falls on the given local date.
     ///
-    /// This filter uses the task timestamp to find tasks associated with
-    /// a particular date. The filtering is typically done at the day level,
-    /// including all tasks from 00:00:00 to 23:59:59 on the specified date.
-    ///
-    /// **Use Cases:**
-    /// - Daily task reviews and reports
-    /// - Time-based productivity analysis
-    /// - Date-specific task exports
-    /// - Calendar integration and scheduling
-    ///
-    /// **Performance:** Good - benefits from timestamp indexing
-    ///
-    /// **Example:**
     /// ```rust
     /// use kasl::libs::task::TaskFilter;
     /// use chrono::{Local, NaiveDate};
@@ -514,25 +235,8 @@ pub enum TaskFilter {
     /// ```
     Date(NaiveDate),
 
-    /// Returns tasks with completion percentage less than 100%.
+    /// Tasks below 100% done; `completeness: None` counts as incomplete.
     ///
-    /// This filter identifies tasks that are still in progress or haven't
-    /// been started. It's useful for focusing on active work items and
-    /// identifying tasks that need attention.
-    ///
-    /// **Criteria:**
-    /// - Tasks with `completeness` < 100
-    /// - Tasks with `completeness` = None (treated as incomplete)
-    ///
-    /// **Use Cases:**
-    /// - Active work item management
-    /// - Progress tracking and follow-up
-    /// - Workload planning and estimation
-    /// - Focus mode filtering for current work
-    ///
-    /// **Performance:** Moderate - depends on completion data distribution
-    ///
-    /// **Example:**
     /// ```rust
     /// use kasl::libs::task::TaskFilter;
     ///
@@ -542,77 +246,26 @@ pub enum TaskFilter {
     /// ```
     Incomplete,
 
-    /// Returns specific tasks identified by their database IDs.
+    /// Tasks with the given database ids.
     ///
-    /// This filter provides precise task retrieval when the exact task
-    /// identifiers are known. It's the most efficient way to retrieve
-    /// a known set of tasks and is commonly used for bulk operations.
-    ///
-    /// **Use Cases:**
-    /// - Bulk task operations (update, delete, export)
-    /// - User-selected task collections
-    /// - Related task loading (parent/child relationships)
-    /// - API responses for specific task requests
-    ///
-    /// **Performance:** Excellent - uses primary key indexing
-    ///
-    /// **Example:**
     /// ```rust
     /// use kasl::libs::task::TaskFilter;
     ///
     /// let specific_tasks = TaskFilter::ByIds(vec![1, 5, 10, 15]);
-    /// // Returns only tasks with IDs 1, 5, 10, and 15
     /// ```
     ByIds(Vec<i32>),
 
-    /// Returns tasks associated with the specified tag.
+    /// Tasks carrying the tag (name matched case-sensitively).
     ///
-    /// This filter finds all tasks that have been tagged with a particular
-    /// label. It's useful for category-based task management and organizing
-    /// work by project, priority, or skill area.
-    ///
-    /// **Query Method:**
-    /// - Performs JOIN with task_tags relationship table
-    /// - Matches tag name case-sensitively
-    /// - Returns tasks with at least one matching tag
-    ///
-    /// **Use Cases:**
-    /// - Project-specific task listings
-    /// - Priority-based filtering ("urgent", "low-priority")
-    /// - Skill-based work organization ("javascript", "database")
-    /// - Status-based filtering ("blocked", "waiting-review")
-    ///
-    /// **Performance:** Moderate - requires JOIN operation
-    ///
-    /// **Example:**
     /// ```rust
     /// use kasl::libs::task::TaskFilter;
     ///
     /// let urgent_filter = TaskFilter::ByTag("urgent".to_string());
-    /// // Returns all tasks tagged with "urgent"
     /// ```
     ByTag(String),
 
-    /// Returns tasks associated with all of the specified tags.
+    /// Tasks carrying ALL of the tags - intersection, not union.
     ///
-    /// This filter finds tasks that have been tagged with every tag in the
-    /// provided list (intersection, not union). It's useful for finding tasks
-    /// that meet multiple criteria simultaneously.
-    ///
-    /// **Query Method:**
-    /// - Performs multiple JOINs with task_tags table
-    /// - Requires ALL tags to be present on the task
-    /// - More restrictive than single tag filtering
-    ///
-    /// **Use Cases:**
-    /// - Complex filtering ("frontend" AND "urgent" AND "javascript")
-    /// - Multi-criteria task discovery
-    /// - Advanced search functionality
-    /// - Refined project management workflows
-    ///
-    /// **Performance:** Moderate to Slow - multiple JOINs required
-    ///
-    /// **Example:**
     /// ```rust
     /// use kasl::libs::task::TaskFilter;
     ///
@@ -621,42 +274,11 @@ pub enum TaskFilter {
     ///     "urgent".to_string(),
     ///     "javascript".to_string()
     /// ]);
-    /// // Returns tasks that have ALL three tags
     /// ```
     ByTags(Vec<String>),
 }
 
-/// Trait providing formatting and manipulation operations for task collections.
-///
-/// This trait extends Vec<Task> with specialized methods for formatting tasks
-/// for display and dividing task collections for parallel processing or
-/// load balancing. It provides a clean interface for common task collection
-/// operations.
-///
-/// ## Design Philosophy
-///
-/// The trait follows Rust's iterator philosophy by providing chainable,
-/// efficient operations on task collections. Methods are designed to be:
-/// - **Composable**: Can be chained together for complex operations
-/// - **Efficient**: Minimize allocations and copying where possible
-/// - **Flexible**: Support various output formats and processing patterns
-/// - **Predictable**: Consistent behavior across different input sizes
-///
-/// ## Method Categories
-///
-/// ### Formatting Methods
-/// - `format()`: Convert tasks to human-readable string representation
-///
-/// ### Partitioning Methods
-/// - `divide()`: Split tasks into balanced groups for parallel processing
-///
-/// ## Performance Characteristics
-///
-/// - **Memory Usage**: Methods minimize unnecessary allocations
-/// - **Time Complexity**: Most operations are O(n) where n is task count
-/// - **Parallelization**: Partitioning methods support concurrent processing
-///
-/// ## Examples
+/// Display formatting and partitioning for task collections.
 ///
 /// ```rust
 /// use kasl::libs::task::{Task, FormatTasks};
@@ -667,50 +289,16 @@ pub enum TaskFilter {
 ///     Task::new("Task 3", "Description 3", Some(100)),
 /// ];
 ///
-/// // Format for display
 /// let formatted = tasks.format();
 /// println!("{}", formatted);
 ///
-/// // Divide for parallel processing
 /// let groups = tasks.divide(2);
 /// for (i, group) in groups.iter().enumerate() {
 ///     println!("Group {}: {} tasks", i, group.len());
 /// }
 /// ```
 pub trait FormatTasks {
-    /// Formats the task collection into a human-readable string representation.
-    ///
-    /// This method converts a collection of tasks into a structured string
-    /// format suitable for console output, logging, or simple text-based
-    /// displays. The format includes key task information in a consistent,
-    /// scannable layout.
-    ///
-    /// ## Output Format
-    ///
-    /// The method produces a multi-line string with each task formatted as:
-    /// ```text
-    /// {name} ({completeness}%)
-    /// ```
-    ///
-    /// ## Field Handling
-    ///
-    /// - **ID**: Shows database ID or "New" for unsaved tasks
-    /// - **Name**: Task title, truncated if excessively long
-    /// - **Completeness**: Percentage or "Unknown" if not set
-    /// - **Comment**: Description, truncated if excessively long
-    ///
-    /// ## Use Cases
-    ///
-    /// - **Debug Output**: Quick task collection visualization
-    /// - **Log Messages**: Structured logging of task operations
-    /// - **Simple Reports**: Basic text-based task summaries
-    /// - **CLI Output**: Command-line interface task displays
-    ///
-    /// # Returns
-    ///
-    /// A formatted string representation of all tasks in the collection.
-    ///
-    /// # Examples
+    /// Renders one `{name} ({completeness}%)` line per task.
     ///
     /// ```rust
     /// use kasl::libs::task::{Task, FormatTasks};
@@ -721,80 +309,14 @@ pub trait FormatTasks {
     /// ];
     ///
     /// let output = tasks.format();
-    /// // Output:
     /// // Review PR (25%)
     /// // Write tests (75%)
     /// ```
     fn format(&mut self) -> String;
 
-    /// Divides the task collection into the specified number of balanced groups.
-    ///
-    /// This method partitions tasks into multiple groups of approximately equal
-    /// size, which is useful for parallel processing, load balancing, or
-    /// organizing large task collections into manageable chunks.
-    ///
-    /// ## Partitioning Algorithm
-    ///
-    /// The method uses a round-robin distribution strategy:
-    /// 1. **Base Size Calculation**: Determines minimum tasks per group
-    /// 2. **Remainder Distribution**: Distributes extra tasks evenly
-    /// 3. **Sequential Assignment**: Assigns tasks to groups in order
-    /// 4. **Balance Optimization**: Ensures groups differ by at most 1 task
-    ///
-    /// ## Edge Case Handling
-    ///
-    /// ### Empty Collection
-    /// - Returns vector of empty groups
-    /// - Number of groups equals requested parts
-    ///
-    /// ### Single Task
-    /// - Duplicates the task across all groups
-    /// - Useful for broadcast scenarios
-    ///
-    /// ### Fewer Tasks Than Parts
-    /// - Creates groups with 0-1 tasks each
-    /// - Distributes tasks round-robin style
-    ///
-    /// ### More Tasks Than Parts
-    /// - Creates balanced groups with similar sizes
-    /// - Groups differ by at most 1 task
-    ///
-    /// ## Use Cases
-    ///
-    /// ### Parallel Processing
-    /// ```text
-    /// let task_groups = tasks.divide(cpu_count);
-    /// for group in task_groups {
-    ///     spawn_worker_thread(group);
-    /// }
-    /// ```
-    ///
-    /// ### Load Balancing
-    /// ```text
-    /// let worker_assignments = tasks.divide(worker_count);
-    /// for (worker_id, assignment) in worker_assignments.iter().enumerate() {
-    ///     assign_tasks_to_worker(worker_id, assignment);
-    /// }
-    /// ```
-    ///
-    /// ### UI Organization
-    /// ```text
-    /// let columns = tasks.divide(3); // Three-column layout
-    /// for (col_index, column_tasks) in columns.iter().enumerate() {
-    ///     render_task_column(col_index, column_tasks);
-    /// }
-    /// ```
-    ///
-    /// # Arguments
-    ///
-    /// * `parts` - Number of groups to create (must be > 0)
-    ///
-    /// # Returns
-    ///
-    /// A vector containing the requested number of task groups. Each group
-    /// is a Vec<Task> containing a portion of the original task collection.
-    ///
-    /// # Examples
+    /// Splits the collection into `parts` groups differing by at most one
+    /// task. A single task is duplicated into every group; fewer tasks than
+    /// parts distributes round-robin.
     ///
     /// ```rust
     /// use kasl::libs::task::{Task, FormatTasks};
@@ -807,13 +329,8 @@ pub trait FormatTasks {
     ///     Task::new("Task 5", "", None),
     /// ];
     ///
-    /// // Divide into 3 groups
     /// let groups = tasks.divide(3);
-    /// // groups[0]: [Task 1, Task 4] (2 tasks)
-    /// // groups[1]: [Task 2, Task 5] (2 tasks)  
-    /// // groups[2]: [Task 3]         (1 task)
     ///
-    /// // Verify balanced distribution
     /// assert_eq!(groups.len(), 3);
     /// assert_eq!(groups[0].len(), 2);
     /// assert_eq!(groups[1].len(), 2);
@@ -822,44 +339,16 @@ pub trait FormatTasks {
     fn divide(&mut self, parts: usize) -> Vec<Vec<Task>>;
 }
 
-/// Implementation of FormatTasks trait for Vec<Task>.
-///
-/// This implementation provides concrete formatting and partitioning logic
-/// for task collections. It handles various edge cases and provides efficient
-/// algorithms for common task manipulation scenarios.
 impl FormatTasks for Vec<Task> {
-    /// Divides the task collection into balanced groups using round-robin distribution.
-    ///
-    /// This implementation uses an optimized algorithm that ensures balanced
-    /// distribution while handling edge cases gracefully. The algorithm
-    /// minimizes memory allocations and provides predictable results.
-    ///
-    /// ## Algorithm Details
-    ///
-    /// 1. **Input Validation**: Handle zero parts and empty collections
-    /// 2. **Special Cases**: Optimize for single task and small collections
-    /// 3. **Size Calculation**: Compute base size and remainder distribution
-    /// 4. **Group Assignment**: Distribute tasks using calculated sizes
-    ///
-    /// ## Performance Characteristics
-    ///
-    /// - **Time Complexity**: O(n) where n is the number of tasks
-    /// - **Space Complexity**: O(n) for the output groups
-    /// - **Memory Efficiency**: Minimal allocations during processing
-    ///
-    /// The implementation is optimized for common use cases while maintaining
-    /// correctness for edge cases.
     fn divide(&mut self, parts: usize) -> Vec<Vec<Task>> {
-        // Initialize result vector with requested capacity
         let mut result: Vec<Vec<Task>> = Vec::with_capacity(parts);
         let len = self.len();
 
-        // Handle edge case: no parts requested
         if len == 0 || parts == 0 {
             return result;
         }
 
-        // Handle edge case: single task
+        // A single task is broadcast to every group.
         if len == 1 {
             for _ in 0..parts {
                 result.push(self.to_vec());
@@ -867,7 +356,7 @@ impl FormatTasks for Vec<Task> {
             return result;
         }
 
-        // Handle edge case: fewer tasks than parts
+        // Fewer tasks than parts: round-robin so every group gets something.
         if len < parts {
             for i in 0..parts {
                 let mut part: Vec<Task> = Vec::with_capacity(len.div_ceil(parts));
@@ -879,11 +368,10 @@ impl FormatTasks for Vec<Task> {
             return result;
         }
 
-        // General case: distribute tasks across parts
+        // General case: contiguous slices, remainder spread over the first groups.
         let mut start = 0;
         let mut end;
         for i in 0..parts {
-            // Calculate group size with remainder distribution
             end = start + len / parts + if i < len % parts { 1 } else { 0 };
             result.push(self[start..end].to_vec());
             start = end;
@@ -892,33 +380,10 @@ impl FormatTasks for Vec<Task> {
         result
     }
 
-    /// Formats the task collection into a structured string representation.
-    ///
-    /// This implementation creates a multi-line string with each task formatted
-    /// consistently. It handles missing fields gracefully and provides readable
-    /// output suitable for debugging and simple displays.
-    ///
-    /// ## Format Structure
-    ///
-    /// Each task is formatted on a separate line with pipe-separated fields:
-    /// ```text
-    /// {name} ({completeness}%)
-    /// ```
-    ///
-    /// ## Field Processing
-    ///
-    /// - **Name**: Used as-is from task struct
-    /// - **Completeness**: Shows percentage or "Unknown" for None values
-    ///
-    /// The method handles all field types gracefully and provides consistent
-    /// output regardless of which optional fields are present.
     fn format(&mut self) -> String {
         self.iter()
             .map(|task| {
-                // Format completeness field
                 let completeness_display = task.completeness.map_or("Unknown".to_string(), |comp| format!("{}%", comp));
-
-                // Create formatted line for this task
                 format!("{} ({})", task.name, completeness_display)
             })
             .collect::<Vec<_>>()

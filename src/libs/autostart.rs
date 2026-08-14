@@ -3,13 +3,6 @@
 //! Provides cross-platform functionality for enabling and disabling automatic
 //! startup of the kasl application when the system boots.
 //!
-//! ## Features
-//!
-//! - **Platform Support**: Windows Task Scheduler/Registry, Linux systemd, macOS Launch Agents
-//! - **Tiered Approach**: System-level, user-level, and fallback methods
-//! - **Security**: Privilege management, attack vector mitigation
-//! - **Error Handling**: Graceful degradation, clear user feedback
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -93,13 +86,6 @@ mod windows {
     /// 2. **Windows-1252 Fallback**: Use Windows-1252 encoding
     /// 3. **Lossy Conversion**: Accept some character loss if necessary
     ///
-    /// # Arguments
-    ///
-    /// * `bytes` - Raw bytes from Windows command output
-    ///
-    /// # Returns
-    ///
-    /// A UTF-8 string representation of the input bytes.
     pub(crate) fn decode_windows_output(bytes: &[u8]) -> String {
         // Try UTF-8 interpretation first
         if let Ok(utf8) = String::from_utf8(bytes.to_vec()) {
@@ -130,11 +116,6 @@ mod windows {
     /// - Current user has administrative privileges
     /// - UAC elevation (if UAC is enabled)
     /// - Write access to Task Scheduler store
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful task creation, or an error describing
-    /// the failure reason.
     ///
     /// # Errors
     ///
@@ -200,10 +181,6 @@ mod windows {
     /// Scheduler. It attempts to remove the task regardless of current
     /// privileges, falling back gracefully if the task doesn't exist.
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful task removal or if no task exists.
-    ///
     /// # Error Handling
     ///
     /// The function handles several scenarios:
@@ -243,9 +220,6 @@ mod windows {
     /// This function queries Windows Task Scheduler to determine if the
     /// kasl autostart task exists and is enabled.
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(true)` if autostart is enabled, `Ok(false)` if disabled.
     pub fn is_enabled() -> Result<bool> {
         // Query task scheduler for the specific task
         let output = Command::new("schtasks")
@@ -270,9 +244,6 @@ mod windows {
     /// 2. Query token elevation information
     /// 3. Determine if the token has administrative privileges
     ///
-    /// # Returns
-    ///
-    /// Returns `true` if running with administrative privileges, `false` otherwise.
     pub fn is_admin() -> bool {
         use std::ptr;
         use winapi::um::handleapi::CloseHandle;
@@ -541,11 +512,6 @@ mod unix {
 /// 3. **User Session**: Falls back to user-level autostart
 /// 4. **Manual Guidance**: Provides setup instructions if needed
 ///
-/// # Returns
-///
-/// Returns `Ok(())` on successful autostart configuration, or an error
-/// describing the failure and suggesting alternative methods.
-///
 /// # Examples
 ///
 /// ```rust
@@ -594,9 +560,6 @@ pub fn enable() -> Result<()> {
 /// - Is less persistent than system-level autostart
 /// - May be affected by user profile issues
 ///
-/// # Returns
-///
-/// Returns `Ok(())` on successful Registry modification.
 #[cfg(target_os = "windows")]
 fn enable_user_autostart() -> Result<()> {
     use std::os::windows::process::CommandExt;
@@ -649,10 +612,6 @@ fn enable_user_autostart() -> Result<()> {
 /// 3. **Desktop Files**: Removes .desktop files (Unix future)
 /// 4. **Service Files**: Removes systemd units (Unix future)
 ///
-/// # Returns
-///
-/// Returns `Ok(())` on successful autostart removal. Partial failures
-/// are logged but don't prevent the function from returning success.
 pub fn disable() -> Result<()> {
     #[cfg(target_os = "windows")]
     {
@@ -671,9 +630,6 @@ pub fn disable() -> Result<()> {
 /// This function removes the kasl entry from the current user's Registry
 /// autostart location. It's used as part of comprehensive autostart cleanup.
 ///
-/// # Returns
-///
-/// Returns `Ok(())` on successful Registry cleanup or if no entry exists.
 #[cfg(target_os = "windows")]
 fn disable_user_autostart() -> Result<()> {
     use std::os::windows::process::CommandExt;
@@ -720,11 +676,6 @@ fn disable_user_autostart() -> Result<()> {
 ///
 /// If any method indicates autostart is enabled, the function returns `true`.
 ///
-/// # Returns
-///
-/// Returns `Ok(true)` if autostart is enabled by any method, `Ok(false)`
-/// if autostart is completely disabled.
-///
 /// # Examples
 ///
 /// ```rust,no_run
@@ -768,12 +719,6 @@ pub fn is_enabled() -> Result<bool> {
 ///
 /// This function provides a simple way to get autostart status information
 /// suitable for display in user interfaces or command-line output.
-///
-/// # Returns
-///
-/// Returns a string indicating the current autostart status:
-/// - `"enabled"` if autostart is active
-/// - `"disabled"` if autostart is inactive
 ///
 /// # Examples
 ///

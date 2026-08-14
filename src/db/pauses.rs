@@ -4,15 +4,6 @@
 //! absences detected automatically by the activity monitor, and ones the user
 //! recorded by hand because the monitor could not see them.
 //!
-//! ## Features
-//!
-//! - **Automatic Detection**: Records pauses when user activity stops
-//! - **Manual Entry**: Records a complete pause with user-stated bounds
-//! - **Protection**: Manual pauses can bypass threshold filtering and merging
-//! - **Duration Calculation**: Automatic computation of pause lengths
-//! - **Daily Filtering**: Retrieve pauses for specific dates with duration thresholds
-//! - **Batch Operations**: Delete multiple pause records efficiently
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -101,12 +92,6 @@ const DELETE_PAUSE: &str = "DELETE FROM pauses WHERE id = ?";
 /// records in the database. It uses thread-safe connection handling to support
 /// concurrent access from the activity monitor and user commands.
 ///
-/// ## Thread Safety
-///
-/// The connection is wrapped in an `Arc<Mutex<>>` to allow safe concurrent access
-/// from multiple threads, particularly important when the activity monitor
-/// is running in the background while users interact with the CLI.
-///
 /// ## Connection Management
 ///
 /// Each `Pauses` instance maintains its own database connection and ensures
@@ -129,11 +114,6 @@ impl Pauses {
     /// table exists with the proper schema, and wraps the connection for
     /// thread-safe access. The schema creation is idempotent and safe to
     /// call multiple times.
-    ///
-    /// # Returns
-    ///
-    /// Returns a new `Pauses` instance ready for pause tracking operations,
-    /// or an error if database initialization fails.
     ///
     /// # Example
     ///
@@ -254,11 +234,6 @@ impl Pauses {
     /// it's completed with `insert_end()`. Multiple open pauses are allowed
     /// to handle edge cases in activity detection.
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the pause start is recorded successfully,
-    /// or an error if the database operation fails.
-    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -270,10 +245,6 @@ impl Pauses {
     /// # }
     /// ```
     ///
-    /// # Thread Safety
-    ///
-    /// This method is thread-safe and can be called concurrently from
-    /// multiple threads, such as the activity monitor daemon.
     pub fn insert_start(&self) -> rusqlite::Result<()> {
         let conn_guard = self.conn.lock();
         conn_guard.execute(INSERT_PAUSE, [])?;
@@ -286,15 +257,6 @@ impl Pauses {
     /// timestamps, useful for importing historical data or correcting
     /// activity tracking records. The specified time should be in the
     /// local timezone for consistency with other records.
-    ///
-    /// # Arguments
-    ///
-    /// * `start_time` - The exact timestamp when the pause began
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the pause is recorded successfully,
-    /// or an error if the database operation fails.
     ///
     /// # Example
     ///
@@ -338,11 +300,6 @@ impl Pauses {
     /// for accurate tracking even when there's a delay between activity
     /// resumption and pause recording.
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the pause is completed successfully, or an error
-    /// if no open pause exists or the database operation fails.
-    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -383,16 +340,6 @@ impl Pauses {
     /// user knows when they left and how long they were gone. No placement is
     /// inferred and no time is invented.
     ///
-    /// # Arguments
-    ///
-    /// * `start` - When the absence began
-    /// * `duration` - How long it lasted
-    /// * `protected` - Exempt the record from threshold filtering and merging
-    /// * `reason` - Optional note describing the absence
-    ///
-    /// # Returns
-    ///
-    /// Returns the id of the inserted pause record.
     pub fn insert_manual(&self, start: NaiveDateTime, duration: TimeDelta, protected: bool, reason: Option<&str>) -> Result<i64> {
         let end = start + duration;
         let conn_guard = self.conn.lock();
@@ -431,16 +378,6 @@ impl Pauses {
     /// - Filters out pauses shorter than the minimum duration
     /// - Includes ongoing pauses (duration IS NULL) regardless of threshold
     /// - Results are ordered by start time for chronological display
-    ///
-    /// # Arguments
-    ///
-    /// * `date` - The target date to query (uses local timezone)
-    /// * `min_duration` - Minimum pause length to include (in minutes)
-    ///
-    /// # Returns
-    ///
-    /// Returns a vector of `Pause` objects representing the filtered pause
-    /// records, or an error if the database query fails.
     ///
     /// # Example
     ///
@@ -544,16 +481,6 @@ impl Pauses {
     /// user-requested deletions. The operation is permanent and cannot
     /// be undone without database backups.
     ///
-    /// # Arguments
-    ///
-    /// * `id` - The unique identifier of the pause record to delete
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the deletion succeeds, or an error if the
-    /// database operation fails. Note that deleting a non-existent
-    /// record is not considered an error.
-    ///
     /// # Example
     ///
     /// ```rust,no_run
@@ -587,16 +514,6 @@ impl Pauses {
     /// All deletions are performed within a single database transaction
     /// to ensure consistency. Either all specified records are deleted
     /// or none are deleted if any error occurs.
-    ///
-    /// # Arguments
-    ///
-    /// * `ids` - Slice of pause record IDs to delete
-    ///
-    /// # Returns
-    ///
-    /// Returns the number of records actually deleted, or an error if
-    /// the batch operation fails. The count may be less than the input
-    /// length if some IDs don't exist in the database.
     ///
     /// # Example
     ///

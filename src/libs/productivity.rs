@@ -26,26 +26,10 @@ use crate::libs::pause::Pause;
 use anyhow::Result;
 use chrono::Duration;
 
-/// Productivity calculator with comprehensive work time analysis.
+/// The central productivity calculation, with the data it runs on.
 ///
-/// This structure holds all the data needed for accurate productivity calculations,
-/// including workday timing, manual breaks, different categories of pauses, and
-/// configuration settings. It provides the central calculation logic used throughout
-/// the application.
-///
-/// ## Data Categories
-///
-/// - **Workday**: Start/end times defining the total work session
-/// - **Breaks**: Manual breaks explicitly added by the user  
-/// - **Short Pauses**: Automatic pauses below the minimum threshold (not stored in DB)
-/// - **Long Pauses**: Automatic pauses above the minimum threshold (stored in DB)
-/// - **Config**: Productivity configuration settings and thresholds
-///
-/// ## Usage Pattern
-///
-/// 1. Create instance with `Productivity::new()` - automatically loads all relevant data
-/// 2. Call `calculate_productivity()` for the main productivity percentage
-/// 3. Use helper methods for break recommendations and analysis (now parameter-free)
+/// The split into short and long pauses drives the whole formula: long
+/// pauses shrink the available time, short ones count against it.
 pub struct Productivity {
     /// The workday record containing start/end times
     pub workday: Workday,
@@ -58,34 +42,8 @@ pub struct Productivity {
 }
 
 impl Productivity {
-    /// Creates a new productivity calculator for the given workday.
-    ///
-    /// This constructor automatically loads all relevant data for productivity calculations:
-    /// - Reads the current configuration to get pause duration thresholds
-    /// - Loads manual breaks from the database for the workday date
-    /// - Loads short pauses (below min_pause_duration threshold)  
-    /// - Loads long pauses (at or above min_pause_duration threshold)
-    ///
-    /// The pause categorization is based on the `min_pause_duration` setting from
-    /// the monitor configuration. This threshold determines which pauses are stored
-    /// in the database vs. calculated on-the-fly.
-    ///
-    /// # Arguments
-    ///
-    /// * `workday` - The workday record to analyze
-    ///
-    /// # Returns
-    ///
-    /// Returns a configured `Productivity` instance with all data loaded.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - Configuration file cannot be read
-    /// - Database queries fail
-    /// - Data integrity issues are encountered
-    ///
-    /// # Examples
+    /// Loads the workday's pauses, split at `min_pause_duration` from the
+    /// monitor config.
     ///
     /// ```rust,no_run
     /// # fn f() -> anyhow::Result<()> {
@@ -114,19 +72,8 @@ impl Productivity {
         })
     }
 
-    /// Creates a productivity calculator with provided test data.
-    ///
-    /// This constructor is primarily intended for testing scenarios where you want
-    /// to provide specific pause and break data without database dependencies.
-    /// It uses default productivity configuration settings.
-    ///
-    /// # Arguments
-    ///
-    /// * `workday` - The workday record to analyze
-    /// * `short_pauses` - Short automatic pauses (< threshold)
-    /// * `long_pauses` - Long automatic pauses (>= threshold)
-    ///
-    /// # Examples
+    /// Builds a calculator from explicit data, bypassing config and database -
+    /// for tests.
     ///
     /// ```rust,no_run
     /// # fn f() {
@@ -165,10 +112,6 @@ impl Productivity {
     /// `min_workday_fraction_before_suggest` of the expected workday has passed,
     /// the figure is stable enough to act on.
     ///
-    /// # Returns
-    ///
-    /// `true` when enough of the day has elapsed and productivity is under
-    /// `min_productivity_threshold`.
     pub fn is_below_threshold(&self) -> bool {
         let now = chrono::Local::now().naive_local();
         let elapsed = now - self.workday.start;
@@ -182,50 +125,12 @@ impl Productivity {
         self.calculate_productivity() < self.config.min_productivity_threshold
     }
 
-    /// Calculates productivity percentage for the workday.
+    /// Returns the day's productivity percentage, clamped to 0-100.
     ///
-    /// This is the central productivity calculation method that properly handles different
-    /// types of work interruptions to provide accurate productivity metrics. The method
-    /// implements a sophisticated calculation that distinguishes between various types of
-    /// time allocation.
-    ///
-    /// ## Calculation Logic
-    ///
-    /// The productivity calculation follows this formula:
-    /// ```text
-    /// Productivity = (Net Work Time / Available Work Time) * 100
-    ///
-    /// Where:
-    /// - Gross Duration = End Time - Start Time
-    /// - Available Work Time = Gross Duration - Manual Breaks - Long Pauses  
-    /// - Net Work Time = Available Work Time - Short Pauses (adjusted for overlaps)
-    /// ```
-    ///
-    /// ## Time Categories
-    ///
-    /// 1. **Manual Breaks**: User-defined break periods (excluded from work time)
-    /// 2. **Long Pauses**: Automatic pauses >= min_pause_duration (recorded in DB)
-    /// 3. **Short Pauses**: Automatic pauses < min_pause_duration (not recorded in DB)
-    /// 4. **Active Work**: Time when user is actively working
-    ///
-    /// ## Overlap Handling
-    ///
-    /// Short pauses are adjusted to avoid double-counting time that's already
-    /// accounted for in manual breaks:
-    /// - If short_pause_duration <= break_duration: Set short pauses to zero
-    /// - Otherwise: Subtract break duration from short pauses
-    ///
-    /// ## Edge Cases
-    ///
-    /// - Returns 0.0% if no available work time exists
-    /// - Clamps result between 0.0% and 100.0% to handle calculation edge cases
-    /// - Handles ongoing workdays by using current time as end time
-    ///
-    /// # Returns
-    ///
-    /// Productivity percentage as a float between 0.0 and 100.0.
-    ///
-    /// # Examples
+    /// `(work - short pauses) / work`, where `work` is the gross day minus
+    /// long pauses. An ongoing day is measured up to now (via
+    /// [`crate::libs::report::workday_end_time`]); a day with no work time
+    /// yet reads 0.
     ///
     /// ```rust
     /// use kasl::libs::productivity::Productivity;

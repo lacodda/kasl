@@ -4,14 +4,6 @@
 //! that kasl integrates with. Includes clients for GitLab, Jira, and internal
 //! SiServer systems, all implementing a common session management pattern.
 //!
-//! ## Features
-//!
-//! - **GitLab**: Fetches user activity and commit data for task creation
-//! - **Jira**: Retrieves assigned issues and project information
-//! - **SiServer**: Internal reporting API for time tracking submissions
-//! - **Session Management**: Automatic caching, encrypted storage, retry logic
-//! - **Security**: Encrypted tokens, secure prompting, session invalidation
-//!
 //! ## Usage
 //!
 //! ```text
@@ -55,10 +47,6 @@ pub trait Session {
     /// This method handles the actual API authentication process using stored
     /// credentials. The returned session ID can be used for subsequent API calls.
     ///
-    /// # Returns
-    ///
-    /// * `Result<String>` - Session identifier on success, error on failure
-    ///
     /// # Errors
     ///
     /// Returns an error if:
@@ -71,10 +59,6 @@ pub trait Session {
     ///
     /// Stores the provided password in memory for use during authentication.
     /// The password may be encoded or hashed depending on the API requirements.
-    ///
-    /// # Arguments
-    ///
-    /// * `password` - User password in plain text
     ///
     /// # Errors
     ///
@@ -121,10 +105,6 @@ pub trait Session {
     /// 2. **Authentication Loop**: If no cache, prompt for credentials and authenticate
     /// 3. **Retry Logic**: Handle failures with limited retry attempts
     /// 4. **Session Storage**: Cache successful sessions for future use
-    ///
-    /// # Returns
-    ///
-    /// * `Result<String>` - Valid session ID ready for API calls
     ///
     /// # Errors
     ///
@@ -179,14 +159,6 @@ pub trait Session {
     /// Attempts to load a cached session identifier from disk storage.
     /// The session may be encrypted depending on the implementation.
     ///
-    /// # Arguments
-    ///
-    /// * `file_name` - Path to the session storage file
-    ///
-    /// # Returns
-    ///
-    /// * `Result<String>` - Session ID if file exists and is readable
-    ///
     /// # Errors
     ///
     /// Returns an error if the file doesn't exist, is unreadable, or contains
@@ -199,15 +171,6 @@ pub trait Session {
     ///
     /// Stores the session identifier for future use, potentially with encryption.
     /// The file is created with restricted permissions for security.
-    ///
-    /// # Arguments
-    ///
-    /// * `file_name` - Path where session should be stored
-    /// * `session_id` - Session identifier to save
-    ///
-    /// # Returns
-    ///
-    /// * `Result<()>` - Success indicator
     ///
     /// # Errors
     ///
@@ -222,10 +185,6 @@ pub trait Session {
     ///
     /// Removes the session cache when authentication fails or sessions expire.
     /// This forces fresh authentication on the next session request.
-    ///
-    /// # Returns
-    ///
-    /// * `Result<()>` - Success indicator
     ///
     /// # Errors
     ///

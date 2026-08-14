@@ -2,14 +2,6 @@
 //!
 //! Provides comprehensive template management functionality for kasl, enabling users to create, edit, delete, and search reusable task templates.
 //!
-//! ## Features
-//!
-//! - **Template CRUD**: Create, read, update, and delete operations
-//! - **Search Functionality**: Find templates by name or content
-//! - **Interactive Management**: User-friendly interfaces for all operations
-//! - **Validation**: Ensures template data integrity and uniqueness
-//! - **Integration**: Seamless integration with task creation workflows
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -143,15 +135,6 @@ enum TemplateCommand {
 /// - **Search**: Text-based template discovery
 /// - **Interactive**: Menu-driven operation selection when no subcommand given
 ///
-/// # Arguments
-///
-/// * `args` - Parsed command-line arguments containing operation specification
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful operation completion, or an error if
-/// the requested operation fails due to validation, database, or user input issues.
-///
 /// # Examples
 ///
 /// ```bash
@@ -212,9 +195,6 @@ pub fn cmd(args: TemplateArgs) -> Result<()> {
 /// - Completion values must be between 0 and 100 inclusive
 /// - Comments are optional and can be empty
 ///
-/// # Arguments
-///
-/// * `name` - Optional template name from command line, or None for interactive prompt
 fn handle_create(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -298,9 +278,6 @@ fn handle_list() -> Result<()> {
 /// whether shown alone or among others. Without a name, the template is picked
 /// interactively.
 ///
-/// # Arguments
-///
-/// * `name` - Template name, or None to select one interactively
 fn handle_show(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -358,9 +335,6 @@ fn handle_show(name: Option<String>) -> Result<()> {
 /// - Validates new values according to template rules
 /// - Provides clear feedback about validation errors
 ///
-/// # Arguments
-///
-/// * `name` - Optional template name to edit, or None for interactive selection
 fn handle_edit(name: Option<String>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -442,9 +416,6 @@ fn handle_edit(name: Option<String>) -> Result<()> {
 /// - Provides escape opportunity before actual deletion
 /// - Clear feedback about cancellation vs. completion
 ///
-/// # Arguments
-///
-/// * `name` - Optional template name to delete, or None for interactive selection
 fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
@@ -515,9 +486,6 @@ fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
 /// Comments and completion values are not included in search to focus
 /// on the most relevant identifying information.
 ///
-/// # Arguments
-///
-/// * `query` - Search string to match against template and task names
 fn handle_search(query: String) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let templates = templates_db.search(&query)?;

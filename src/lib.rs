@@ -3,17 +3,6 @@
 //! A command-line utility for tracking work activities, managing tasks,
 //! and generating productivity reports.
 //!
-//! ## Features
-//!
-//! - **Activity Monitoring**: Automatic detection of work sessions and breaks
-//! - **Productivity Analysis**: Comprehensive calculation engine with break recommendations
-//! - **Task Management**: Create, update, and track task completion
-//! - **Report Generation**: Daily and monthly productivity reports with advanced metrics
-//! - **External Integrations**: Sync with GitLab commits and Jira issues
-//! - **Data Export**: Export data to CSV, JSON, and Excel formats
-//! - **Template System**: Reusable task templates
-//! - **Tag System**: Organize tasks with custom tags
-//!
 //! ## Usage
 //!
 //! ```rust,no_run

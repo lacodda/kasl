@@ -2,14 +2,6 @@
 //!
 //! Provides comprehensive task management functionality for creating, editing, deleting, and organizing tasks.
 //!
-//! ## Features
-//!
-//! - **CRUD Operations**: Create, read, update, and delete individual tasks
-//! - **Batch Operations**: Mass editing and deletion of multiple tasks
-//! - **External Integration**: Import tasks from GitLab commits and Jira issues
-//! - **Advanced Filtering**: View tasks by date, completion status, tags, or IDs
-//! - **Template System**: Create tasks from predefined templates
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -259,15 +251,6 @@ pub struct RemoveArgs {
 /// - Detailed information about affected items
 /// - Option to cancel operations at multiple points
 ///
-/// # Arguments
-///
-/// * `task_args` - Parsed command-line arguments specifying the operation to perform
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful operation completion, or an error if the
-/// requested operation fails due to validation, database, or network issues.
-///
 /// # Examples
 ///
 /// ```bash
@@ -363,9 +346,6 @@ fn show_tasks(filter: TaskFilter) -> Result<()> {
 /// deduplicates near-identical names, and prioritizes incomplete tasks above
 /// external imports.
 ///
-/// # Arguments
-///
-/// * `date` - Current date/time for filtering today's external content
 async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
     // Discovery ends in a MultiSelect of what to import.
     ensure_interactive("`kasl task find` is interactive and needs a terminal")?;
@@ -620,9 +600,6 @@ fn looks_like_issue_key(name: &str) -> bool {
 /// It also handles tag assignment and provides immediate feedback about
 /// the created task.
 ///
-/// # Arguments
-///
-/// * `task_args` - Command-line arguments containing optional task information
 async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
     // Anything not supplied on the command line is asked for, so a missing name
     // means prompting - which must not happen with no one at the terminal.
@@ -720,9 +697,6 @@ async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
 /// - Provides clear feedback about deletion results
 /// - Handles non-existent IDs gracefully
 ///
-/// # Arguments
-///
-/// * `ids` - Vector of task IDs to delete
 async fn handle_delete_by_ids(ids: Vec<i32>, assume_yes: bool) -> Result<()> {
     if ids.is_empty() {
         msg_error!(Message::NoTaskIdsProvided);
@@ -840,9 +814,6 @@ async fn handle_delete_today(assume_yes: bool) -> Result<()> {
 /// including name, comment, and completion status. Includes preview of
 /// changes before applying them to the database.
 ///
-/// # Arguments
-///
-/// * `id` - Database ID of the task to edit
 async fn handle_edit_by_id(id: i32) -> Result<()> {
     // Editing prompts for each field with the current value as default.
     ensure_interactive("`kasl task edit` is interactive and needs a terminal")?;
@@ -959,13 +930,6 @@ async fn handle_edit_interactive() -> Result<()> {
 /// Used by both single and batch editing operations to ensure uniform
 /// user experience and validation.
 ///
-/// # Arguments
-///
-/// * `task` - Original task to edit (used for default values)
-///
-/// # Returns
-///
-/// Returns a new Task instance with updated values from user input.
 fn edit_task_interactive(task: &Task) -> Result<Task> {
     let name = collapse_whitespace(
         &Input::with_theme(&ColorfulTheme::default())
@@ -1009,9 +973,6 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
 /// values before creating the final task. This streamlines creation of
 /// frequently used task types while maintaining flexibility.
 ///
-/// # Arguments
-///
-/// * `template_name` - Name of the template to use for task creation
 async fn handle_create_from_template(template_name: String) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let template = match templates_db.get(&template_name)? {

@@ -2,14 +2,6 @@
 //!
 //! Provides database schema management utilities for development and debugging purposes.
 //!
-//! ## Features
-//!
-//! - **Version Tracking**: Maintains current database schema version
-//! - **Migration History**: Records all applied migrations with timestamps
-//! - **Debug Only**: Available only in debug builds for production safety
-//! - **Status Inspection**: View current migration status and history
-//! - **Integrity Checking**: Validates database schema consistency
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -76,15 +68,6 @@ enum MigrationsCommand {
 /// Provides essential database schema inspection capabilities for development
 /// and debugging. All operations are designed to be safe and non-destructive.
 ///
-/// # Arguments
-///
-/// * `args` - Parsed command-line arguments specifying the inspection operation
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful operation completion, or an error if
-/// database access fails or the requested operation encounters issues.
-///
 /// # Examples
 ///
 /// ```bash
@@ -95,12 +78,6 @@ enum MigrationsCommand {
 /// kasl migrations history
 /// ```
 ///
-/// # Error Scenarios
-///
-/// - Database connection failures
-/// - Corrupted migration tracking tables
-/// - Inconsistent schema state
-/// - Permission issues accessing database files
 #[cfg(debug_assertions)]
 pub fn cmd(args: MigrationsArgs) -> Result<()> {
     // Create direct database connection without running migrations

@@ -2,13 +2,6 @@
 //!
 //! Provides cross-platform functionality for managing whether kasl automatically starts monitoring when the system boots.
 //!
-//! ## Features
-//!
-//! - **Cross-Platform Support**: Windows Task Scheduler, Linux systemd, macOS Launch Agents
-//! - **Enable/Disable Toggle**: Simple on/off control for autostart functionality
-//! - **Status Checking**: Query current autostart configuration
-//! - **Privilege Management**: Handles different privilege levels appropriately
-//!
 //! ## Usage
 //!
 //! ```bash
@@ -77,15 +70,6 @@ enum AutostartCommand {
 /// Delegates to the appropriate autostart library function based on the user's choice,
 /// handling platform-specific implementations transparently.
 ///
-/// # Arguments
-///
-/// * `args` - Parsed command arguments containing the operation to perform
-///
-/// # Returns
-///
-/// Returns `Ok(())` on successful operation, or an error if the autostart
-/// operation fails (e.g., insufficient privileges, unsupported platform).
-/// - System configuration conflicts
 pub fn cmd(args: AutostartArgs) -> Result<()> {
     match args.command {
         AutostartCommand::Enable => {

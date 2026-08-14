@@ -4,14 +4,6 @@
 //! real-time monitoring of user input to automatically detect work sessions,
 //! breaks, and productivity patterns.
 //!
-//! ## Features
-//!
-//! - **Input Detection**: Low-level keyboard and mouse event capture
-//! - **State Machine**: Activity state tracking (Active/InPause)
-//! - **Timing Logic**: Configurable thresholds for activity and pause detection
-//! - **Database Integration**: Automatic workday and pause recording
-//! - **Configuration Management**: Flexible behavior customization
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -77,13 +69,6 @@ enum State {
 ///
 /// Orchestrates all aspects of activity monitoring, from low-level input detection
 /// to high-level workday management.
-///
-/// ## Thread Safety
-///
-/// The monitor uses thread-safe primitives to coordinate between:
-/// - **Input Thread**: Captures keyboard/mouse events via `rdev`
-/// - **Monitor Thread**: Runs the main monitoring loop
-/// - **Shared State**: Activity timestamps and workday tracking
 ///
 /// ## Configuration Impact
 ///
@@ -197,22 +182,6 @@ impl Monitor {
     ///
     /// Errors in the input thread are logged but don't crash the main monitor,
     /// allowing for graceful degradation when input monitoring isn't available.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - The [`MonitorConfig`] containing timing and behavior settings
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(Monitor)` with a fully initialized monitor ready to start
-    /// the monitoring loop, or an error if database initialization fails.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Database Connection**: Cannot connect to SQLite database files
-    /// - **Database Schema**: Database schema is incompatible or corrupted
-    /// - **File Permissions**: Cannot read/write database files
-    /// - **Resource Exhaustion**: System cannot create necessary threads or allocate memory
     ///
     /// # Examples
     ///
@@ -373,19 +342,6 @@ impl Monitor {
     /// - **I/O Operations**: Minimal, only database writes for state changes
     /// - **Network Usage**: None during monitoring
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` when the monitoring loop is explicitly stopped,
-    /// or an error if a critical database operation fails that prevents
-    /// continued monitoring.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Database Connection Loss**: SQLite database becomes unavailable
-    /// - **Disk Space Exhaustion**: Cannot write to database files
-    /// - **Permission Changes**: Database files become read-only
-    /// - **System Resource Exhaustion**: Cannot allocate memory for operations
-    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -493,12 +449,6 @@ impl Monitor {
     /// - **Lower `poll_interval`**: More sensitive, detects brief activity
     /// - **Higher `poll_interval`**: Less sensitive, requires sustained activity
     ///
-    /// ## Thread Safety
-    ///
-    /// This method safely accesses the shared `last_activity` timestamp
-    /// that is continuously updated by the input listener thread. The mutex
-    /// protection ensures data consistency without blocking the input thread.
-    ///
     /// ## Debug Logging
     ///
     /// When debug mode is enabled (`KASL_DEBUG=1`), this method logs detailed
@@ -506,11 +456,6 @@ impl Monitor {
     /// - Elapsed time since last activity
     /// - Activity detection result
     /// - Timing relationship to poll interval
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if user activity was detected within the last poll interval,
-    /// `false` if the user appears to be inactive.
     ///
     /// # Performance Considerations
     ///
@@ -609,17 +554,6 @@ impl Monitor {
     /// informational messages. In foreground mode, users see real-time
     /// pause notifications for immediate feedback.
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the pause was successfully recorded and state
-    /// transition completed, or an error if database operations fail.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Database Connection**: Cannot connect to pause database
-    /// - **Database Write**: Cannot insert pause start record
-    /// - **Timing Calculation**: System clock issues affecting timestamp calculation
-    ///
     /// # Database Schema Impact
     ///
     /// This method creates records in the `pauses` table:
@@ -712,17 +646,6 @@ impl Monitor {
     /// The method provides immediate notification about pause completion,
     /// which is especially useful in foreground monitoring mode for
     /// real-time activity awareness.
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if the pause end was successfully recorded and the
-    /// state transition completed, or an error if database operations fail.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Database Connection**: Cannot connect to pause database
-    /// - **Database Update**: Cannot record pause end time
-    /// - **Inconsistent State**: No active pause record to complete
     ///
     /// # Database Schema Impact
     ///
@@ -826,22 +749,6 @@ impl Monitor {
     /// - Monitor continues tracking for pause detection
     /// - Future activity updates the workday end time
     /// - No additional workday records are created for the date
-    ///
-    /// # Arguments
-    ///
-    /// * `today` - The current date for workday record creation
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` if workday management completed successfully,
-    /// or an error if critical database operations fail.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Database Connection**: Cannot connect to workdays database
-    /// - **Database Query**: Cannot check for existing workday records
-    /// - **Database Insert**: Cannot create new workday record
-    /// - **Date Validation**: Invalid date format or system clock issues
     ///
     /// # Database Schema Impact
     ///

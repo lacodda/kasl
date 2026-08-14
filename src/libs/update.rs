@@ -3,14 +3,6 @@
 //! Provides comprehensive auto-update capabilities that enable the application
 //! to automatically check for, download, and install newer versions from GitHub releases.
 //!
-//! ## Features
-//!
-//! - **Safety Mechanisms**: Automatic backup, rollback capability, atomic operations
-//! - **Platform Detection**: Architecture awareness, OS detection, ABI compatibility
-//! - **Network Resilience**: Throttled checks, graceful degradation, retry logic
-//! - **Version Management**: Semantic versioning, GitHub API integration
-//! - **Platform Support**: Windows, macOS Intel/Apple Silicon, Linux
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -76,11 +68,6 @@ const BACKUP_EXTENSION: &str = "bak";
 /// - **Configuration**: API endpoints and platform identification
 /// - **Check Throttling**: Timestamps for rate-limited update checks
 ///
-/// ## Thread Safety
-///
-/// The Updater is designed for single-threaded use during update operations.
-/// While individual methods are safe to call, the update process itself should
-/// not be parallelized to avoid file system conflicts during binary replacement.
 #[derive(Debug)]
 pub struct Updater {
     /// HTTP client for making API requests to GitHub.
@@ -156,11 +143,6 @@ impl Updater {
     /// - **Data Directory**: Platform-specific application data location
     /// - **Permissions**: Appropriate read/write permissions for update operations
     ///
-    /// # Returns
-    ///
-    /// Returns a configured Updater instance ready for version checking and
-    /// update operations, or an error if initialization fails.
-    ///
     /// # Errors
     ///
     /// - **Data Storage**: Cannot determine or create application data directory
@@ -221,14 +203,6 @@ impl Updater {
     /// - **Informative**: Provides clear version information in notifications
     /// - **Actionable**: Suggests how users can install available updates
     /// - **Reliable**: Handles network errors gracefully without user impact
-    ///
-    /// ## Implementation Strategy
-    ///
-    /// The method uses a fail-fast approach:
-    /// - Returns immediately if updater initialization fails
-    /// - Skips check if not enough time has passed since last check
-    /// - Only displays notification if newer version is confirmed available
-    /// - Handles all errors silently to avoid disrupting user workflow
     ///
     /// # Examples
     ///
@@ -322,11 +296,6 @@ impl Updater {
     /// This method requires that `check_for_latest_release()` has been called
     /// successfully and that `self.download_url` contains a valid URL.
     ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful update completion, or an error describing
-    /// the specific failure that occurred during the update process.
-    ///
     /// # Examples
     ///
     /// ```rust,no_run
@@ -342,14 +311,6 @@ impl Updater {
     /// # }
     /// ```
     ///
-    /// # Error Scenarios
-    ///
-    /// - **No Download URL**: `check_for_latest_release()` hasn't been called successfully
-    /// - **Network Failure**: Unable to download release archive from GitHub
-    /// - **Disk Space**: Insufficient space for temporary files or backup
-    /// - **Permissions**: Cannot write to application directory or create backup
-    /// - **Archive Corruption**: Downloaded archive is corrupted or invalid format
-    /// - **Missing Binary**: Archive doesn't contain expected executable file
     pub async fn perform_update(&self) -> Result<()> {
         // Validate that download URL is available from previous version check
         let download_url = self.download_url.as_ref().ok_or(msg_error_anyhow!(Message::UpdateDownloadUrlNotSet))?;
@@ -400,11 +361,6 @@ impl Updater {
     /// - **latest_version**: Stores the newer version string for display
     /// - **download_url**: Sets the URL for downloading the platform-specific binary
     /// - **Check Timestamp**: Records when this check was performed for throttling
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if a newer version is available and download URL is found,
-    /// `false` if the current version is up-to-date or no compatible asset exists.
     ///
     /// # Errors
     ///
@@ -525,22 +481,6 @@ impl Updater {
     /// - **Permissions**: Standard file permissions are applied
     /// - **Cleanup**: Temporary files are removed after extraction
     ///
-    /// # Arguments
-    ///
-    /// * `tar_gz_path` - Path to the downloaded release archive
-    ///
-    /// # Returns
-    ///
-    /// Returns `Ok(())` on successful extraction and replacement, or an error
-    /// if any step of the process fails.
-    ///
-    /// # Error Scenarios
-    ///
-    /// - **Archive Errors**: Corrupted or invalid tar.gz format
-    /// - **Missing Binary**: Archive doesn't contain expected executable
-    /// - **File System Errors**: Permission issues or disk space problems
-    /// - **Backup Failures**: Cannot create backup of current executable
-    /// - **Extraction Errors**: Cannot extract files from archive
     fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<()> {
         // Open and prepare the archive for extraction
         let tar_gz = File::open(tar_gz_path)?;
@@ -606,11 +546,6 @@ impl Updater {
     /// - `windows` → `pc-windows-msvc`: Windows with MSVC toolchain
     /// - `macos` → `apple-darwin`: macOS with Darwin ABI
     /// - Other → `unknown-linux-gnu`: Linux with glibc
-    ///
-    /// # Returns
-    ///
-    /// Returns a platform identifier string suitable for matching against
-    /// GitHub release asset names.
     ///
     /// # Examples
     ///
@@ -700,12 +635,6 @@ impl Updater {
     /// - Timestamp corruption doesn't block checks permanently
     /// - Clock synchronization problems are handled gracefully
     /// - Users receive update notifications despite technical issues
-    ///
-    /// # Returns
-    ///
-    /// Returns `true` if a check should be performed (enough time has passed
-    /// or error conditions favor allowing the check), `false` if the check
-    /// should be skipped to respect throttling intervals.
     ///
     /// # Examples
     ///

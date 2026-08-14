@@ -3,13 +3,6 @@
 //! Provides formatting functions and types for converting time durations into
 //! human-readable string representations used throughout the application.
 //!
-//! ## Features
-//!
-//! - **Consistent Formatting**: All time durations use the same "HH:MM" format
-//! - **Safety**: Handles negative durations gracefully by treating them as zero
-//! - **Performance**: Lightweight formatting with minimal allocations
-//! - **Integration**: Works seamlessly with `chrono::Duration` types
-//!
 //! ## Usage
 //!
 //! ```rust
@@ -48,13 +41,6 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 /// - CSV export of time-based data
 /// - JSON serialization for API responses
 /// - Report generation and data visualization
-///
-/// ## Field Descriptions
-///
-/// - `id`: Sequential number for ordering and reference
-/// - `start`: Formatted start time (typically "HH:MM")  
-/// - `end`: Formatted end time (typically "HH:MM")
-/// - `duration`: Formatted duration (typically "HH:MM")
 ///
 /// ## Examples
 ///
@@ -129,14 +115,6 @@ pub struct FormattedEvent {
 /// 3. Clamp negative values to zero
 /// 4. Format with zero-padding
 ///
-/// # Arguments
-///
-/// * `duration` - A reference to the chrono::Duration to format
-///
-/// # Returns
-///
-/// A String in "HH:MM" format representing the duration.
-///
 /// # Examples
 ///
 /// ```rust
@@ -161,10 +139,6 @@ pub struct FormattedEvent {
 /// - Simple arithmetic operations only
 /// - No complex parsing or validation
 ///
-/// ## Thread Safety
-///
-/// This function is pure and thread-safe. It can be called concurrently
-/// from multiple threads without synchronization.
 pub fn format_duration(duration: &Duration) -> String {
     // Extract hours and minutes from the duration
     let hours = duration.num_hours();

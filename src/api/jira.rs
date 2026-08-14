@@ -3,13 +3,6 @@
 //! Provides functionality to connect to Jira instances and retrieve completed
 //! issues for automatic task generation and time tracking integration.
 //!
-//! ## Features
-//!
-//! - **Issue Retrieval**: Fetch completed issues for specific dates
-//! - **Session Management**: Automatic login and session token caching
-//! - **Error Recovery**: Robust retry logic for authentication failures
-//! - **JQL Integration**: Flexible issue querying using Jira Query Language
-//!
 //! ## Usage
 //!
 //! ```rust,no_run
@@ -215,11 +208,6 @@ pub struct JiraSearchResults {
 /// from Jira instances. It implements the [`Session`] trait for automatic
 /// credential management and retry logic.
 ///
-/// ## Thread Safety
-///
-/// The client is not thread-safe due to mutable retry state. Each thread
-/// should use its own client instance for concurrent operations.
-///
 /// ## Session Lifecycle
 ///
 /// 1. **Initialization**: Client created with configuration
@@ -258,10 +246,6 @@ impl Session for Jira {
     ///
     /// The returned session ID is formatted as `{cookie_name}={cookie_value}` and
     /// should be included in the `Cookie` header of subsequent API requests.
-    ///
-    /// # Returns
-    ///
-    /// Returns a formatted session cookie string on successful authentication.
     ///
     /// # Errors
     ///
@@ -307,13 +291,6 @@ impl Session for Jira {
     /// - No persistence to disk or configuration files
     /// - Credentials are cleared after successful authentication
     ///
-    /// # Arguments
-    ///
-    /// * `password` - The user's Jira password in plain text
-    ///
-    /// # Returns
-    ///
-    /// Always returns `Ok(())` as this operation cannot fail.
     fn set_credentials(&mut self, password: &str) -> Result<()> {
         self.credentials = Some(LoginCredentials {
             username: self.config.login.to_string(),
@@ -335,9 +312,6 @@ impl Session for Jira {
     /// The Secret manager handles secure password input with hidden characters
     /// and optional encrypted caching in the user's data directory.
     ///
-    /// # Returns
-    ///
-    /// A configured `Secret` instance with Jira-specific prompts and file names.
     fn secret(&self) -> Secret {
         Secret::new(SECRET_FILE, "Enter your Jira password")
     }
@@ -373,10 +347,6 @@ impl Jira {
     /// Initializes the HTTP client with default settings suitable for Jira API
     /// interactions. The client is configured for JSON requests and includes
     /// appropriate timeout and connection settings.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Configuration containing Jira URL and login information
     ///
     /// # Examples
     ///
@@ -434,18 +404,6 @@ impl Jira {
     /// The method formats the provided date to ensure proper JQL syntax and
     /// covers the entire day from midnight to 23:59 to capture all possible
     /// resolution times within the target date.
-    ///
-    /// # Arguments
-    ///
-    /// * `date` - The date to search for completed issues (in any timezone)
-    ///
-    /// # Returns
-    ///
-    /// Returns a vector of [`JiraIssue`] objects representing completed work.
-    /// Returns an empty vector if:
-    /// - No issues are found matching the criteria
-    /// - Authentication fails persistently after all retries
-    /// - Network errors occur during the request
     ///
     /// # Errors
     ///
@@ -827,9 +785,6 @@ impl JiraConfig {
     /// Jira-specific settings during interactive setup. This provides
     /// the human-readable name and internal key for the module.
     ///
-    /// # Returns
-    ///
-    /// A `ConfigModule` with Jira identification information.
     pub fn module() -> ConfigModule {
         ConfigModule {
             key: "jira".to_string(),
@@ -858,14 +813,6 @@ impl JiraConfig {
     /// While this method doesn't validate the actual connection to Jira,
     /// it provides helpful prompts and examples to guide users toward
     /// correct configuration values.
-    ///
-    /// # Arguments
-    ///
-    /// * `config` - Existing Jira configuration to use as defaults (if any)
-    ///
-    /// # Returns
-    ///
-    /// * `Result<Self>` - New Jira configuration with user input
     ///
     /// # Errors
     ///

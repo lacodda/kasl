@@ -87,12 +87,6 @@ pub struct Secret {
 impl Secret {
     /// Creates a credential handle for the given secret.
     ///
-    /// # Arguments
-    ///
-    /// * `secret_name` - Legacy file name for the credential (e.g. `.jira_secret`),
-    ///   which also determines the keyring account name
-    /// * `prompt` - User-facing text shown when asking for the password
-    ///
     /// # Examples
     ///
     /// ```rust
@@ -124,10 +118,6 @@ impl Secret {
     /// spot), then the user. A value obtained from either of the last two is
     /// written to the keyring, so this is the only time it is asked for.
     ///
-    /// # Returns
-    ///
-    /// The stored or freshly entered password.
-    ///
     /// # Errors
     ///
     /// Returns an error when the keyring is unavailable, or when there is no
@@ -146,9 +136,6 @@ impl Secret {
     /// block. Migrates a legacy file if one is found, so an unattended run
     /// benefits from the migration too.
     ///
-    /// # Returns
-    ///
-    /// `Some(password)` when the credential is known, `None` otherwise.
     pub fn try_get_cached(&self) -> Option<String> {
         if let Ok(entry) = self.entry()
             && let Ok(password) = entry.get_password()

@@ -4,13 +4,6 @@
 //! the ones it missed - a walk with the laptop closed, a meeting away from the
 //! desk - by stating when they happened.
 //!
-//! ## Features
-//!
-//! - **Listing**: View all recorded pauses for any date with duration filtering
-//! - **Manual entry**: Record an absence the monitor did not detect
-//! - **Protection**: Keep a manual pause exempt from threshold filtering and merging
-//! - **Removal**: Delete a pause recorded by mistake
-//!
 //! ## Usage
 //!
 //! ```bash

@@ -2,14 +2,6 @@
 //!
 //! Defines the central `Message` enum that represents all user-facing messages with type safety and compile-time verification.
 //!
-//! ## Features
-//!
-//! - **Type Safety**: All messages are strongly typed with appropriate parameters
-//! - **Centralization**: Single enum captures all application messaging needs  
-//! - **Extensibility**: Easy addition of new message types and categories
-//! - **Organization**: Logical grouping by functional categories
-//! - **Internationalization**: Structure supports future localization efforts
-//!
 //! ## Usage
 //!
 //! ```rust
@@ -32,35 +24,6 @@
 /// communication while ensuring consistent formatting and proper parameter
 /// handling across all components.
 ///
-/// ## Message Categories
-///
-/// The enum is organized into logical categories that correspond to different
-/// areas of application functionality. Each category groups related messages
-/// to improve maintainability and make it easier to understand the scope
-/// of each functional area.
-///
-/// ## Parameter Conventions
-///
-/// - **String Parameters**: Used for names, descriptions, and user-provided text
-/// - **Numeric Parameters**: Used for counts, IDs, and measurements
-/// - **Status Parameters**: Used for system states and operation results
-/// - **Structured Parameters**: Named fields for complex message data
-///
-/// ## Adding New Messages
-///
-/// When adding new message variants:
-/// 1. Choose the appropriate category section
-/// 2. Use descriptive names that clearly indicate the message purpose
-/// 3. Include necessary parameters with appropriate types
-/// 4. Add corresponding text in the `Display` implementation
-/// 5. Document the message purpose and usage context
-///
-/// ## Backward Compatibility
-///
-/// The enum is designed to maintain backward compatibility:
-/// - New variants can be added without breaking existing code
-/// - Parameter changes should be additive when possible
-/// - Deprecated messages can be maintained for transition periods
 #[derive(Debug, Clone)]
 pub enum Message {
     // === AUTOSTART MESSAGES ===
