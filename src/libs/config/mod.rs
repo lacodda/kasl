@@ -259,7 +259,7 @@ impl JiraInboxConfig {
     }
 }
 
-/// Settings for intelligent task discovery (`kasl task --find`).
+/// Settings for intelligent task discovery (`kasl task find`).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct TaskDiscoveryConfig {
     /// Names/prefixes of tasks and commits to exclude from discovery.

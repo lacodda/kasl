@@ -149,32 +149,7 @@ pub struct RemoveArgs {
     yes: bool,
 }
 
-/// Main entry point for the comprehensive task management command.
-///
-/// # Examples
-///
-/// ```bash
-/// # Create a simple task
-/// kasl task --name "Review pull request" --completeness 0
-///
-/// # Create task with tags
-/// kasl task --name "Fix login bug" --tags "urgent,backend,bug"
-///
-/// # Find and import tasks from external sources
-/// kasl task --find
-///
-/// # Show all tasks with specific tag
-/// kasl task --show --tag urgent
-///
-/// # Edit multiple tasks interactively
-/// kasl task --edit-interactive
-///
-/// # Create task from template
-/// kasl task --template daily-standup
-///
-/// # Delete specific tasks (with confirmation)
-/// kasl task --delete 1 2 3
-/// ```
+/// Dispatches `kasl task` subcommands; the module header shows the surface.
 pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     let date = Local::now();
 

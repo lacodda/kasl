@@ -7,7 +7,7 @@
 //!
 //! ```bash
 //! kasl watch                    # Start activity monitoring
-//! kasl task --name "Review code" # Create a new task
+//! kasl task add --name "Review code" # Create a new task
 //! kasl report                   # Generate today's report
 //! kasl export tasks --format csv # Export tasks to CSV
 //! ```
@@ -164,7 +164,7 @@ enum Commands {
 /// kasl --help
 ///
 /// # Run a specific command
-/// kasl task --name "New task"
+/// kasl task add --name "New task"
 /// ```
 #[derive(Debug, Parser)]
 #[command(name = "kasl", author, version, about, long_about = None)]
