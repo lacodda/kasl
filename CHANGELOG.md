@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.3.0] - 2026-08-14
+
+### Documentation
+- Strip generated walls from core libs and the db layer
+- Strip generated walls from monitor, daemon, update, pauses
+- Compact the api layer docs
+- Strip walls from libs/report, fixing another doc fusion
+- Final mechanical passes over the remaining walls
+- Fix examples still using the pre-1.0 flag surface
+
+### Refactoring
+- Drop the 67 Message variants nothing constructs
+- Move the hourly grid into its own module
+- Separate the data model from the setup wizard
+- Move discovery into its own module
+- Route the remaining hand-rolled pickers through libs/pick
 ## [1.2.0] - 2026-08-14
 
 ### Documentation
