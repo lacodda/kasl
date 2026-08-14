@@ -42,7 +42,7 @@ use crate::{
 use anyhow::Result;
 use chrono::Local;
 use clap::{Args, Subcommand};
-use dialoguer::{Confirm, Input, MultiSelect, Select, theme::ColorfulTheme};
+use dialoguer::{Confirm, Input, theme::ColorfulTheme};
 
 mod discovery;
 
@@ -502,26 +502,15 @@ async fn handle_edit_interactive() -> Result<()> {
         return Ok(());
     }
 
-    // Create selection list with task descriptions
-    let task_descriptions: Vec<String> = tasks
-        .iter()
-        .map(|t| format!("[{}] {} ({}%)", t.id.unwrap_or(0), t.name, t.completeness.unwrap_or(0)))
-        .collect();
+    let ids = pick::tasks(&tasks, &Message::SelectTasksToEdit.to_string())?;
 
-    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::SelectTasksToEdit.to_string())
-        .items(&task_descriptions)
-        .interact()?;
-
-    if selections.is_empty() {
+    if ids.is_empty() {
         msg_info!(Message::NoTasksSelected);
         return Ok(());
     }
 
     // Edit each selected task in sequence
-    for &index in &selections {
-        let task = &tasks[index];
-
+    for task in tasks.iter().filter(|t| t.id.is_some_and(|id| ids.contains(&id))) {
         msg_print!(Message::EditingTask(task.name.clone()), true);
         View::tasks(std::slice::from_ref(task))?;
 
@@ -643,15 +632,8 @@ async fn handle_create_from_template_interactive() -> Result<()> {
         return Ok(());
     }
 
-    let template_options: Vec<String> = templates.iter().map(|t| format!("{} - {}", t.name, t.task_name)).collect();
-
-    let selection = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::SelectTemplate.to_string())
-        .items(&template_options)
-        .interact()?;
-
-    let template = &templates[selection];
-    handle_create_from_template(template.name.clone()).await
+    let name = pick::template(&templates, &Message::SelectTemplate.to_string())?;
+    handle_create_from_template(name).await
 }
 
 #[cfg(test)]

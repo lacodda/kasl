@@ -141,6 +141,17 @@ pub fn truncate_to_width(s: &str, max_width: usize) -> String {
     format!("{}{}", &s[..end], ELLIPSIS)
 }
 
+/// Parses `YYYY-MM-DD` or the (case-insensitive) keyword `today` into a date.
+///
+/// The shared parser behind every command's `--date` argument.
+pub fn parse_date(date_str: &str) -> anyhow::Result<chrono::NaiveDate> {
+    if date_str.to_lowercase() == "today" {
+        Ok(chrono::Local::now().date_naive())
+    } else {
+        Ok(chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

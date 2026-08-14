@@ -152,10 +152,6 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 ///
 /// This provides insight into work efficiency while accounting for
 /// legitimate breaks and focusing on actual productive activity.
-///
-/// # Data Sources
-///
-/// The report integrates multiple data sources:
 async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let workday = match Workdays::new()?.fetch(naive_date)? {

@@ -337,38 +337,20 @@ fn handle_interactive() -> Result<()> {
         }
         1 => handle_list(),
         2 => {
-            // Interactive tag editing with selection
-            let mut tags_db = Tags::new()?;
-            let tags = tags_db.get_all()?;
+            let tags = Tags::new()?.get_all()?;
             if tags.is_empty() {
                 msg_info!(Message::NoTagsFound);
                 return Ok(());
             }
-            drop(tags_db);
-
-            let tag_names: Vec<String> = tags.iter().map(|t| t.name.clone()).collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt(Message::SelectTagToEdit.to_string())
-                .items(&tag_names)
-                .interact()?;
-            handle_edit(tag_names[selection].clone())
+            handle_edit(pick::tag(&tags, &Message::SelectTagToEdit.to_string())?)
         }
         3 => {
-            // Interactive tag deletion with selection
-            let mut tags_db = Tags::new()?;
-            let tags = tags_db.get_all()?;
+            let tags = Tags::new()?.get_all()?;
             if tags.is_empty() {
                 msg_info!(Message::NoTagsFound);
                 return Ok(());
             }
-            drop(tags_db);
-
-            let tag_names: Vec<String> = tags.iter().map(|t| t.name.clone()).collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt(Message::SelectTagToDelete.to_string())
-                .items(&tag_names)
-                .interact()?;
-            handle_delete(tag_names[selection].clone(), false)
+            handle_delete(pick::tag(&tags, &Message::SelectTagToDelete.to_string())?, false)
         }
         _ => Ok(()),
     }

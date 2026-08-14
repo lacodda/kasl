@@ -66,10 +66,6 @@ mod windows {
     }
 
     /// Enables system-level autostart using Windows Task Scheduler.
-    ///
-    /// # Errors
-    ///
-    /// Common error scenarios:
     pub fn enable() -> Result<()> {
         // Get current executable path for task configuration
         let exe_path = env::current_exe()?;

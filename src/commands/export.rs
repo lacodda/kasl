@@ -19,12 +19,13 @@ use crate::{
     libs::{
         config::Config,
         export::{ExportData, ExportFormat, Exporter},
+        formatter::parse_date,
         messages::Message,
     },
     msg_info,
 };
 use anyhow::Result;
-use chrono::{Local, NaiveDate};
+use chrono::NaiveDate;
 use clap::Args;
 use std::path::PathBuf;
 
@@ -85,32 +86,15 @@ pub struct ExportArgs {
     hourly: bool,
 }
 
-/// Executes the data export command.
-///
-/// Orchestrates the complete export process including date parsing, exporter
-/// initialization, data processing, file generation, and user feedback.
-/// - Data format conversion errors
-/// - Output file write failures
-///
-/// # Examples
+/// Executes the export: parses the date, resolves the output path, and
+/// hands off to the [`Exporter`].
 ///
 /// ```bash
-/// # Export today's report as CSV
 /// kasl export report --format csv
-///
-/// # Export tasks from specific date as JSON
 /// kasl export tasks --format json --date 2025-01-15
-///
-/// # Export monthly summary to Excel with custom filename
 /// kasl export summary --format excel --output monthly_report.xlsx
-///
-/// # Export all data for backup purposes
 /// kasl export all --format json --output backup_2025_01.json
 /// ```
-///
-/// # Output Files
-///
-/// Generated files include:
 pub async fn cmd(args: ExportArgs) -> Result<()> {
     let date = parse_date(&args.date)?;
 
@@ -184,24 +168,4 @@ fn resolve_report_output(data: ExportData, format: ExportFormat, date: NaiveDate
     }
 
     unreachable!("sequence iterator is unbounded")
-}
-
-/// Parses a date string supporting both 'today' and ISO format.
-///
-/// This utility function provides consistent date parsing across the export
-/// command, handling both user-friendly keywords and explicit date specifications.
-///
-/// # Examples
-///
-/// ```text
-/// let today = parse_date("today")?;           // Current date
-/// let christmas = parse_date("2025-12-25")?;  // Specific holiday
-/// let start_year = parse_date("2025-01-01")?; // Year beginning
-/// ```
-fn parse_date(date_str: &str) -> Result<NaiveDate> {
-    if date_str.to_lowercase() == "today" {
-        Ok(Local::now().date_naive())
-    } else {
-        Ok(NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?)
-    }
 }

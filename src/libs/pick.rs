@@ -37,6 +37,7 @@ use dialoguer::{MultiSelect, Select, theme::ColorfulTheme};
 
 use crate::db::jira_inbox::JiraInboxItem;
 use crate::db::tags::Tag;
+use crate::db::templates::TaskTemplate;
 use crate::libs::pause::Pause;
 use crate::libs::prompt::ensure_interactive;
 use crate::libs::task::Task;
@@ -97,6 +98,19 @@ pub fn tasks(tasks: &[Task], prompt: &str) -> Result<Vec<i32>> {
         .interact()?;
 
     Ok(chosen.into_iter().filter_map(|i| tasks[i].id).collect())
+}
+
+/// Picks a template by name, showing the task title it would create.
+pub fn template(templates: &[TaskTemplate], prompt: &str) -> Result<String> {
+    if templates.is_empty() {
+        bail!("no templates yet - run `kasl template add` first");
+    }
+    ensure_interactive("template name is required; pass NAME outside a terminal")?;
+
+    let width = templates.iter().map(|t| t.name.len()).max().unwrap_or(0);
+    let labels: Vec<String> = templates.iter().map(|t| format!("{:width$}  {}", t.name, t.task_name)).collect();
+
+    Ok(templates[select(prompt, &labels)?].name.clone())
 }
 
 /// Picks a tag by name, showing its colour where one is set.

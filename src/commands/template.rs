@@ -20,7 +20,7 @@
 
 use crate::{
     db::templates::{TaskTemplate, Templates},
-    libs::{messages::Message, prompt::ensure_interactive, view::View},
+    libs::{messages::Message, pick, prompt::ensure_interactive, view::View},
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -229,13 +229,7 @@ fn handle_show(name: Option<String>) -> Result<()> {
                 return Ok(());
             }
 
-            let template_names: Vec<String> = templates.iter().map(|t| t.name.clone()).collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt(Message::SelectTemplate.to_string())
-                .items(&template_names)
-                .interact()?;
-
-            template_names[selection].clone()
+            pick::template(&templates, &Message::SelectTemplate.to_string())?
         }
     };
 
@@ -264,13 +258,7 @@ fn handle_edit(name: Option<String>) -> Result<()> {
                 return Ok(());
             }
 
-            let template_names: Vec<String> = templates.iter().map(|t| t.name.clone()).collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt(Message::SelectTemplateToEdit.to_string())
-                .items(&template_names)
-                .interact()?;
-
-            template_names[selection].clone()
+            pick::template(&templates, &Message::SelectTemplateToEdit.to_string())?
         }
     };
 
@@ -330,13 +318,7 @@ fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
                 return Ok(());
             }
 
-            let template_names: Vec<String> = templates.iter().map(|t| t.name.clone()).collect();
-            let selection = Select::with_theme(&ColorfulTheme::default())
-                .with_prompt(Message::SelectTemplateToDelete.to_string())
-                .items(&template_names)
-                .interact()?;
-
-            template_names[selection].clone()
+            pick::template(&templates, &Message::SelectTemplateToDelete.to_string())?
         }
     };
 

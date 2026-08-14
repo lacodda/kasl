@@ -26,12 +26,13 @@
 use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
 use crate::libs::config::Config;
+use crate::libs::formatter::parse_date;
 use crate::libs::messages::Message;
 use crate::libs::pick;
 use crate::libs::view::View;
 use crate::{msg_error, msg_print, msg_success};
 use anyhow::{Result, bail};
-use chrono::{Duration, Local, NaiveDate, NaiveTime, TimeDelta};
+use chrono::{Duration, NaiveTime, TimeDelta};
 use clap::{Args, Subcommand};
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use std::io::IsTerminal;
@@ -242,15 +243,4 @@ fn remove_picked(pauses: &Pauses, id: i32) -> Result<()> {
     }
 
     Ok(())
-}
-
-/// Parses a date string into a structured date value.
-///
-/// Accepts the `today` keyword (case-insensitive) and ISO `YYYY-MM-DD` dates.
-fn parse_date(date_str: &str) -> Result<NaiveDate> {
-    if date_str.to_lowercase() == "today" {
-        Ok(Local::now().date_naive())
-    } else {
-        Ok(NaiveDate::parse_from_str(date_str, "%Y-%m-%d")?)
-    }
 }
