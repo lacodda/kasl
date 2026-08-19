@@ -1,3 +1,9 @@
+//! The building blocks every command stands on.
+//!
+//! Config round-trips, the data directory, the `Task` value type, duration
+//! formatting and the message catalogue: small pieces with no home of their
+//! own, whose breakage would surface as a puzzling failure somewhere else.
+
 #[cfg(test)]
 mod tests {
     use kasl::db::db::Db;
@@ -6,11 +12,11 @@ mod tests {
     use tempfile::TempDir;
     use test_context::{TestContext, test_context};
 
-    struct BasicTestContext {
+    struct FoundationsTestContext {
         _temp_dir: TempDir,
     }
 
-    impl TestContext for BasicTestContext {
+    impl TestContext for FoundationsTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
             // SAFETY: tests touching the env are #[serial] or single-threaded setup
@@ -21,30 +27,14 @@ mod tests {
             unsafe {
                 std::env::set_var("LOCALAPPDATA", temp_dir.path());
             }
-            BasicTestContext { _temp_dir: temp_dir }
+            FoundationsTestContext { _temp_dir: temp_dir }
         }
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_database_initialization(_ctx: &mut BasicTestContext) {
-        // Test that database can be initialized without errors
-        let db_result = Db::new();
-        assert!(db_result.is_ok());
-
-        // Verify we can create multiple database instances
-        let _db1 = Db::new().unwrap();
-        let _db2 = Db::new().unwrap();
-
-        // Both should be valid
-        // Database connections should not interfere with each other
-    }
-
-    #[test_context(BasicTestContext)]
-    #[serial]
-    #[test]
-    fn test_config_default_creation(_ctx: &mut BasicTestContext) {
+    fn test_config_default_creation(_ctx: &mut FoundationsTestContext) {
         // Test creating default configuration
         let config = Config::default();
         assert!(config.monitor.is_none());
@@ -54,10 +44,10 @@ mod tests {
         assert!(config.jira.is_none());
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_config_save_and_read(_ctx: &mut BasicTestContext) {
+    fn test_config_save_and_read(_ctx: &mut FoundationsTestContext) {
         // Create a configuration with some values
         let config = Config {
             monitor: Some(kasl::libs::config::MonitorConfig {
@@ -108,10 +98,10 @@ mod tests {
         }
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_data_storage_functionality(_ctx: &mut BasicTestContext) {
+    fn test_data_storage_functionality(_ctx: &mut FoundationsTestContext) {
         use kasl::libs::data_storage::DataStorage;
 
         // Test data storage path resolution
@@ -129,10 +119,10 @@ mod tests {
         }
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_task_struct_creation(_ctx: &mut BasicTestContext) {
+    fn test_task_struct_creation(_ctx: &mut FoundationsTestContext) {
         use kasl::libs::task::Task;
 
         // Test creating tasks with different parameters
@@ -148,10 +138,10 @@ mod tests {
         assert_eq!(task2.completeness, None);
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_formatter_functionality(_ctx: &mut BasicTestContext) {
+    fn test_formatter_functionality(_ctx: &mut FoundationsTestContext) {
         use chrono::Duration;
         use kasl::libs::formatter::{FormattedEvent, format_duration};
 
@@ -188,31 +178,10 @@ mod tests {
         assert_eq!(event.duration, "08:00");
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_autostart_status_query(_ctx: &mut BasicTestContext) {
-        use kasl::libs::autostart;
-
-        // Test autostart status querying (should not crash)
-        let status_result = autostart::status();
-        assert!(status_result.is_ok());
-
-        let status = status_result.unwrap();
-        assert!(status == "enabled" || status == "disabled");
-
-        // Test is_enabled query
-        let enabled_result = autostart::is_enabled();
-        assert!(enabled_result.is_ok());
-
-        // The value is a bool by type; the unwrap() above is the real check.
-        let _is_enabled = enabled_result.unwrap();
-    }
-
-    #[test_context(BasicTestContext)]
-    #[serial]
-    #[test]
-    fn test_daemon_operations_dont_panic(_ctx: &mut BasicTestContext) {
+    fn test_daemon_operations_dont_panic(_ctx: &mut FoundationsTestContext) {
         use kasl::libs::daemon;
 
         // Test that daemon operations don't panic (they may return errors)
@@ -225,10 +194,10 @@ mod tests {
         // Instead we just verify that the function exists and can be called safely
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_message_types(_ctx: &mut BasicTestContext) {
+    fn test_message_types(_ctx: &mut FoundationsTestContext) {
         use kasl::libs::messages::Message;
 
         // Test that message types can be created and formatted
@@ -242,10 +211,10 @@ mod tests {
         assert_ne!(message_str, message2_str); // Should be different messages
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_data_persistence(_ctx: &mut BasicTestContext) {
+    fn test_data_persistence(_ctx: &mut FoundationsTestContext) {
         use kasl::libs::data_storage::DataStorage;
         use std::fs;
 
@@ -274,10 +243,10 @@ mod tests {
         let _ = fs::remove_file(&test_file_path);
     }
 
-    #[test_context(BasicTestContext)]
+    #[test_context(FoundationsTestContext)]
     #[serial]
     #[test]
-    fn test_error_handling_patterns(_ctx: &mut BasicTestContext) {
+    fn test_error_handling_patterns(_ctx: &mut FoundationsTestContext) {
         use kasl::libs::config::Config;
         use kasl::libs::data_storage::DataStorage;
 

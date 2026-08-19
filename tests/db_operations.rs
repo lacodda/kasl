@@ -1,6 +1,12 @@
+//! Storage operations behind the commands: tasks, workdays and config.
+//!
+//! Exercises the database layer the way the commands drive it - insert,
+//! fetch, filter, update - rather than the command surface itself, which is
+//! covered by the tests that spawn the real binary.
+
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
+    use chrono::{Local, Utc};
     use kasl::db::db::Db;
     use kasl::db::tasks::Tasks;
     use kasl::db::workdays::Workdays;
@@ -10,11 +16,11 @@ mod tests {
     use tempfile::TempDir;
     use test_context::{TestContext, test_context};
 
-    struct SimpleCommandTestContext {
+    struct DbOperationsTestContext {
         _temp_dir: TempDir,
     }
 
-    impl TestContext for SimpleCommandTestContext {
+    impl TestContext for DbOperationsTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
             // SAFETY: tests touching the env are #[serial] or single-threaded setup
@@ -25,23 +31,23 @@ mod tests {
             unsafe {
                 std::env::set_var("LOCALAPPDATA", temp_dir.path());
             }
-            SimpleCommandTestContext { _temp_dir: temp_dir }
+            DbOperationsTestContext { _temp_dir: temp_dir }
         }
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_database_initialization(_ctx: &mut SimpleCommandTestContext) {
+    fn test_database_initialization(_ctx: &mut DbOperationsTestContext) {
         // Test that database can be initialized
         let db = Db::new();
         assert!(db.is_ok());
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_tasks_crud_operations(_ctx: &mut SimpleCommandTestContext) {
+    fn test_tasks_crud_operations(_ctx: &mut DbOperationsTestContext) {
         // Initialize database
         let _db = Db::new().unwrap();
         let mut tasks = Tasks::new().unwrap();
@@ -60,10 +66,10 @@ mod tests {
         assert_eq!(tasks_list[0].name, "Test Task");
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_workdays_operations(_ctx: &mut SimpleCommandTestContext) {
+    fn test_workdays_operations(_ctx: &mut DbOperationsTestContext) {
         // Initialize database
         let _db = Db::new().unwrap();
         let mut workdays = Workdays::new().unwrap();
@@ -81,10 +87,10 @@ mod tests {
         assert!(workday_opt.is_some());
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_config_operations(_ctx: &mut SimpleCommandTestContext) {
+    fn test_config_operations(_ctx: &mut DbOperationsTestContext) {
         // Test config creation
         let config = Config::default();
         assert!(config.monitor.is_none());
@@ -98,10 +104,10 @@ mod tests {
         assert!(loaded_config.is_ok());
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_task_completion(_ctx: &mut SimpleCommandTestContext) {
+    fn test_task_completion(_ctx: &mut DbOperationsTestContext) {
         // Initialize database
         let _db = Db::new().unwrap();
         let mut tasks = Tasks::new().unwrap();
@@ -128,10 +134,10 @@ mod tests {
         assert_eq!(completed_task.completeness, Some(100));
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_task_filtering(_ctx: &mut SimpleCommandTestContext) {
+    fn test_task_filtering(_ctx: &mut DbOperationsTestContext) {
         // Initialize database
         let _db = Db::new().unwrap();
         let mut tasks = Tasks::new().unwrap();
@@ -141,22 +147,38 @@ mod tests {
         let task2 = Task::new("Task 2", "Second task", Some(50));
         let task3 = Task::new("Task 3", "Third task", Some(75));
 
-        let _ = tasks.insert(&task1);
-        let _ = tasks.insert(&task2);
-        let _ = tasks.insert(&task3);
+        tasks.insert(&task1).unwrap();
+        tasks.insert(&task2).unwrap();
+        tasks.insert(&task3).unwrap();
 
         // Test listing all tasks
         let all_tasks = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
-        assert_eq!(all_tasks.len(), 3);
+        assert_eq!(all_tasks.len(), 3, "ALL filter");
 
-        // Test with different filters if available
-        // Note: Specific filter testing depends on actual implementation
+        // Everything inserted today is what the date filter must return: the
+        // filter builds its own date bounds, so a mismatch here means the
+        // day boundary moved, not that the tasks are missing.
+        let today = Local::now().date_naive();
+        let today_tasks = tasks.fetch(kasl::libs::task::TaskFilter::Date(today)).unwrap();
+        assert_eq!(today_tasks.len(), 3, "DATE filter");
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_database_error_handling(_ctx: &mut SimpleCommandTestContext) {
+    fn test_fetching_an_unknown_task_id(_ctx: &mut DbOperationsTestContext) {
+        // An id nobody ever issued must come back empty rather than as an
+        // error: callers branch on `None`, not on a failed lookup.
+        let _db = Db::new().unwrap();
+        let mut tasks = Tasks::new().unwrap();
+
+        assert!(tasks.get_by_id(99999).unwrap().is_none());
+    }
+
+    #[test_context(DbOperationsTestContext)]
+    #[serial]
+    #[test]
+    fn test_database_error_handling(_ctx: &mut DbOperationsTestContext) {
         // Test operations that should handle errors gracefully
         let _db = Db::new().unwrap();
         let mut tasks = Tasks::new().unwrap();
@@ -179,10 +201,10 @@ mod tests {
         }
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_concurrent_database_access(_ctx: &mut SimpleCommandTestContext) {
+    fn test_concurrent_database_access(_ctx: &mut DbOperationsTestContext) {
         // Test that multiple database instances can coexist
         let _db1 = Db::new().unwrap();
         let _db2 = Db::new().unwrap();
@@ -208,10 +230,10 @@ mod tests {
         assert_eq!(list1.len(), 2);
     }
 
-    #[test_context(SimpleCommandTestContext)]
+    #[test_context(DbOperationsTestContext)]
     #[serial]
     #[test]
-    fn test_workday_lifecycle(_ctx: &mut SimpleCommandTestContext) {
+    fn test_workday_lifecycle(_ctx: &mut DbOperationsTestContext) {
         // Test complete workday creation and management
         let _db = Db::new().unwrap();
         let mut workdays = Workdays::new().unwrap();

@@ -53,6 +53,17 @@ mod tests {
         path
     }
 
+    /// Announces a skipped test on stdout and returns `true`.
+    ///
+    /// A guard that returns silently makes a test that never runs
+    /// indistinguishable from one that passed: if the keyring broke on the
+    /// developer's own machine, three green lines would say nothing. Run the
+    /// suite with `--nocapture` to see these.
+    fn skipped(test: &str, why: &str) -> bool {
+        println!("SKIP {test}: {why}");
+        true
+    }
+
     /// True when this machine has a usable keyring.
     ///
     /// CI runners generally do not: headless Linux has no Secret Service, and
@@ -89,7 +100,10 @@ mod tests {
     #[serial]
     #[test]
     fn legacy_file_is_migrated_into_the_keyring(_ctx: &mut SecretTestContext) {
-        if !keyring_available() || !built_with_default_keys() {
+        if !keyring_available() && skipped("legacy_file_is_migrated_into_the_keyring", "no usable keyring on this machine") {
+            return;
+        }
+        if !built_with_default_keys() && skipped("legacy_file_is_migrated_into_the_keyring", "this build carries custom key material") {
             return;
         }
 
@@ -133,7 +147,7 @@ mod tests {
     #[serial]
     #[test]
     fn stored_credential_round_trips(_ctx: &mut SecretTestContext) {
-        if !keyring_available() {
+        if !keyring_available() && skipped("stored_credential_round_trips", "no usable keyring on this machine") {
             return;
         }
 
@@ -150,7 +164,7 @@ mod tests {
     #[serial]
     #[test]
     fn deleting_an_absent_credential_succeeds(_ctx: &mut SecretTestContext) {
-        if !keyring_available() {
+        if !keyring_available() && skipped("deleting_an_absent_credential_succeeds", "no usable keyring on this machine") {
             return;
         }
 

@@ -94,4 +94,24 @@ mod tests {
         // The start time should not have changed
         assert_eq!(workday1.start, workday2.start);
     }
+
+    #[test_context(WorkdayTestContext)]
+    #[serial]
+    #[test]
+    fn ending_a_day_that_was_never_started_writes_nothing(_ctx: &mut WorkdayTestContext) {
+        // Documents a known defect rather than the desired behaviour: the
+        // UPDATE matches no row, `insert_end` reports Ok, and `kasl end`
+        // prints "Workday ended for today" over an empty database. The test
+        // pins the storage side of it - nothing is created out of thin air -
+        // so the fix (reporting the missing day, planned for the doctor
+        // stage) has to change the return value, not the data.
+        let mut workdays = Workdays::new().unwrap();
+        let date = Local::now().date_naive();
+
+        assert!(workdays.insert_end(date).is_ok(), "the missing day is currently not reported");
+        assert!(
+            workdays.fetch(date).unwrap().is_none(),
+            "ending an unstarted day must not conjure a workday record"
+        );
+    }
 }

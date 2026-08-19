@@ -1,3 +1,10 @@
+//! End-to-end scenarios across the storage layers.
+//!
+//! A day is not one table: starting it writes a workday, the tasks recorded
+//! against it live elsewhere, and the config that drives both is a third
+//! store. These tests drive whole sequences - open a day, record tasks,
+//! close it, reopen the database - to catch the seams between them.
+
 #[cfg(test)]
 mod tests {
     use chrono::{Duration, Utc};
@@ -10,11 +17,11 @@ mod tests {
     use tempfile::TempDir;
     use test_context::{TestContext, test_context};
 
-    struct SimpleIntegrationTestContext {
+    struct WorkflowTestContext {
         _temp_dir: TempDir,
     }
 
-    impl TestContext for SimpleIntegrationTestContext {
+    impl TestContext for WorkflowTestContext {
         fn setup() -> Self {
             let temp_dir = tempfile::tempdir().unwrap();
             // SAFETY: tests touching the env are #[serial] or single-threaded setup
@@ -25,14 +32,14 @@ mod tests {
             unsafe {
                 std::env::set_var("LOCALAPPDATA", temp_dir.path());
             }
-            SimpleIntegrationTestContext { _temp_dir: temp_dir }
+            WorkflowTestContext { _temp_dir: temp_dir }
         }
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_complete_work_session_workflow(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_complete_work_session_workflow(_ctx: &mut WorkflowTestContext) {
         // 1. Initialize database
         let _db = Db::new().unwrap();
 
@@ -49,9 +56,9 @@ mod tests {
         let task2 = Task::new("Code review", "Review PR #123", Some(50));
         let task3 = Task::new("Bug fix", "Fix login issue", Some(75));
 
-        let _insert1 = tasks.insert(&task1);
-        let _insert2 = tasks.insert(&task2);
-        let _insert3 = tasks.insert(&task3);
+        tasks.insert(&task1).unwrap();
+        tasks.insert(&task2).unwrap();
+        tasks.insert(&task3).unwrap();
 
         // 5. Complete some tasks during the day
         let task_list = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
@@ -64,8 +71,8 @@ mod tests {
         completed_task1.completeness = Some(100);
         completed_task2.completeness = Some(100);
 
-        let _update1 = tasks.update(&completed_task1);
-        let _update2 = tasks.update(&completed_task2);
+        tasks.update(&completed_task1).unwrap();
+        tasks.update(&completed_task2).unwrap();
 
         // 6. End the workday
         workdays.insert_end(today).unwrap();
@@ -80,10 +87,10 @@ mod tests {
         assert_eq!(completed_tasks.len(), 2); // task1 and task2 completed
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_multi_day_workflow(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_multi_day_workflow(_ctx: &mut WorkflowTestContext) {
         let _db = Db::new().unwrap();
         let mut workdays = Workdays::new().unwrap();
         let mut tasks = Tasks::new().unwrap();
@@ -92,22 +99,19 @@ mod tests {
 
         // Create workdays for 3 consecutive days
         for day in 0..3 {
-            let day_start = base_date + Duration::days(day) + Duration::hours(9);
-            let _day_end = day_start + Duration::hours(8);
-
             let day_date = (base_date + Duration::days(day)).date_naive();
             workdays.insert_start(day_date).unwrap();
 
             // Create task for each day
             let task_name = format!("Day {} Task", day + 1);
             let task = Task::new(&task_name, "Daily task", Some(50));
-            let _insert = tasks.insert(&task);
+            tasks.insert(&task).unwrap();
 
             // Complete the task
             let task_list = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
             let mut last_task = task_list.last().unwrap().clone();
             last_task.completeness = Some(100);
-            let _update = tasks.update(&last_task);
+            tasks.update(&last_task).unwrap();
 
             // End the workday
             workdays.insert_end(day_date).unwrap();
@@ -121,10 +125,10 @@ mod tests {
         assert!(completed_tasks.len() >= 3);
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_configuration_integration(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_configuration_integration(_ctx: &mut WorkflowTestContext) {
         // 1. Create and save a configuration
         let config = Config {
             monitor: Some(kasl::libs::config::MonitorConfig {
@@ -175,10 +179,10 @@ mod tests {
         assert!(result.is_ok());
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_database_consistency(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_database_consistency(_ctx: &mut WorkflowTestContext) {
         // Test that database operations maintain consistency
         let _db = Db::new().unwrap();
         let mut workdays = Workdays::new().unwrap();
@@ -191,7 +195,7 @@ mod tests {
         // Create tasks
         for i in 1..=5 {
             let task = Task::new(&format!("Task {}", i), &format!("Description {}", i), Some(i * 20));
-            let _insert = tasks.insert(&task);
+            tasks.insert(&task).unwrap();
         }
 
         // Complete every other task
@@ -200,7 +204,7 @@ mod tests {
             if index % 2 == 0 {
                 let mut completed_task = task.clone();
                 completed_task.completeness = Some(100);
-                let _update = tasks.update(&completed_task);
+                tasks.update(&completed_task).unwrap();
             }
         }
 
@@ -218,10 +222,10 @@ mod tests {
         assert_eq!(completed_count, 3); // Tasks 1, 3, and 5 (indices 0, 2, 4)
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_error_recovery_workflow(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_error_recovery_workflow(_ctx: &mut WorkflowTestContext) {
         let _db = Db::new().unwrap();
         let mut tasks = Tasks::new().unwrap();
 
@@ -263,10 +267,10 @@ mod tests {
         assert!(all_tasks.len() >= 2); // At least the two valid tasks
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_concurrent_access_simulation(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_concurrent_access_simulation(_ctx: &mut WorkflowTestContext) {
         // Simulate concurrent access by creating multiple database handles
         let _db1 = Db::new().unwrap();
         let _db2 = Db::new().unwrap();
@@ -280,13 +284,13 @@ mod tests {
         let task1 = Task::new("From handle 1", "Task via first database handle", Some(30));
         let yesterday = (Utc::now() - Duration::days(1)).date_naive();
         workdays1.insert_start(yesterday).unwrap();
-        let _insert1 = tasks1.insert(&task1);
+        tasks1.insert(&task1).unwrap();
 
         // Create data through second handle
         let task2 = Task::new("From handle 2", "Task via second database handle", Some(70));
         let today = Utc::now().date_naive();
         workdays2.insert_start(today).unwrap();
-        let _insert2 = tasks2.insert(&task2);
+        tasks2.insert(&task2).unwrap();
 
         // Both handles should see all data
         let tasks_via_handle1 = tasks1.fetch(kasl::libs::task::TaskFilter::All).unwrap();
@@ -300,10 +304,10 @@ mod tests {
         workdays2.insert_end(today).unwrap();
     }
 
-    #[test_context(SimpleIntegrationTestContext)]
+    #[test_context(WorkflowTestContext)]
     #[serial]
     #[test]
-    fn test_data_persistence_across_sessions(_ctx: &mut SimpleIntegrationTestContext) {
+    fn test_data_persistence_across_sessions(_ctx: &mut WorkflowTestContext) {
         // First session: create data
         {
             let _db = Db::new().unwrap();
@@ -313,7 +317,7 @@ mod tests {
             let task = Task::new("Persistent Task", "Should survive across sessions", Some(40));
             let today = Utc::now().date_naive();
             workdays.insert_start(today).unwrap();
-            let _insert = tasks.insert(&task);
+            tasks.insert(&task).unwrap();
             workdays.insert_end(today).unwrap();
         } // Database connection closes here
 
@@ -333,5 +337,91 @@ mod tests {
             let persistent_task = persisted_tasks.iter().find(|t| t.name == "Persistent Task");
             assert!(persistent_task.is_some());
         }
+    }
+
+    #[test_context(WorkflowTestContext)]
+    #[serial]
+    #[test]
+    fn test_task_lifecycle_management(_ctx: &mut WorkflowTestContext) {
+        let _db = Db::new().unwrap();
+        let mut tasks = Tasks::new().unwrap();
+
+        // Create tasks with different completion levels
+        let task1 = Task::new("New Task", "Just created", Some(0));
+        let task2 = Task::new("In Progress Task", "Half done", Some(50));
+        let task3 = Task::new("Almost Done Task", "Nearly finished", Some(90));
+
+        tasks.insert(&task1).unwrap();
+        tasks.insert(&task2).unwrap();
+        tasks.insert(&task3).unwrap();
+
+        // Get all tasks
+        let all_tasks = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
+        assert_eq!(all_tasks.len(), 3);
+
+        // Complete the first task
+        let mut task_to_complete = all_tasks[0].clone();
+        task_to_complete.completeness = Some(100);
+        let update_result = tasks.update(&task_to_complete);
+        assert!(update_result.is_ok());
+
+        // Verify completion
+        let updated_tasks = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
+        let completed_count = updated_tasks.iter().filter(|t| t.completeness == Some(100)).count();
+        assert_eq!(completed_count, 1);
+    }
+
+    #[test_context(WorkflowTestContext)]
+    #[serial]
+    #[test]
+    fn test_workday_time_management(_ctx: &mut WorkflowTestContext) {
+        let _db = Db::new().unwrap();
+        let mut workdays = Workdays::new().unwrap();
+
+        // Test creating workdays for different dates
+        let today = Utc::now().date_naive();
+        let yesterday = (Utc::now() - Duration::days(1)).date_naive();
+
+        // Create workdays
+        workdays.insert_start(yesterday).unwrap();
+        workdays.insert_start(today).unwrap();
+
+        // End workdays
+        workdays.insert_end(yesterday).unwrap();
+        workdays.insert_end(today).unwrap();
+
+        // Verify both workdays exist and are completed
+        let yesterday_workday = workdays.fetch(yesterday).unwrap();
+        let today_workday = workdays.fetch(today).unwrap();
+
+        assert!(yesterday_workday.is_some());
+        assert!(today_workday.is_some());
+        assert!(yesterday_workday.unwrap().end.is_some());
+        assert!(today_workday.unwrap().end.is_some());
+    }
+
+    #[test_context(WorkflowTestContext)]
+    #[serial]
+    #[test]
+    fn test_error_handling_and_recovery(_ctx: &mut WorkflowTestContext) {
+        let _db = Db::new().unwrap();
+        let mut tasks = Tasks::new().unwrap();
+
+        // Test creating a valid task
+        let task = Task::new("Valid task", "This should work", Some(50));
+        let result = tasks.insert(&task);
+        assert!(result.is_ok());
+
+        // Test operations on non-existent IDs
+        let non_existent_task = tasks.get_by_id(99999).unwrap();
+        assert!(non_existent_task.is_none());
+
+        // Test that valid operations still work after error cases
+        let another_task = Task::new("Another task", "Should still work", Some(75));
+        let result2 = tasks.insert(&another_task);
+        assert!(result2.is_ok());
+
+        let all_tasks = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
+        assert_eq!(all_tasks.len(), 2);
     }
 }
