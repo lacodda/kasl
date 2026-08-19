@@ -85,7 +85,7 @@ kasl --version
 
 ### Update Installed
 ```
-✅ The kasl application has been successfully updated to version 1.2.0!
+✅ The kasl application has been successfully updated to version 1.4.0!
 ```
 
 The download and the binary swap are silent; only the result is printed.
@@ -98,7 +98,7 @@ afterwards:
 ```
 ℹ️ Stopping watcher for update...
 ℹ️ Restarting watcher after update...
-✅ The kasl application has been successfully updated to version 1.2.0!
+✅ The kasl application has been successfully updated to version 1.4.0!
 ```
 
 ### Update Available
@@ -106,7 +106,7 @@ afterwards:
 Other commands mention a newer release when they notice one:
 
 ```
-A new version of kasl is available: v1.2.0
+A new version of kasl is available: v1.4.0
 Upgrade now by running: kasl self-update
 ```
 

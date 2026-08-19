@@ -105,7 +105,7 @@ Monthly work productivity: 95.4%
 - **Reports where they need to go.** One command submits the day, or the month, to your corporate API. Exports to CSV, JSON and Excel, including the hourly breakdown that time sheets tend to ask for.
 - **Credentials in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing sensitive in a config file, nothing encrypted with a key that ships inside the binary.
 - **Nothing that hangs.** Every prompt checks for a terminal first, so kasl under cron, under CI or under the daemon fails with a message naming the flag you needed instead of waiting forever for an answer nobody can give.
-- **A short alias.** `ka` is installed alongside `kasl`, and completions are available for bash, zsh, fish, PowerShell and elvish.
+- **A short alias.** `ka` is installed alongside `kasl` by every channel and updated with it, and completions are available for bash, zsh, fish, PowerShell and elvish.
 
 ## Install
 
@@ -133,7 +133,7 @@ macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh
 ```
 
-**Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` on your `PATH`.
+**Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` - and `ka` next to it, if you want the alias - on your `PATH`.
 
 Both installers take the newest release by default; set `KASL_VERSION` to a tag to pin one, `KASL_INSTALL_DIR` to choose where the binary lands, and `KASL_NO_ALIAS=1` to skip the `ka` alias.
 
