@@ -45,6 +45,22 @@ try {
     if (-not $binary) { throw "The archive did not contain kasl.exe" }
     New-Item -ItemType Directory -Force $dir | Out-Null
     Copy-Item $binary.FullName $dir -Force
+
+    # Short alias `ka`: taken from the archive, which carries it as a second
+    # binary since v1.4, and copied from kasl.exe for older releases (symlinks
+    # need elevation on Windows). Skipped when another `ka` already answers in
+    # PATH; $env:KASL_NO_ALIAS=1 opts out.
+    if (-not $env:KASL_NO_ALIAS) {
+        $alias = Join-Path $dir "ka.exe"
+        $existing = Get-Command ka -ErrorAction SilentlyContinue
+        if (-not $existing -or $existing.Source -eq $alias) {
+            $source = Get-ChildItem -Path $tmp -Filter "ka.exe" -Recurse | Select-Object -First 1
+            Copy-Item $(if ($source) { $source.FullName } else { $binary.FullName }) $alias -Force
+            Write-Host "Alias ka -> kasl"
+        } else {
+            Write-Host "Note: 'ka' already resolves to $($existing.Source) - alias skipped."
+        }
+    }
 } finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -55,19 +71,6 @@ if (($userPath -split ";") -notcontains $dir) {
     Write-Host "Added $dir to your user PATH - restart the terminal to pick it up."
 }
 Write-Host "Installed kasl $tag to $dir\kasl.exe"
-
-# Short alias `ka`: a copy, since symlinks need elevation on Windows. Skipped
-# when another `ka` already answers in PATH; $env:KASL_NO_ALIAS=1 opts out.
-if (-not $env:KASL_NO_ALIAS) {
-    $alias = Join-Path $dir "ka.exe"
-    $existing = Get-Command ka -ErrorAction SilentlyContinue
-    if (-not $existing -or $existing.Source -eq $alias) {
-        Copy-Item (Join-Path $dir "kasl.exe") $alias -Force
-        Write-Host "Alias ka -> kasl"
-    } else {
-        Write-Host "Note: 'ka' already resolves to $($existing.Source) - alias skipped."
-    }
-}
 
 # `init` is an interactive wizard, so it cannot run from here: this script is
 # usually piped into iex, which leaves no terminal for prompts.

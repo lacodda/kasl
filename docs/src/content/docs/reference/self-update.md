@@ -22,8 +22,9 @@ The update process performs a complete workflow:
 1. **Version Check**: Reads the latest release tag from the `releases/latest` redirect (no GitHub API quota involved)
 2. **Platform Detection**: Identifies the correct binary for the current OS/architecture
 3. **Download**: Retrieves the latest release archive
-4. **Extraction**: Unpacks the new binary from the archive
+4. **Extraction**: Unpacks the new binaries from the archive
 5. **Replacement**: Safely replaces the current executable with backup
+6. **Alias refresh**: Updates the short `ka` alias too, where it is installed
 
 ## Update Sources
 
@@ -51,6 +52,7 @@ The update process is designed to be safe and atomic:
 - **Quiet Until Done**: The download and swap print nothing; the result line says which version is now installed
 - **Error Handling**: Handles network errors and other issues gracefully
 - **Manual Rollback**: The replaced binary is kept as `kasl.bak`, so a bad update can be undone by hand
+- **No Leftovers**: Only the executables are taken out of the archive; nothing else is written next to the binary
 
 ## Examples
 
@@ -244,6 +246,16 @@ the most recent update - and nothing older.
 
 1. **Keep it until the new version is proven**: it is the only way back
 2. **Restore by copying it over the binary**: nothing reverts automatically
+
+## The `ka` Alias
+
+Where the short alias is installed, `self-update` replaces it along with the
+main binary, so `ka` never answers to an older version than `kasl`. An update
+never adds the alias to an installation that does not have it - skipping it at
+install time (`KASL_NO_ALIAS=1`) stays skipped.
+
+On macOS and Linux the installer makes `ka` a symlink to `kasl`, so it follows
+every update for free.
 
 ## Integration with Other Commands
 

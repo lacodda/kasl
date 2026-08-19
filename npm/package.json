@@ -14,10 +14,12 @@
   },
   "keywords": ["cli", "time-tracking", "productivity", "work", "tasks", "reports", "jira", "gitlab"],
   "bin": {
-    "kasl": "run.js"
+    "kasl": "run.js",
+    "ka": "run.js"
   },
-  "files": ["download.js", "install.js", "run.js"],
+  "files": ["download.js", "install.js", "prepack.js", "run.js", "README.md"],
   "scripts": {
+    "prepack": "node prepack.js",
     "postinstall": "node install.js"
   },
   "os": ["win32", "darwin", "linux"],

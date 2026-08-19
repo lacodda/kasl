@@ -69,7 +69,8 @@ docs/.astro/
 *.db
 .env
 
-# npm wrapper artifacts (downloaded binary)
+# npm wrapper artifacts (downloaded binary, README copied by prepack)
 npm/kasl.exe
 npm/kasl
 npm/archive.*
+npm/README.md

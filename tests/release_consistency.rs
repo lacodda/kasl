@@ -134,6 +134,83 @@ mod tests {
     }
 
     #[test]
+    fn every_declared_binary_is_packaged_into_the_release() {
+        // Field report, 14.08: `ka` was declared in Cargo.toml, built by CI
+        // and promised by the README, but the packaging step copied only
+        // `kasl` - so `where ka` came up empty on every machine installed
+        // from a release archive.
+        let manifest = read("Cargo.toml");
+        let binaries: Vec<String> = manifest
+            .lines()
+            .map(str::trim)
+            .scan(false, |in_bin, line| {
+                if line == "[[bin]]" {
+                    *in_bin = true;
+                    return Some(None);
+                }
+                if line.starts_with('[') {
+                    *in_bin = false;
+                    return Some(None);
+                }
+                if *in_bin && let Some(value) = line.strip_prefix("name") {
+                    return Some(Some(value.trim_start_matches([' ', '=']).trim().trim_matches('"').to_string()));
+                }
+                Some(None)
+            })
+            .flatten()
+            .collect();
+
+        assert!(binaries.len() > 1, "expected several [[bin]] targets in Cargo.toml, found {binaries:?}");
+
+        let workflow = read(".github/workflows/release.yml");
+        for binary in &binaries {
+            assert!(
+                workflow.contains(&format!("release/{binary}.exe")),
+                "release.yml does not package `{binary}.exe`; the Windows archive would ship without it"
+            );
+            assert!(
+                workflow.contains(&format!("release/{binary}\"")),
+                "release.yml does not package `{binary}`; the Unix archives would ship without it"
+            );
+        }
+    }
+
+    #[test]
+    fn the_npm_package_exposes_every_declared_binary() {
+        // npm installs its own shims from `bin`, so a binary missing there is
+        // missing for everyone who installed through npm, however well the
+        // release archive is packed.
+        let npm = read("npm/package.json");
+        for name in ["kasl", "ka"] {
+            assert!(
+                npm.contains(&format!("\"{name}\": \"run.js\"")),
+                "npm/package.json does not expose `{name}`; the README promises both names"
+            );
+        }
+    }
+
+    #[test]
+    fn the_npm_readme_is_produced_by_the_package_itself() {
+        // Copying the README in the publish workflow meant a hand-run
+        // `npm publish` shipped a page with no README at all. `prepack` runs
+        // for every pack, CI or manual.
+        let npm = read("npm/package.json");
+        assert!(npm.contains("\"prepack\""), "npm/package.json has no prepack script to bring the README in");
+        assert!(npm.contains("README.md"), "README.md is not listed in the npm package files");
+        assert!(
+            repo_root().join("npm/prepack.js").exists(),
+            "npm/prepack.js is missing; the packed tarball would have no README"
+        );
+
+        let workflow = read(".github/workflows/publish.yml");
+        assert!(
+            !workflow.contains("cp README.md npm/README.md"),
+            "the publish workflow still copies the README; that step belongs to the package, \
+             otherwise a manual publish skips it"
+        );
+    }
+
+    #[test]
     fn readme_only_shows_commands_that_exist() {
         // The old README documented `kasl adjust` for months after the command
         // was removed. Every `$ kasl <word>` in a console block must name a

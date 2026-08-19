@@ -50,6 +50,8 @@ echo "Installed kasl $TAG to $BIN_DIR/kasl"
 
 # Short alias `ka`, unless something else in PATH already answers to that name
 # (ours from a previous run does not count). KASL_NO_ALIAS=1 skips it.
+# A symlink rather than the archive's own `ka` binary: it can never fall
+# behind the version `kasl` was updated to.
 if [ -z "${KASL_NO_ALIAS:-}" ]; then
     EXISTING=$(command -v ka 2>/dev/null || true)
     if [ -z "$EXISTING" ] || [ "$EXISTING" = "$BIN_DIR/ka" ]; then

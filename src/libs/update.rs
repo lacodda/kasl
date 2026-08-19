@@ -24,7 +24,7 @@ use flate2::read::GzDecoder;
 use reqwest::Client;
 use std::env;
 use std::fs::{self, File};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tar::Archive;
 
 // Include application metadata (name, version, owner) generated at build time.
@@ -241,30 +241,67 @@ impl Updater {
         }
     }
 
-    /// Unpacks the archive: the entry matching the current executable's
-    /// name replaces it (old binary renamed to `.bak` first), everything
-    /// else lands next to it. Errors if the archive holds no executable.
+    /// Unpacks the release archive over the installed binaries.
+    ///
+    /// Only the executables are taken: `kasl` (renamed to `.bak` first, so a
+    /// broken update can be undone by hand) and, when the alias sits next to
+    /// it, `ka`. LICENSE and README are skipped - copying them used to
+    /// recreate the archive's `kasl-<tag>-<target>/` prefix inside the
+    /// installation directory, leaving a folder of stale duplicates behind
+    /// after every update.
     fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<()> {
+        let current_exe = env::current_exe()?;
+        let install_dir = current_exe.parent().unwrap().to_path_buf();
+
+        Self::unpack_binaries(tar_gz_path, &install_dir, &self.name)
+    }
+
+    /// Replaces the binaries in `install_dir` from the archive.
+    ///
+    /// Split out from [`Updater::extract_and_replace_binary`] so the layout
+    /// rules can be tested against a real archive without a real update:
+    /// both release bugs found in the field (the alias missing, the leftover
+    /// version folders) lived here, untested.
+    pub(crate) fn unpack_binaries(tar_gz_path: &PathBuf, install_dir: &Path, app_name: &str) -> Result<()> {
+        // The app updates under its own name, not under whichever name was
+        // typed: `ka update` must still replace `kasl`.
+        let exe_suffix = env::consts::EXE_SUFFIX;
+        let primary = format!("{}{}", app_name, exe_suffix);
+        let alias = format!("ka{}", exe_suffix);
+
         let tar_gz = File::open(tar_gz_path)?;
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
         let mut is_updated = false;
 
-        let current_exe = env::current_exe()?;
-        let current_exe_backup = current_exe.with_extension(BACKUP_EXTENSION);
-
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
-            let entry_path = entry.path()?;
+            let entry_path = entry.path()?.to_path_buf();
+            let Some(file_name) = entry_path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
 
-            if entry_path.ends_with(current_exe.file_name().unwrap()) {
-                // Keep the running binary as the one-and-only backup.
-                fs::rename(&current_exe, &current_exe_backup)?;
-                entry.unpack(&current_exe)?;
+            // Flattened on purpose: archive entries carry a
+            // `kasl-<tag>-<target>/` prefix that must not reach the
+            // installation directory.
+            if file_name == primary {
+                let target = install_dir.join(&primary);
+                // Keep the replaced binary as the one-and-only backup.
+                if target.exists() {
+                    fs::rename(&target, target.with_extension(BACKUP_EXTENSION))?;
+                }
+                entry.unpack(&target)?;
                 is_updated = true;
-            } else {
-                let dest_path = current_exe.parent().unwrap().join(&entry_path);
-                entry.unpack(dest_path)?;
+            } else if file_name == alias {
+                let target = install_dir.join(&alias);
+                // The alias is refreshed only where it is already installed:
+                // updating must not add a binary the user declined
+                // (`KASL_NO_ALIAS`), but a `ka` left behind at an older
+                // version would be worse than none at all.
+                if target.exists() {
+                    fs::remove_file(&target)?;
+                    entry.unpack(&target)?;
+                }
             }
         }
 
@@ -313,5 +350,121 @@ impl Updater {
             }
             Err(_) => true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use flate2::Compression;
+    use flate2::write::GzEncoder;
+    use tempfile::TempDir;
+
+    /// Builds an archive shaped like a real release asset: every entry sits
+    /// under a `kasl-<tag>-<target>/` directory, next to LICENSE and README.
+    fn release_archive(dir: &Path, files: &[(&str, &str)]) -> PathBuf {
+        let path = dir.join("release.tar.gz");
+        let encoder = GzEncoder::new(File::create(&path).unwrap(), Compression::default());
+        let mut builder = tar::Builder::new(encoder);
+
+        for (name, contents) in files {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(contents.len() as u64);
+            header.set_mode(0o755);
+            header.set_cksum();
+            builder
+                .append_data(&mut header, format!("kasl-v9.9.9-x86_64-pc-windows-msvc/{name}"), contents.as_bytes())
+                .unwrap();
+        }
+
+        builder.into_inner().unwrap().finish().unwrap();
+        path
+    }
+
+    fn exe(name: &str) -> String {
+        format!("{}{}", name, env::consts::EXE_SUFFIX)
+    }
+
+    #[test]
+    fn the_archive_directory_prefix_stays_out_of_the_installation() {
+        // Field report, 14.08: every update left a `kasl-v1.2.0/` folder with
+        // copies of LICENSE and README next to the binary, because non-binary
+        // entries were unpacked under their in-archive path.
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "old").unwrap();
+
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new"), ("LICENSE", "MIT"), ("README.md", "docs")]);
+
+        Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
+
+        let leftovers: Vec<_> = fs::read_dir(&install)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|name| name.starts_with("kasl-v"))
+            .collect();
+        assert!(leftovers.is_empty(), "update left {leftovers:?} in the installation directory");
+        assert!(!install.join("LICENSE").exists(), "LICENSE does not belong next to the binary");
+        assert!(!install.join("README.md").exists(), "README does not belong next to the binary");
+    }
+
+    #[test]
+    fn the_binary_is_replaced_and_the_old_one_kept_as_backup() {
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "old").unwrap();
+
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new")]);
+        Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
+
+        assert_eq!(fs::read_to_string(install.join(exe("kasl"))).unwrap(), "new");
+        assert_eq!(
+            fs::read_to_string(install.join("kasl.bak")).unwrap(),
+            "old",
+            "the replaced binary must remain recoverable"
+        );
+    }
+
+    #[test]
+    fn an_installed_alias_is_updated_together_with_the_binary() {
+        // A `ka` left at the previous version is a trap: it answers to the
+        // same commands while running older code.
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "old").unwrap();
+        fs::write(install.join(exe("ka")), "old").unwrap();
+
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new"), (&exe("ka"), "new")]);
+        Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
+
+        assert_eq!(fs::read_to_string(install.join(exe("ka"))).unwrap(), "new");
+    }
+
+    #[test]
+    fn an_absent_alias_is_not_installed_by_an_update() {
+        // `KASL_NO_ALIAS=1` at install time is a choice; an update must not
+        // quietly overturn it.
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "old").unwrap();
+
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new"), (&exe("ka"), "new")]);
+        Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
+
+        assert!(!install.join(exe("ka")).exists(), "the update added an alias the user never installed");
+    }
+
+    #[test]
+    fn an_archive_without_the_binary_fails_instead_of_reporting_success() {
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+
+        let archive = release_archive(temp.path(), &[("LICENSE", "MIT")]);
+        assert!(Updater::unpack_binaries(&archive, &install, "kasl").is_err());
     }
 }
