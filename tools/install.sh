@@ -8,8 +8,18 @@ REPO="lacodda/kasl"
 case "$(uname -s)-$(uname -m)" in
     Linux-x86_64) TARGET="x86_64-unknown-linux-gnu" ;;
     Darwin-arm64) TARGET="aarch64-apple-darwin" ;;
+    # Git Bash, MSYS2 and Cygwin run this script happily on Windows, where it
+    # has no business being: the Windows build is installed by install.ps1.
+    # Saying so beats the generic "no prebuilt binary" dead end, since a
+    # Windows release does exist - just not for this installer.
+    MINGW*|MSYS*|CYGWIN*)
+        echo "This is the macOS/Linux installer, but you are on Windows ($(uname -s))." >&2
+        echo "Install with PowerShell instead:" >&2
+        echo "  irm https://raw.githubusercontent.com/$REPO/main/tools/install.ps1 | iex" >&2
+        exit 1
+        ;;
     *)
-        echo "No prebuilt binary for $(uname -s)/$(uname -m); install with: cargo install kasl" >&2
+        echo "No prebuilt binary for $(uname -s)/$(uname -m); install with: cargo install kasl-cli" >&2
         exit 1
         ;;
 esac

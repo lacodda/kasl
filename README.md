@@ -133,6 +133,8 @@ macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh
 ```
 
+On Windows use the PowerShell line above: `install.sh` carries the macOS and Linux builds only, and run from Git Bash it stops with a pointer back here.
+
 **Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` - and `ka` next to it, if you want the alias - on your `PATH`.
 
 Both installers take the newest release by default; set `KASL_VERSION` to a tag to pin one, `KASL_INSTALL_DIR` to choose where the binary lands, and `KASL_NO_ALIAS=1` to skip the `ka` alias.

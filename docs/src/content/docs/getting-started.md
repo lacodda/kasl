@@ -6,22 +6,54 @@ This guide will help you get up and running with kasl quickly.
 
 ## Installation
 
-### Quick Install (Recommended)
+One line on Windows (PowerShell):
 
-Install kasl using curl:
-```bash
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh)"
+```powershell
+irm https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.ps1 | iex
 ```
 
-Or using wget:
+One line on macOS / Linux:
+
 ```bash
-sh -c "$(wget https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh -O -)"
+curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh
 ```
+
+Via npm:
+
+```bash
+npm i -g kasl-cli
+```
+
+Via cargo:
+
+```bash
+cargo install kasl-cli
+```
+
+Or download the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` on your `PATH`.
+
+:::caution[On Windows, use the PowerShell line]
+`install.sh` installs the macOS and Linux builds only. Running it from Git Bash, MSYS2 or Cygwin stops with a pointer to `install.ps1` rather than installing anything.
+:::
+
+### Installer options
+
+Both scripts read three environment variables:
+
+| Variable | Effect |
+| --- | --- |
+| `KASL_VERSION` | Install this tag (e.g. `v1.4.0`) instead of the newest release |
+| `KASL_INSTALL_DIR` | Where the binaries land; defaults to `%LOCALAPPDATA%\Programs\kasl` on Windows and `~/.local/bin` elsewhere |
+| `KASL_NO_ALIAS` | Set to `1` to skip the short `ka` alias |
+
+### The `ka` alias
+
+The installers and the npm package also set up `ka` as a short second name, so `ka report` is the same as `kasl report`. It is skipped when something else in your `PATH` already answers to `ka`, and `self-update` keeps it on the same version as `kasl`. Installing through `cargo install` gives you both names, since the crate builds them as two binaries.
 
 ### Build from Source
 
 Requirements:
-- Rust 1.70 or higher
+- Rust 1.95 or higher
 - Git
 
 ```bash
