@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.4.0] - 2026-08-19
+
+### Bug Fixes
+- Ship the ka alias and stop self-update from littering
+
+### Testing
+- Remove duplicated suites and make skipped tests visible
 ## [1.3.0] - 2026-08-14
 
 ### Documentation
