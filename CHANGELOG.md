@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.4.1] - 2026-08-19
+
+### Bug Fixes
+- Point Windows shells at the PowerShell installer
 ## [1.4.0] - 2026-08-19
 
 ### Bug Fixes
