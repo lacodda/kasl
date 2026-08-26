@@ -105,6 +105,13 @@ Controls activity monitoring behavior:
 - **Description**: Minimum work interval duration for report filtering
 - **Usage**: Intervals shorter than this duration are automatically filtered out from reports (display and API submission)
 
+### `pause_merge_gap`
+- **Type**: `u64`
+- **Default**: `30`
+- **Unit**: Seconds
+- **Description**: Largest gap between two consecutive pauses that still counts as one pause
+- **Usage**: A stray keypress in the middle of a break splits it into two records; pauses no further apart than this are treated as one, so the sub-threshold halves are not dropped. Keep it small - a few tens of seconds - or genuine short work periods get swallowed into the break. Not offered by the wizard; edit `config.json` to change it
+
 ## SiServer Configuration
 
 Internal company API integration:
@@ -207,6 +214,104 @@ Controls productivity tracking and reporting thresholds:
 }
 ```
 
+## Report Configuration
+
+Defaults for generated report files. Every field is optional.
+
+### `output_dir`
+- **Type**: `String`
+- **Default**: unset
+- **Description**: Directory for exports made without an explicit `--output`; created if missing
+- **Usage**: Unset means a timestamped file in the current directory
+
+### `filename_template`
+- **Type**: `String`
+- **Default**: `"daily_report_{date}{seq}"`
+- **Description**: File name (without extension) for generated reports
+- **Placeholders**: `{date}` - the report date as `YYYY-MM-DD`; `{seq}` - empty for the day's first report, then `_2`, `_3`, and so on
+- **Usage**: The extension follows the export format
+
+### `language`
+- **Type**: `String`
+- **Default**: `"en"`
+- **Values**: `"en"` or `"ru"`; anything else falls back to `"en"`
+- **Description**: Language of the labels inside hourly Excel reports - the title, the weekday, the break label and the column headers
+- **Usage**: Russian was the default before 1.0; this opts back into it
+
+### `template`
+- **Type**: `String`
+- **Default**: unset (the built-in `siserver` look)
+- **Description**: Design template name, read from `<data>/report_templates/<name>.json`
+- **Usage**: A missing file falls back to the built-in look rather than failing
+
+**Example:**
+```json
+{
+  "report": {
+    "output_dir": "~/reports",
+    "filename_template": "daily_report_{date}{seq}",
+    "language": "en"
+  }
+}
+```
+
+## Jira Inbox Configuration
+
+Controls the background poll behind [`kasl inbox`](/reference/inbox/). Requires
+the `jira` block; the inbox stays off when this one is absent.
+
+### `enabled`
+- **Type**: `bool`
+- **Default**: `true`
+- **Description**: Whether the watcher polls Jira for open assigned issues
+
+### `poll_interval_secs`
+- **Type**: `u64`
+- **Default**: `300`
+- **Unit**: Seconds
+- **Description**: Time between polls
+
+### `notify`
+- **Type**: `bool`
+- **Default**: `true`
+- **Description**: Desktop toast when a new issue lands on you
+
+### `notify_changes`
+- **Type**: `bool`
+- **Default**: `true`
+- **Description**: Toast when an issue already in the inbox visibly changes - status, priority or score
+
+### `notify_gone`
+- **Type**: `bool`
+- **Default**: `false`
+- **Description**: Toast when an issue leaves the inbox, closed or reassigned. Off by default: a departure is rarely something to interrupt you for
+
+### `custom_fields`
+- **Type**: `{ "id": String, "label": String }[]`
+- **Default**: `[]`
+- **Description**: Extra Jira fields to fetch and display, such as a scoring field
+- **Example**: `{ "id": "customfield_12345", "label": "Scoring" }`
+
+### `sort_by_field`
+- **Type**: `String`
+- **Default**: unset
+- **Description**: Field id used to rank the inbox, descending - typically the scoring custom field
+
+**Example:**
+```json
+{
+  "jira_inbox": {
+    "enabled": true,
+    "poll_interval_secs": 300,
+    "notify": true,
+    "notify_changes": true,
+    "notify_gone": false,
+    "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
+    "sort_by_field": "customfield_12345"
+  }
+}
+```
+
 ## Interactive Configuration
 
 ### Initial Setup
@@ -300,80 +405,36 @@ Common validation errors:
 - Invalid URL formats
 - Unsupported configuration values
 
-## Security Considerations
+## Credentials are not in this file
 
-### Credential Storage
-
-- **API Tokens**: Stored encrypted in separate files
-- **Passwords**: Prompted interactively, not stored
-- **Session Data**: Cached temporarily for performance
-
-### File Permissions
-
-Ensure proper file permissions:
+Passwords are never written to `config.json`; they live in the OS keyring - see
+[API Integrations](/concepts/api-integrations/). The file does hold two
+non-password secrets as written: the GitLab `access_token` and the reporting
+server's `auth_token`. On Linux and macOS it is worth keeping the file to
+yourself:
 
 ```bash
-# Linux/macOS
 chmod 600 ~/.local/share/lacodda/kasl/config.json
-chmod 700 ~/.local/share/lacodda/kasl/
 ```
 
-### Environment Variables
+There is no environment-variable override: kasl reads its settings from this
+file only.
 
-Override configuration with environment variables:
+## Editing the file
 
-```bash
-# Override monitor settings
-export KASL_MIN_PAUSE_DURATION=30
-export KASL_PAUSE_THRESHOLD=90
+`kasl setup` walks through the modules and rewrites the file. Fields the wizard
+does not offer - `pause_merge_gap` among them - are edited by hand; kasl keeps
+values it did not ask about.
 
-# Override API URLs
-export KASL_GITLAB_API_URL=https://gitlab.company.com
-export KASL_JIRA_API_URL=https://jira.company.com
-```
-
-## Troubleshooting
-
-### Configuration Issues
-
-**Problem**: Configuration not found
-```bash
-# Check if file exists
-ls ~/.local/share/lacodda/kasl/config.json
-
-# Recreate configuration
-kasl setup
-```
-
-**Problem**: Invalid configuration
-```bash
-# Validate JSON syntax
-python -m json.tool config.json
-
-# Check for missing fields
-kasl watch --foreground
-```
-
-**Problem**: API connection failures
-```bash
-# Test API connectivity
-curl -H "Authorization: Bearer YOUR_TOKEN" https://api.company.com/health
-
-# Check network settings
-ping api.company.com
-```
-
-### Debug Configuration
-
-Enable debug logging to see configuration loading:
+An unreadable or malformed file surfaces on the next command that needs it. To
+see what was loaded:
 
 ```bash
 RUST_LOG=kasl=debug kasl watch --foreground
 ```
 
-This will show:
-- Configuration file location
-- Loaded configuration values
-- Validation results
-- API connection attempts
+## Related pages
 
+- [`setup`](/reference/setup/) - the wizard that writes this file
+- [API Integrations](/concepts/api-integrations/) - GitLab, Jira and SiServer in detail
+- [`watch`](/reference/watch/) - what the monitor settings govern

@@ -126,7 +126,7 @@ Recording a genuine absence therefore raises productivity: the time no longer co
 
 > **Note:** earlier versions had a separate `kasl breaks` command that invented break times to lift the productivity figure above the reporting threshold. It has been removed. Existing break records were migrated into the pause list as protected pauses, so historical reports keep their numbers.
 
-## Related Commands
+## Related commands
 
 - **[`report`](/reference/report/)** - View the complete workday summary including pauses
 - **[`watch`](/reference/watch/)** - Monitor activity and detect pauses automatically

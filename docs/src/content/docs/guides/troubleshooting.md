@@ -1,613 +1,160 @@
 ---
 title: "Troubleshooting"
+sidebar:
+  order: 7
 ---
 
-This guide helps you resolve common issues with kasl.
+Common problems and how to check what is actually happening, rather than guessing.
 
-## Common Issues
+## Enable debug logging first
 
-### Activity Monitoring
-
-#### Problem: Monitoring not starting
-
-**Symptoms**:
-- `kasl watch` fails to start
-- No work sessions detected
-- Error messages about permissions
-
-**Solutions**:
-
-1. **Check permissions**:
-   ```bash
-   # Linux/macOS
-   ls -la ~/.local/share/lacodda/kasl/
-   
-   # Windows
-   dir "%LOCALAPPDATA%\lacodda\kasl"
-   ```
-
-2. **Run in foreground for debugging**:
-   ```bash
-   kasl watch --foreground
-   ```
-
-3. **Check for existing processes**:
-   ```bash
-   # Linux/macOS
-   ps aux | grep kasl
-   
-   # Windows
-   tasklist | findstr kasl
-   ```
-
-4. **Stop existing processes**:
-   ```bash
-   kasl watch --stop
-   ```
-
-#### Problem: False activity detection
-
-**Symptoms**:
-- Work sessions start unexpectedly
-- Pauses not detected properly
-- Inconsistent timing
-
-**Solutions**:
-
-1. **Adjust configuration**:
-   ```bash
-   kasl setup  # Reconfigure monitor settings
-   ```
-
-2. **Increase thresholds**:
-   ```json
-   {
-     "monitor": {
-       "activity_threshold": 60,    // Increase from 30
-       "pause_threshold": 120,      // Increase from 60
-       "min_pause_duration": 30     // Increase from 20
-     }
-   }
-   ```
-
-3. **Check for background processes**:
-   ```bash
-   # Linux/macOS
-   ps aux | grep -E "(mouse|keyboard|input)"
-   ```
-
-### Database Issues
-
-#### Problem: Database locked
-
-**Symptoms**:
-- "database is locked" errors
-- Cannot access data
-- Application crashes
-
-**Solutions**:
-
-1. **Stop all kasl processes**:
-   ```bash
-   kasl watch --stop
-   ```
-
-2. **Check file permissions**:
-   ```bash
-   # Linux/macOS
-   ls -la ~/.local/share/lacodda/kasl/kasl.db
-   
-   # Windows
-   dir "%LOCALAPPDATA%\lacodda\kasl\kasl.db"
-   ```
-
-3. **Fix permissions**:
-   ```bash
-   # Linux/macOS
-   chmod 600 ~/.local/share/lacodda/kasl/kasl.db
-   chmod 700 ~/.local/share/lacodda/kasl/
-   ```
-
-4. **Check for corruption**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "PRAGMA integrity_check;"
-   ```
-
-#### Problem: Migration failures
-
-**Symptoms**:
-- "migration failed" errors
-- Database schema issues
-- Application won't start
-
-**Solutions**:
-
-1. **Check migration status**:
-   ```bash
-   kasl migrations status
-   ```
-
-2. **View migration history**:
-   ```bash
-   kasl migrations history
-   ```
-
-3. **Backup and reset**:
-   ```bash
-   # Backup current database
-   cp ~/.local/share/lacodda/kasl/kasl.db kasl_backup.db
-   
-   # Remove database (will be recreated)
-   rm ~/.local/share/lacodda/kasl/kasl.db
-   
-   # Restart kasl
-   kasl watch
-   ```
-
-### Configuration Issues
-
-#### Problem: Configuration not found
-
-**Symptoms**:
-- "configuration not found" errors
-- Default settings used
-- Cannot save configuration
-
-**Solutions**:
-
-1. **Check configuration location**:
-   ```bash
-   # Linux/macOS
-   ls -la ~/.local/share/lacodda/kasl/config.json
-   
-   # Windows
-   dir "%LOCALAPPDATA%\lacodda\kasl\config.json"
-   ```
-
-2. **Recreate configuration**:
-   ```bash
-   kasl setup
-   ```
-
-3. **Create directory manually**:
-   ```bash
-   # Linux/macOS
-   mkdir -p ~/.local/share/lacodda/kasl
-   
-   # Windows
-   mkdir "%LOCALAPPDATA%\lacodda\kasl"
-   ```
-
-#### Problem: Invalid configuration
-
-**Symptoms**:
-- "invalid configuration" errors
-- Application crashes on startup
-- Settings not applied
-
-**Solutions**:
-
-1. **Validate JSON syntax**:
-   ```bash
-   # Using Python
-   python -m json.tool ~/.local/share/lacodda/kasl/config.json
-   
-   # Using jq
-   jq . ~/.local/share/lacodda/kasl/config.json
-   ```
-
-2. **Reset configuration**:
-   ```bash
-   kasl setup --delete
-   kasl setup
-   ```
-
-3. **Check for syntax errors**:
-   ```bash
-   # Common issues:
-   # - Missing commas
-   # - Extra commas
-   # - Unquoted strings
-   # - Invalid JSON types
-   ```
-
-### API Integration Issues
-
-#### Problem: Authentication failures
-
-**Symptoms**:
-- "authentication failed" errors
-- Cannot connect to APIs
-- Session expired messages
-
-**Solutions**:
-
-1. **Clear cached sessions**:
-   ```bash
-   # Remove session files
-   rm ~/.local/share/lacodda/kasl/.gitlab_session
-   rm ~/.local/share/lacodda/kasl/.jira_session
-   rm ~/.local/share/lacodda/kasl/.si_session
-   ```
-
-2. **Reconfigure integration**:
-   ```bash
-   kasl setup
-   ```
-
-3. **Check credentials**:
-   - Verify API tokens are valid
-   - Check username/password
-   - Confirm API URLs
-
-4. **Test connectivity**:
-   ```bash
-   # Test GitLab
-   curl -H "Authorization: Bearer YOUR_TOKEN" https://gitlab.com/api/v4/user
-   
-   # Test Jira
-   curl -u "username:password" https://jira.company.com/rest/api/2/myself
-   ```
-
-#### Problem: Network connectivity
-
-**Symptoms**:
-- "connection failed" errors
-- Timeout errors
-- Cannot reach APIs
-
-**Solutions**:
-
-1. **Check network connectivity**:
-   ```bash
-   # Test basic connectivity
-   ping gitlab.com
-   ping jira.company.com
-   
-   # Test HTTPS
-   curl -I https://gitlab.com
-   ```
-
-2. **Check proxy settings**:
-   ```bash
-   # Set proxy environment variables
-   export HTTP_PROXY=http://proxy.company.com:8080
-   export HTTPS_PROXY=http://proxy.company.com:8080
-   ```
-
-3. **Check firewall settings**:
-   - Ensure outbound HTTPS (443) is allowed
-   - Check corporate firewall rules
-   - Verify VPN connection if required
-
-### Task Management Issues
-
-#### Problem: Tasks not found
-
-**Symptoms**:
-- Empty task lists
-- "task not found" errors
-- Tasks not saving
-
-**Solutions**:
-
-1. **Check database**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM tasks;"
-   ```
-
-2. **Verify task creation**:
-   ```bash
-   # Create test task
-   kasl task add --name "Test task" --completeness 0
-   
-   # List tasks
-   kasl task list
-   ```
-
-3. **Check for database issues**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "PRAGMA integrity_check;"
-   ```
-
-#### Problem: Tag issues
-
-**Symptoms**:
-- Tags not saving
-- Tag associations lost
-- Tag filtering not working
-
-**Solutions**:
-
-1. **Check tag tables**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM tags;"
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM task_tags;"
-   ```
-
-2. **Recreate tags**:
-   ```bash
-   kasl tag add "test" --color "red"
-   kasl tag list
-   ```
-
-3. **Check foreign key constraints**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "PRAGMA foreign_keys = ON;"
-   ```
-
-### Report Issues
-
-#### Problem: Reports not generating
-
-**Symptoms**:
-- Empty reports
-- Missing data
-- Report generation errors
-
-**Solutions**:
-
-1. **Check workday data**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM workdays ORDER BY date DESC LIMIT 5;"
-   ```
-
-2. **Check pause data**:
-   ```bash
-   sqlite3 ~/.local/share/lacodda/kasl/kasl.db "SELECT * FROM pauses ORDER BY start DESC LIMIT 5;"
-   ```
-
-3. **Generate report manually**:
-   ```bash
-   kasl report --last
-   ```
-
-#### Problem: Report submission failures
-
-**Symptoms**:
-- "report send failed" errors
-- Reports not reaching server
-- Authentication issues
-
-**Solutions**:
-
-1. **Check API configuration**:
-   ```bash
-   # Verify SiServer configuration
-   cat ~/.local/share/lacodda/kasl/config.json | jq .si
-   ```
-
-2. **Test API connectivity**:
-   ```bash
-   # Test SiServer connection
-   curl -X POST https://api.company.com/health
-   ```
-
-3. **Check authentication**:
-   ```bash
-   # Clear session and retry
-   rm ~/.local/share/lacodda/kasl/.si_session
-   kasl report --send
-   ```
-
-## Debug Mode
-
-### Enable Debug Logging
+kasl has no log file. Diagnostic output goes through `tracing` to stderr, and is silent unless `RUST_LOG` or `KASL_DEBUG` is set:
 
 ```bash
-# Enable debug mode
 RUST_LOG=kasl=debug kasl watch --foreground
-
-# Enable trace logging
-RUST_LOG=kasl=trace kasl watch --foreground
-
-# Enable SQLite logging
-RUST_LOG=kasl=debug kasl report
 ```
 
-### Debug Information
+`RUST_LOG=kasl=trace` gives more detail; `KASL_DEBUG=1` is a shorthand equivalent to `RUST_LOG=kasl=debug` for kasl's own messages. Reproduce the problem with one of these set before doing anything else below - most of the following sections just point you back here.
 
-Debug mode shows:
-- Configuration loading
-- Database operations
-- API requests/responses
-- Error details
-- Performance metrics
+## Where kasl keeps its files
 
-### Common Debug Commands
+Everything lives under one data directory:
 
-```bash
-# Check configuration
-RUST_LOG=kasl=debug kasl setup
+| Platform | Path |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\lacodda\kasl` |
+| macOS | `~/Library/Application Support/lacodda/kasl` |
+| Linux | `~/.local/share/lacodda/kasl` |
 
-# Debug task operations
-RUST_LOG=kasl=debug kasl task list
+Inside it: `kasl.db` (SQLite database), `config.json` (settings and API credentials), and session cookie files (`.jira_session_id`, `.si_session_id`) written after a successful login. GitLab authenticates with a personal access token on every request, so it has no session file.
 
-# Debug report generation
-RUST_LOG=kasl=debug kasl report
+## Activity monitoring
 
-# Debug API operations
-RUST_LOG=kasl=debug kasl task find
-```
+### `kasl watch` does not detect a workday
 
-## Performance Issues
-
-### High CPU Usage
-
-**Symptoms**:
-- High CPU usage
-- System slowdown
-- Battery drain
-
-**Solutions**:
-
-1. **Increase poll interval**:
-   ```json
-   {
-     "monitor": {
-       "poll_interval": 1000  // Increase from 500
-     }
-   }
-   ```
-
-2. **Check for multiple instances**:
+1. Run it in the foreground to see activity as it happens:
    ```bash
-   ps aux | grep kasl
-   kasl watch --stop
+   RUST_LOG=kasl=debug kasl watch --foreground
    ```
-
-3. **Profile performance**:
-   ```bash
-   # Linux
-   perf record --call-graph=dwarf ./target/release/kasl watch
-   perf report
-   ```
-
-### High Memory Usage
-
-**Symptoms**:
-- High memory consumption
-- Memory leaks
-- Application crashes
-
-**Solutions**:
-
-1. **Check memory usage**:
+2. Check for an already-running daemon before starting another:
    ```bash
    # Linux/macOS
    ps aux | grep kasl
-   
    # Windows
    tasklist | findstr kasl
    ```
+   Stop it cleanly with `kasl watch --stop` before restarting.
+3. If the workday starts too late or too early, adjust `activity_threshold` (seconds of continuous activity required to start a workday) via `kasl setup`. See [Configuration](/concepts/configuration/).
 
-2. **Restart application**:
-   ```bash
-   kasl watch --stop
-   kasl watch
-   ```
+### Pauses are not detected, or are detected too eagerly
 
-3. **Check for memory leaks**:
-   ```bash
-   # Use valgrind (Linux)
-   valgrind --leak-check=full ./target/release/kasl watch
-   ```
+`pause_threshold` (seconds of inactivity before a pause starts) and `min_pause_duration` (minutes before a pause is kept) control this - reconfigure with `kasl setup`. An absence spent away from the machine (meeting in another room, laptop closed) leaves no trace at all; record it by hand with [`kasl pauses add`](/reference/pauses/).
 
-## Platform-Specific Issues
+## Database issues
 
-### Windows Issues
+### "database is locked"
 
-#### Problem: Autostart not working
+Only one process should hold the database at a time. Stop any running daemon first:
 
-**Solutions**:
-1. **Check Task Scheduler**:
-   - Open Task Scheduler
-   - Look for kasl tasks
-   - Verify task is enabled
+```bash
+kasl watch --stop
+```
 
-2. **Check Registry**:
-   ```cmd
-   reg query "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run" /v kasl
-   ```
+Then check that nothing else is writing to `kasl.db` (a second `watch` instance, a report running concurrently). If the file itself looks suspect:
 
-3. **Run as Administrator**:
-   ```cmd
-   kasl autostart enable
-   ```
+```bash
+sqlite3 "<data dir>/kasl.db" "PRAGMA integrity_check;"
+```
 
-#### Problem: Permission denied
+## Configuration issues
 
-**Solutions**:
-1. **Run as Administrator**:
-   - Right-click Command Prompt
-   - "Run as administrator"
+### `config.json` missing or invalid
 
-2. **Check file permissions**:
-   ```cmd
-   icacls "%LOCALAPPDATA%\lacodda\kasl"
-   ```
+```bash
+kasl setup            # recreate interactively
+kasl setup --delete   # wipe it and start over
+```
 
-### macOS Issues
+`config.json` is plain JSON; a `jq . config.json` or `python -m json.tool config.json` will point at a syntax error if the file was hand-edited.
 
-#### Problem: Input monitoring permissions
+### Credentials keep getting asked for again
 
-**Solutions**:
-1. **Grant Accessibility permissions**:
-   - System Preferences → Security & Privacy → Privacy → Accessibility
-   - Add kasl to the list
+Jira and SiServer passwords are stored in the OS keyring (Credential Manager / Keychain / Secret Service), not in `config.json`. On Linux, a background `kasl watch` daemon needs a running Secret Service provider (e.g. `gnome-keyring` or `kwallet`) to read the stored password without a terminal to prompt at; on a headless box without one, credential lookups fail silently and Jira/SiServer features are skipped. GitLab's access token and the reporting server's `auth_token` are stored directly in `config.json`, not the keyring - keep that file's permissions private.
 
-2. **Grant Input Monitoring permissions**:
-   - System Preferences → Security & Privacy → Privacy → Input Monitoring
-   - Add kasl to the list
+## API integration issues
 
-#### Problem: Autostart not working
+### Jira or SiServer authentication fails repeatedly
 
-**Solutions**:
-1. **Check LaunchAgents**:
-   ```bash
-   ls -la ~/Library/LaunchAgents/
-   ```
+Delete the stale session file and let the next request log in again:
 
-2. **Load LaunchAgent manually**:
-   ```bash
-   launchctl load ~/Library/LaunchAgents/com.lacodda.kasl.plist
-   ```
+```bash
+rm "<data dir>/.jira_session_id"
+rm "<data dir>/.si_session_id"
+```
 
-### Linux Issues
+If that does not help, re-run `kasl setup` to re-enter credentials - they may have expired or changed on the server side.
 
-#### Problem: Input device access
+### GitLab requests fail
 
-**Solutions**:
-1. **Check user groups**:
-   ```bash
-   groups $USER
-   ```
+GitLab uses a personal access token (`gitlab.access_token` in `config.json`), not a session. Confirm the token is valid and has `read_user` + `read_repository` scope, and that `gitlab.api_url` points at the instance root (no `/api/v4` suffix).
 
-2. **Add user to input group**:
-   ```bash
-   sudo usermod -a -G input $USER
-   ```
+### Report submission is refused with a productivity warning
 
-3. **Check device permissions**:
-   ```bash
-   ls -la /dev/input/
-   ```
+`kasl report --send` refuses to submit when the day's productivity is below `min_productivity_threshold` (the monthly `kasl sum --send` has no such check) (see [Configuration](/concepts/configuration/)). This is intentional - it is the safeguard the removed `kasl breaks` command used to defeat. Record any genuine absence the monitor missed with [`kasl pauses add`](/reference/pauses/) before retrying; that is the only supported way to raise the number.
 
-#### Problem: systemd service issues
+## Platform-specific issues
 
-**Solutions**:
-1. **Check service status**:
-   ```bash
-   systemctl --user status kasl
-   ```
+### Windows: autostart does not run at login
 
-2. **Enable service**:
-   ```bash
-   systemctl --user enable kasl
-   systemctl --user start kasl
-   ```
+`kasl autostart enable` tries Task Scheduler first, then falls back to a `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` registry entry if that fails. Check both:
 
-## Getting Help
+```cmd
+schtasks /query /tn KaslAutostart
+reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v Kasl
+```
 
-### Before Asking for Help
+`kasl autostart status` reports which one (if either) is active.
 
-1. **Check this guide** for your specific issue
-2. **Enable debug logging** and check output
-3. **Try the solutions** provided above
-4. **Gather information** about your system
+### macOS: no activity detected
 
-### Information to Provide
+Grant Accessibility and Input Monitoring permissions under System Settings -> Privacy & Security, then restart `kasl watch`. Without them the OS silently withholds keyboard/mouse events.
 
-When reporting issues, include:
-- Operating system and version
-- kasl version (`kasl --version`)
-- Error messages (with debug logging)
-- Steps to reproduce
-- System configuration
+### macOS: autostart does not run at login
 
-### Support Channels
+`kasl autostart enable` installs a LaunchAgent at `~/Library/LaunchAgents/com.lacodda.kasl.plist`. Reload it manually if needed:
+
+```bash
+launchctl unload ~/Library/LaunchAgents/com.lacodda.kasl.plist
+launchctl load ~/Library/LaunchAgents/com.lacodda.kasl.plist
+```
+
+### Linux: no activity detected
+
+The activity monitor reads raw input devices. Add your user to the `input` group and re-login:
+
+```bash
+sudo usermod -a -G input $USER
+ls -la /dev/input/
+```
+
+### Linux: autostart does not run at login
+
+`kasl autostart enable` installs a systemd user unit. Check it directly:
+
+```bash
+systemctl --user status kasl
+systemctl --user enable --now kasl
+```
+
+## Support Channels
 
 - **GitHub Issues**: [https://github.com/lacodda/kasl/issues](https://github.com/lacodda/kasl/issues)
-- **Email**: lahtachev@gmail.com
 - **Documentation**: [https://kasl.lacodda.com](https://kasl.lacodda.com)
 
+## Related pages
+
+- [Configuration](/concepts/configuration/) - all settings referenced above
+- [`watch`](/reference/watch/) - the activity monitor
+- [`pauses`](/reference/pauses/) - recording missed absences
+- [`setup`](/reference/setup/) - creating and resetting configuration
+- [`autostart`](/reference/autostart/) - platform autostart details

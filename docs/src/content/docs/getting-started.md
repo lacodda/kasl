@@ -226,17 +226,17 @@ kasl task remove 1
 kasl task add --from-template
 ```
 
-### Time Adjustments
+### Absences the monitor missed
+
+The monitor only sees the keyboard and the mouse, so an hour in a meeting room
+leaves no trace. Record it yourself:
 
 ```bash
-# Adjust work start time
-kasl adjust --mode start --minutes 30
+# A 40-minute absence starting at 15:00
+kasl pauses add --start 15:00 --minutes 40 --reason "offsite meeting"
 
-# Add a pause
-kasl adjust --mode pause --minutes 15
-
-# Adjust work end time
-kasl adjust --mode end --minutes 20
+# See what was recorded
+kasl pauses list
 ```
 
 ### Data Export

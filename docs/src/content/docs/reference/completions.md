@@ -68,3 +68,8 @@ kasl completions elvish > ~/.elvish/lib/kasl.elv
 ## Notes
 
 The script is generated from kasl's own command definitions, so it always matches the installed version. Regenerate it after updating kasl if you wrote the output to a file rather than sourcing it dynamically.
+
+## Related commands
+
+- [`self-update`](/reference/self-update/) - after an update, regenerate a script written to a file
+- [`setup`](/reference/setup/) - the first-run wizard

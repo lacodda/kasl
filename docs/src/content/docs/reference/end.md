@@ -58,7 +58,7 @@ kasl end
 kasl report --send
 ```
 
-## Related Commands
+## Related commands
 
 - **[`watch`](/reference/watch/)** - The daemon that normally opens and closes the day
 - **[`report`](/reference/report/)** - The day's intervals, tasks and productivity

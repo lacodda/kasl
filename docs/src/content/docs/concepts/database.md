@@ -8,8 +8,7 @@ kasl uses SQLite as its local database for storing work sessions, tasks, and con
 
 The database provides:
 - **Local Storage**: All data stored locally for privacy
-- **ACID Compliance**: Reliable data integrity
-- **Migration System**: Safe schema updates
+- **Migration System**: Schema changes are applied automatically, in order, on every startup
 - **Cross-Platform**: Works on all supported platforms
 
 ## Database Location
@@ -20,6 +19,8 @@ Database files are stored in platform-specific locations:
 - **macOS**: `~/Library/Application Support/lacodda/kasl/kasl.db`
 - **Linux**: `~/.local/share/lacodda/kasl/kasl.db`
 
+On every open, kasl runs `PRAGMA foreign_keys = ON` and applies any pending migrations.
+
 ## Schema Overview
 
 ### Tables
@@ -29,9 +30,10 @@ Stores daily work session information:
 ```sql
 CREATE TABLE workdays (
     id INTEGER PRIMARY KEY,
-    date TEXT UNIQUE NOT NULL,
-    start TEXT NOT NULL,
-    end TEXT
+    date DATE NOT NULL UNIQUE,
+    start TIMESTAMP NOT NULL,
+    end TIMESTAMP,
+    notes TEXT
 );
 ```
 
@@ -39,35 +41,42 @@ CREATE TABLE workdays (
 Stores break periods during work sessions:
 ```sql
 CREATE TABLE pauses (
-    id INTEGER PRIMARY KEY,
-    start TEXT NOT NULL,
-    end TEXT,
-    duration INTEGER
+    id INTEGER NOT NULL PRIMARY KEY,
+    start TIMESTAMP NOT NULL,
+    end TIMESTAMP,
+    duration INTEGER,
+    protected INTEGER NOT NULL DEFAULT 0,
+    reason TEXT
 );
 ```
+
+`protected` marks a pause entered by hand with `kasl pauses add --keep`. Protected pauses are exempt from both cleanup filters applied to detected pauses: the minimum-duration threshold and merging with an adjacent pause. `reason` is the optional note passed via `--reason`. See [`pauses`](/reference/pauses/) for the filtering and productivity rules.
 
 #### `tasks`
 Stores task information and metadata:
 ```sql
 CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY,
-    task_id INTEGER DEFAULT 0,
-    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+    id INTEGER NOT NULL PRIMARY KEY,
+    task_id INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 0,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     name TEXT NOT NULL,
     comment TEXT,
-    completeness INTEGER DEFAULT 100,
-    excluded_from_search BOOLEAN DEFAULT FALSE
+    completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
+    excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE,
+    deleted_at TIMESTAMP
 );
 ```
+
+`deleted_at` was added for soft delete, but nothing in the current codebase sets or reads it - `kasl task remove` deletes rows outright. Treat the column as reserved.
 
 #### `tags`
 Stores task categorization tags:
 ```sql
 CREATE TABLE tags (
     id INTEGER PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     color TEXT,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -77,9 +86,9 @@ Links tasks to tags (many-to-many relationship):
 CREATE TABLE task_tags (
     task_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
+    PRIMARY KEY (task_id, tag_id),
     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (task_id, tag_id)
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 ```
 
@@ -88,11 +97,50 @@ Stores reusable task templates:
 ```sql
 CREATE TABLE task_templates (
     id INTEGER PRIMARY KEY,
-    name TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     task_name TEXT NOT NULL,
     comment TEXT,
-    completeness INTEGER DEFAULT 0,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    completeness INTEGER DEFAULT 100,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+#### `jira_inbox`
+Stores Jira issues assigned to you, synced by the background watcher. See [`inbox`](/reference/inbox/) for the command that reads and manages this table:
+```sql
+CREATE TABLE jira_inbox (
+    issue_key TEXT PRIMARY KEY NOT NULL,
+    issue_id TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    priority TEXT,
+    priority_rank INTEGER NOT NULL DEFAULT 999,
+    url TEXT NOT NULL,
+    first_seen TIMESTAMP NOT NULL,
+    last_seen TIMESTAMP NOT NULL,
+    notified INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    dismissed INTEGER NOT NULL DEFAULT 0,
+    raw_updated TEXT,
+    status_id TEXT,
+    sort_value REAL,
+    gone_at TIMESTAMP,
+    last_change TEXT,
+    changed_at TIMESTAMP
+);
+```
+
+- `status_id` references `jira_statuses.id` and resolves to a display name via join.
+- `sort_value` is the numeric value of a configured Jira custom field (e.g. Scoring), used to rank issues.
+- `gone_at` is stamped when an issue stops appearing in the Jira poll (closed or reassigned); it clears if the issue reappears. Rows with `gone_at` set are hidden from the default list and only shown with `kasl inbox --all`.
+- `last_change` / `changed_at` record the most recent visible change (status, priority, or score) so the list can badge it.
+- `pinned` and `dismissed` are set by `kasl inbox pin` / `kasl inbox dismiss`.
+
+#### `jira_statuses`
+Local catalog of Jira workflow statuses, populated from issue sync so `jira_inbox.status_id` can resolve to a name:
+```sql
+CREATE TABLE jira_statuses (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL
 );
 ```
 
@@ -100,9 +148,10 @@ CREATE TABLE task_templates (
 Tracks database schema version:
 ```sql
 CREATE TABLE migrations (
-    version INTEGER PRIMARY KEY,
+    id INTEGER PRIMARY KEY,
+    version INTEGER NOT NULL UNIQUE,
     name TEXT NOT NULL,
-    applied_at TEXT DEFAULT CURRENT_TIMESTAMP
+    applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```
 
@@ -111,11 +160,10 @@ CREATE TABLE migrations (
 ### Timestamps
 - **Format**: ISO 8601 (`YYYY-MM-DD HH:MM:SS`)
 - **Timezone**: Local system time
-- **Storage**: TEXT for human readability
+- **Storage**: SQLite `TIMESTAMP` affinity (stored as text)
 
 ### Dates
 - **Format**: ISO 8601 (`YYYY-MM-DD`)
-- **Storage**: TEXT for consistency
 
 ### Durations
 - **Unit**: Seconds
@@ -127,38 +175,43 @@ CREATE TABLE migrations (
 
 ## Migration System
 
-### Automatic Migrations
+Migrations run automatically whenever kasl opens the database - there is no separate command to trigger them:
 
-Migrations run automatically on startup:
 ```bash
-kasl watch  # Migrations run automatically
+kasl watch  # opening the database applies any pending migrations
 ```
 
-### Manual Migration Management
+Schema history, in order:
 
-Debug builds provide migration commands:
+1. `create_tables_and_indices` - base `tasks`, `pauses`, `workdays` tables and their indices
+2. `add_task_templates` - `task_templates`
+3. `add_tags_system` - `tags`, `task_tags`
+4. `add_soft_delete` - `deleted_at` column and index on `tasks`
+5. `add_workday_notes` - `notes` column on `workdays`
+6. `add_breaks_table` - manual breaks table (later folded away, see migration 11)
+7. `add_jira_inbox_table` - `jira_inbox`
+8. `jira_inbox_status_id_and_sort_value` - `jira_statuses`, `status_id`/`sort_value` on `jira_inbox`
+9. `clear_jira_inbox_legacy_status_text` - clears the legacy `status` text column
+10. `drop_jira_inbox_legacy_status_column` - drops it
+11. `fold_breaks_into_protected_pauses` - adds `protected`/`reason` to `pauses`, migrates rows out of `breaks` as protected pauses, drops `breaks`
+12. `jira_inbox_gone_and_change_tracking` - adds `gone_at`, `last_change`, `changed_at` to `jira_inbox`
+
+Each migration runs inside a transaction; a failure rolls back that migration.
+
+### Inspecting migrations
+
+Debug builds only expose a `migrations` subcommand for inspection:
+
 ```bash
-# Check migration status
-kasl migrations status
-
-# View migration history
-kasl migrations history
+kasl migrations status   # current version, pending or up to date
+kasl migrations history  # applied migrations with timestamps
 ```
 
-### Migration Process
+This command does not exist in release builds - it is compiled out (`#[cfg(debug_assertions)]`). Do not point end users at it; on a release install, use direct SQL against the `migrations` table instead if you need to check the version:
 
-1. **Version Check**: Compare current vs. target version
-2. **Migration Selection**: Find pending migrations
-3. **Transaction**: Apply migrations in transaction
-4. **Version Update**: Update migration table
-5. **Rollback**: Rollback on failure
-
-### Migration Safety
-
-- **Transactions**: All migrations run in transactions
-- **Idempotency**: Safe to run multiple times
-- **Rollback**: Automatic rollback on failure
-- **Versioning**: Strict version ordering
+```bash
+sqlite3 kasl.db "SELECT * FROM migrations ORDER BY version;"
+```
 
 ## Data Management
 
@@ -179,10 +232,9 @@ Restore from backup:
 ```bash
 # Replace database file
 cp kasl_backup.db ~/.local/share/lacodda/kasl/kasl.db
-
-# Import data
-# (Manual import not yet implemented)
 ```
+
+There is no `kasl import` command. A JSON export from `kasl export all` is for reading or archiving outside kasl, not for reloading back into the database - restoring means replacing the `.db` file itself.
 
 ### Cleanup
 
@@ -198,61 +250,24 @@ kasl task remove --today
 sqlite3 kasl.db "DELETE FROM pauses WHERE start < date('now', '-30 days');"
 ```
 
-## Performance
+## Indexes
 
-### Indexes
-
-Automatic indexes for performance:
 ```sql
 -- Workdays table
 CREATE INDEX idx_workdays_date ON workdays(date);
 
 -- Tasks table
 CREATE INDEX idx_tasks_timestamp ON tasks(timestamp);
-CREATE INDEX idx_tasks_completeness ON tasks(completeness);
+CREATE INDEX idx_tasks_task_id ON tasks(task_id);
+CREATE INDEX idx_tasks_deleted_at ON tasks(deleted_at);
 
 -- Pauses table
 CREATE INDEX idx_pauses_start ON pauses(start);
+
+-- Jira inbox table
+CREATE INDEX idx_jira_inbox_active ON jira_inbox(dismissed, pinned DESC, priority_rank ASC, last_seen DESC);
+CREATE INDEX idx_jira_inbox_sort ON jira_inbox(dismissed, pinned DESC, sort_value DESC, priority_rank ASC);
 ```
-
-### Optimization
-
-- **Connection Pooling**: Efficient connection management
-- **Prepared Statements**: Reused query plans
-- **Transactions**: Batch operations for performance
-- **Memory Management**: Automatic cleanup
-
-### Monitoring
-
-Check database performance:
-```bash
-# Enable SQLite logging
-RUST_LOG=kasl=debug kasl report
-
-# Check database size
-ls -lh ~/.local/share/lacodda/kasl/kasl.db
-
-# Analyze database
-sqlite3 kasl.db "ANALYZE;"
-```
-
-## Security
-
-### File Permissions
-
-Secure database file:
-```bash
-# Linux/macOS
-chmod 600 ~/.local/share/lacodda/kasl/kasl.db
-chmod 700 ~/.local/share/lacodda/kasl/
-```
-
-### Data Privacy
-
-- **Local Storage**: No data sent to external servers
-- **Encryption**: Consider filesystem encryption
-- **Access Control**: Restrict file permissions
-- **Audit Trail**: Complete operation logging
 
 ## Troubleshooting
 
@@ -282,18 +297,8 @@ sqlite3 kasl.db ".recover" | sqlite3 kasl_recovered.db
 cp kasl_backup.db kasl.db
 ```
 
-**Problem**: Migration failures
-```bash
-# Check migration status
-kasl migrations status
-
-# View error logs
-RUST_LOG=kasl=debug kasl watch --foreground
-```
-
 ### Debug Database
 
-Enable SQLite debugging:
 ```bash
 # Show SQL queries
 RUST_LOG=kasl=debug kasl report
@@ -378,3 +383,10 @@ GROUP BY tag.id
 ORDER BY usage_count DESC;
 ```
 
+## Related pages
+
+- [`pauses`](/reference/pauses/) - protected pauses and the `--keep`/`--reason` flags behind the `pauses` columns
+- [`task`](/reference/task/) - task commands, including `remove`
+- [`inbox`](/reference/inbox/) - the Jira inbox commands backed by `jira_inbox` and `jira_statuses`
+- [`export`](/reference/export/) - export formats and data types, including `export all`
+- [Configuration](/concepts/configuration/) - config keys referenced by pauses, reports, and Jira sync

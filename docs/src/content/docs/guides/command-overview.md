@@ -1,5 +1,7 @@
 ---
 title: "Commands"
+sidebar:
+  order: 6
 ---
 
 kasl provides a comprehensive set of commands for work activity tracking, task management, and reporting.
@@ -19,6 +21,10 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 - **[`export`](/reference/export/)** - Export data to various formats
 - **[`pauses`](/reference/pauses/)** - View pauses and record ones the monitor missed
+
+### Incoming work
+
+- **[`inbox`](/reference/inbox/)** - Jira issues assigned to you, polled in the background
 
 ### Organization
 
@@ -200,46 +206,26 @@ kasl task add --from-template
 kasl task edit
 ```
 
-## Command Options
+## Options you will meet everywhere
 
-### Global Options
+- `--help` on any command or subcommand prints its own help; `kasl --version`
+  prints the version.
+- `--date <YYYY-MM-DD|today>` selects the day for `report`, `export` and
+  `pauses`.
+- `-y`/`--yes` skips the confirmation on destructive commands, which is what
+  makes them usable from a script.
+- Commands that would otherwise prompt refuse with an explanatory error when
+  there is no terminal, rather than waiting for an answer nobody can give.
 
-Most commands support these global options:
-- `--help` - Show command help
-- `--version` - Show version information
+Debug logging is a environment variable, not a flag:
 
-### Common Options
+```bash
+KASL_DEBUG=1 kasl watch --foreground
+RUST_LOG=kasl=debug kasl task find
+```
 
-Many commands support these common options:
-- `--date` - Specify date (YYYY-MM-DD or 'today')
-- `--output` - Specify output file
-- `--format` - Specify output format
+## Related pages
 
-### Debug Options
-
-Debug options for troubleshooting:
-- `--foreground` - Run in foreground mode
-- `--debug` - Enable debug logging
-
-## Best Practices
-
-### Command Organization
-
-1. **Use templates** for frequently created tasks
-2. **Use tags** for task categorization
-3. **Regular exports** for data backup
-4. **Monitor configuration** for optimal detection
-
-### Workflow Integration
-
-1. **Start monitoring** at the beginning of your workday
-2. **Create tasks** as you plan your work
-3. **Update progress** throughout the day
-4. **Review reports** at the end of the day
-
-### Data Management
-
-1. **Regular backups** using export functionality
-2. **Clean up old data** periodically
-3. **Validate data** using report commands
-4. **Monitor database** size and performance
+- [Getting Started](/getting-started/) - installing kasl and the first run
+- [Configuration](/concepts/configuration/) - every setting in one place
+- [API Integrations](/concepts/api-integrations/) - GitLab, Jira and report submission

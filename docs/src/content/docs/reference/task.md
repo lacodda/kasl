@@ -2,7 +2,7 @@
 title: "task"
 ---
 
-The `task` command provides comprehensive task management functionality in kasl, including creating, displaying, updating, and organizing tasks. It supports various operations through subcommands and interactive interfaces, providing flexibility in how tasks are handled within the application.
+The `task` command creates, lists, shows, edits and removes tasks, and can pull candidates from Jira and GitLab.
 
 ## Usage
 
@@ -20,20 +20,18 @@ Running `kasl task` without a subcommand creates a task interactively.
 kasl task add [OPTIONS]
 ```
 
-**Options:**
-- `-n, --name <NAME>`: Specifies the name of the task
-  - Required for non-interactive creation
-- `--comment <COMMENT>`: Adds a comment to the task
-  - Optional additional information about the task
-- `-c, --completeness <COMPLETENESS>`: Indicates the completeness of the task as a percentage (0-100)
-  - 0% = not started, 100% = completed
-- `--tags <TAGS>`: Assign tags to the task
-  - Comma-separated list of tags for categorization
-  - Tags are automatically created if they don't exist
-- `-t, --template <TEMPLATE>`: Create from a named template
-- `-l, --from-template`: Pick a template interactively
+- `-n, --name <NAME>`: Task name. Required for non-interactive creation.
+- `--comment <COMMENT>`: Task comment or description.
+- `-c, --completeness <COMPLETENESS>`: Completion percentage (0-100).
+- `--tags <TAGS>`: Comma-separated tags to assign. Tags are created automatically if they do not exist yet. This is the only place tags are set - `task edit` never touches them.
+- `-t, --template <TEMPLATE>`: Create from a named template.
+- `-l, --from-template`: Pick a template interactively.
 
 Without `--name` (or a full set of non-interactive options), `kasl task add` prompts interactively. Outside an interactive terminal it errors instead of hanging: "task name is required; pass --name outside an interactive terminal" - so it's safe to call from scripts as long as `--name` is provided.
+
+#### `--template` and the flag overrides
+
+`--template NAME` fills the task from a saved template, but any of `--name`, `--comment`, `--completeness` or `--tags` given alongside it wins over the template's value for that field - the template supplies defaults, not fixed values. Fields you don't override, and don't have a flag for, fall back to the template outside a terminal; in a terminal they are offered as prompts seeded with the template's value. `--tags` is independent of the template either way: templates carry no tags, so tagging a templated task always goes through `--tags`.
 
 ### `list` - List tasks
 
@@ -41,9 +39,8 @@ Without `--name` (or a full set of non-interactive options), `kasl task add` pro
 kasl task list [OPTIONS]
 ```
 
-**Options:**
-- `-a, --all`: List tasks from every date, not just today
-- `--tag <TAG>`: Only tasks carrying this tag
+- `-a, --all`: List tasks from every date, not just today.
+- `--tag <TAG>`: Only tasks carrying this tag.
 
 ### `show` - Show tasks by id
 
@@ -51,7 +48,6 @@ kasl task list [OPTIONS]
 kasl task show [ID]...
 ```
 
-**Arguments:**
 - `ID...`: One or more task ids to show. Omit them on a terminal to pick from today's tasks.
 
 ### `edit` - Edit a task by id, or several interactively
@@ -60,8 +56,9 @@ kasl task show [ID]...
 kasl task edit [ID]
 ```
 
-**Arguments:**
-- `[ID]`: Task id to edit; omit to pick several interactively
+- `[ID]`: Task id to edit; omit to pick several interactively.
+
+Editing only ever touches name, comment and completeness - tags are left as they are; assign them with `task add --tags` instead.
 
 ### `remove` - Remove tasks by id, or all of today's
 
@@ -69,12 +66,9 @@ kasl task edit [ID]
 kasl task remove [OPTIONS] [ID]...
 ```
 
-**Arguments:**
-- `[ID]...`: Task ids to remove
-
-**Options:**
-- `--today`: Remove every task recorded for today
-- `-y, --yes`: Remove without asking for confirmation
+- `[ID]...`: Task ids to remove.
+- `--today`: Remove every task recorded for today.
+- `-y, --yes`: Remove without asking for confirmation.
 
 ### `find` - Find incomplete tasks and import from GitLab/Jira
 
@@ -82,15 +76,13 @@ kasl task remove [OPTIONS] [ID]...
 kasl task find
 ```
 
-- Shows a spinner while searching incomplete local tasks, today's Jira issues, and GitLab commits
-- Presents a single consolidated MultiSelect (incomplete tasks first, then a separator, then Jira/GitLab)
-- Filters out tasks already logged today, near-duplicate names, and names from `task_discovery.ignore_names`
-- After import selection, optionally add items to the persistent ignore list
-- Selected incomplete tasks prompt for an updated completeness percentage before insert
+- Shows a spinner while searching incomplete local tasks, today's Jira issues, and GitLab commits.
+- Presents a single consolidated MultiSelect (incomplete tasks first, then a separator, then Jira/GitLab).
+- Filters out tasks already logged today, near-duplicate names, and names from `task_discovery.ignore_names`.
+- After import selection, optionally add items to the persistent ignore list.
+- Selected incomplete tasks prompt for an updated completeness percentage before insert.
 
 ## Examples
-
-### Basic Task Operations
 
 ```bash
 # Create a new task
@@ -107,168 +99,55 @@ kasl task list --all
 
 # Display tasks with specific tag
 kasl task list --tag "urgent"
-```
 
-### Interactive Operations
-
-```bash
-# Find and update incomplete tasks
+# Find and import incomplete/Jira/GitLab tasks
 kasl task find
 
 # Show specific tasks
 kasl task show 1
 
-# Edit specific task
+# Edit a specific task
 kasl task edit 1
 
 # Edit several tasks interactively
 kasl task edit
 
-# Create task from template
+# Create task from template, picked interactively
 kasl task add --from-template
 
-# Use specific template
+# Use a named template, non-interactively
 kasl task add --template "daily-standup"
-```
 
-### Task Management
+# Use a template but override its name and add tags
+kasl task add --template "daily-standup" --name "Standup - sprint planning" --tags "meeting"
 
-```bash
 # Remove specific tasks
 kasl task remove 1 2 3
 
 # Remove specific tasks without confirmation
 kasl task remove 1 2 3 -y
 
-# Remove all today's tasks
-kasl task remove --today
-
 # Remove all today's tasks without confirmation
-kasl task remove --today -y
-```
-
-## Use Cases
-
-### Daily Task Management
-
-```bash
-# Create today's tasks
-kasl task add --name "Daily standup" --template "daily-standup"
-kasl task add --name "Code review" --tags "urgent,backend"
-kasl task add --name "Team meeting" --tags "meeting"
-
-# Review and update progress
-kasl task list
-kasl task find
-
-# Complete finished tasks
-kasl task edit 1
-```
-
-### Project Organization
-
-```bash
-# Create project-specific tasks
-kasl task add --name "Frontend bug fix" --tags "frontend,bug,urgent"
-kasl task add --name "API documentation" --tags "backend,documentation"
-
-# Filter by project
-kasl task list --tag "frontend"
-kasl task list --tag "backend"
-```
-
-### Template Usage
-
-```bash
-# Create templates for common tasks
-kasl template add --name "bug-fix"
-kasl template add --name "meeting"
-
-# Use templates to create tasks
-kasl task add --template "bug-fix" --name "Fix login issue"
-kasl task add --template "meeting" --name "Client call"
-```
-
-### Scripting
-
-Because `add`, `remove`, and their siblings are dedicated subcommands with their own flags, they can be called from scripts without triggering an interactive prompt as long as the required arguments are supplied:
-
-```bash
-# Non-interactive creation
-kasl task add --name "Nightly build check" --completeness 0
-
-# Non-interactive cleanup
 kasl task remove --today -y
 ```
 
 ## Sample Output
 
-### Task List
+Running `kasl task list` after adding one task:
+
 ```
-+---+----+----------+------------------+------------------+-------------+------------------+
-| # | ID | TASK ID | NAME             | COMMENT          | COMPLETENESS| TAGS             |
-+---+----+----------+------------------+------------------+-------------+------------------+
-| 1 | 1  | 0       | Daily standup    | Team sync        | 100%        | meeting          |
-| 2 | 2  | 0       | Code review      | Review PR #123   | 75%         | urgent           |
-| 3 | 3  | 0       | Bug fix          | Fix login issue  | 0%          | bug, urgent      |
-| 4 | 4  | 0       | Documentation    | Update API docs  | 25%         | docs             |
-+---+----+----------+------------------+------------------+-------------+------------------+
++---+----+---------+---------------+------+
+| # | ID | TASK ID | NAME          | DONE |
++---+----+---------+---------------+------+
+| 1 | 1  | 1       | Review PR 318 | 100% |
++---+----+---------+---------------+------+
 ```
 
-### Interactive Task Selection
-```
-Select task to edit:
-1. Daily standup (100%)
-2. Code review (75%)
-3. Bug fix (0%)
-4. Documentation (25%)
+The `TASK ID`, `COMMENT` and `TAGS` columns only appear when at least one listed task actually has that data - an all-local, comment-less, tag-less list renders as just `#`, `ID`, `NAME`, `DONE`.
 
-Enter task number: 2
+## Related commands
 
-Editing task: Code review
-Current completeness: 75%
-
-New completeness (0-100): 100
-New comment (press Enter to keep current): Review completed
-
-✅ Task updated successfully!
-```
-
-## Integration with Other Commands
-
-The `task` command works with other kasl commands:
-
-- **`tag`**: Create and manage tags for task categorization
-- **`template`**: Use templates for quick task creation
-- **`report`**: View tasks in daily and monthly reports
-- **`export`**: Export task data for external analysis
-
-## Best Practices
-
-### Task Organization
-
-1. **Use descriptive names**: Clear, specific task names
-2. **Add helpful comments**: Detailed descriptions for complex tasks
-3. **Use tags consistently**: Establish tag conventions for your projects
-4. **Update progress regularly**: Keep task completeness current
-
-### Workflow Integration
-
-1. **Create tasks at the start**: Plan your day with task creation
-2. **Use templates**: Save time with reusable task templates
-3. **Review regularly**: Check task status throughout the day
-4. **Complete tasks promptly**: Mark tasks as done when finished
-
-### Data Management
-
-1. **Regular cleanup**: Remove completed tasks periodically
-2. **Use filters**: Leverage tag and date filters for organization
-3. **Backup data**: Export tasks before major cleanup operations
-4. **Monitor patterns**: Review task completion patterns for insights
-
-## Related Commands
-
-- **[`tag`](/reference/tag/)** - Manage tags for task categorization
-- **[`template`](/reference/template/)** - Create and use task templates
-- **[`report`](/reference/report/)** - View tasks in work reports
-- **[`export`](/reference/export/)** - Export task data for analysis
+- [`tag`](/reference/tag/) - Manage tags for task categorization
+- [`template`](/reference/template/) - Create and use task templates
+- [`report`](/reference/report/) - View tasks in work reports
+- [`export`](/reference/export/) - Export task data for analysis

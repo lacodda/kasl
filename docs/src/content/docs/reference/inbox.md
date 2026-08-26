@@ -98,7 +98,7 @@ Imports the issue into local tasks (creates a task named `KEY summary` and dismi
 
 ## Background Polling
 
-Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser (Windows). Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled.
+Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled.
 
 ## Configuration
 
@@ -157,3 +157,10 @@ kasl inbox sync
 kasl inbox take PROJ-123
 kasl inbox dismiss PROJ-456
 ```
+
+## Related commands
+
+- [`watch`](/reference/watch/) - the daemon that polls the inbox
+- [`task`](/reference/task/) - where `take` puts the issue
+- [`setup`](/reference/setup/) - configuring the Jira connection
+- [Configuration](/concepts/configuration/) - the `jira_inbox` block in full

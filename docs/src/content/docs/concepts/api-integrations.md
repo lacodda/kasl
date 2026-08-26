@@ -2,32 +2,30 @@
 title: "API Integrations"
 ---
 
-kasl supports integration with external services for enhanced task management and reporting capabilities.
+kasl talks to three kinds of external service: GitLab and Jira supply candidate tasks, and a corporate reporting API receives the finished day. All three are optional - kasl records the workday without any of them.
 
-## Overview
+## What each integration does
 
-API integrations provide:
-- **Task Discovery**: Import tasks from external systems
-- **Report Submission**: Send reports to organizational systems
-- **Credential Management**: Secure storage and authentication
-- **Session Handling**: Automatic session management and renewal
+| Service | Direction | What it is for |
+| --- | --- | --- |
+| GitLab | reads | Today's commits become candidate tasks in `kasl task find` |
+| Jira | reads | Resolved issues become candidates; assigned open issues feed `kasl inbox` |
+| SiServer | writes | `kasl report --send` and `kasl sum --send` file the day and the month |
 
-## GitLab Integration
+Each is configured through the `kasl setup` wizard. Logins and URLs go to
+`config.json`; passwords go to the OS keyring. API tokens are the exception -
+see the note under GitLab.
 
-Import commits and merge requests as completed tasks.
+## GitLab
+
+Imports the commits you pushed today, so the tasks you log come from what you
+actually did rather than from memory.
 
 ### Setup
 
-1. **Generate Access Token**:
-   - Go to GitLab → User Settings → Access Tokens
-   - Create token with scopes: `read_user`, `read_repository`
-   - Copy the generated token
-
-2. **Configure Integration**:
-   ```bash
-   kasl setup
-   # Follow prompts to configure GitLab
-   ```
+1. In GitLab, open **User Settings → Access Tokens** and create a token with the
+   `read_user` and `read_api` scopes.
+2. Run `kasl setup` and follow the GitLab prompts.
 
 ### Configuration
 
@@ -40,47 +38,34 @@ Import commits and merge requests as completed tasks.
 }
 ```
 
-### Features
+:::caution[The GitLab token is stored in the config file]
+Unlike the Jira and SiServer passwords, which go to the OS keyring, the GitLab
+personal access token is written to `config.json` in plain text. Give the token
+the narrowest scopes that work, and keep the file readable only by you.
+:::
 
-- **Commit Import**: Automatically import today's commits as completed tasks
-- **User Activity**: Track user activity across repositories
-- **Repository Filtering**: Support for multiple repositories
-- **Commit Message Parsing**: Extract meaningful task names from commit messages
+### How it finds your commits
 
-### Usage
+kasl reads your user id, asks for your push events of the day, and resolves each
+push to the commits it carried. Merge commits and commits already logged as
+tasks are filtered out, so `kasl task find` offers each piece of work once.
 
 ```bash
-# Find tasks from GitLab
 kasl task find
-
-# This will show:
-# - Incomplete local tasks
-# - Today's GitLab commits
-# - Interactive selection interface
 ```
 
-### API Endpoints Used
+## Jira
 
-- `GET /api/v4/user` - Get user information
-- `GET /api/v4/events` - Get user events
-- `GET /api/v4/projects/{id}/repository/commits/{sha}` - Get commit details
-
-## Jira Integration
-
-Import completed issues and track work items.
+Two separate features read from Jira: `task find` offers issues you resolved
+today as completed tasks, and the [inbox](/reference/inbox/) polls issues
+assigned to you that are still open.
 
 ### Setup
 
-1. **Get Credentials**:
-   - Username (not email, unless configured)
-   - Password (prompted interactively)
-   - Jira instance URL
-
-2. **Configure Integration**:
-   ```bash
-   kasl setup
-   # Follow prompts to configure Jira
-   ```
+1. Have your Jira login (the username, which is not always the email address)
+   and the instance URL at hand.
+2. Run `kasl setup` and follow the Jira prompts. The password is asked for once
+   and stored in the keyring.
 
 ### Configuration
 
@@ -88,54 +73,32 @@ Import completed issues and track work items.
 {
   "jira": {
     "login": "john.doe",
-    "api_url": "https://company.atlassian.net"
+    "api_url": "https://jira.company.com"
   }
 }
 ```
 
-### Features
+Inbox polling has its own block - see [Configuration](/concepts/configuration/)
+for `jira_inbox`.
 
-- **Issue Import**: Import completed issues as tasks
-- **Status Tracking**: Filter by issue status
-- **Project Support**: Support for multiple projects
-- **Field Mapping**: Custom field support
+### Authentication
 
-### Usage
+kasl authenticates once and caches the resulting session id in the data
+directory as `.jira_session_id`. Subsequent runs reuse it; when the server
+rejects it the file is dropped and the login repeats. The password itself is
+never written to disk.
 
-```bash
-# Find tasks from Jira
-kasl task find
+## SiServer
 
-# This will show:
-# - Incomplete local tasks
-# - Today's GitLab commits
-# - Today's completed Jira issues
-# - Interactive selection interface
-```
-
-### API Endpoints Used
-
-- `POST /rest/auth/1/session` - Authenticate
-- `GET /rest/api/2/search` - Search issues
-- `GET /rest/api/2/issue/{key}` - Get issue details
-
-## SiServer Integration
-
-Submit reports to internal company systems.
+Submits the daily report and the monthly summary to a corporate reporting
+system. This integration is specific to the deployment kasl was originally
+written for; the endpoint paths come from your organization and are configured,
+not hard-coded into the docs.
 
 ### Setup
 
-1. **Get Credentials**:
-   - Corporate username
-   - Password (prompted interactively)
-   - Authentication URL
-   - API URL
-
-2. **Configure Integration**:
-   ```bash
-   kasl setup
-   # Follow prompts to configure SiServer
-   ```
+Run `kasl setup` and answer the SiServer prompts: login, authentication URL and
+API URL. The password goes to the keyring.
 
 ### Configuration
 
@@ -143,206 +106,81 @@ Submit reports to internal company systems.
 {
   "si": {
     "login": "john.doe@company.com",
-    "auth_url": "https://auth.company.com",
-    "api_url": "https://api.company.com"
+    "auth_url": "https://auth.company.example",
+    "api_url": "https://api.company.example"
   }
 }
 ```
 
-### Features
-
-- **Daily Reports**: Submit daily work reports
-- **Monthly Reports**: Submit monthly summaries
-- **Rest Dates**: Import company holidays and rest days
-- **Secure Authentication**: LDAP-based authentication
-
 ### Usage
 
 ```bash
-# Submit daily report
 kasl report --send
-
-# Submit monthly report
 kasl sum --send
-
-# This will:
-# - Authenticate with SiServer
-# - Format report data
-# - Submit via API
-# - Handle errors and retries
 ```
 
-### API Endpoints Used
+Authentication is two-staged: kasl signs in against the LDAP endpoint, exchanges
+the result for a bearer token, and caches the session id as `.si_session_id`.
+The same session also supplies the company's rest days, which is why `kasl sum`
+can tell a holiday from a day you did not work.
 
-- `POST /auth/login` - Authenticate
-- `POST /reports/daily` - Submit daily report
-- `POST /reports/monthly` - Submit monthly report
-- `GET /calendar/rest-dates` - Get rest dates
+## Credentials
 
-## Credential Management
+Since 1.0, the passwords you type at a prompt live in the operating system
+keyring:
 
-### Secure Storage
+- **Windows** - Credential Manager
+- **macOS** - Keychain
+- **Linux** - Secret Service (GNOME Keyring, KWallet, and compatible)
 
-Credentials are stored securely:
+Nothing is encrypted with a key compiled into the binary any more - that scheme
+was removed rather than improved, because a key shipped inside a public release
+protects nothing. Installations that predate 1.0 still carry the old AES files
+next to the config; they are read once, migrated into the keyring and left alone
+afterwards. See [ADR 0001](https://github.com/lacodda/kasl/blob/main/docs/adr/0001-os-keyring.md).
 
-- **API Tokens**: Encrypted in separate files
-- **Passwords**: Not stored, prompted interactively
-- **Session Data**: Cached temporarily
+Two values are not passwords and stay in `config.json` as written: the GitLab
+`access_token` and the reporting server's `auth_token`.
 
-### File Locations
+### What is on disk
+
+The data directory holds the database, the config and the cached session ids:
 
 - **Windows**: `%LOCALAPPDATA%\lacodda\kasl\`
 - **macOS**: `~/Library/Application Support/lacodda/kasl/`
 - **Linux**: `~/.local/share/lacodda/kasl/`
 
-### Encryption
+Session ids are `.jira_session_id` and `.si_session_id`. GitLab has none - it
+authenticates with the token on every request.
 
-- **Algorithm**: AES-256-CBC
-- **Key Management**: Compile-time embedded keys
-- **File Permissions**: Restricted access
+### When authentication fails
 
-## Session Management
+A wrong password is re-prompted up to three times before kasl gives up; a
+rejected session id is discarded and the login is retried once. Neither is a
+network backoff - a server that is down fails the command rather than being
+retried in a loop.
 
-### Automatic Handling
+To force a fresh login, delete the cached session id:
 
-Sessions are managed automatically:
-
-- **Authentication**: Prompted when needed
-- **Caching**: Sessions cached for performance
-- **Renewal**: Automatic session renewal
-- **Cleanup**: Expired sessions removed
-
-### Session Files
-
-- `.gitlab_session` - GitLab session data
-- `.jira_session` - Jira session data
-- `.si_session` - SiServer session data
-
-### Error Handling
-
-- **Network Errors**: Automatic retry with backoff
-- **Authentication Failures**: Re-prompt for credentials
-- **Session Expiry**: Automatic re-authentication
-- **Rate Limiting**: Respect API rate limits
-
-## Troubleshooting
-
-### Common Issues
-
-**Problem**: Authentication failures
 ```bash
-# Clear cached sessions
-rm ~/.local/share/lacodda/kasl/.gitlab_session
-rm ~/.local/share/lacodda/kasl/.jira_session
-rm ~/.local/share/lacodda/kasl/.si_session
-
-# Reconfigure integration
-kasl setup
+# Linux and macOS
+rm ~/.local/share/lacodda/kasl/.jira_session_id
 ```
 
-**Problem**: API connection errors
-```bash
-# Test connectivity
-curl -H "Authorization: Bearer YOUR_TOKEN" https://gitlab.com/api/v4/user
+To replace a stored password, run `kasl setup` again.
 
-# Check network settings
-ping gitlab.com
-```
-
-**Problem**: Rate limiting
-```bash
-# Wait and retry
-# kasl handles rate limiting automatically
-# Check API documentation for limits
-```
-
-### Debug Mode
-
-Enable debug logging for API operations:
+## Debugging
 
 ```bash
 RUST_LOG=kasl=debug kasl task find
 ```
 
-This will show:
-- API requests and responses
-- Authentication attempts
-- Session management
-- Error details
+Debug logging names the requests kasl makes and the decisions it takes on the
+responses. It does not print credentials.
 
-### API Limits
+## Related pages
 
-Be aware of API rate limits:
-
-- **GitLab**: 600 requests/hour for authenticated users
-- **Jira**: Varies by plan and usage
-- **SiServer**: Depends on company configuration
-
-## Best Practices
-
-### Security
-
-- **Token Rotation**: Regularly rotate API tokens
-- **Minimal Permissions**: Use tokens with minimal required scopes
-- **Secure Storage**: Keep configuration files secure
-- **Network Security**: Use HTTPS for all API communications
-
-### Performance
-
-- **Caching**: Sessions are cached to reduce API calls
-- **Batch Operations**: Use batch operations when possible
-- **Rate Limiting**: Respect API rate limits
-- **Connection Pooling**: Efficient HTTP connection management
-
-### Monitoring
-
-- **Error Tracking**: Monitor for authentication failures
-- **Usage Monitoring**: Track API usage patterns
-- **Performance Metrics**: Monitor response times
-- **Log Analysis**: Review debug logs for issues
-
-## Custom Integrations
-
-### Adding New APIs
-
-To add support for new APIs:
-
-1. **Create API Client**: Implement the `Session` trait
-2. **Add Configuration**: Extend configuration structure
-3. **Update Commands**: Add integration to relevant commands
-4. **Add Tests**: Comprehensive test coverage
-
-### Example Implementation
-
-```rust
-pub struct CustomApi {
-    client: Client,
-    config: CustomConfig,
-    credentials: Option<LoginCredentials>,
-    retries: i32,
-}
-
-impl Session for CustomApi {
-    async fn login(&self) -> Result<String> {
-        // Implementation
-    }
-    
-    fn set_credentials(&mut self, password: &str) -> Result<()> {
-        // Implementation
-    }
-    
-    // ... other required methods
-}
-```
-
-### Configuration Extension
-
-```json
-{
-  "custom_api": {
-    "login": "username",
-    "api_url": "https://api.example.com"
-  }
-}
-```
-
+- [`task`](/reference/task/) - `task find` is where GitLab and Jira candidates appear
+- [`inbox`](/reference/inbox/) - the Jira inbox and its polling
+- [`report`](/reference/report/) - filing the day with `--send`
+- [Configuration](/concepts/configuration/) - every configuration block in one place

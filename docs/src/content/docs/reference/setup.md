@@ -2,12 +2,14 @@
 title: "setup"
 ---
 
-The `setup` command sets up kasl configuration interactively, guiding you through the initial setup process.
+The `setup` command runs the interactive configuration wizard: a checklist of modules, then a few prompts for each one you ticked.
 
 :::note[Renamed in 1.2]
 This command used to be called `init`. The old name still works and does the
 same thing, printing a notice that points here; it will be removed in 2.0.
 :::
+
+`kasl setup` needs a terminal - every step is a prompt, several of them for secrets. Run it outside one and it refuses with a message naming the problem rather than hanging.
 
 ## Usage
 
@@ -15,249 +17,63 @@ same thing, printing a notice that points here; it will be removed in 2.0.
 kasl setup [OPTIONS]
 ```
 
-## Options
+- `-d, --delete`: Remove the existing configuration file and global PATH settings instead of creating a new one.
 
-| Option | Description |
-|--------|-------------|
-| `-d, --delete` | Remove existing configuration instead of creating new one |
-| `-h, --help` | Print help information |
+## Module checklist
 
-## Description
+The wizard opens with a single checklist - a `MultiSelect`, not a chain of "Enable X? (y/N)" questions - listing every module in this order:
 
-The `setup` command provides an interactive configuration wizard that guides you through setting up:
+1. **SiServer**
+2. **GitLab**
+3. **Jira**
+4. **Monitor**
+5. **Server**
+6. **Productivity**
+7. **Report**
+8. **Task discovery**
+9. **Jira inbox**
 
-- **Monitor Settings**: Activity detection thresholds and timing
-- **API Integrations**: GitLab, Jira, and SiServer connections
-- **Server Configuration**: External reporting endpoints
-- **Credential Management**: Secure storage setup
+Whatever you tick runs its own prompts right after the checklist closes; nothing you leave unticked is touched. Fields already in your config file are offered back as defaults, so re-running `setup` on a module you configured before is an edit, not a rewrite.
 
-## Interactive Setup
+### SiServer, GitLab, Jira
 
-### Monitor Configuration
+Each asks for a login/token and its API URL:
 
-Configure activity monitoring behavior:
+- **SiServer**: login, login URL, API URL.
+- **GitLab**: private token, API URL.
+- **Jira**: login, API URL - just the two fields; there is no separate "Jira Username" prompt.
 
-```
-Minimum pause duration (minutes) [20]: 
-Pause threshold (seconds) [60]: 
-Poll interval (milliseconds) [500]: 
-Activity threshold (seconds) [30]: 
-Minimum work interval (minutes) [10]: 
-```
+### Monitor
 
-**Settings Explained**:
-- **Minimum pause duration**: Breaks shorter than this are ignored
-- **Pause threshold**: Time without activity before pause detection
-- **Poll interval**: How often to check for activity
-- **Activity threshold**: Continuous activity needed to start workday
-- **Minimum work interval**: Short intervals to merge
+Prompts for `min_pause_duration`, `pause_threshold`, `poll_interval`, `activity_threshold`, and `min_work_interval`. One monitor setting, `pause_merge_gap`, is not part of this prompt set - it only has a default and is changed by editing `config.json` directly. See [Configuration](/concepts/configuration/) for what each field controls.
 
-### API Integrations
+### Server
 
-Configure external service connections:
+Prompts for the reporting API URL and auth token used by `report --send` and `sum --send`.
 
-#### GitLab Integration
-```
-Enable GitLab integration? (y/N): y
-GitLab API URL [https://gitlab.com]: 
-GitLab Access Token: 
-```
+### Productivity, Report, Task discovery, Jira inbox
 
-#### Jira Integration
-```
-Enable Jira integration? (y/N): y
-Jira API URL: 
-Jira Username: 
-```
+The remaining four modules configure the productivity thresholds, report output (directory, filename template, language, template name), the task-discovery ignore list, and Jira inbox polling (interval, notifications, sort field, custom fields) respectively. Field-by-field details live on [Configuration](/concepts/configuration/) - this page only tracks what the wizard asks and in what order.
 
-#### SiServer Integration
-```
-Enable SiServer integration? (y/N): y
-SiServer Auth URL: 
-SiServer API URL: 
-SiServer Username: 
-```
-
-### Server Configuration
-
-Configure external reporting:
-
-```
-Enable external reporting? (y/N): y
-Server API URL: 
-Authentication Token: 
-```
-
-## Configuration Reset
-
-Remove existing configuration:
-
-```bash
-kasl setup --delete
-```
-
-This will:
-- Delete the configuration file
-- Remove global PATH settings
-- Reset to initial state
-
-## Configuration File Location
-
-Configuration is stored in platform-specific locations:
+## Configuration file location
 
 - **Windows**: `%LOCALAPPDATA%\lacodda\kasl\config.json`
 - **macOS**: `~/Library/Application Support/lacodda/kasl/config.json`
 - **Linux**: `~/.local/share/lacodda/kasl/config.json`
 
-## Example Configuration
-
-After running `setup`, your configuration will look like:
-
-```json
-{
-  "monitor": {
-    "min_pause_duration": 20,
-    "pause_threshold": 60,
-    "poll_interval": 500,
-    "activity_threshold": 30,
-    "min_work_interval": 10
-  },
-  "gitlab": {
-    "access_token": "glpat-XXXXXXXXXXXXXXXXXXXX",
-    "api_url": "https://gitlab.com"
-  },
-  "jira": {
-    "login": "john.doe",
-    "api_url": "https://company.atlassian.net"
-  },
-  "si": {
-    "login": "john.doe@company.com",
-    "auth_url": "https://auth.company.com",
-    "api_url": "https://api.company.com"
-  },
-  "server": {
-    "api_url": "https://api.company.com/timetracking",
-    "auth_token": "your-api-token"
-  }
-}
-```
-
-## Credential Management
-
-### Secure Storage
-
-Credentials are stored securely:
-- **API Tokens**: Encrypted in separate files
-- **Passwords**: Prompted interactively, not stored
-- **Session Data**: Cached temporarily
-
-### File Permissions
-
-Ensure proper file permissions:
-
-```bash
-# Linux/macOS
-chmod 600 ~/.local/share/lacodda/kasl/config.json
-chmod 700 ~/.local/share/lacodda/kasl/
-```
-
-## Troubleshooting
-
-### Configuration Issues
-
-**Problem**: Configuration not saved
-```bash
-# Check file permissions
-ls -la ~/.local/share/lacodda/kasl/config.json
-
-# Recreate configuration
-kasl setup --delete
-kasl setup
-```
-
-**Problem**: Invalid configuration
-```bash
-# Validate JSON syntax
-python -m json.tool ~/.local/share/lacodda/kasl/config.json
-
-# Reset configuration
-kasl setup --delete
-kasl setup
-```
-
-### API Configuration Issues
-
-**Problem**: API connection failures
-```bash
-# Test connectivity
-curl -H "Authorization: Bearer YOUR_TOKEN" https://gitlab.com/api/v4/user
-
-# Reconfigure integration
-kasl setup
-```
-
 ## Examples
 
-### Basic Setup
-
 ```bash
-# Run interactive setup
+# Run the wizard
 kasl setup
 
-# Follow prompts to configure:
-# 1. Monitor settings
-# 2. API integrations (optional)
-# 3. Server configuration (optional)
-```
-
-### Reset Configuration
-
-```bash
-# Remove existing configuration
+# Remove the configuration and start over
 kasl setup --delete
-
-# Run setup again
 kasl setup
 ```
 
-### Partial Configuration
-
-```bash
-# Run setup and skip optional integrations
-kasl setup
-
-# Only configure monitor settings
-# Skip GitLab, Jira, and SiServer when prompted
-```
-
-## Next Steps
-
-After running `setup`:
-
-1. **Start monitoring**:
-   ```bash
-   kasl watch
-   ```
-
-2. **Enable autostart** (optional):
-   ```bash
-   kasl autostart enable
-   ```
-
-3. **Create your first task**:
-   ```bash
-   kasl task add --name "Set up kasl" --completeness 100
-   ```
-
-4. **View your report**:
-   ```bash
-   kasl report
-   ```
-
-## Related Commands
+## Related commands
 
 - [`watch`](/reference/watch/) - Start activity monitoring
 - [`task`](/reference/task/) - Manage tasks
 - [`report`](/reference/report/) - Generate reports
-- [`autostart`](/reference/autostart/) - Configure automatic startup
-

@@ -103,7 +103,7 @@ Monthly work productivity: 95.4%
 - **Tasks you do not have to remember.** Today's GitLab commits and resolved Jira issues are offered as candidates and deduplicated against what you already logged. A Jira inbox polls assigned issues in the background, raises a desktop notification when something new lands on you or an issue changes, and drops issues that were closed or reassigned instead of letting the list go stale.
 - **Honest numbers.** kasl records absences; it does not invent them. When a day falls below your reporting threshold it says so - and if the cause is a break the monitor missed, you add that break with its real time.
 - **Reports where they need to go.** One command submits the day, or the month, to your corporate API. Exports to CSV, JSON and Excel, including the hourly breakdown that time sheets tend to ask for.
-- **Credentials in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing sensitive in a config file, nothing encrypted with a key that ships inside the binary.
+- **Passwords in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing is encrypted with a key that ships inside the binary. API tokens, which are not prompted for, stay in the config file.
 - **Nothing that hangs.** Every prompt checks for a terminal first, so kasl under cron, under CI or under the daemon fails with a message naming the flag you needed instead of waiting forever for an answer nobody can give.
 - **A short alias.** `ka` is installed alongside `kasl` by every channel and updated with it, and completions are available for bash, zsh, fish, PowerShell and elvish.
 

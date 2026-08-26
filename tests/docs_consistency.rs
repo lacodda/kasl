@@ -116,6 +116,22 @@ mod tests {
     }
 
     #[test]
+    fn every_reference_page_points_at_its_neighbours() {
+        // Line-standard: a reference page ends by naming the commands next to
+        // it, so the reader is never left at a dead end. The section drifted
+        // in twice as "Integration with Other Commands" duplicating it, and
+        // was missing outright from two pages.
+        for page in reference_pages() {
+            let text = read(format!("{REFERENCE_DIR}/{page}.md"));
+            assert!(text.contains("## Related commands"), "{page}.md has no `## Related commands` section");
+            assert!(
+                !text.contains("## Integration with Other Commands"),
+                "{page}.md still carries `Integration with Other Commands`, which duplicates `Related commands`"
+            );
+        }
+    }
+
+    #[test]
     fn the_documented_msrv_matches_the_manifest() {
         // `getting-started.md` asked for "Rust 1.70 or higher" through four
         // MSRV bumps: the number lives in prose, so nothing but a reader
@@ -185,6 +201,41 @@ mod tests {
             }
         }
         assert!(checked > 50, "only {checked} command invocations found in the docs - is the walk working?");
+    }
+
+    #[test]
+    fn internal_links_resolve_to_a_page() {
+        // Starlight builds a broken internal link without complaining, so a
+        // page renamed or removed leaves a 404 behind that only a reader
+        // finds. Every `](/some/path/)` must have a file behind it.
+        let docs_dir = repo_root().join("docs/src/content/docs");
+        let mut checked = 0;
+        for path in walk_markdown(&docs_dir) {
+            let text = fs::read_to_string(&path).expect("cannot read a docs page");
+            let relative = path.strip_prefix(repo_root()).unwrap_or(&path).display().to_string();
+            for (line_no, line) in text.lines().enumerate() {
+                let mut rest = line;
+                while let Some(at) = rest.find("](/") {
+                    rest = &rest[at + 2..];
+                    let Some(close) = rest.find(')') else { break };
+                    let target = &rest[..close];
+                    rest = &rest[close..];
+
+                    // Site-absolute page links only: anchors and files served
+                    // from public/ are not content pages.
+                    if !target.ends_with('/') || target.contains('#') {
+                        continue;
+                    }
+                    let slug = target.trim_matches('/');
+                    let exists = ["md", "mdx"].iter().any(|ext| docs_dir.join(format!("{slug}.{ext}")).exists())
+                        || docs_dir.join(slug).join("index.md").exists()
+                        || docs_dir.join(slug).join("index.mdx").exists();
+                    assert!(exists, "{relative}:{} links to /{slug}/, which has no page", line_no + 1);
+                    checked += 1;
+                }
+            }
+        }
+        assert!(checked > 20, "only {checked} internal links found - is the walk working?");
     }
 
     /// Every markdown/MDX file under a docs directory, recursively.
