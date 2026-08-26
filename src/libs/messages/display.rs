@@ -395,6 +395,24 @@ impl Display for Message {
             Message::JiraInboxDismissed(key) => format!("Dismissed {}.", key),
             Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
             Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
+            Message::JiraInboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),
+            Message::JiraInboxSummary { total, fresh, taken } => {
+                // Only the parts that carry information: "3 in the inbox" says
+                // enough when none are new and none are taken.
+                let mut parts = Vec::new();
+                if *fresh > 0 {
+                    parts.push(format!("{} new", fresh));
+                }
+                if *taken > 0 {
+                    parts.push(format!("{} taken", taken));
+                }
+                let detail = if parts.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", parts.join(", "))
+                };
+                format!("{} in the inbox{}", total, detail)
+            }
             Message::JiraInboxOpenFailed(err) => format!("Failed to open browser: {}", err),
             Message::PromptJiraInboxEnabled => "Enable Jira inbox polling?".to_string(),
             Message::PromptJiraInboxPollInterval => "Jira inbox poll interval (seconds)".to_string(),

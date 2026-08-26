@@ -329,6 +329,23 @@ impl MigrationManager {
             tx.execute("ALTER TABLE jira_inbox ADD COLUMN changed_at TIMESTAMP", [])?;
             Ok(())
         });
+
+        // Version 13: the link between an inbox issue and the task it became.
+        //
+        // `take` used to create a task and dismiss the issue, which severed
+        // the two: the key survived only inside the task's name, and the
+        // inbox forgot the issue had ever been picked up. `tasks.jira_key`
+        // records which issue a task came from, and `jira_inbox.taken_at`
+        // keeps the issue in the list marked as taken rather than hiding it.
+        //
+        // Dismissal stays what it always was - "not my problem" - so rows
+        // dismissed before this migration are left alone.
+        self.add_migration(13, "link_taken_issues_to_their_tasks", |tx| {
+            tx.execute("ALTER TABLE tasks ADD COLUMN jira_key TEXT", [])?;
+            tx.execute("CREATE INDEX idx_tasks_jira_key ON tasks(jira_key)", [])?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN taken_at TIMESTAMP", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

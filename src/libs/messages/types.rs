@@ -342,6 +342,16 @@ pub enum Message {
     JiraInboxDismissed(String),
     JiraInboxOpened(String),
     JiraInboxTaken(String),
+
+    /// The issue already became a task: key, then the task's name.
+    JiraInboxAlreadyTaken(String, String),
+
+    /// What the inbox holds, shown under the daily report.
+    JiraInboxSummary {
+        total: i64,
+        fresh: i64,
+        taken: i64,
+    },
     JiraInboxOpenFailed(String),
     PromptJiraInboxEnabled,
     PromptJiraInboxPollInterval,

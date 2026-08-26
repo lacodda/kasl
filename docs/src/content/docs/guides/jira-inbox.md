@@ -65,12 +65,14 @@ kasl inbox dismiss PROJ-412   # not now - stop showing it
 kasl inbox take PROJ-412      # turn it into a task
 ```
 
-`take` creates a local task named `PROJ-412 <summary>` and dismisses the inbox
-entry in the same step - the issue leaves the inbox because the work it
-represents now lives in your task list. There is no stored link back from the
-task to the Jira issue: once taken, the two are separate records, so the
-inbox row does not track what became of the task afterward. If you need the
-issue again, `kasl inbox open PROJ-412` still works from its browse URL.
+`take` creates a local task named `PROJ-412 <summary>` and marks the issue as
+taken. The issue **stays** in the inbox, wearing a `taken` badge: what you have
+picked up is as much a part of the picture as what you have not. Only
+`dismiss` removes an issue from the list.
+
+The task stores the issue key, so the two stay connected even after you rename
+the task to something that reads better. Taking the same issue twice does not
+create a second task - the command tells you which task it already became.
 
 ## Sort order
 
@@ -132,6 +134,14 @@ Work through the list: `take` what you're picking up today, `dismiss` what
 isn't yours to worry about right now, `pin` anything you want to keep visible
 without committing to it yet. From there the day runs as usual - see
 [A day with kasl](/guides/a-day-with-kasl/).
+
+At the end of the day, `kasl report` closes with a line about what is still
+waiting, so the inbox does not quietly grow while you look only at what you
+finished:
+
+```
+3 in the inbox (1 new, 1 taken)
+```
 
 ## Related pages
 

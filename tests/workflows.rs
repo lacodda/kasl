@@ -12,7 +12,7 @@ mod tests {
     use kasl::db::tasks::Tasks;
     use kasl::db::workdays::Workdays;
     use kasl::libs::config::Config;
-    use kasl::libs::task::Task;
+    use kasl::libs::task::{Task, TaskFilter};
     use serial_test::serial;
     use tempfile::TempDir;
     use test_context::{TestContext, test_context};
@@ -423,5 +423,49 @@ mod tests {
 
         let all_tasks = tasks.fetch(kasl::libs::task::TaskFilter::All).unwrap();
         assert_eq!(all_tasks.len(), 2);
+    }
+
+    #[test_context(WorkflowTestContext)]
+    #[serial]
+    #[test]
+    fn the_link_between_an_issue_and_its_task_survives_a_rename(_ctx: &mut WorkflowTestContext) {
+        // The key used to live only inside the task's name, so renaming the
+        // task lost which issue it came from. `jira_key` is what the lookup
+        // goes through now, and the UPDATE statement does not list the column
+        // at all - an edit cannot reach it, whatever the caller passes.
+        let mut tasks = Tasks::new().unwrap();
+        let task = Task::new("PROJ-412 Fix session timeout", "", Some(0)).from_jira("PROJ-412");
+        tasks.insert(&task).unwrap();
+
+        let found = tasks.fetch(TaskFilter::ByJiraKey("PROJ-412".to_string())).unwrap();
+        assert_eq!(found.len(), 1, "the task must be findable by its issue key");
+        let id = found[0].id.unwrap();
+
+        // Rename it to something that no longer mentions the key at all, and
+        // pass a task whose `jira_key` has been cleared - as `task edit` would
+        // if it ever stopped copying the field forward.
+        let mut renamed = found[0].clone();
+        renamed.update_from(&Task::new("Session timeout on settings", "stale cookie jar", Some(60)));
+        renamed.jira_key = None;
+        tasks.update(&renamed).unwrap();
+
+        let after = tasks.fetch(TaskFilter::ByJiraKey("PROJ-412".to_string())).unwrap();
+        assert_eq!(after.len(), 1, "renaming must not detach the task from its issue");
+        assert_eq!(after[0].id.unwrap(), id);
+        assert_eq!(after[0].name, "Session timeout on settings");
+        assert_eq!(after[0].jira_key.as_deref(), Some("PROJ-412"));
+    }
+
+    #[test_context(WorkflowTestContext)]
+    #[serial]
+    #[test]
+    fn a_task_not_taken_from_an_issue_carries_no_key(_ctx: &mut WorkflowTestContext) {
+        let mut tasks = Tasks::new().unwrap();
+        tasks.insert(&Task::new("Something I thought of myself", "", Some(0))).unwrap();
+
+        let all = tasks.fetch(TaskFilter::All).unwrap();
+        assert_eq!(all.len(), 1);
+        assert!(all[0].jira_key.is_none(), "only `inbox take` sets a key");
+        assert!(tasks.fetch(TaskFilter::ByJiraKey("PROJ-1".to_string())).unwrap().is_empty());
     }
 }

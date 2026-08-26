@@ -63,11 +63,14 @@ CREATE TABLE tasks (
     comment TEXT,
     completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
     excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE,
-    deleted_at TIMESTAMP
+    deleted_at TIMESTAMP,
+    jira_key TEXT
 );
 ```
 
-`deleted_at` was added for soft delete, but nothing in the current codebase sets or reads it - `kasl task remove` deletes rows outright. Treat the column as reserved.
+- `task_id` groups a task with its own history across days - it points at the id of the first task in the chain, so `task find` can offer yesterday's unfinished work and see today's progress as the same item. It is not an external reference.
+- `jira_key` is the Jira issue the task was taken from, set by `kasl inbox take`. The `UPDATE` behind `kasl task edit` does not list this column, so renaming a task cannot detach it from its issue.
+- `deleted_at` was added for soft delete, but nothing in the current codebase sets or reads it - `kasl task remove` deletes rows outright. Treat the column as reserved.
 
 #### `tags`
 Stores task categorization tags:
@@ -125,7 +128,8 @@ CREATE TABLE jira_inbox (
     sort_value REAL,
     gone_at TIMESTAMP,
     last_change TEXT,
-    changed_at TIMESTAMP
+    changed_at TIMESTAMP,
+    taken_at TIMESTAMP
 );
 ```
 
@@ -133,6 +137,7 @@ CREATE TABLE jira_inbox (
 - `sort_value` is the numeric value of a configured Jira custom field (e.g. Scoring), used to rank issues.
 - `gone_at` is stamped when an issue stops appearing in the Jira poll (closed or reassigned); it clears if the issue reappears. Rows with `gone_at` set are hidden from the default list and only shown with `kasl inbox --all`.
 - `last_change` / `changed_at` record the most recent visible change (status, priority, or score) so the list can badge it.
+- `taken_at` is stamped by `kasl inbox take`. Unlike `dismissed`, it keeps the row in the list: a taken issue is still part of the picture, it is just already in hand.
 - `pinned` and `dismissed` are set by `kasl inbox pin` / `kasl inbox dismiss`.
 
 #### `jira_statuses`
@@ -195,6 +200,7 @@ Schema history, in order:
 10. `drop_jira_inbox_legacy_status_column` - drops it
 11. `fold_breaks_into_protected_pauses` - adds `protected`/`reason` to `pauses`, migrates rows out of `breaks` as protected pauses, drops `breaks`
 12. `jira_inbox_gone_and_change_tracking` - adds `gone_at`, `last_change`, `changed_at` to `jira_inbox`
+13. `link_taken_issues_to_their_tasks` - adds `jira_key` and its index to `tasks`, and `taken_at` to `jira_inbox`
 
 Each migration runs inside a transaction; a failure rolls back that migration.
 
@@ -260,6 +266,7 @@ CREATE INDEX idx_workdays_date ON workdays(date);
 CREATE INDEX idx_tasks_timestamp ON tasks(timestamp);
 CREATE INDEX idx_tasks_task_id ON tasks(task_id);
 CREATE INDEX idx_tasks_deleted_at ON tasks(deleted_at);
+CREATE INDEX idx_tasks_jira_key ON tasks(jira_key);
 
 -- Pauses table
 CREATE INDEX idx_pauses_start ON pauses(start);

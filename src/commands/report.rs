@@ -8,6 +8,7 @@
 use crate::{
     api::si::Si,
     db::{
+        jira_inbox::JiraInbox,
         pauses::Pauses,
         tasks::Tasks,
         workdays::{Workday, Workdays},
@@ -189,6 +190,16 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
             info.count,
             format_duration(&info.total_duration)
         ));
+    }
+
+    // What is still waiting in the inbox - the day is not only what was done.
+    let counts = JiraInbox::new()?.counts()?;
+    if !counts.is_empty() {
+        msg_info!(Message::JiraInboxSummary {
+            total: counts.total,
+            fresh: counts.fresh,
+            taken: counts.taken,
+        });
     }
 
     // Warn when productivity is below the configured threshold

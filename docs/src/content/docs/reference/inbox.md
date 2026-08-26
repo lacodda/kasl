@@ -2,7 +2,7 @@
 title: "inbox"
 ---
 
-The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, dismiss, open in the browser, or import issues into your local task list.
+The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, dismiss, open in the browser, or take an issue into your task list.
 
 Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
@@ -43,7 +43,7 @@ kasl inbox list [OPTIONS]
 - `-n, --limit <N>`: Show only the top N issues
 - `--all`: Include issues gone from Jira
 
-The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`).
+The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `gone` outranks everything.
 
 ### `pin` - Pin an inbox issue
 
@@ -85,7 +85,7 @@ kasl inbox open [KEY]
 **Arguments:**
 - `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
-### `take` - Import issue into tasks
+### `take` - Start working on an issue
 
 ```bash
 kasl inbox take [KEY]
@@ -94,7 +94,14 @@ kasl inbox take [KEY]
 **Arguments:**
 - `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
 
-Imports the issue into local tasks (creates a task named `KEY summary` and dismisses the inbox entry).
+Creates a task named `KEY summary` and records that the issue is in hand: the
+task stores the issue key, and the issue stays in the inbox wearing a `taken`
+badge. Dismissing is still a separate act - `take` means "I started this", not
+"this is not mine".
+
+Taking the same issue twice does not create a second task; the command says
+which task it already became. The stored key survives renaming the task, so the
+link outlives the summary it started with.
 
 ## Background Polling
 

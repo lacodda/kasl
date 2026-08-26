@@ -38,6 +38,29 @@ pub struct JiraInboxItem {
     /// Most recent visible change, e.g. `status→In Progress` or `↑prio High`.
     pub last_change: Option<String>,
     pub changed_at: Option<NaiveDateTime>,
+    /// When `inbox take` turned this issue into a task.
+    ///
+    /// A taken issue stays in the list - the point is to see what is in hand,
+    /// not to hide it. Dismissal remains separate and still means "not mine".
+    pub taken_at: Option<NaiveDateTime>,
+}
+
+/// What the inbox holds right now, for the daily report line.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct InboxCounts {
+    /// Issues still asking for attention (not dismissed, not gone).
+    pub total: i64,
+    /// Of those, already turned into tasks.
+    pub taken: i64,
+    /// Of those, first seen within the freshness window and not yet taken.
+    pub fresh: i64,
+}
+
+impl InboxCounts {
+    /// Nothing to say when the inbox is empty.
+    pub fn is_empty(&self) -> bool {
+        self.total == 0
+    }
 }
 
 impl JiraInboxItem {
@@ -50,6 +73,11 @@ impl JiraInboxItem {
         let fresh = |t: NaiveDateTime| now.signed_duration_since(t) < Duration::hours(FRESH_BADGE_HOURS);
         if self.gone_at.is_some() {
             return Some("gone".to_string());
+        }
+        // Taken outranks NEW and change badges: once an issue is in hand, that
+        // is the fact worth seeing, and it does not fade with time.
+        if self.taken_at.is_some() {
+            return Some("taken".to_string());
         }
         if fresh(self.first_seen) {
             return Some("NEW".to_string());
@@ -243,7 +271,7 @@ impl JiraInbox {
             "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
                     i.priority, i.priority_rank, i.sort_value, i.url,
                     i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                    i.gone_at, i.last_change, i.changed_at
+                    i.gone_at, i.last_change, i.changed_at, i.taken_at
              FROM jira_inbox i
              LEFT JOIN jira_statuses s ON s.id = i.status_id
              WHERE i.dismissed = 0{gone_filter}
@@ -263,7 +291,7 @@ impl JiraInbox {
                 "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
                         i.priority, i.priority_rank, i.sort_value, i.url,
                         i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                        i.gone_at, i.last_change, i.changed_at
+                        i.gone_at, i.last_change, i.changed_at, i.taken_at
                  FROM jira_inbox i
                  LEFT JOIN jira_statuses s ON s.id = i.status_id
                  WHERE i.issue_key = ?1",
@@ -287,6 +315,46 @@ impl JiraInbox {
             .db
             .conn
             .execute("UPDATE jira_inbox SET dismissed = ?1 WHERE issue_key = ?2", params![dismissed as i32, key])?;
+        Ok(n > 0)
+    }
+
+    /// Counts what is waiting in the inbox, for the daily report line.
+    ///
+    /// Dismissed and gone rows are excluded - the point is what still asks for
+    /// attention, which is the same set `inbox list` shows.
+    pub fn counts(&self) -> Result<InboxCounts> {
+        let now = Local::now().naive_local();
+        let fresh_since = now - Duration::hours(FRESH_BADGE_HOURS);
+        self.db
+            .conn
+            .query_row(
+                "SELECT COUNT(*),
+                        COUNT(taken_at),
+                        SUM(CASE WHEN taken_at IS NULL AND first_seen >= ?1 THEN 1 ELSE 0 END)
+                 FROM jira_inbox
+                 WHERE dismissed = 0 AND gone_at IS NULL",
+                params![fresh_since],
+                |row| {
+                    Ok(InboxCounts {
+                        total: row.get(0)?,
+                        taken: row.get(1)?,
+                        fresh: row.get::<_, Option<i64>>(2)?.unwrap_or(0),
+                    })
+                },
+            )
+            .map_err(Into::into)
+    }
+
+    /// Marks the issue as taken, or clears the mark.
+    ///
+    /// Unlike dismissal this keeps the row in the list: `take` used to hide
+    /// the issue, which lost the fact that it had been picked up at all.
+    pub fn set_taken(&self, key: &str, taken: bool) -> Result<bool> {
+        let value = taken.then(|| Local::now().naive_local());
+        let n = self
+            .db
+            .conn
+            .execute("UPDATE jira_inbox SET taken_at = ?1 WHERE issue_key = ?2", params![value, key])?;
         Ok(n > 0)
     }
 
@@ -390,5 +458,6 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
         gone_at: row.get(15)?,
         last_change: row.get(16)?,
         changed_at: row.get(17)?,
+        taken_at: row.get(18)?,
     })
 }

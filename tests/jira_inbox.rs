@@ -6,6 +6,8 @@
 
 use chrono::{Duration, Local};
 use kasl::db::jira_inbox::{JiraInbox, JiraInboxItem, JiraInboxUpsert};
+use kasl::db::tasks::Tasks;
+use kasl::libs::task::{Task, TaskFilter};
 use serial_test::serial;
 use tempfile::TempDir;
 use test_context::{TestContext, test_context};
@@ -193,6 +195,7 @@ fn test_badge_precedence_and_freshness() {
         gone_at: None,
         last_change: None,
         changed_at: None,
+        taken_at: None,
     };
 
     // Old, unchanged issue: no badge.
@@ -216,4 +219,91 @@ fn test_badge_precedence_and_freshness() {
     item.gone_at = Some(fresh);
     item.changed_at = Some(fresh);
     assert_eq!(item.badge(now).as_deref(), Some("gone"));
+
+    // Taken sits between the two: it outranks NEW and change badges, but a
+    // gone issue is still reported as gone.
+    item.gone_at = None;
+    item.taken_at = Some(stale);
+    item.first_seen = fresh;
+    assert_eq!(item.badge(now).as_deref(), Some("taken"), "taken must outrank NEW");
+    item.gone_at = Some(fresh);
+    assert_eq!(item.badge(now).as_deref(), Some("gone"), "gone must outrank taken");
+}
+
+#[test_context(InboxTestContext)]
+#[serial]
+#[test]
+fn test_taken_issue_stays_in_the_list(_ctx: &mut InboxTestContext) {
+    // `take` used to dismiss the issue, which hid the fact it was picked up.
+    // A taken issue stays listed; only dismissal removes it.
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-10")]).unwrap();
+
+    assert!(db.set_taken("KA-10", true).unwrap());
+
+    let listed = db.list_active(false).unwrap();
+    assert_eq!(listed.len(), 1, "a taken issue must remain in the list");
+    assert!(listed[0].taken_at.is_some(), "the taken mark must survive a round trip");
+    assert!(!listed[0].dismissed, "taking is not dismissing");
+
+    // Dismissal still removes it, taken or not.
+    db.set_dismissed("KA-10", true).unwrap();
+    assert!(db.list_active(false).unwrap().is_empty());
+}
+
+#[test_context(InboxTestContext)]
+#[serial]
+#[test]
+fn test_taking_the_same_issue_twice_creates_one_task(_ctx: &mut InboxTestContext) {
+    // A repeated `take` is almost always a repeated keystroke, not a request
+    // for a second copy of the same work. The guard is the key lookup, so this
+    // drives the same primitives the command uses.
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-30")]).unwrap();
+    let mut tasks = Tasks::new().unwrap();
+
+    for _ in 0..2 {
+        let existing = tasks.fetch(TaskFilter::ByJiraKey("KA-30".to_string())).unwrap();
+        if existing.is_empty() {
+            let task = Task::new("KA-30 Summary for KA-30", "", Some(0)).from_jira("KA-30");
+            tasks.insert(&task).unwrap();
+            db.set_taken("KA-30", true).unwrap();
+        }
+    }
+
+    let found = tasks.fetch(TaskFilter::ByJiraKey("KA-30".to_string())).unwrap();
+    assert_eq!(found.len(), 1, "taking twice must not fan out into duplicate tasks");
+    assert_eq!(db.list_active(false).unwrap()[0].badge(Local::now().naive_local()).as_deref(), Some("taken"));
+}
+
+#[test_context(InboxTestContext)]
+#[serial]
+#[test]
+fn test_counts_report_what_still_asks_for_attention(_ctx: &mut InboxTestContext) {
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-20"), upsert("KA-21"), upsert("KA-22"), upsert("KA-23")]).unwrap();
+
+    // Freshly discovered issues all count as new.
+    let counts = db.counts().unwrap();
+    assert_eq!((counts.total, counts.fresh, counts.taken), (4, 4, 0));
+
+    // A taken issue is no longer "new" - it is in hand.
+    db.set_taken("KA-20", true).unwrap();
+    let counts = db.counts().unwrap();
+    assert_eq!((counts.total, counts.fresh, counts.taken), (4, 3, 1));
+
+    // Dismissed and gone issues drop out of the count entirely: the number is
+    // about what still asks for attention.
+    db.set_dismissed("KA-21", true).unwrap();
+    db.mark_gone(&["KA-20".to_string(), "KA-21".to_string(), "KA-23".to_string()]).unwrap();
+    let counts = db.counts().unwrap();
+    assert_eq!(
+        (counts.total, counts.fresh, counts.taken),
+        (2, 1, 1),
+        "gone KA-22 and dismissed KA-21 must not count"
+    );
+
+    db.set_dismissed("KA-20", true).unwrap();
+    db.set_dismissed("KA-23", true).unwrap();
+    assert!(db.counts().unwrap().is_empty(), "an inbox with nothing waiting reports empty");
 }

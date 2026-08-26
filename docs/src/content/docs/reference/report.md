@@ -66,6 +66,17 @@ Tasks:
 +---+----+---------------------------------------------------+------------------+------+
 ```
 
+When the Jira inbox holds anything, the report closes with a line about what is
+still waiting - the day is not only what got done:
+
+```
+3 in the inbox (1 new, 1 taken)
+```
+
+The counts leave out dismissed issues and issues that left Jira: they name what
+still asks for attention. Nothing is printed when the inbox is empty or not
+configured. See [`inbox`](/reference/inbox/).
+
 Sending it:
 
 ```
@@ -80,3 +91,4 @@ Wait for a message to your email address
 - [`task`](/reference/task/) - Manage tasks included in reports
 - [`pauses`](/reference/pauses/) - Record absences reflected in reports
 - [`sum`](/reference/sum/) - Generate monthly summaries
+- [`inbox`](/reference/inbox/) - The issues counted at the end of the report

@@ -7,7 +7,7 @@ use crate::db::tasks::Tasks;
 use crate::libs::jira_inbox as inbox_lib;
 use crate::libs::messages::Message;
 use crate::libs::pick;
-use crate::libs::task::Task;
+use crate::libs::task::{Task, TaskFilter};
 use crate::libs::view::View;
 use crate::{msg_error, msg_info, msg_print, msg_success};
 use anyhow::{Result, bail};
@@ -186,6 +186,12 @@ fn open_issue(key: &str) -> Result<()> {
     Ok(())
 }
 
+/// Turns an inbox issue into a task and records that it was taken.
+///
+/// `take` used to create the task and dismiss the issue, which severed the
+/// two: the key survived only inside the task's name, and the inbox forgot the
+/// issue had ever been picked up. Now the task carries `jira_key`, and the
+/// issue stays in the list wearing a `taken` badge.
 fn take_issue(key: &str) -> Result<()> {
     let db = JiraInbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
@@ -193,10 +199,25 @@ fn take_issue(key: &str) -> Result<()> {
         return Ok(());
     };
 
+    // Taking the same issue twice should not fan out into duplicate tasks -
+    // the second call is almost always a repeated keystroke, not a request
+    // for a second copy of the same work.
+    let mut tasks = Tasks::new()?;
+    let existing = tasks.fetch(TaskFilter::ByJiraKey(key.to_string()))?;
+    if let Some(task) = existing.first() {
+        msg_info!(Message::JiraInboxAlreadyTaken(key.to_string(), task.name.clone()));
+        // Repair the mark if only the task survived - an issue taken before
+        // this became possible has a task but no `taken_at`.
+        if item.taken_at.is_none() {
+            let _ = db.set_taken(key, true)?;
+        }
+        return Ok(());
+    }
+
     let name = format!("{} {}", item.issue_key, item.summary);
-    let task = Task::new(&name, "", Some(0));
-    Tasks::new()?.insert(&task)?;
-    let _ = db.set_dismissed(key, true)?;
+    let task = Task::new(&name, "", Some(0)).from_jira(key);
+    tasks.insert(&task)?;
+    let _ = db.set_taken(key, true)?;
     msg_success!(Message::JiraInboxTaken(key.to_string()));
     Ok(())
 }

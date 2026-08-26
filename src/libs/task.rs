@@ -42,25 +42,27 @@ use chrono::NaiveDate;
 /// use kasl::libs::task::Task;
 ///
 /// // Simulated Jira issue data used to populate a task.
-/// let jira_issue_id = 42;
 /// struct JiraIssue {
+///     key: String,
 ///     summary: String,
 ///     description: Option<String>,
 /// }
 /// let jira_issue = JiraIssue {
+///     key: "PROJ-412".to_string(),
 ///     summary: "Fix login bug".to_string(),
 ///     description: Some("Users cannot log in with SSO".to_string()),
 /// };
 ///
 /// let jira_task = Task {
 ///     id: None, // Will be assigned by database
-///     task_id: Some(jira_issue_id),
+///     task_id: None, // Set to the task's own id once saved
 ///     timestamp: None,
 ///     name: jira_issue.summary,
 ///     comment: jira_issue.description.unwrap_or_default(),
 ///     completeness: Some(100), // Imported completed issues
 ///     excluded_from_search: None,
 ///     tags: vec![],
+///     jira_key: Some(jira_issue.key),
 /// };
 /// # let _ = jira_task;
 /// ```
@@ -69,7 +71,12 @@ pub struct Task {
     /// Database primary key; `None` until the task is saved.
     pub id: Option<i32>,
 
-    /// External reference (Jira issue id, GitLab MR id); `None` for standalone tasks.
+    /// Groups a task with its own history across days.
+    ///
+    /// Points at the id of the first task in the chain, so `task find` can
+    /// offer yesterday's unfinished work and see today's progress as the same
+    /// item. Not an external reference - the Jira issue a task came from is
+    /// [`Task::jira_key`].
     pub task_id: Option<i32>,
 
     /// `"YYYY-MM-DD HH:MM:SS"` in local time, set by the database layer.
@@ -89,6 +96,13 @@ pub struct Task {
 
     /// Tags, maintained through the `task_tags` relationship table.
     pub tags: Vec<Tag>,
+
+    /// Jira issue this task was taken from, e.g. `PROJ-412`.
+    ///
+    /// Set by `kasl inbox take`; `None` for tasks that did not come from the
+    /// inbox. The key also opens the task's name, but only this field survives
+    /// a rename.
+    pub jira_key: Option<String>,
 }
 
 impl Task {
@@ -125,11 +139,19 @@ impl Task {
             completeness,
             excluded_from_search: None,
             tags: Vec::new(),
+            jira_key: None,
         }
     }
 
+    /// Records the Jira issue this task was taken from.
+    pub fn from_jira(mut self, key: &str) -> Self {
+        self.jira_key = Some(key.to_string());
+        self
+    }
+
     /// Copies `name`, `comment` and `completeness` from `other`, keeping
-    /// identity fields (`id`, `task_id`, `timestamp`, search flag, tags).
+    /// identity fields (`id`, `task_id`, `timestamp`, search flag, tags,
+    /// `jira_key`).
     ///
     /// ```rust,no_run
     /// # fn f() -> anyhow::Result<()> {
@@ -276,6 +298,15 @@ pub enum TaskFilter {
     /// ]);
     /// ```
     ByTags(Vec<String>),
+
+    /// Tasks taken from the given Jira issue.
+    ///
+    /// ```rust
+    /// use kasl::libs::task::TaskFilter;
+    ///
+    /// let from_issue = TaskFilter::ByJiraKey("PROJ-412".to_string());
+    /// ```
+    ByJiraKey(String),
 }
 
 /// Display formatting and partitioning for task collections.

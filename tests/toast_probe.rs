@@ -27,6 +27,7 @@ fn toast_shows_with_logo() {
         gone_at: None,
         last_change: None,
         changed_at: None,
+        taken_at: None,
     };
     assert!(kasl::libs::jira_inbox::show_toast(&item));
 }

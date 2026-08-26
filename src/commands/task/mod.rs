@@ -570,6 +570,8 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
         completeness: Some(completeness),
         excluded_from_search: task.excluded_from_search,
         tags: vec![], // Tags are preserved separately
+        // Renaming a task does not detach it from the issue it came from.
+        jira_key: task.jira_key.clone(),
     })
 }
 
