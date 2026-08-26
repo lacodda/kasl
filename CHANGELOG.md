@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.6.0] - 2026-08-26
+
+### Features
+- Make take the start of work rather than an import
 ## [1.5.0] - 2026-08-26
 
 ### Bug Fixes
