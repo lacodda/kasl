@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.5.0] - 2026-08-26
+
+### Bug Fixes
+- Make template paths scriptable and correct four help texts
+
+### Documentation
+- Revise every page against the code and add five guides
 ## [1.4.1] - 2026-08-19
 
 ### Bug Fixes
