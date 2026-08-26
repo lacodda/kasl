@@ -42,7 +42,7 @@ Both scripts read three environment variables:
 
 | Variable | Effect |
 | --- | --- |
-| `KASL_VERSION` | Install this tag (e.g. `v1.4.0`) instead of the newest release |
+| `KASL_VERSION` | Install this tag (`vX.Y.Z`) instead of the newest release |
 | `KASL_INSTALL_DIR` | Where the binaries land; defaults to `%LOCALAPPDATA%\Programs\kasl` on Windows and `~/.local/bin` elsewhere |
 | `KASL_NO_ALIAS` | Set to `1` to skip the short `ka` alias |
 

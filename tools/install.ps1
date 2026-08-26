@@ -22,7 +22,7 @@ if (-not $tag) {
     }
 }
 if (-not $tag -or $tag -notmatch '^v\d') {
-    throw "Cannot resolve the latest release of $repo - set `$env:KASL_VERSION to a tag like v1.4.0"
+    throw "Cannot resolve the latest release of $repo - set `$env:KASL_VERSION to a release tag (vX.Y.Z)"
 }
 
 $name = "kasl-$tag-x86_64-pc-windows-msvc"

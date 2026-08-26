@@ -70,7 +70,7 @@ If the watcher was running, two extra lines bracket the result:
 Other commands print a similar notice when they notice a newer release is available:
 
 ```
-A new version of kasl is available: v1.5.0
+A new version of kasl is available: vX.Y.Z
 Upgrade now by running: kasl self-update
 ```
 

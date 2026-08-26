@@ -156,6 +156,52 @@ mod tests {
     }
 
     #[test]
+    fn no_page_pins_a_release_version() {
+        // Release numbers written into prose go stale on the next tag and
+        // nothing notices: `self-update.md` illustrated its output with a
+        // version the binary could no longer offer, and both installers told
+        // users to "set KASL_VERSION to a tag like v1.4.0" long after 1.4.0
+        // stopped being the newest. Examples use the shape (vX.Y.Z), not a
+        // number; the real version belongs in Cargo.toml alone.
+        let mut files: Vec<PathBuf> = walk_markdown(&repo_root().join("docs/src/content/docs"));
+        files.push(repo_root().join("README.md"));
+        files.push(repo_root().join("tools/install.sh"));
+        files.push(repo_root().join("tools/install.ps1"));
+
+        for path in files {
+            let text = fs::read_to_string(&path).expect("cannot read a documented file");
+            let relative = path.strip_prefix(repo_root()).unwrap_or(&path).display().to_string();
+            for (line_no, line) in text.lines().enumerate() {
+                // A release version: v?N.N.N. Dependency pins and dates do not
+                // live in these files, so any such triple is a release number.
+                let mut chars = line.char_indices().peekable();
+                while let Some((idx, c)) = chars.next() {
+                    if !c.is_ascii_digit() {
+                        continue;
+                    }
+                    // Only look at the start of a run of digits.
+                    if idx > 0 && line[..idx].ends_with(|p: char| p.is_ascii_digit() || p == '.') {
+                        continue;
+                    }
+                    let tail = &line[idx..];
+                    let digits_dots: String = tail.chars().take_while(|c| c.is_ascii_digit() || *c == '.').collect();
+                    let parts: Vec<&str> = digits_dots.split('.').collect();
+                    if parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
+                        panic!(
+                            "{relative}:{} pins the release version {digits_dots}; use the vX.Y.Z shape instead",
+                            line_no + 1
+                        );
+                    }
+                    // Skip the rest of this run.
+                    while chars.peek().is_some_and(|(_, c)| c.is_ascii_digit() || *c == '.') {
+                        chars.next();
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn docs_only_show_commands_that_exist() {
         // Same guard the README carries, over every page: a `kasl <word>` in a
         // code block must name a real subcommand. Catches the renames
