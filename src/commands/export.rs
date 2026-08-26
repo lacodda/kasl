@@ -77,8 +77,8 @@ pub struct ExportArgs {
     ///
     /// When enabled, the report is exported as a per-hour grid: each row
     /// represents one hour of the workday with a description of the work
-    /// performed, and "Перерыв" is written for hours (or parts of hours) that
-    /// fall within a break or pause.
+    /// performed, and the localized break label is written for hours (or parts
+    /// of hours) that fall within a break or pause.
     ///
     /// This option only affects Excel report exports (`report --format excel`);
     /// it is ignored for other data types and formats.

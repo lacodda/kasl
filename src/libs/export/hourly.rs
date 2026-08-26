@@ -19,7 +19,8 @@ pub(super) struct HourlyRow {
     pub(super) start: String,
     /// Hour slot end in "HH:MM" format.
     pub(super) end: String,
-    /// Description of what happened during the hour ("Перерыв" for breaks).
+    /// Description of what happened during the hour (the localized break
+    /// label for breaks).
     pub(super) description: String,
 }
 

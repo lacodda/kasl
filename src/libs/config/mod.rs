@@ -118,8 +118,11 @@ pub struct ReportConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename_template: Option<String>,
 
-    /// Report label language: `ru` (default) or `en`; unknown values fall
-    /// back to `ru`.
+    /// Report label language: `en` (default) or `ru`; unknown values fall
+    /// back to `en`.
+    ///
+    /// Russian was the default before 1.0, when the product spoke Russian; the
+    /// shipped default is English and this opts back in.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
 

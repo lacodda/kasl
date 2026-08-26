@@ -156,11 +156,11 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
     match task_args.command {
         Some(TaskCommand::Add(args)) => {
             // Template creation is a form of adding, so it lives here too.
-            if let Some(template_name) = args.template {
-                return handle_create_from_template(template_name).await;
+            if let Some(template_name) = args.template.clone() {
+                return handle_create_from_template(template_name, args).await;
             }
             if args.from_template {
-                return handle_create_from_template_interactive().await;
+                return handle_create_from_template_interactive(args).await;
             }
             handle_task_creation(args).await
         }
@@ -575,10 +575,14 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
 
 /// Creates a task from a named template.
 ///
-/// Loads the specified template and allows the user to modify the template
-/// values before creating the final task. This streamlines creation of
-/// frequently used task types while maintaining flexibility.
-async fn handle_create_from_template(template_name: String) -> Result<()> {
+/// The template supplies the defaults; anything given on the command line wins
+/// over it, and in a terminal the remaining fields are offered for editing.
+///
+/// Outside a terminal the template is applied as it stands: `--template` is the
+/// spelling `--from-template` points scripts at, so it has to work with nobody
+/// there to answer a prompt. It used to reach `interact_text()` regardless and
+/// fail with a bare "IO error: not a terminal".
+async fn handle_create_from_template(template_name: String, args: AddArgs) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let template = match templates_db.get(&template_name)? {
         Some(t) => t,
@@ -590,27 +594,55 @@ async fn handle_create_from_template(template_name: String) -> Result<()> {
 
     msg_info!(Message::CreatingTaskFromTemplate(template.name.clone()));
 
-    // Allow modification of template values
-    let name = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTaskName.to_string())
-        .default(template.task_name)
-        .interact_text()?;
+    let interactive = is_interactive();
 
-    let comment = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTaskComment.to_string())
-        .default(template.comment)
-        .allow_empty(true)
-        .interact_text()?;
+    // Each field: the flag if given, else the prompt seeded with the
+    // template's value, else - with no terminal - the template's value itself.
+    let name = match args.name {
+        Some(n) => collapse_whitespace(&n),
+        None if !interactive => template.task_name,
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTaskName.to_string())
+            .default(template.task_name)
+            .interact_text()?,
+    };
 
-    let completeness = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTaskCompleteness.to_string())
-        .default(template.completeness)
-        .interact_text()?;
+    let comment = match args.comment {
+        Some(c) => collapse_whitespace(&c),
+        None if !interactive => template.comment,
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTaskComment.to_string())
+            .default(template.comment)
+            .allow_empty(true)
+            .interact_text()?,
+    };
+
+    let completeness = match args.completeness {
+        Some(c) => c,
+        None if !interactive => template.completeness,
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTaskCompleteness.to_string())
+            .default(template.completeness)
+            .interact_text()?,
+    };
 
     // Create and display the new task
     let task = Task::new(&name, &comment, Some(completeness));
     let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
     View::tasks(&new_task)?;
+
+    // Tags are the task's own, not the template's: templates carry no tags.
+    if let Some(tags_str) = args.tags {
+        let tag_names: Vec<String> = tags_str.split(',').map(|s| s.trim().to_string()).collect();
+
+        let mut tags_db = crate::db::tags::Tags::new()?;
+        let tag_ids = tags_db.get_or_create_tags(&tag_names)?;
+
+        if let Some(task_id) = new_task[0].id {
+            tags_db.set_task_tags(task_id, &tag_ids)?;
+            msg_info!(Message::TagsAddedToTask(tag_names.join(", ")));
+        }
+    }
 
     Ok(())
 }
@@ -619,7 +651,7 @@ async fn handle_create_from_template(template_name: String) -> Result<()> {
 ///
 /// Displays available templates in a selection interface, allowing users
 /// to choose from existing templates without needing to remember template names.
-async fn handle_create_from_template_interactive() -> Result<()> {
+async fn handle_create_from_template_interactive(args: AddArgs) -> Result<()> {
     // Template is chosen from a Select.
     ensure_interactive("`--from-template` is interactive; pass --template NAME outside a terminal")?;
 
@@ -633,7 +665,7 @@ async fn handle_create_from_template_interactive() -> Result<()> {
     }
 
     let name = pick::template(&templates, &Message::SelectTemplate.to_string())?;
-    handle_create_from_template(name).await
+    handle_create_from_template(name, args).await
 }
 
 #[cfg(test)]

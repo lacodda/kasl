@@ -42,6 +42,131 @@ mod tests {
 
     #[serial]
     #[test]
+    fn task_add_from_a_template_needs_no_terminal() {
+        let dir = TempDir::new().unwrap();
+
+        // Regression: `--template` reached dialoguer's prompts unconditionally
+        // and died with a bare "IO error: not a terminal" - on the very path
+        // `--from-template` tells scripts to use instead of itself.
+        kasl_cmd(dir.path())
+            .args([
+                "template",
+                "add",
+                "--name",
+                "review",
+                "--task-name",
+                "Code review",
+                "--comment",
+                "daily",
+                "--completeness",
+                "80",
+            ])
+            .output()
+            .unwrap();
+
+        let out = kasl_cmd(dir.path()).args(["task", "add", "--template", "review"]).output().unwrap();
+        assert!(
+            out.status.success(),
+            "task add --template failed: {}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+
+        let listed = kasl_cmd(dir.path()).args(["task", "list"]).output().unwrap();
+        let listed = String::from_utf8_lossy(&listed.stdout);
+        assert!(
+            listed.contains("Code review"),
+            "template task missing from list:
+{listed}"
+        );
+        assert!(
+            listed.contains("80%"),
+            "template completeness not applied:
+{listed}"
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn flags_win_over_the_template_they_are_passed_with() {
+        let dir = TempDir::new().unwrap();
+
+        // The docs promised `--template X --name Y` would apply Y. The flags
+        // were silently dropped instead, so the task came out named after the
+        // template.
+        kasl_cmd(dir.path())
+            .args([
+                "template",
+                "add",
+                "--name",
+                "review",
+                "--task-name",
+                "Code review",
+                "--comment",
+                "daily",
+                "--completeness",
+                "80",
+            ])
+            .output()
+            .unwrap();
+
+        let out = kasl_cmd(dir.path())
+            .args(["task", "add", "--template", "review", "--name", "Review PR 318", "--completeness", "40"])
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "task add failed: {}", String::from_utf8_lossy(&out.stderr));
+
+        let listed = kasl_cmd(dir.path()).args(["task", "list"]).output().unwrap();
+        let listed = String::from_utf8_lossy(&listed.stdout);
+        assert!(
+            listed.contains("Review PR 318"),
+            "--name did not win over the template:
+{listed}"
+        );
+        assert!(
+            !listed.contains("Code review"),
+            "the template name was used despite --name:
+{listed}"
+        );
+        assert!(
+            listed.contains("40%"),
+            "--completeness did not win over the template:
+{listed}"
+        );
+        // The comment was not overridden, so it still comes from the template.
+        assert!(
+            listed.contains("daily"),
+            "template comment was lost:
+{listed}"
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn template_add_without_a_name_fails_instead_of_hanging() {
+        let dir = TempDir::new().unwrap();
+
+        // `template add` had no flags for its fields at all, so creating one
+        // from a script was impossible: it prompted, unwrapped, and died with
+        // "IO error: not a terminal" instead of naming the flag to pass.
+        let out = kasl_cmd(dir.path()).args(["template", "add"]).output().unwrap();
+
+        assert!(!out.status.success(), "expected a refusal without a name");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("--name"),
+            "error should name the missing flag:
+{stderr}"
+        );
+        assert!(
+            !stderr.contains("not a terminal"),
+            "the raw dialoguer error leaked through:
+{stderr}"
+        );
+    }
+
+    #[serial]
+    #[test]
     fn task_add_without_a_name_fails_instead_of_hanging() {
         let dir = TempDir::new().unwrap();
 

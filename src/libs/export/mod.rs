@@ -138,8 +138,8 @@ pub struct Exporter {
     ///
     /// When enabled (and the format is Excel), the report is rendered as a
     /// per-hour grid where each row represents one hour of the workday with a
-    /// description of the work performed, and "Перерыв" is written for hours
-    /// (or parts of hours) that fall within a break/pause.
+    /// description of the work performed, and the localized break label is
+    /// written for hours (or parts of hours) that fall within a break/pause.
     hourly: bool,
 }
 

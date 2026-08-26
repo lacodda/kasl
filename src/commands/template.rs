@@ -20,7 +20,12 @@
 
 use crate::{
     db::templates::{TaskTemplate, Templates},
-    libs::{messages::Message, pick, prompt::ensure_interactive, view::View},
+    libs::{
+        messages::Message,
+        pick,
+        prompt::{ensure_interactive, is_interactive},
+        view::View,
+    },
     msg_error, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
@@ -50,6 +55,22 @@ enum TemplateCommand {
         /// referencing the template in task creation commands.
         #[arg(short, long)]
         name: Option<String>,
+
+        /// Task name the template fills in
+        ///
+        /// Supplying it - along with `--name` - is what makes template
+        /// creation scriptable; the remaining fields fall back to an empty
+        /// comment and 100% completeness.
+        #[arg(short = 't', long)]
+        task_name: Option<String>,
+
+        /// Comment the template fills in
+        #[arg(long)]
+        comment: Option<String>,
+
+        /// Default completion percentage (0-100)
+        #[arg(short, long)]
+        completeness: Option<i32>,
     },
 
     /// List all available templates
@@ -137,7 +158,12 @@ enum TemplateCommand {
 /// ```
 pub fn cmd(args: TemplateArgs) -> Result<()> {
     match args.command {
-        Some(TemplateCommand::Add { name }) => handle_create(name),
+        Some(TemplateCommand::Add {
+            name,
+            task_name,
+            comment,
+            completeness,
+        }) => handle_create(name, task_name, comment, completeness),
         Some(TemplateCommand::List) => handle_list(),
         Some(TemplateCommand::Show { name }) => handle_show(name),
         Some(TemplateCommand::Edit { name }) => handle_edit(name),
@@ -151,16 +177,24 @@ pub fn cmd(args: TemplateArgs) -> Result<()> {
 }
 
 /// Handles template creation with validation and uniqueness checking.
-fn handle_create(name: Option<String>) -> Result<()> {
+///
+/// Every field has a flag, so a template can be created from a script; what is
+/// left out is asked for in a terminal and defaulted outside one. The name is
+/// the exception - without it there is nothing to ask for outside a terminal,
+/// so the command refuses instead of prompting into a void.
+fn handle_create(name: Option<String>, task_name: Option<String>, comment: Option<String>, completeness: Option<i32>) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
-    // Get template name (from args or interactive prompt)
-    let name = name.unwrap_or_else(|| {
-        Input::with_theme(&ColorfulTheme::default())
+    if name.is_none() {
+        ensure_interactive("template name is required; pass --name outside an interactive terminal")?;
+    }
+
+    let name = match name {
+        Some(n) => n,
+        None => Input::with_theme(&ColorfulTheme::default())
             .with_prompt(Message::PromptTemplateName.to_string())
-            .interact_text()
-            .unwrap()
-    });
+            .interact_text()?,
+    };
 
     // Validate template name uniqueness
     if templates_db.exists(&name)? {
@@ -168,24 +202,45 @@ fn handle_create(name: Option<String>) -> Result<()> {
         return Ok(());
     }
 
-    // Collect template properties interactively
-    let task_name = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTemplateTaskName.to_string())
-        .interact_text()?;
+    let interactive = is_interactive();
 
-    let comment = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTemplateComment.to_string())
-        .allow_empty(true)
-        .interact_text()?;
+    let task_name = match task_name {
+        Some(t) => t,
+        // A template whose task name is the template name is still usable, and
+        // beats refusing the whole command over a field that has a sane guess.
+        None if !interactive => name.clone(),
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTemplateTaskName.to_string())
+            .interact_text()?,
+    };
+
+    let comment = match comment {
+        Some(c) => c,
+        None if !interactive => String::new(),
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTemplateComment.to_string())
+            .allow_empty(true)
+            .interact_text()?,
+    };
 
     let completeness_range_msg = Message::TaskCompletenessRange.to_string();
-    let completeness = Input::with_theme(&ColorfulTheme::default())
-        .with_prompt(Message::PromptTemplateCompleteness.to_string())
-        .default(100)
-        .validate_with(|input: &i32| -> Result<(), &str> {
-            if *input >= 0 && *input <= 100 { Ok(()) } else { Err(&completeness_range_msg) }
-        })
-        .interact_text()?;
+    let completeness = match completeness {
+        Some(c) => {
+            if !(0..=100).contains(&c) {
+                msg_error!(Message::TaskCompletenessRange);
+                return Ok(());
+            }
+            c
+        }
+        None if !interactive => 100,
+        None => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptTemplateCompleteness.to_string())
+            .default(100)
+            .validate_with(|input: &i32| -> Result<(), &str> {
+                if *input >= 0 && *input <= 100 { Ok(()) } else { Err(&completeness_range_msg) }
+            })
+            .interact_text()?,
+    };
 
     // Create and save the template
     let template = TaskTemplate::new(name.clone(), task_name, comment, completeness);
@@ -368,7 +423,7 @@ fn handle_interactive() -> Result<()> {
         .interact()?;
 
     match selection {
-        0 => handle_create(None),
+        0 => handle_create(None, None, None, None),
         1 => handle_list(),
         2 => handle_show(None),
         3 => handle_edit(None),

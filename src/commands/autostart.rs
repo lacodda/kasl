@@ -40,8 +40,9 @@ enum AutostartCommand {
     /// - Primary: Windows Task Scheduler (requires admin privileges)
     /// - Fallback: Registry Run key (current user)
     ///
-    /// **macOS**: LaunchAgent (planned - not yet implemented)
-    /// **Linux**: systemd user service (planned - not yet implemented)
+    /// **macOS**: a LaunchAgent plist in `~/Library/LaunchAgents`
+    ///
+    /// **Linux**: a systemd user unit, enabled for the current user
     Enable,
 
     /// Disable autostart on system boot

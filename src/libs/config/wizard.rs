@@ -168,9 +168,12 @@ impl Config {
                         .default(default.filename_template.unwrap_or_else(|| "daily_report_{date}{seq}".to_string()))
                         .allow_empty(true)
                         .interact_text()?;
+                    // The shipped default is English; the wizard used to offer
+                    // "ru", so pressing Enter opted the user into the pre-1.0
+                    // language without saying so.
                     let language: String = Input::with_theme(&ColorfulTheme::default())
-                        .with_prompt("Report language (ru, en)")
-                        .default(default.language.unwrap_or_else(|| "ru".to_string()))
+                        .with_prompt("Report language (en, ru)")
+                        .default(default.language.unwrap_or_else(|| "en".to_string()))
                         .allow_empty(true)
                         .interact_text()?;
                     let template: String = Input::with_theme(&ColorfulTheme::default())
