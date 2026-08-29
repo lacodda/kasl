@@ -233,6 +233,25 @@ pub enum Message {
     SiServerRestDatesFailed(String),        // error message
     SiServerRestDatesParsingFailed(String), // error message
 
+    // === KASL-SERVER MESSAGES ===
+    KaslServerReached {
+        url: String,
+        version: String,
+    },
+    KaslServerConnected {
+        user_name: String,
+        agent_name: String,
+    },
+    KaslServerConfigured(String),        // url
+    KaslServerDatabaseUnhealthy(String), // what the server reported
+    KaslServerUnreachable(String),       // error message
+    KaslServerTokenRejected(String),     // error message
+    KaslServerUrlNeedsScheme(String),    // the url as entered
+    KaslServerTokenEmpty,
+    KaslServerTokenMissing,
+    KaslServerNotConnected,
+    KaslServerDisconnected,
+
     // === DATABASE MESSAGES ===
     DatabaseOperationFailed {
         operation: String,
@@ -303,6 +322,8 @@ pub enum Message {
     PromptMinWorkdayFraction,
     PromptServerApiUrl,
     PromptServerAuthToken,
+    PromptKaslServerUrl,
+    PromptKaslServerToken,
     PromptSelectModules,
     PromptSelectTasksToImport,
     PromptSelectTasksToIgnore,

@@ -82,6 +82,7 @@ mod tests {
                 api_url: ctx.api_url.clone(),
                 auth_token: ctx.auth_token.clone(),
             }),
+            kasl_server: None,
             si: None,
             gitlab: None,
             jira: None,

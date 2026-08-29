@@ -105,6 +105,8 @@ Monthly work productivity: 95.4%
 - **Reports where they need to go.** One command submits the day, or the month, to your corporate API. Exports to CSV, JSON and Excel, including the hourly breakdown that time sheets tend to ask for.
 - **Passwords in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing is encrypted with a key that ships inside the binary. API tokens, which are not prompted for, stay in the config file.
 - **Nothing that hangs.** Every prompt checks for a terminal first, so kasl under cron, under CI or under the daemon fails with a message naming the flag you needed instead of waiting forever for an answer nobody can give.
+- **A team server, when there is one.** `kasl server connect` points this machine at a self-hosted [kasl-server](https://github.com/lacodda/kasl-server) with a token your administrator issues, and says whose token it is before storing anything - a token pasted from the wrong window would otherwise file your days under a colleague's name. The token goes in the OS keyring; the config file records the address only. Connecting is optional and changes nothing locally.
+
 - **A short alias.** `ka` is installed alongside `kasl` by every channel and updated with it, and completions are available for bash, zsh, fish, PowerShell and elvish.
 
 ## Install
@@ -162,6 +164,7 @@ Everything above works today, on Windows, macOS and Linux. What is next:
 - [ ] **Scriptable output** - `--json` and `NO_COLOR`/`--plain`, then `kasl status` for status bars and `kasl standup` for a markdown summary
 - [ ] **Doctor and notifications** - `kasl doctor` with `--fix`, a nudge when a break is due or the day is still open, quiet hours
 - [ ] **Smarter time** - overnight tracking and a configurable day boundary, so work past midnight belongs to the right day
+- [ ] **Sending to the team server** - uploading the day, and a queue that survives a week offline and delivers the backlog when the network returns
 - [ ] **Beyond the terminal** - a live TUI, a companion in the tray, and `kasl-plugin-*` subprocesses with Jira and GitLab behind the same interface
 
 Released versions and what landed in each: [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).

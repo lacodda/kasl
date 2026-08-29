@@ -276,6 +276,31 @@ impl Display for Message {
             Message::SiServerRestDatesFailed(error) => format!("[kasl] Failed to request rest dates: {}", error),
             Message::SiServerRestDatesParsingFailed(error) => format!("[kasl] Failed to parse rest dates response: {}", error),
 
+            // === KASL-SERVER MESSAGES ===
+            Message::KaslServerReached { url, version } => format!("{} is kasl-server {}", url, version),
+            Message::KaslServerConnected { user_name, agent_name } => {
+                format!("Connected as {} (agent '{}')", user_name, agent_name)
+            }
+            Message::KaslServerConfigured(url) => format!("Configured server: {}", url),
+            Message::KaslServerDatabaseUnhealthy(state) => {
+                format!(
+                    "The server answered, but reports its database as '{}' - uploads will fail until that clears.",
+                    state
+                )
+            }
+            Message::KaslServerUnreachable(error) => format!("Cannot reach the server: {}", error),
+            Message::KaslServerTokenRejected(error) => format!("The stored token no longer works: {}", error),
+            Message::KaslServerUrlNeedsScheme(url) => {
+                format!(
+                    "'{}' has no scheme - write http:// or https:// so it is clear whether the token crosses the network in the clear.",
+                    url
+                )
+            }
+            Message::KaslServerTokenEmpty => "No token entered; nothing was changed.".to_string(),
+            Message::KaslServerTokenMissing => "A server is configured but no token is stored - run `kasl server connect` again.".to_string(),
+            Message::KaslServerNotConnected => "This machine is not connected to a kasl-server.".to_string(),
+            Message::KaslServerDisconnected => "Disconnected; the stored token has been removed.".to_string(),
+
             // === DATABASE MESSAGES ===
             Message::DatabaseOperationFailed { operation, error } => {
                 format!("Database operation '{}' failed (continuing monitoring): {}", operation, error)
@@ -352,6 +377,8 @@ impl Display for Message {
             Message::PromptMinWorkdayFraction => "Enter minimum workday fraction before suggesting breaks (0.0-1.0)".to_string(),
             Message::PromptServerApiUrl => "Enter server API URL".to_string(),
             Message::PromptServerAuthToken => "Enter server auth token".to_string(),
+            Message::PromptKaslServerUrl => "kasl-server URL".to_string(),
+            Message::PromptKaslServerToken => "Agent token (issued by your administrator)".to_string(),
             Message::PromptSelectModules => "Select nodes to configure".to_string(),
             Message::PromptSelectTasksToImport => "Select tasks to import".to_string(),
             Message::PromptSelectTasksToIgnore => "Select tasks to ignore (optional)".to_string(),

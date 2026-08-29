@@ -195,6 +195,54 @@ mod tests {
 
     #[serial]
     #[test]
+    fn server_connect_refuses_before_touching_the_network() {
+        let dir = TempDir::new().unwrap();
+
+        // The token can only be typed at a prompt, so this command cannot
+        // finish unattended however complete its arguments are. It has to say
+        // so straight away: found in a live run, where it contacted the server
+        // first, announced the version, and only then gave up - a request sent
+        // on behalf of a run that was never going to succeed.
+        //
+        // Port 1 is reserved and never has a listener, so if the check ever
+        // moves back after the network call this fails with a connection error
+        // instead of the refusal.
+        let out = kasl_cmd(dir.path())
+            .args(["server", "connect", "--url", "http://127.0.0.1:1"])
+            .output()
+            .unwrap();
+
+        assert!(!out.status.success(), "expected a refusal with no terminal");
+
+        let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert!(combined.contains("terminal"), "the refusal should name the cause:\n{combined}");
+        assert!(
+            !combined.contains("cannot reach"),
+            "the server must not be contacted by a run that cannot finish:\n{combined}"
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn server_status_and_disconnect_work_unattended() {
+        let dir = TempDir::new().unwrap();
+
+        // Neither reads a secret from the user, so both belong in a script:
+        // `status` is the natural health check, and `disconnect` has to work
+        // when a machine is being decommissioned by one.
+        for args in [vec!["server", "status"], vec!["server", "disconnect"]] {
+            let out = kasl_cmd(dir.path()).args(&args).output().unwrap();
+            assert!(
+                out.status.success(),
+                "`kasl {}` failed unattended: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+    }
+
+    #[serial]
+    #[test]
     fn read_only_commands_work_unattended() {
         let dir = TempDir::new().unwrap();
 

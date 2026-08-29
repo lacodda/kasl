@@ -132,7 +132,12 @@ pub struct ReportConfig {
     pub template: Option<String>,
 }
 
-/// External reporting server connection.
+/// SiServer connection used by `report --send`.
+///
+/// Named `server` for historical reasons - this is the third-party corporate
+/// reporting API, not kasl-server. The team server lives in
+/// [`KaslServerConfig`] under its own key so the two channels can be
+/// configured independently, and eventually used side by side.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct ServerConfig {
     /// Base URL of the reporting API.
@@ -140,6 +145,28 @@ pub struct ServerConfig {
 
     /// Token sent with report submissions.
     pub auth_token: String,
+}
+
+/// Connection to a kasl-server instance: where to reach it, and how to trust
+/// it.
+///
+/// The agent token is deliberately absent - it lives in the OS keyring, like
+/// every other kasl credential, so a readable config file never carries one.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct KaslServerConfig {
+    /// Base URL of the server, e.g. `https://kasl.example.com`. Stored
+    /// without a trailing slash so endpoint paths can be appended as-is.
+    pub url: String,
+
+    /// PEM file holding the certificate authority that signed the server's
+    /// certificate.
+    ///
+    /// Self-hosted deployments are routinely behind a company CA or a
+    /// self-signed certificate, which the system trust store does not know.
+    /// Naming the certificate here keeps verification on: the alternative -
+    /// switching it off - would also accept anyone else's certificate.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ca_certificate: Option<String>,
 }
 
 /// The root configuration. Every module is optional, and unset modules
@@ -162,9 +189,13 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub monitor: Option<MonitorConfig>,
 
-    /// External reporting server.
+    /// SiServer, the third-party corporate reporting API.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<ServerConfig>,
+
+    /// kasl-server: the team server this agent reports to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kasl_server: Option<KaslServerConfig>,
 
     /// Productivity thresholds.
     #[serde(skip_serializing_if = "Option::is_none")]

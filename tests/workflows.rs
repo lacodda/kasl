@@ -143,6 +143,7 @@ mod tests {
                 api_url: "https://test.example.com".to_string(),
                 auth_token: "test_token_123".to_string(),
             }),
+            kasl_server: None,
             si: None,
             gitlab: None,
             jira: None,

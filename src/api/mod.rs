@@ -1,5 +1,9 @@
-//! External API clients (GitLab, Jira, SiServer) and the shared
-//! session-management pattern they implement.
+//! External API clients (GitLab, Jira, SiServer, kasl-server) and the shared
+//! session-management pattern most of them implement.
+//!
+//! [`kasl_server`] is the exception: it authenticates with a token an
+//! administrator issues, so it has no session to manage and does not
+//! implement [`Session`].
 //!
 //! ```text
 //! use kasl::api::{GitLabConfig, JiraConfig, SiConfig};
@@ -17,6 +21,7 @@ use std::io::Write;
 
 pub mod gitlab;
 pub mod jira;
+pub mod kasl_server;
 pub mod si;
 
 pub use gitlab::GitLabConfig;

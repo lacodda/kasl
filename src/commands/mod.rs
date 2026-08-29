@@ -19,6 +19,7 @@ pub mod init;
 pub mod migrations;
 pub mod pauses;
 pub mod report;
+pub mod server;
 pub mod sum;
 pub mod tag;
 pub mod task;
@@ -125,6 +126,14 @@ enum Commands {
     #[command(about = "View pauses and record ones the monitor missed")]
     Pauses(pauses::PausesArgs),
 
+    /// Connection to the team's kasl-server
+    ///
+    /// Connects this machine to a kasl-server with an agent token issued by
+    /// an administrator, shows where the connection stands, and forgets it
+    /// again. The token lives in the OS keyring, never in the config file.
+    #[command(about = "Manage the connection to a kasl-server")]
+    Server(server::ServerArgs),
+
     /// Jira inbox of assigned open issues
     ///
     /// Syncs assigned unresolved Jira issues into a local table, lists them
@@ -222,6 +231,7 @@ impl Cli {
                 clap_complete::generate(shell, &mut Self::command(), "kasl", &mut std::io::stdout());
                 Ok(())
             }
+            Commands::Server(args) => server::cmd(args).await,
             Commands::Inbox(args) => inbox::cmd(args).await,
 
             // Database migrations only available in debug builds

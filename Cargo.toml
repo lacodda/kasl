@@ -6,7 +6,7 @@
 # to an unrelated project); the binary, library and app identity stay "kasl".
 [package]
 name = "kasl-cli"
-version = "1.6.0"
+version = "1.7.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Work activity tracker CLI: automatic workday and break detection, task management with Jira/GitLab integration, productivity reports and exports"
@@ -142,3 +142,4 @@ winapi = { version = "0.3", features = [
 serial_test = "4.0.1"
 tempfile = "3.27.0"    # Temporary files for tests
 test-context = "0.5.8" # Test setup/teardown utilities
+wiremock = "0.6.5"
