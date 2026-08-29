@@ -4,6 +4,9 @@ All notable changes to this project are documented in this file.
 
 ## [1.7.0] - 2026-08-29
 
+### Bug Fixes
+- Forget the address even when the keyring is out of reach
+
 ### Features
 - Connect this machine to a kasl-server
 ## [1.6.0] - 2026-08-26

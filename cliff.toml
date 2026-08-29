@@ -41,6 +41,9 @@ commit_parsers = [
   { message = "^fix", group = "Bug Fixes" },
   { message = "^perf", group = "Performance" },
   { message = "^refactor", group = "Refactoring" },
+  # The release commit that writes this file describes itself; it is bookkeeping,
+  # not a change a reader of the changelog is looking for.
+  { message = '^docs\(changelog\)', skip = true },
   { message = "^docs", group = "Documentation" },
   { message = "^test", group = "Testing" },
   { message = "^build", group = "Build" },
