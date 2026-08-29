@@ -298,6 +298,9 @@ impl Display for Message {
             }
             Message::KaslServerTokenEmpty => "No token entered; nothing was changed.".to_string(),
             Message::KaslServerTokenMissing => "A server is configured but no token is stored - run `kasl server connect` again.".to_string(),
+            Message::KaslServerTokenNotRemoved(error) => {
+                format!("The address was forgotten, but the stored token could not be removed: {}", error)
+            }
             Message::KaslServerNotConnected => "This machine is not connected to a kasl-server.".to_string(),
             Message::KaslServerDisconnected => "Disconnected; the stored token has been removed.".to_string(),
 

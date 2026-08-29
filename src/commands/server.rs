@@ -204,7 +204,15 @@ async fn status() -> Result<()> {
 fn disconnect() -> Result<()> {
     let mut config = Config::read().unwrap_or_default();
 
-    Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT).delete()?;
+    // An unreachable keyring must not stop the address being forgotten. On a
+    // headless machine - a container, a build agent, a server with no session
+    // keyring - there is no store to hold a token and nothing to remove, and
+    // refusing to disconnect there leaves the config pointing at a server for
+    // good. The failure is still reported, because on a machine that does have
+    // a keyring it means a credential survived.
+    if let Err(error) = Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT).delete() {
+        msg_warning!(Message::KaslServerTokenNotRemoved(error.to_string()));
+    }
 
     if config.kasl_server.take().is_some() {
         config.save()?;

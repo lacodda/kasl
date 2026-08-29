@@ -249,6 +249,7 @@ pub enum Message {
     KaslServerUrlNeedsScheme(String),    // the url as entered
     KaslServerTokenEmpty,
     KaslServerTokenMissing,
+    KaslServerTokenNotRemoved(String), // error message
     KaslServerNotConnected,
     KaslServerDisconnected,
 
