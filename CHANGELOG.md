@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.8.1] - 2026-08-31
+
+### Breaking Changes
+- **Ship one binary and make ka a link** - `cargo install kasl` now installs `kasl` only. Cargo installs binaries, and `ka` is a link; create it beside the installed binary if you want it. Installer and npm users are unaffected.
+
+### Bug Fixes
+- Stop the test suite from reconfiguring the machine
+
+### Features
+- Ship one binary and make ka a link
 ## [1.8.0] - 2026-08-31
 
 ### Features
