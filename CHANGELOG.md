@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.8.0] - 2026-08-31
+
+### Features
+- Send a day to the connected kasl-server
 ## [1.7.0] - 2026-08-29
 
 ### Bug Fixes
