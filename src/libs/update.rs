@@ -158,7 +158,7 @@ impl Updater {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn perform_update(&self) -> Result<()> {
+    pub async fn perform_update(&self) -> Result<crate::libs::alias::Outcome> {
         let download_url = self.download_url.as_ref().ok_or(msg_error_anyhow!(Message::UpdateDownloadUrlNotSet))?;
 
         let response = self.client.get(download_url).send().await?;
@@ -167,11 +167,13 @@ impl Updater {
         let tar_gz_path = env::temp_dir().join(format!("{}.tar.gz", self.name));
         fs::write(&tar_gz_path, &content)?;
 
-        self.extract_and_replace_binary(&tar_gz_path)?;
+        let alias = self.extract_and_replace_binary(&tar_gz_path)?;
 
         fs::remove_file(&tar_gz_path)?;
 
-        Ok(())
+        // Returned rather than printed here: a stale second name has to reach
+        // the user, and the command layer is what talks to them.
+        Ok(alias)
     }
 
     /// Compares the latest published tag against the running version;
@@ -241,19 +243,74 @@ impl Updater {
         }
     }
 
-    /// Unpacks the release archive over the installed binaries.
+    /// Deletes the executable a previous update left behind as `.bak`.
     ///
-    /// Only the executables are taken: `kasl` (renamed to `.bak` first, so a
-    /// broken update can be undone by hand) and, when the alias sits next to
-    /// it, `ka`. LICENSE and README are skipped - copying them used to
-    /// recreate the archive's `kasl-<tag>-<target>/` prefix inside the
-    /// installation directory, leaving a folder of stale duplicates behind
-    /// after every update.
-    fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<()> {
+    /// Called on every command rather than from the update alone: after
+    /// updating, nobody has a reason to run the updater again, and the
+    /// leftover is a whole 15 MB binary that nothing ever comes back for. It
+    /// exists because Windows will not delete a running image - the outgoing
+    /// file is renamed aside instead - and it can only be removed once it is
+    /// no longer the running one, which is the next command.
+    ///
+    /// Best-effort: still locked means the next command tries again.
+    pub fn sweep_backup() {
+        let Ok(exe) = env::current_exe() else { return };
+        let _ = fs::remove_file(exe.with_extension(BACKUP_EXTENSION));
+        // The other name's leftover too: an update run as `ka` leaves
+        // `ka.bak`, and one run as `kasl` leaves `kasl.bak`.
+        if let Some(other) = crate::libs::alias::counterpart(&exe) {
+            let _ = fs::remove_file(other.with_extension(BACKUP_EXTENSION));
+        }
+    }
+
+    /// Unpacks the release archive over the installed binary.
+    ///
+    /// Only the executable is taken, and only the one named after the app:
+    /// LICENSE and README are skipped - copying them used to recreate the
+    /// archive's `kasl-<tag>-<target>/` prefix inside the installation
+    /// directory, leaving a folder of stale duplicates behind after every
+    /// update.
+    ///
+    /// The `ka` alias is not in the archive any more: it is a link to this
+    /// binary, so it needs re-pointing rather than replacing. That is
+    /// [`crate::libs::alias::refresh`], and it happens here because the swap is
+    /// what breaks the link.
+    ///
+    /// Running as the alias needs one extra step first. `ka` is a hard link to
+    /// `kasl`, so both names are the same file - and while `ka` is the running
+    /// image, Windows keeps those bytes alive under that name. Renaming
+    /// `kasl` aside then frees the *name* but not the *file*, the archive's
+    /// binary lands as a new `kasl`, and `ka` goes on answering with the
+    /// previous release. Caught on a live stand: an update run as `ka`
+    /// reported success while both names stayed on the old version - quieter,
+    /// and so worse, than the "access denied" it replaced.
+    ///
+    /// Moving the running name aside first is what breaks that: the swap then
+    /// starts from a directory where no name holds the outgoing file.
+    fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<crate::libs::alias::Outcome> {
         let current_exe = env::current_exe()?;
         let install_dir = current_exe.parent().unwrap().to_path_buf();
+        let running_name = install_dir.join(current_exe.file_name().unwrap_or_default());
 
-        Self::unpack_binaries(tar_gz_path, &install_dir, &self.name)
+        // Only when running under a name the swap will not replace itself -
+        // `unpack_binaries` already renames `kasl` aside.
+        let primary = install_dir.join(format!("{}{}", self.name, env::consts::EXE_SUFFIX));
+        if running_name != primary && running_name.exists() {
+            fs::rename(&running_name, running_name.with_extension(BACKUP_EXTENSION))?;
+        }
+
+        Self::unpack_binaries(tar_gz_path, &install_dir, &self.name)?;
+
+        // Re-point the name that is not the freshly unpacked one. After an
+        // update run as `ka` that name is gone (moved aside just above), so
+        // the link is created from scratch rather than refreshed.
+        if running_name != primary {
+            return Ok(match crate::libs::alias::link(&primary, &running_name) {
+                Ok(()) => crate::libs::alias::Outcome::Relinked(running_name),
+                Err(err) => crate::libs::alias::Outcome::Failed(running_name, err.to_string()),
+            });
+        }
+        Ok(crate::libs::alias::refresh(&primary))
     }
 
     /// Replaces the binaries in `install_dir` from the archive.
@@ -264,10 +321,9 @@ impl Updater {
     /// version folders) lived here, untested.
     pub(crate) fn unpack_binaries(tar_gz_path: &PathBuf, install_dir: &Path, app_name: &str) -> Result<()> {
         // The app updates under its own name, not under whichever name was
-        // typed: `ka update` must still replace `kasl`.
+        // typed: `ka self-update` must still replace `kasl`.
         let exe_suffix = env::consts::EXE_SUFFIX;
         let primary = format!("{}{}", app_name, exe_suffix);
-        let alias = format!("ka{}", exe_suffix);
 
         let tar_gz = File::open(tar_gz_path)?;
         let tar = GzDecoder::new(tar_gz);
@@ -286,22 +342,15 @@ impl Updater {
             // installation directory.
             if file_name == primary {
                 let target = install_dir.join(&primary);
-                // Keep the replaced binary as the one-and-only backup.
+                // Keep the replaced binary as the one-and-only backup. A
+                // rename is allowed on a running image where a delete is not,
+                // which is what lets an update replace the file it is
+                // executing from.
                 if target.exists() {
                     fs::rename(&target, target.with_extension(BACKUP_EXTENSION))?;
                 }
                 entry.unpack(&target)?;
                 is_updated = true;
-            } else if file_name == alias {
-                let target = install_dir.join(&alias);
-                // The alias is refreshed only where it is already installed:
-                // updating must not add a binary the user declined
-                // (`KASL_NO_ALIAS`), but a `ka` left behind at an older
-                // version would be worse than none at all.
-                if target.exists() {
-                    fs::remove_file(&target)?;
-                    entry.unpack(&target)?;
-                }
             }
         }
 
@@ -427,26 +476,64 @@ mod tests {
         );
     }
 
+    /// An update must leave a directory where no name still holds the outgoing
+    /// file.
+    ///
+    /// Found on a live stand, not by these tests: `ka` is a hard link to
+    /// `kasl`, so when the update runs *as* `ka` both names are the same
+    /// running image. Renaming `kasl` aside frees the name but not the file,
+    /// the new binary lands as a fresh `kasl`, and `ka` keeps answering with
+    /// the previous release - while the command reports success.
+    ///
+    /// The unit test can only state the invariant, since nothing here is a
+    /// running image: after the swap, no `.bak` may share a file with a name
+    /// the user calls.
     #[test]
-    fn an_installed_alias_is_updated_together_with_the_binary() {
-        // A `ka` left at the previous version is a trap: it answers to the
-        // same commands while running older code.
+    fn the_outgoing_file_is_not_left_under_a_live_name() {
         let temp = TempDir::new().unwrap();
         let install = temp.path().join("install");
         fs::create_dir(&install).unwrap();
         fs::write(install.join(exe("kasl")), "old").unwrap();
-        fs::write(install.join(exe("ka")), "old").unwrap();
+        crate::libs::alias::link(&install.join(exe("kasl")), &install.join(exe("ka"))).unwrap();
 
-        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new"), (&exe("ka"), "new")]);
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new")]);
         Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
 
-        assert_eq!(fs::read_to_string(install.join(exe("ka"))).unwrap(), "new");
+        assert_eq!(fs::read_to_string(install.join(exe("kasl"))).unwrap(), "new");
+        // The alias still points at the old bytes here - relinking is the
+        // caller's next step - but the backup must be a file of its own, not
+        // the one `kasl` now names.
+        assert_eq!(fs::read_to_string(install.join("kasl.bak")).unwrap(), "old");
     }
 
+    /// The alias is a link now, so an update must not write a second binary
+    /// where one is expected to be a link - even if a stale archive still
+    /// carries `ka`, which every release before v1.8.1 did.
+    #[test]
+    fn an_update_never_unpacks_a_second_binary_for_the_alias() {
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "old").unwrap();
+        // A link, the way the installers create it.
+        crate::libs::alias::link(&install.join(exe("kasl")), &install.join(exe("ka"))).unwrap();
+
+        // An archive from before the change, still carrying both.
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "new"), (&exe("ka"), "stale copy")]);
+        Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
+
+        assert_eq!(fs::read_to_string(install.join(exe("kasl"))).unwrap(), "new");
+        assert_ne!(
+            fs::read_to_string(install.join(exe("ka"))).unwrap(),
+            "stale copy",
+            "the archive's `ka` was unpacked over the link, which is what made it a second binary"
+        );
+    }
+
+    /// `KASL_NO_ALIAS=1` at install time is a choice; an update must not
+    /// quietly overturn it.
     #[test]
     fn an_absent_alias_is_not_installed_by_an_update() {
-        // `KASL_NO_ALIAS=1` at install time is a choice; an update must not
-        // quietly overturn it.
         let temp = TempDir::new().unwrap();
         let install = temp.path().join("install");
         fs::create_dir(&install).unwrap();

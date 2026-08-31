@@ -46,17 +46,29 @@ try {
     New-Item -ItemType Directory -Force $dir | Out-Null
     Copy-Item $binary.FullName $dir -Force
 
-    # Short alias `ka`: taken from the archive, which carries it as a second
-    # binary since v1.4, and copied from kasl.exe for older releases (symlinks
-    # need elevation on Windows). Skipped when another `ka` already answers in
+    # Short alias `ka` as a hard link, not a copy: a copy doubles the install
+    # for no new code and goes stale the moment self-update replaces the
+    # binary. A symlink would need elevation on Windows; a hard link does not,
+    # as long as both names are on one volume - and they are, since the alias
+    # lands beside the binary. Skipped when another `ka` already answers in
     # PATH; $env:KASL_NO_ALIAS=1 opts out.
     if (-not $env:KASL_NO_ALIAS) {
         $alias = Join-Path $dir "ka.exe"
         $existing = Get-Command ka -ErrorAction SilentlyContinue
         if (-not $existing -or $existing.Source -eq $alias) {
-            $source = Get-ChildItem -Path $tmp -Filter "ka.exe" -Recurse | Select-Object -First 1
-            Copy-Item $(if ($source) { $source.FullName } else { $binary.FullName }) $alias -Force
-            Write-Host "Alias ka -> kasl"
+            # A link cannot be created over an existing name, and earlier
+            # installs left a full second binary sitting there.
+            Remove-Item $alias -Force -ErrorAction SilentlyContinue
+            try {
+                New-Item -ItemType HardLink -Path $alias -Target (Join-Path $dir "kasl.exe") -ErrorAction Stop | Out-Null
+                Write-Host "Alias ka -> kasl"
+            } catch {
+                # A different volume, or a filesystem without hard links: a
+                # copy still works, it just has to be refreshed by the
+                # installer.
+                Copy-Item (Join-Path $dir "kasl.exe") $alias -Force
+                Write-Host "Alias ka -> kasl (copied - this filesystem has no hard links)"
+            }
         } else {
             Write-Host "Note: 'ka' already resolves to $($existing.Source) - alias skipped."
         }
@@ -64,6 +76,11 @@ try {
 } finally {
     Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
 }
+
+# Binaries left behind by updates: the replaced executable is kept as `.bak`
+# and nothing ever came back for it.
+Remove-Item (Join-Path $dir "kasl.bak") -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $dir "ka.bak") -Force -ErrorAction SilentlyContinue
 
 $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if (($userPath -split ";") -notcontains $dir) {

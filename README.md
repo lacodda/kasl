@@ -107,7 +107,7 @@ Monthly work productivity: 95.4%
 - **Nothing that hangs.** Every prompt checks for a terminal first, so kasl under cron, under CI or under the daemon fails with a message naming the flag you needed instead of waiting forever for an answer nobody can give.
 - **A team server, when there is one.** `kasl server connect` points this machine at a self-hosted [kasl-server](https://github.com/lacodda/kasl-server) with a token your administrator issues, and says whose token it is before storing anything - a token pasted from the wrong window would otherwise file your days under a colleague's name. `kasl server push` then sends a day whole, timestamps carrying this machine's UTC offset so days from different countries can be compared at all; the last upload wins, so re-sending a corrected day corrects it there and sending an unchanged one costs nothing. The token goes in the OS keyring; the config file records the address only. Connecting is optional and changes nothing locally.
 
-- **A short alias.** `ka` is installed alongside `kasl` by every channel and updated with it, and completions are available for bash, zsh, fish, PowerShell and elvish.
+- **A short alias.** `ka` is installed alongside `kasl` by every channel as a *link* to the same binary, so both names answer with the same code and an update can never leave one behind. Completions are available for bash, zsh, fish, PowerShell and elvish.
 
 ## Install
 
@@ -137,7 +137,7 @@ curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh 
 
 On Windows use the PowerShell line above: `install.sh` carries the macOS and Linux builds only, and run from Git Bash it stops with a pointer back here.
 
-**Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` - and `ka` next to it, if you want the alias - on your `PATH`.
+**Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` on your `PATH`. The archive carries one binary; `ka` is a link the installers create beside it, and you can make one yourself the same way.
 
 Both installers take the newest release by default; set `KASL_VERSION` to a tag to pin one, `KASL_INSTALL_DIR` to choose where the binary lands, and `KASL_NO_ALIAS=1` to skip the `ka` alias.
 

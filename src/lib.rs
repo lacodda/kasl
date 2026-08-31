@@ -28,6 +28,10 @@ pub mod libs;
 ///
 /// Propagates whatever the executed command fails with.
 pub fn run() -> anyhow::Result<()> {
+    // Clear the binary a previous update left behind; it is only deletable
+    // once it is no longer the running image, which is now.
+    libs::update::Updater::sweep_backup();
+
     let runtime = tokio::runtime::Runtime::new()?;
     runtime.block_on(async {
         // Initialize tracing only if debug mode is enabled; otherwise log output

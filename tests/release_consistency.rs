@@ -160,7 +160,10 @@ mod tests {
             .flatten()
             .collect();
 
-        assert!(binaries.len() > 1, "expected several [[bin]] targets in Cargo.toml, found {binaries:?}");
+        // One binary, deliberately: the `ka` alias is a link the installers
+        // create, not a second executable. Shipping it as its own `[[bin]]`
+        // put two identical 15 MB files in every archive and download.
+        assert_eq!(binaries, vec!["kasl".to_string()], "expected exactly the `kasl` binary in Cargo.toml");
 
         let workflow = read(".github/workflows/release.yml");
         for binary in &binaries {
@@ -296,6 +299,82 @@ mod tests {
                 known.contains(&word.to_string()),
                 "README shows `kasl {word}`, which is not a command; known: {known:?}"
             );
+        }
+    }
+
+    /// No Windows test may reconfigure the machine it runs on.
+    ///
+    /// The Unix autostart implementation is sandboxed by redirecting HOME and
+    /// XDG_CONFIG_HOME, so calling it in a test is safe - and the Unix tests
+    /// do. The Windows one writes to the Task Scheduler and to the registry,
+    /// and neither honours an environment variable: there is nothing to
+    /// redirect, so a call lands on the developer's own machine.
+    ///
+    /// It did. A Windows test asserting only "this does not panic" - which a
+    /// function returning `Result` was never going to do - registered the test
+    /// binary for startup and then deleted the entry, taking the user's real
+    /// kasl autostart with it.
+    #[test]
+    fn no_windows_test_reconfigures_autostart() {
+        let source = read("tests/autostart.rs");
+        // Everything from a `#[cfg(windows)]` up to the next `#[cfg(` is the
+        // Windows-only region; the calls are only unsafe there.
+        let mut region_is_windows = false;
+        for line in source.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            if let Some(target) = trimmed.strip_prefix("#[cfg(") {
+                region_is_windows = target.starts_with("windows");
+                continue;
+            }
+            if region_is_windows && (trimmed.contains("autostart::enable(") || trimmed.contains("autostart::disable(")) {
+                panic!("a Windows-only test calls `{trimmed}`, which reconfigures the machine running it - there is no sandbox for that path");
+            }
+        }
+    }
+
+    /// A doctest that touches the machine must never actually run.
+    ///
+    /// `cargo test` executes every example that is not marked `no_run` or
+    /// `ignore` - including, once, the one on `autostart::enable`. It really
+    /// registered the doctest's own temporary binary for startup, overwriting
+    /// the user's kasl entry with a path that is deleted minutes later. Found
+    /// in the field: an owner's Run key held
+    /// `...\rustdoctestkS63gI\rust_out.exe watch`.
+    ///
+    /// So the examples on this handful of functions are checked for the
+    /// marker. The list is deliberately explicit rather than a heuristic over
+    /// every example: these are the calls that write to the registry, the
+    /// scheduler or the filesystem outside the project, and naming them is
+    /// what makes the check say something true.
+    #[test]
+    fn examples_that_touch_the_machine_are_marked_no_run() {
+        // (file, the call that makes an example unsafe to execute)
+        const SIDE_EFFECTING: &[(&str, &str)] = &[
+            ("src/libs/autostart.rs", "autostart::enable()"),
+            ("src/libs/autostart.rs", "autostart::disable()"),
+        ];
+
+        for (file, call) in SIDE_EFFECTING {
+            let source = read(file);
+            let mut fence: Option<String> = None;
+            for line in source.lines() {
+                let trimmed = line.trim().trim_start_matches("///").trim_start_matches("//!").trim();
+                if let Some(attributes) = trimmed.strip_prefix("```") {
+                    fence = if fence.is_some() { None } else { Some(attributes.to_string()) };
+                    continue;
+                }
+                let Some(attributes) = &fence else { continue };
+                if !trimmed.contains(call) {
+                    continue;
+                }
+                assert!(
+                    attributes.contains("no_run") || attributes.contains("ignore"),
+                    "{file}: an example calling {call} runs during `cargo test` and would                      change this machine's startup configuration - mark the block ```rust,no_run"
+                );
+            }
         }
     }
 }

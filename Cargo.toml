@@ -6,7 +6,7 @@
 # to an unrelated project); the binary, library and app identity stay "kasl".
 [package]
 name = "kasl-cli"
-version = "1.8.0"
+version = "1.8.1"
 edition = "2024"
 rust-version = "1.95"
 description = "Work activity tracker CLI: automatic workday and break detection, task management with Jira/GitLab integration, productivity reports and exports"
@@ -39,12 +39,12 @@ name = "kasl"
 name = "kasl"
 path = "src/main.rs"
 
-# Short alias, matching the `ka` brand code. Same program under a second name,
-# so `ka report` and `kasl report` are interchangeable. Data paths and
-# self-update key off the `kasl` bin above, not off whichever name was typed.
-[[bin]]
-name = "ka"
-path = "src/bin/ka.rs"
+# There is deliberately no second `[[bin]]` for the `ka` alias. Shipping it as
+# its own binary put two identical 15 MB executables in every archive and in
+# every download, to give one program a second name. The installers create `ka`
+# as a link instead - a hard link on Windows, a symlink elsewhere - so one set
+# of bytes answers to both names and neither can go stale. See tools/install.*
+# and the alias module.
 
 # Application metadata used during build process
 [package.metadata]

@@ -49,8 +49,8 @@ pub async fn cmd() -> Result<()> {
 
     // Download and install the latest version
     // This includes downloading the archive, extracting the binary,
-    // backing up the current executable, and replacing it
-    updater.perform_update().await?;
+    // backing up the current executable, and re-pointing the `ka` link
+    let alias = updater.perform_update().await?;
 
     // Restart watcher if it was running before the update
     if watcher_was_running {
@@ -63,6 +63,12 @@ pub async fn cmd() -> Result<()> {
         app_name: updater.name,
         version: updater.latest_version.as_deref().unwrap_or("unknown").to_string()
     });
+
+    // A second name that could not be re-pointed keeps answering with the
+    // previous release under its own name, so silence here would be a lie.
+    if let Some(line) = alias.message() {
+        println!("{}", line);
+    }
 
     Ok(())
 }

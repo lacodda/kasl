@@ -48,7 +48,9 @@ Both scripts read three environment variables:
 
 ### The `ka` alias
 
-The installers and the npm package also set up `ka` as a short second name, so `ka report` is the same as `kasl report`. It is skipped when something else in your `PATH` already answers to `ka`, and `self-update` keeps it on the same version as `kasl`. Installing through `cargo install` gives you both names, since the crate builds them as two binaries.
+The installers and the npm package also set up `ka` as a short second name, so `ka report` is the same as `kasl report`. It is a **link** to the same binary - a hard link on Windows, a symlink elsewhere - so both names always answer with the same code and neither can fall behind. It is skipped when something else in your `PATH` already answers to `ka`, and `self-update` re-points it after replacing the binary.
+
+Installing through `cargo install` gives you `kasl` only: cargo installs binaries, and `ka` is a link the installers create. Make it yourself if you want it, beside the binary cargo installed.
 
 ### Build from Source
 

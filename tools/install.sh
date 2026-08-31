@@ -60,8 +60,9 @@ echo "Installed kasl $TAG to $BIN_DIR/kasl"
 
 # Short alias `ka`, unless something else in PATH already answers to that name
 # (ours from a previous run does not count). KASL_NO_ALIAS=1 skips it.
-# A symlink rather than the archive's own `ka` binary: it can never fall
-# behind the version `kasl` was updated to.
+# A symlink, never a second binary: one set of bytes answers to both names, so
+# `ka` can never fall behind the version `kasl` was updated to. The archive
+# carries one binary and no `ka` of its own.
 if [ -z "${KASL_NO_ALIAS:-}" ]; then
     EXISTING=$(command -v ka 2>/dev/null || true)
     if [ -z "$EXISTING" ] || [ "$EXISTING" = "$BIN_DIR/ka" ]; then
@@ -71,6 +72,10 @@ if [ -z "${KASL_NO_ALIAS:-}" ]; then
         echo "Note: 'ka' already resolves to $EXISTING - alias skipped."
     fi
 fi
+
+# Binaries left behind by updates: the replaced executable is kept as `.bak`
+# and nothing ever came back for it.
+rm -f "$BIN_DIR/kasl.bak" "$BIN_DIR/ka.bak"
 
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;

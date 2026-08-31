@@ -37,16 +37,17 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
       # All platforms ship tar.gz: kasl update and the npm wrapper of already
       # released versions expect that extension, so it must never change.
-      # Both binaries ship: README promises `ka` alongside `kasl`, and until
-      # v1.4 the archives carried only `kasl` - so `where ka` came up empty on
-      # every machine installed from a release archive or by self-update.
+      # One binary ships. Until v1.8.1 the archive carried `ka` as a second,
+      # byte-identical executable - 15 MB downloaded twice to give one program
+      # a second name. The installers create `ka` as a link to `kasl` instead,
+      # so there is nothing to pack and nothing that can fall behind.
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: bash
         run: |
           name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir "$name"
-          cp "target/${{ matrix.target }}/release/kasl.exe" "target/${{ matrix.target }}/release/ka.exe" LICENSE README.md "$name"
+          cp "target/${{ matrix.target }}/release/kasl.exe" LICENSE README.md "$name"
           tar czf "$name.tar.gz" "$name"
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -54,7 +55,7 @@ jobs:
         run: |
           name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir "$name"
-          cp "target/${{ matrix.target }}/release/kasl" "target/${{ matrix.target }}/release/ka" LICENSE README.md "$name"
+          cp "target/${{ matrix.target }}/release/kasl" LICENSE README.md "$name"
           tar czf "$name.tar.gz" "$name"
       - uses: actions/upload-artifact@v7
         with:
