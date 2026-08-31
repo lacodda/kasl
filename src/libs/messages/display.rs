@@ -303,6 +303,34 @@ impl Display for Message {
             }
             Message::KaslServerNotConnected => "This machine is not connected to a kasl-server.".to_string(),
             Message::KaslServerDisconnected => "Disconnected; the stored token has been removed.".to_string(),
+            Message::KaslServerNoDayToPush(date) => format!("No workday recorded for {} - nothing to send.", date),
+            Message::KaslServerDayPushed { date, pauses, tasks } => {
+                format!("Sent {} to the server: {} pauses, {} tasks", date, pauses, tasks)
+            }
+            Message::KaslServerTasksDeleted(count) => {
+                format!("{} task(s) removed on the server - deleted here since the last upload", count)
+            }
+            Message::KaslServerPushRejected(error) => {
+                format!(
+                    "{}
+The server will not accept this day as sent; fix it here and push again.",
+                    error
+                )
+            }
+            Message::KaslServerPushTokenRejected(error) => {
+                format!(
+                    "{}
+Run `kasl server connect` to connect again with a token your administrator issues.",
+                    error
+                )
+            }
+            Message::KaslServerPushRetryable(error) => {
+                format!(
+                    "{}
+The day is unchanged here - try again when the server is back.",
+                    error
+                )
+            }
 
             // === DATABASE MESSAGES ===
             Message::DatabaseOperationFailed { operation, error } => {

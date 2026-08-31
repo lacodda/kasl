@@ -252,6 +252,16 @@ pub enum Message {
     KaslServerTokenNotRemoved(String), // error message
     KaslServerNotConnected,
     KaslServerDisconnected,
+    KaslServerNoDayToPush(String), // the date, as the user would read it
+    KaslServerDayPushed {
+        date: String,
+        pauses: usize,
+        tasks: usize,
+    },
+    KaslServerTasksDeleted(u64),         // how many the server dropped as no longer held here
+    KaslServerPushRejected(String),      // error message
+    KaslServerPushTokenRejected(String), // error message
+    KaslServerPushRetryable(String),     // error message
 
     // === DATABASE MESSAGES ===
     DatabaseOperationFailed {

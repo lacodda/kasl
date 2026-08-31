@@ -16,6 +16,7 @@ kasl server <SUBCOMMAND>
 | --- | --- |
 | `connect` | Connect this machine with an agent token |
 | `status` | Show the connection and whether it still works |
+| `push` | Send a day's work to the server |
 | `disconnect` | Forget the connection and remove the stored token |
 
 ## Getting a token
@@ -82,6 +83,63 @@ Connected as Kirill Lakhtachev (agent 'laptop')
 
 Each part can fail on its own, and each failure names its own fix - the server unreachable, the token no longer accepted (revoked, or the account deactivated), or a configured server with no token stored, which means connecting again.
 
+## `kasl server push`
+
+```bash
+kasl server push [OPTIONS]
+```
+
+- `--last`, `-l`: Send yesterday instead of today.
+- `--date <YYYY-MM-DD>`: Send a specific day.
+
+Sends one day - its start and end, its pauses, and its tasks - to the connected server.
+
+```console
+$ kasl server push
+Sent 2026-08-31 to the server: 4 pauses, 6 tasks
+```
+
+Nothing is sent for a day that was never started, which is the honest answer rather than an error:
+
+```console
+$ kasl server push --last
+No workday recorded for 2026-08-30 - nothing to send.
+```
+
+### Sending the same day twice is safe
+
+The server stores a day as a unit, and the last upload wins. Pushing an unchanged day leaves the server exactly as it was; pushing a day you have since corrected - a task renamed, a break added with [`pauses add`](/reference/pauses/) - replaces the stored copy with the corrected one. There is no separate "update" to remember.
+
+That is also why a failed push costs nothing: whatever went wrong, the day is still here, and sending it again is the whole fix.
+
+### A day is sent whole, including its deletions
+
+Every push says "this is everything I hold for this date". A task you deleted here is therefore deleted there too, and the count is printed when it happens:
+
+```console
+$ kasl server push
+Sent 2026-08-31 to the server: 4 pauses, 6 tasks
+1 task(s) removed on the server - deleted here since the last upload
+```
+
+The deletion is scoped to the date being sent. A task carried across several days keeps its copy on the others, so pushing an old day cannot erase work recorded on a different one.
+
+### Time zones
+
+Every timestamp is sent with this machine's UTC offset, and the day carries its own calendar date rather than one derived from the clock. Both matter once a team spans time zones: bare wall-clock time from two countries cannot be compared, and near midnight the date of an instant and the date the work belongs to disagree.
+
+The offset is taken per timestamp, so a day spanning a daylight-saving change keeps both of its halves right. The two wall-clock readings that have no single offset - the hour skipped when clocks go forward, the hour repeated when they go back - are refused by name instead of guessed, because either guess would silently move an hour of work.
+
+### When a push fails
+
+The two kinds of failure need different things from you, so they are reported differently.
+
+**The server refused the day.** The payload will not be accepted as sent, and sending it again will not help. The server's own explanation is printed - which task, which field - so it can be fixed here and pushed again. A revoked token lands here too: the fix is [`kasl server connect`](#kasl-server-connect), not another attempt.
+
+**The server could not answer.** It is down, unreachable, or asking for a pause. The day is unchanged locally and worth sending later.
+
+Retrying is manual for now; an offline queue that holds days and delivers them when the server returns is the next step.
+
 ## `kasl server disconnect`
 
 ```bash
@@ -106,6 +164,15 @@ kasl server connect --url https://kasl.internal --ca-certificate /etc/ssl/compan
 
 # Check where the connection stands
 kasl server status
+
+# Send today's work
+kasl server push
+
+# Send yesterday, the morning after
+kasl server push --last
+
+# Send one particular day
+kasl server push --date 2026-08-24
 
 # Forget the connection on a machine being handed on
 kasl server disconnect

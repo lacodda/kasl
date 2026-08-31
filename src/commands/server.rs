@@ -14,14 +14,17 @@
 //! machine's days under a colleague's name. The server is asked who it thinks
 //! is connecting, and the answer is printed.
 
-use crate::api::kasl_server::{AGENT_TOKEN_PROMPT, AGENT_TOKEN_SECRET, KaslServer, normalize_url};
+use crate::api::kasl_server::{AGENT_TOKEN_PROMPT, AGENT_TOKEN_SECRET, KaslServer, UploadError, normalize_url};
 use crate::libs::config::{Config, KaslServerConfig};
+use crate::libs::day_upload::build_day_upload;
 use crate::libs::messages::Message;
 use crate::libs::secret::Secret;
 use crate::{msg_error_anyhow, msg_info, msg_print, msg_success, msg_warning};
 use anyhow::{Context, Result};
+use chrono::{Duration, Local, NaiveDate};
 use clap::{Args, Subcommand};
 use dialoguer::{Input, Password, theme::ColorfulTheme};
+use reqwest::StatusCode;
 
 /// Command-line arguments for the server command.
 #[derive(Debug, Args)]
@@ -41,9 +44,25 @@ enum ServerCommand {
     #[command(about = "Show the current connection to a kasl-server")]
     Status,
 
+    /// Send a day to the server
+    #[command(about = "Send a day's work to the connected kasl-server")]
+    Push(PushArgs),
+
     /// Forget the connection and the stored token
     #[command(about = "Forget the connection and the stored agent token")]
     Disconnect,
+}
+
+/// Arguments accepted by `kasl server push`.
+#[derive(Debug, Args)]
+pub struct PushArgs {
+    /// Send yesterday instead of today
+    #[arg(long, short, help = "Send the last day instead of today")]
+    last: bool,
+
+    /// Send a specific date, YYYY-MM-DD
+    #[arg(long, value_name = "YYYY-MM-DD", conflicts_with = "last")]
+    date: Option<NaiveDate>,
 }
 
 /// Arguments accepted by `kasl server connect`.
@@ -63,6 +82,7 @@ pub async fn cmd(args: ServerArgs) -> Result<()> {
     match args.command {
         ServerCommand::Connect(args) => connect(args).await,
         ServerCommand::Status => status().await,
+        ServerCommand::Push(args) => push(args).await,
         ServerCommand::Disconnect => disconnect(),
     }
 }
@@ -194,6 +214,72 @@ async fn status() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Sends one day's work to the connected server.
+///
+/// The whole day goes every time - workday bounds, pauses, tasks - because
+/// the server stores a day as a unit and the last upload wins (ADR 0004 in
+/// kasl-server). Sending the same day twice therefore changes nothing, and a
+/// day corrected here corrects itself there on the next push.
+///
+/// The day is assembled before the token is fetched: a day that cannot be
+/// built - a timestamp with no valid offset, a task without an id - is a local
+/// problem, and reporting it without first touching the keyring or the network
+/// keeps the cause visible.
+async fn push(args: PushArgs) -> Result<()> {
+    let date = match args.date {
+        Some(date) => date,
+        None if args.last => (Local::now() - Duration::days(1)).date_naive(),
+        None => Local::now().date_naive(),
+    };
+
+    let config = Config::read().unwrap_or_default();
+    let Some(server_config) = config.kasl_server else {
+        return Err(msg_error_anyhow!(Message::KaslServerNotConnected));
+    };
+
+    let Some(day) = build_day_upload(date)? else {
+        msg_print!(Message::KaslServerNoDayToPush(date.to_string()));
+        return Ok(());
+    };
+
+    let secret = Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT);
+    let Some(token) = secret.try_get_cached() else {
+        return Err(msg_error_anyhow!(Message::KaslServerTokenMissing));
+    };
+
+    let client = KaslServer::new(&server_config)?;
+
+    match client.upload_day(&token, &day).await {
+        Ok(accepted) => {
+            msg_success!(Message::KaslServerDayPushed {
+                date: accepted.date.to_string(),
+                pauses: accepted.pauses,
+                tasks: accepted.tasks,
+            });
+            // Worth saying out loud rather than hiding in a debug log: this is
+            // the visible consequence of declaring the task set authoritative,
+            // and the only sign that a deletion here reached the server.
+            if accepted.deleted_tasks > 0 {
+                msg_info!(Message::KaslServerTasksDeleted(accepted.deleted_tasks));
+            }
+            Ok(())
+        }
+        // Three failures, three different things to do about them: a
+        // credential to renew, a payload to fix, or a server to wait for.
+        // Telling someone whose token was revoked to fix the day and push
+        // again would send them looking at data that is not the problem.
+        // All three are errors - the day did not arrive in any of them.
+        Err(
+            error @ UploadError::Rejected {
+                status: StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN,
+                ..
+            },
+        ) => Err(msg_error_anyhow!(Message::KaslServerPushTokenRejected(error.to_string()))),
+        Err(error @ UploadError::Rejected { .. }) => Err(msg_error_anyhow!(Message::KaslServerPushRejected(error.to_string()))),
+        Err(error) => Err(msg_error_anyhow!(Message::KaslServerPushRetryable(error.to_string()))),
+    }
 }
 
 /// Forgets the connection: the token first, then the config.

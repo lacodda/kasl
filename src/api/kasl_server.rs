@@ -24,8 +24,9 @@
 
 use crate::libs::config::KaslServerConfig;
 use anyhow::{Context, Result, bail};
+use chrono::{DateTime, FixedOffset, NaiveDate};
 use reqwest::{Client, StatusCode};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::time::Duration;
 
@@ -80,6 +81,146 @@ pub struct AgentIdentity {
     /// The server's own version.
     pub server_version: String,
 }
+
+/// One day as this agent recorded it, in the shape the server accepts.
+///
+/// Field names and types mirror the ingest contract (ADR 0004 in
+/// kasl-server) rather than kasl's own model, so a change on either side
+/// shows up as a compile error here rather than as a `400` in the field.
+///
+/// Every instant carries a UTC offset. kasl stores bare wall-clock text,
+/// which is unambiguous on one laptop and meaningless across a team; the
+/// offset is attached when the day is assembled, and a day whose offset
+/// cannot be determined is not sent (ADR 0003).
+#[derive(Debug, Clone, Serialize)]
+pub struct DayUpload {
+    /// The employee's own calendar date, sent rather than derived: near
+    /// midnight the date of `started_at` and the date the work belongs to
+    /// disagree, and the agent is the side that knows which is meant.
+    pub date: NaiveDate,
+
+    /// When the day started.
+    pub started_at: DateTime<FixedOffset>,
+
+    /// When it ended; absent while the day is still open.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<DateTime<FixedOffset>>,
+
+    pub pauses: Vec<PauseUpload>,
+
+    pub tasks: Vec<TaskUpload>,
+
+    /// Declares `tasks` to be everything this agent holds for the date, so a
+    /// task the employee deleted here is deleted there too (ADR 0005).
+    ///
+    /// kasl always sends the whole date, so this is always true. It is a
+    /// field rather than a constant because the server defaults it to false
+    /// for agents that predate it, and saying it explicitly is what
+    /// distinguishes "I have nothing more" from "I did not mention".
+    pub tasks_are_complete: bool,
+}
+
+/// One break, as the server takes it.
+#[derive(Debug, Clone, Serialize)]
+pub struct PauseUpload {
+    pub started_at: DateTime<FixedOffset>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ended_at: Option<DateTime<FixedOffset>>,
+
+    /// Seconds. Sent explicitly because kasl merges neighbouring pauses
+    /// before reporting them, so this is not always `ended_at - started_at`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub duration_seconds: Option<i32>,
+
+    /// A break the employee entered by hand - kasl's `protected` flag.
+    pub manual: bool,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+}
+
+/// One task, keyed by the ids this agent knows it by.
+#[derive(Debug, Clone, Serialize)]
+pub struct TaskUpload {
+    /// This agent's row id: the key a re-upload matches on, so a corrected
+    /// task updates the stored row instead of piling up beside it.
+    pub agent_task_id: i32,
+
+    /// This agent's `task_id`, tying the same work across several days.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_group_id: Option<i32>,
+
+    pub recorded_at: DateTime<FixedOffset>,
+
+    pub name: String,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub comment: Option<String>,
+
+    /// Percent complete, 0..=100.
+    pub completeness: i16,
+}
+
+/// What the server reports about a day it stored.
+#[derive(Debug, Clone, Deserialize)]
+pub struct DayAccepted {
+    /// The server's own id for the day, which this agent does not otherwise
+    /// know: worth printing so a day can be looked up on the other side.
+    pub workday_id: String,
+
+    pub date: NaiveDate,
+
+    pub pauses: usize,
+
+    pub tasks: usize,
+
+    /// Tasks the server dropped because this upload declared its set
+    /// authoritative. Non-zero means deletions here reached the server.
+    #[serde(default)]
+    pub deleted_tasks: u64,
+
+    /// The installation's privacy level, always reported - an agent should be
+    /// able to tell a server that keeps everything from one whose policy it
+    /// has not read (ADR 0011).
+    #[serde(default)]
+    pub privacy_level: Option<String>,
+}
+
+/// Why an upload failed, and whether sending the same bytes again could ever
+/// work.
+///
+/// The distinction is the server's own (ADR 0005) and it is the whole reason
+/// this is an enum rather than a message: `4xx` means the payload will never
+/// be accepted as sent, so a queue must stop asking; `5xx` and `429` mean the
+/// server could not answer this time, so it must keep the day and try later.
+#[derive(Debug)]
+pub enum UploadError {
+    /// The server refused the payload itself. Retrying is pointless.
+    Rejected { status: StatusCode, message: String },
+
+    /// The server could not answer, or answered that it was unavailable.
+    /// The day is still worth sending.
+    Retryable { message: String },
+}
+
+impl UploadError {
+    /// Whether sending this day again could succeed.
+    pub fn is_retryable(&self) -> bool {
+        matches!(self, UploadError::Retryable { .. })
+    }
+}
+
+impl std::fmt::Display for UploadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UploadError::Rejected { status, message } => write!(f, "the server refused the day ({}): {}", status, message),
+            UploadError::Retryable { message } => write!(f, "{}", message),
+        }
+    }
+}
+
+impl std::error::Error for UploadError {}
 
 /// A client bound to one kasl-server instance.
 #[derive(Debug, Clone)]
@@ -173,6 +314,53 @@ impl KaslServer {
         }
     }
 
+    /// Sends one day to `POST /api/v1/days`.
+    ///
+    /// The last upload wins on the server, so re-sending a day corrects it
+    /// and sending the same day twice changes nothing (ADR 0004). That makes
+    /// a retry safe by construction, which is what the failure split here is
+    /// for: [`UploadError`] separates a payload the server will never take
+    /// from a server that could not answer this time.
+    pub async fn upload_day(&self, token: &str, day: &DayUpload) -> Result<DayAccepted, UploadError> {
+        let url = format!("{}/api/v1/days", self.base_url);
+        let response = match self.client.post(&url).bearer_auth(token).json(day).send().await {
+            Ok(response) => response,
+            // Nothing was answered: DNS, TLS, a refused connection, a timeout.
+            // The day is untouched on the server and worth sending again.
+            Err(error) => {
+                return Err(UploadError::Retryable {
+                    message: format!("cannot reach kasl-server at {}: {}", self.base_url, error),
+                });
+            }
+        };
+
+        let status = response.status();
+        if status.is_success() {
+            // A 2xx whose body is not a day report means the address answers
+            // for something other than this endpoint. Retrying a URL that is
+            // wrong would never come good, so it is a rejection.
+            return response.json::<DayAccepted>().await.map_err(|error| UploadError::Rejected {
+                status,
+                message: format!("the server accepted the day but answered unreadably: {}", error),
+            });
+        }
+
+        // Read the body before classifying: the server explains a refusal
+        // there ("tasks[0]: name is empty"), and a status alone would leave
+        // the user with nothing to fix.
+        let message = response.text().await.unwrap_or_default();
+        let message = describe_failure(status, &message);
+
+        // The server's own rule, not a guess: 4xx will not be accepted as
+        // sent; 5xx and 429 are worth repeating. 429 sits inside the 4xx
+        // range and is the one exception to it.
+        if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+            Err(UploadError::Retryable { message })
+        } else {
+            Err(UploadError::Rejected { status, message })
+        }
+    }
+
     /// The base URL this client talks to, as stored.
     pub fn base_url(&self) -> &str {
         &self.base_url
@@ -187,6 +375,30 @@ impl KaslServer {
 /// user's behalf.
 pub fn normalize_url(url: &str) -> String {
     url.trim().trim_end_matches('/').to_string()
+}
+
+/// Extracts the sentence a person can act on from a failed response.
+///
+/// The server answers errors as JSON (`{"error": "..."}`), and showing that
+/// wrapper verbatim buries the sentence that matters. A body in any other
+/// shape is passed through as-is rather than dropped: an error from a proxy
+/// in front of the server is still the most informative thing available.
+///
+/// The status is deliberately *not* added here. It is already carried by the
+/// error and printed once when the failure is displayed, and some of the
+/// server's own messages open with it too - stamping it on again produced
+/// "the server refused the day (401 Unauthorized): 401 Unauthorized: the
+/// token is not recognized", which reads as three different problems.
+fn describe_failure(status: StatusCode, body: &str) -> String {
+    let body = body.trim();
+    if body.is_empty() {
+        return format!("the server gave no explanation ({})", status);
+    }
+
+    serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|value| value.get("error").and_then(|error| error.as_str()).map(str::to_string))
+        .unwrap_or_else(|| body.chars().take(300).collect())
 }
 
 /// Whether a file's bytes carry a PEM certificate block.
