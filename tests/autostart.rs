@@ -55,27 +55,24 @@ mod tests {
         let _is_enabled = result.unwrap();
     }
 
-    #[cfg(windows)]
-    #[test_context(AutostartTestContext)]
-    #[serial]
-    #[test]
-    fn test_windows_admin_detection(_ctx: &mut AutostartTestContext) {
-        // Test admin privilege detection on Windows
-        // Note: We can't directly test the windows module since it's private
-        // Instead, test the public enable/disable functions which use admin detection internally
-
-        // These operations might succeed or fail based on privileges
-        // but they should not panic
-        let _enable_result = std::panic::catch_unwind(|| {
-            let _ = autostart::enable();
-        });
-
-        let _disable_result = std::panic::catch_unwind(|| {
-            let _ = autostart::disable();
-        });
-
-        // If we get here without panicking, the test passes
-    }
+    // There is deliberately no Windows test calling `enable()`/`disable()`.
+    //
+    // The context above redirects HOME, XDG_CONFIG_HOME and LOCALAPPDATA,
+    // which is enough to sandbox the Unix implementation - it writes files
+    // under those roots. The Windows one writes to the Task Scheduler and to
+    // `HKCU\...\Run`, and neither honours an environment variable, so there is
+    // nothing to redirect: the call lands on the machine running the test.
+    //
+    // It did. A test asserting only "this does not panic" - which a function
+    // returning `Result` was never going to do - registered the test binary
+    // for startup and then deleted the entry, taking the user's real kasl
+    // autostart with it. Found in the field on the owner's machine, together
+    // with a doctest doing the same (see the gate in
+    // tests/release_consistency.rs).
+    //
+    // Admin detection is reachable another way when it needs covering: make
+    // `windows::is_admin` testable directly rather than through a call that
+    // reconfigures the machine to observe it.
 
     #[cfg(windows)]
     #[test_context(AutostartTestContext)]
@@ -113,27 +110,6 @@ mod tests {
         // Disabling what was never enabled is success: nothing starts kasl.
         assert!(autostart::disable().is_ok());
         assert!(autostart::disable().is_ok());
-    }
-
-    #[test_context(AutostartTestContext)]
-    #[serial]
-    #[test]
-    fn test_autostart_disable_when_not_enabled(_ctx: &mut AutostartTestContext) {
-        // Test disabling autostart when it's not enabled
-        // This should succeed (idempotent operation)
-        let result = autostart::disable();
-
-        #[cfg(windows)]
-        {
-            // On Windows, success depends on admin privileges; it must not panic.
-            let _ = result;
-        }
-
-        #[cfg(unix)]
-        {
-            // On Unix, removing an absent agent is success: nothing autostarts.
-            assert!(result.is_ok());
-        }
     }
 
     #[test_context(AutostartTestContext)]
@@ -255,25 +231,21 @@ mod tests {
         let _ = (enabled1, enabled2, enabled3);
     }
 
+    /// The read-only queries must be safe to call anywhere, on any machine.
+    ///
+    /// `enable`/`disable` are deliberately not exercised here. They used to
+    /// be, wrapped in `catch_unwind` to assert "this does not panic" - which a
+    /// function returning `Result` was never going to do - and on Windows that
+    /// assertion of nothing was paid for by registering the test binary for
+    /// startup and then deleting the entry, removing the user's real kasl
+    /// autostart along with it. The Unix roundtrip below covers the write path
+    /// where a sandbox actually exists.
     #[test_context(AutostartTestContext)]
     #[serial]
     #[test]
-    fn test_autostart_operations_dont_panic(_ctx: &mut AutostartTestContext) {
-        // Ensure that autostart operations don't panic under any circumstances
-
-        let _status = autostart::status();
-        let _is_enabled = autostart::is_enabled();
-
-        // These operations might fail, but they shouldn't panic
-        let _enable_result = std::panic::catch_unwind(|| {
-            let _ = autostart::enable();
-        });
-
-        let _disable_result = std::panic::catch_unwind(|| {
-            let _ = autostart::disable();
-        });
-
-        // If we get here without panicking, the test passes
+    fn test_autostart_queries_are_safe_anywhere(_ctx: &mut AutostartTestContext) {
+        assert!(autostart::status().is_ok());
+        assert!(autostart::is_enabled().is_ok());
     }
 
     #[cfg(windows)]

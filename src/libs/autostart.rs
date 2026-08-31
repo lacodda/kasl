@@ -405,7 +405,15 @@ mod unix {
 ///
 /// # Examples
 ///
-/// ```rust
+/// `no_run` is load-bearing, not decoration: this function writes to the
+/// machine it runs on. Without it `cargo test` executed the example for real
+/// and registered the doctest's own temporary binary for autostart - a path
+/// under `target/` or the system temp directory that is deleted minutes later,
+/// leaving the user with a startup entry pointing at nothing and their actual
+/// kasl entry overwritten. Found in the field: an owner's Run key held
+/// `...\rustdoctestkS63gI\rust_out.exe watch`.
+///
+/// ```rust,no_run
 /// use kasl::libs::autostart;
 ///
 /// match autostart::enable() {
