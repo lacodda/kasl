@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.9.0] - 2026-09-03
+
+### Bug Fixes
+- Check what is owed before checking the connection
+
+### Features
+- Queue undelivered days and send a backlog in one request
 ## [1.8.1] - 2026-08-31
 
 ### Breaking Changes
