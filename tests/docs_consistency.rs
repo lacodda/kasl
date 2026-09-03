@@ -109,6 +109,21 @@ mod tests {
     }
 
     #[test]
+    fn the_overview_guide_lists_every_shipped_command() {
+        // `server` shipped in v1.7 and never reached this guide - the same
+        // omission `inbox` had before v1.5. A reader who starts at the
+        // overview simply never learns the command exists, and the page
+        // coverage gate cannot see it: the reference page was there all along.
+        let overview = read("docs/src/content/docs/guides/command-overview.md");
+        for command in shipped_commands() {
+            assert!(
+                overview.contains(&format!("`{command}`")),
+                "`kasl {command}` ships but is not listed in the command overview guide"
+            );
+        }
+    }
+
+    #[test]
     fn every_shipped_subcommand_is_documented_on_its_page() {
         // The coverage gate above only sees top-level commands, so a new
         // `kasl server flush` could ship with nothing on the page and nothing

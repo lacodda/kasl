@@ -340,13 +340,17 @@ async fn push(args: PushArgs) -> Result<()> {
 
 /// Sends everything the outbox still owes.
 async fn flush() -> Result<()> {
-    let (client, token) = connected_client()?;
-
+    // What is owed is checked before the connection is, because an empty queue
+    // is nothing to do whatever the connection looks like. The other order
+    // makes an hourly `kasl server flush` on an unconnected machine fail every
+    // hour over work that does not exist - and a cron job that cries wolf is
+    // one nobody reads by the time it matters.
     if ServerOutbox::new()?.count()? == 0 {
         msg_print!(Message::KaslServerQueueEmpty);
         return Ok(());
     }
 
+    let (client, token) = connected_client()?;
     flush_with(&client, &token).await
 }
 

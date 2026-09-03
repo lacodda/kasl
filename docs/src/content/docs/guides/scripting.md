@@ -42,6 +42,9 @@ kasl inbox list < /dev/null
 kasl export report --format csv < /dev/null
 kasl end < /dev/null
 kasl completions bash < /dev/null
+kasl server queue < /dev/null
+kasl server flush < /dev/null
+kasl server push < /dev/null
 ```
 
 `report` and `sum` print whatever the database has (or a "no workday record"
@@ -125,6 +128,9 @@ needs a terminal ``:
 - **`kasl task add --from-template`** - picks a template from a list. Use
   `kasl task add --template NAME` instead, which names the template directly
   and works without a terminal.
+- **`kasl server connect`** - the agent token is always typed at a prompt,
+  never taken from an argument where it would land in shell history. Connect
+  once by hand; everything that sends days afterwards runs unattended.
 
 ## Environment variables
 
@@ -157,6 +163,18 @@ if ! kasl report --send > /tmp/kasl-report.log 2>&1; then
     exit 1
 fi
 ```
+
+A machine that reports to a [kasl-server](/reference/server/) can drain its
+queue the same way. `kasl server flush` sends whatever is owed and exits 0
+when there is nothing waiting, so it is safe to run on a schedule:
+
+```bash
+0 * * * * kasl server flush > /dev/null 2>&1
+```
+
+The queue is what makes that unattended job harmless: a run while the server
+is down leaves the days owed rather than losing them, and the next run sends
+them.
 
 The same non-zero exit covers a CI step - no extra error handling is needed
 for the runner to mark it failed, even when the failure is the productivity

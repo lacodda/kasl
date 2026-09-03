@@ -243,6 +243,28 @@ mod tests {
 
     #[serial]
     #[test]
+    fn the_queue_commands_are_quiet_when_nothing_is_owed() {
+        let dir = TempDir::new().unwrap();
+
+        // Found in a live run, not by the suite: `flush` asked for the token
+        // before asking whether anything was owed, so an hourly cron on a
+        // machine that never connected failed every hour over work that does
+        // not exist. Nothing owed is nothing to do, connection or no
+        // connection - and a scheduled job that cries wolf is one nobody reads
+        // by the time it matters.
+        for args in [vec!["server", "queue"], vec!["server", "flush"]] {
+            let out = kasl_cmd(dir.path()).args(&args).output().unwrap();
+            assert!(
+                out.status.success(),
+                "`kasl {}` must succeed with an empty queue: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+    }
+
+    #[serial]
+    #[test]
     fn read_only_commands_work_unattended() {
         let dir = TempDir::new().unwrap();
 
