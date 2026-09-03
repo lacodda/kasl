@@ -15,7 +15,10 @@
 //! is connecting, and the answer is printed.
 
 use crate::api::kasl_server::{AGENT_TOKEN_PROMPT, AGENT_TOKEN_SECRET, KaslServer, UploadError, normalize_url};
+use crate::db::server_outbox::ServerOutbox;
+use crate::db::workdays::Workdays;
 use crate::libs::config::{Config, KaslServerConfig};
+use crate::libs::day_delivery::{Delivered, deliver, record_single};
 use crate::libs::day_upload::build_day_upload;
 use crate::libs::messages::Message;
 use crate::libs::secret::Secret;
@@ -48,9 +51,33 @@ enum ServerCommand {
     #[command(about = "Send a day's work to the connected kasl-server")]
     Push(PushArgs),
 
+    /// Send everything that is still owed
+    #[command(about = "Send every day still waiting to reach the server")]
+    Flush,
+
+    /// Show what is still waiting to be sent
+    #[command(about = "Show the days still waiting to reach the server")]
+    Queue,
+
+    /// Queue a stretch of past days
+    #[command(about = "Queue every recorded day in a date range and send them")]
+    Backfill(BackfillArgs),
+
     /// Forget the connection and the stored token
     #[command(about = "Forget the connection and the stored agent token")]
     Disconnect,
+}
+
+/// Arguments accepted by `kasl server backfill`.
+#[derive(Debug, Args)]
+pub struct BackfillArgs {
+    /// First date of the range, YYYY-MM-DD
+    #[arg(long, value_name = "YYYY-MM-DD")]
+    from: NaiveDate,
+
+    /// Last date of the range, YYYY-MM-DD; defaults to today
+    #[arg(long, value_name = "YYYY-MM-DD")]
+    to: Option<NaiveDate>,
 }
 
 /// Arguments accepted by `kasl server push`.
@@ -83,6 +110,9 @@ pub async fn cmd(args: ServerArgs) -> Result<()> {
         ServerCommand::Connect(args) => connect(args).await,
         ServerCommand::Status => status().await,
         ServerCommand::Push(args) => push(args).await,
+        ServerCommand::Flush => flush().await,
+        ServerCommand::Queue => queue(),
+        ServerCommand::Backfill(args) => backfill(args).await,
         ServerCommand::Disconnect => disconnect(),
     }
 }
@@ -227,6 +257,11 @@ async fn status() -> Result<()> {
 /// built - a timestamp with no valid offset, a task without an id - is a local
 /// problem, and reporting it without first touching the keyring or the network
 /// keeps the cause visible.
+///
+/// A day that cannot be delivered is queued rather than lost, and a day that
+/// is delivered takes the rest of the backlog with it - a laptop coming back
+/// from a week offline pays the whole debt on the first push, without the user
+/// having to know a queue exists.
 async fn push(args: PushArgs) -> Result<()> {
     let date = match args.date {
         Some(date) => date,
@@ -264,6 +299,17 @@ async fn push(args: PushArgs) -> Result<()> {
             if accepted.deleted_tasks > 0 {
                 msg_info!(Message::KaslServerTasksDeleted(accepted.deleted_tasks));
             }
+
+            // A day that arrives cancels its own debt. Without this a date
+            // queued by an earlier failure would be sent again by the next
+            // flush, forever.
+            ServerOutbox::new()?.remove(date)?;
+
+            // Today went, so the backlog is worth a try on the same
+            // connection: a machine that comes back online typically owes
+            // several days, and making the user run a second command to
+            // discover that would be a queue that hides itself.
+            flush_with(&client, &token).await?;
             Ok(())
         }
         // Three failures, three different things to do about them: a
@@ -271,15 +317,187 @@ async fn push(args: PushArgs) -> Result<()> {
         // Telling someone whose token was revoked to fix the day and push
         // again would send them looking at data that is not the problem.
         // All three are errors - the day did not arrive in any of them.
-        Err(
-            error @ UploadError::Rejected {
-                status: StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN,
-                ..
-            },
-        ) => Err(msg_error_anyhow!(Message::KaslServerPushTokenRejected(error.to_string()))),
-        Err(error @ UploadError::Rejected { .. }) => Err(msg_error_anyhow!(Message::KaslServerPushRejected(error.to_string()))),
-        Err(error) => Err(msg_error_anyhow!(Message::KaslServerPushRetryable(error.to_string()))),
+        Err(error) => {
+            // Queued before it is reported, and only if a retry could ever
+            // work: a day the server will never accept as sent would
+            // otherwise sit in the queue retrying until someone noticed.
+            let outcome = record_single(&mut ServerOutbox::new()?, date, &error)?;
+            if matches!(outcome, Delivered::Deferred { .. }) {
+                msg_info!(Message::KaslServerDayQueued(date.to_string()));
+            }
+
+            match error {
+                error @ UploadError::Rejected {
+                    status: StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN,
+                    ..
+                } => Err(msg_error_anyhow!(Message::KaslServerPushTokenRejected(error.to_string()))),
+                error @ UploadError::Rejected { .. } => Err(msg_error_anyhow!(Message::KaslServerPushRejected(error.to_string()))),
+                error => Err(msg_error_anyhow!(Message::KaslServerPushRetryable(error.to_string()))),
+            }
+        }
     }
+}
+
+/// Sends everything the outbox still owes.
+async fn flush() -> Result<()> {
+    let (client, token) = connected_client()?;
+
+    if ServerOutbox::new()?.count()? == 0 {
+        msg_print!(Message::KaslServerQueueEmpty);
+        return Ok(());
+    }
+
+    flush_with(&client, &token).await
+}
+
+/// Drains the outbox against an already-built client.
+///
+/// Shared with `push` so a successful upload carries the backlog with it, on
+/// the connection that was just proven to work.
+async fn flush_with(client: &KaslServer, token: &str) -> Result<()> {
+    let mut outbox = ServerOutbox::new()?;
+    let dates: Vec<NaiveDate> = outbox.pending()?.into_iter().map(|owed| owed.date).collect();
+    if dates.is_empty() {
+        return Ok(());
+    }
+
+    msg_info!(Message::KaslServerQueueSending(dates.len()));
+
+    let outcomes = deliver(client, token, &mut outbox, &dates).await?;
+
+    let (mut accepted, mut refused, mut deferred) = (0, 0, 0);
+    for outcome in &outcomes {
+        match outcome {
+            Delivered::Accepted {
+                date,
+                pauses,
+                tasks,
+                deleted_tasks,
+            } => {
+                accepted += 1;
+                msg_success!(Message::KaslServerDayPushed {
+                    date: date.to_string(),
+                    pauses: *pauses,
+                    tasks: *tasks,
+                });
+                if *deleted_tasks > 0 {
+                    msg_info!(Message::KaslServerTasksDeleted(*deleted_tasks));
+                }
+            }
+            // Named rather than counted: a day dropped because the server
+            // will never take it is data that is not going to arrive, and
+            // burying that in a total would be the queue losing a day
+            // quietly.
+            Delivered::Refused { date, reason } => {
+                refused += 1;
+                msg_warning!(Message::KaslServerDayRefused {
+                    date: date.to_string(),
+                    reason: reason.clone(),
+                });
+            }
+            Delivered::Deferred { date, reason } => {
+                deferred += 1;
+                msg_warning!(Message::KaslServerDayDeferred {
+                    date: date.to_string(),
+                    reason: reason.clone(),
+                });
+            }
+        }
+    }
+
+    msg_print!(Message::KaslServerFlushSummary { accepted, refused, deferred });
+    Ok(())
+}
+
+/// Lists what is still owed, without touching the network.
+///
+/// Deliberately offline: this is the command someone runs to find out whether
+/// their work is safe, and it has to answer on a train.
+fn queue() -> Result<()> {
+    let outbox = ServerOutbox::new()?;
+    let owed = outbox.pending()?;
+
+    if owed.is_empty() {
+        msg_print!(Message::KaslServerQueueEmpty);
+        return Ok(());
+    }
+
+    msg_info!(Message::KaslServerQueueOwed(owed.len() as i64));
+    for day in &owed {
+        msg_print!(Message::KaslServerQueueEntry {
+            date: day.date.to_string(),
+            attempts: day.attempts,
+            last_error: day.last_error.clone(),
+        });
+    }
+
+    Ok(())
+}
+
+/// Queues every recorded day in a range and sends them.
+///
+/// The range is walked against the database rather than the calendar: only
+/// dates that actually have a workday are queued, so a month containing
+/// weekends and leave does not fill the outbox with days that were never
+/// worked and can never be sent.
+async fn backfill(args: BackfillArgs) -> Result<()> {
+    let to = args.to.unwrap_or_else(|| Local::now().date_naive());
+    if args.from > to {
+        return Err(msg_error_anyhow!(Message::KaslServerBackfillOrderReversed));
+    }
+
+    let (client, token) = connected_client()?;
+
+    let mut workdays = Workdays::new()?;
+    let mut dates = Vec::new();
+    let mut date = args.from;
+    while date <= to {
+        if workdays.fetch(date)?.is_some() {
+            dates.push(date);
+        }
+        date += Duration::days(1);
+    }
+
+    if dates.is_empty() {
+        msg_print!(Message::KaslServerBackfillNoDays {
+            from: args.from.to_string(),
+            to: to.to_string(),
+        });
+        return Ok(());
+    }
+
+    msg_info!(Message::KaslServerBackfillRange {
+        from: args.from.to_string(),
+        to: to.to_string(),
+        days: dates.len(),
+    });
+
+    // Queued before they are sent, so an interrupted backfill is not lost: a
+    // run cut off halfway leaves the rest owed rather than forgotten.
+    let mut outbox = ServerOutbox::new()?;
+    for date in &dates {
+        outbox.enqueue(*date, "queued by backfill")?;
+    }
+
+    flush_with(&client, &token).await
+}
+
+/// The client and token for the configured server, or a message saying why
+/// there is none.
+///
+/// Both failures are the same shape - nothing can be sent - and both have a
+/// single fix, `kasl server connect`.
+fn connected_client() -> Result<(KaslServer, String)> {
+    let config = Config::read().unwrap_or_default();
+    let Some(server_config) = config.kasl_server else {
+        return Err(msg_error_anyhow!(Message::KaslServerNotConnected));
+    };
+
+    let Some(token) = Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT).try_get_cached() else {
+        return Err(msg_error_anyhow!(Message::KaslServerTokenMissing));
+    };
+
+    Ok((KaslServer::new(&server_config)?, token))
 }
 
 /// Forgets the connection: the token first, then the config.

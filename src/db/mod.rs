@@ -54,6 +54,9 @@ pub mod tags;
 /// Task CRUD and filtered queries.
 pub mod tasks;
 
+/// Days owed to kasl-server after a failed or skipped upload.
+pub mod server_outbox;
+
 /// Reusable task templates.
 pub mod templates;
 

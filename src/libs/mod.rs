@@ -22,6 +22,7 @@ pub mod autostart;
 pub mod config;
 pub mod daemon;
 pub mod data_storage;
+pub mod day_delivery;
 pub mod day_upload;
 pub mod export;
 pub mod formatter;

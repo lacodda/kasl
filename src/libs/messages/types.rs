@@ -262,6 +262,38 @@ pub enum Message {
     KaslServerPushRejected(String),      // error message
     KaslServerPushTokenRejected(String), // error message
     KaslServerPushRetryable(String),     // error message
+    KaslServerDayQueued(String),         // the date now waiting in the outbox
+    KaslServerQueueEmpty,
+    KaslServerQueueOwed(i64), // how many days are waiting
+    KaslServerQueueEntry {
+        date: String,
+        attempts: i32,
+        last_error: Option<String>,
+    },
+    KaslServerQueueSending(usize), // how many days are about to go
+    KaslServerDayRefused {
+        date: String,
+        reason: String,
+    },
+    KaslServerDayDeferred {
+        date: String,
+        reason: String,
+    },
+    KaslServerFlushSummary {
+        accepted: usize,
+        refused: usize,
+        deferred: usize,
+    },
+    KaslServerBackfillRange {
+        from: String,
+        to: String,
+        days: usize,
+    },
+    KaslServerBackfillNoDays {
+        from: String,
+        to: String,
+    },
+    KaslServerBackfillOrderReversed, // --from is later than --to
 
     // === DATABASE MESSAGES ===
     DatabaseOperationFailed {

@@ -17,6 +17,9 @@ kasl server <SUBCOMMAND>
 | `connect` | Connect this machine with an agent token |
 | `status` | Show the connection and whether it still works |
 | `push` | Send a day's work to the server |
+| `flush` | Send every day still waiting to reach the server |
+| `queue` | Show the days still waiting, and why |
+| `backfill` | Queue every recorded day in a date range and send them |
 | `disconnect` | Forget the connection and remove the stored token |
 
 ## Getting a token
@@ -136,9 +139,101 @@ The two kinds of failure need different things from you, so they are reported di
 
 **The server refused the day.** The payload will not be accepted as sent, and sending it again will not help. The server's own explanation is printed - which task, which field - so it can be fixed here and pushed again. A revoked token lands here too: the fix is [`kasl server connect`](#kasl-server-connect), not another attempt.
 
-**The server could not answer.** It is down, unreachable, or asking for a pause. The day is unchanged locally and worth sending later.
+**The server could not answer.** It is down, unreachable, or asking for a pause. The day is unchanged locally, and it is queued:
 
-Retrying is manual for now; an offline queue that holds days and delivers them when the server returns is the next step.
+```console
+$ kasl server push
+Cannot reach kasl-server at https://kasl.example.com: connection refused
+The day is unchanged here and stays queued - `kasl server flush` sends it when the server is back.
+2026-08-31 is queued and will be sent with the next successful push.
+```
+
+Only the second kind is queued. A day the server will never accept as sent is not put in a queue that would retry it forever - it is reported, so you can fix it and push again.
+
+## The queue
+
+A laptop that spends a week off the network still has that week's work. Every day that could not be delivered is remembered, and the next successful push pays the whole debt off - so in normal use the queue is something you never have to think about.
+
+Two properties are worth knowing:
+
+**A queued day is rebuilt when it is sent, not replayed as it was.** The queue holds a date, not a stored copy of the payload. A day you correct while the network is down arrives corrected.
+
+**A backlog goes in one request.** The server takes a batch of days and answers about each one separately, so a single day it will not accept does not strand the rest behind it. Long backlogs are split into batches automatically.
+
+### `kasl server push` carries the backlog
+
+A successful push sends the queue too, on the connection that was just proven to work:
+
+```console
+$ kasl server push
+Sent 2026-09-03 to the server: 3 pauses, 5 tasks
+Sending 4 days...
+Sent 2026-08-28 to the server: 2 pauses, 4 tasks
+Sent 2026-08-29 to the server: 5 pauses, 6 tasks
+Sent 2026-08-30 to the server: 1 pauses, 2 tasks
+Sent 2026-08-31 to the server: 4 pauses, 6 tasks
+4 sent, 0 refused, 0 still waiting
+```
+
+### `kasl server flush`
+
+```bash
+kasl server flush
+```
+
+Sends what is owed without pushing today - useful from a script, or when you want the backlog gone but today is not finished.
+
+```console
+$ kasl server flush
+Sending 2 days...
+Sent 2026-08-30 to the server: 1 pauses, 2 tasks
+2026-08-31 was refused and has been dropped from the queue: tasks[0]: name is empty
+1 sent, 1 refused, 0 still waiting
+```
+
+A day the server refuses is named and dropped rather than kept: it would be refused identically on every future attempt. A day the server could not answer for stays, and the summary says so.
+
+### `kasl server queue`
+
+```bash
+kasl server queue
+```
+
+Shows what is still owed, with how many attempts each has taken and what went wrong last time. It does not touch the network, so it answers on a train:
+
+```console
+$ kasl server queue
+2 days are waiting to be sent:
+  2026-08-30 - 3 attempts, last: cannot reach kasl-server at https://kasl.example.com
+  2026-08-31 - 1 attempt, last: cannot reach kasl-server at https://kasl.example.com
+```
+
+```console
+$ kasl server queue
+Nothing is waiting to be sent.
+```
+
+### `kasl server backfill`
+
+```bash
+kasl server backfill --from <YYYY-MM-DD> [--to <YYYY-MM-DD>]
+```
+
+- `--from <YYYY-MM-DD>`: First date of the range.
+- `--to <YYYY-MM-DD>`: Last date; defaults to today.
+
+For history that predates the connection - a machine that tracked locally for months before the team got a server:
+
+```console
+$ kasl server backfill --from 2026-08-01 --to 2026-08-31
+21 recorded days between 2026-08-01 and 2026-08-31
+Sending 21 days...
+Sent 2026-08-03 to the server: 2 pauses, 4 tasks
+...
+21 sent, 0 refused, 0 still waiting
+```
+
+Only dates that actually have a workday are queued, so weekends and leave inside the range are skipped rather than queued as days that can never be sent. The days are queued before they are sent, so a run interrupted halfway leaves the rest owed rather than forgotten - running it again, or `flush`, continues where it stopped.
 
 ## `kasl server disconnect`
 
@@ -173,6 +268,15 @@ kasl server push --last
 
 # Send one particular day
 kasl server push --date 2026-08-24
+
+# See what is still owed, without touching the network
+kasl server queue
+
+# Send everything that is waiting
+kasl server flush
+
+# Upload history recorded before this machine was connected
+kasl server backfill --from 2026-08-01
 
 # Forget the connection on a machine being handed on
 kasl server disconnect

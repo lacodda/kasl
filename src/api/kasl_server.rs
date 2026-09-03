@@ -187,6 +187,46 @@ pub struct DayAccepted {
     pub privacy_level: Option<String>,
 }
 
+/// A stretch of days in one request - what an agent sends after time offline.
+#[derive(Debug, Clone, Serialize)]
+pub struct BatchUpload {
+    pub days: Vec<DayUpload>,
+}
+
+/// What came of a batch.
+///
+/// The counts are read first because the status will not tell: a batch
+/// answers `200` even when days inside it were refused (ADR 0005). A client
+/// that checks only the status believes a rejected day arrived.
+#[derive(Debug, Clone, Deserialize)]
+pub struct BatchResult {
+    pub accepted: usize,
+
+    pub rejected: usize,
+
+    /// One entry per day sent, in the order they were sent.
+    #[serde(default)]
+    pub results: Vec<DayResult>,
+}
+
+/// One day's fate inside a batch.
+///
+/// Tagged by `status` to match what the server serializes. An unrecognized
+/// tag is a contract the two sides no longer share, and is surfaced rather
+/// than silently treated as either outcome.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(tag = "status", rename_all = "lowercase")]
+pub enum DayResult {
+    Accepted {
+        #[serde(flatten)]
+        day: DayAccepted,
+    },
+    Rejected {
+        date: NaiveDate,
+        error: String,
+    },
+}
+
 /// Why an upload failed, and whether sending the same bytes again could ever
 /// work.
 ///
@@ -349,21 +389,69 @@ impl KaslServer {
         // there ("tasks[0]: name is empty"), and a status alone would leave
         // the user with nothing to fix.
         let message = response.text().await.unwrap_or_default();
-        let message = describe_failure(status, &message);
+        Err(classify_failure(status, describe_failure(status, &message)))
+    }
 
-        // The server's own rule, not a guess: 4xx will not be accepted as
-        // sent; 5xx and 429 are worth repeating. 429 sits inside the 4xx
-        // range and is the one exception to it.
-        if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
-            Err(UploadError::Retryable { message })
-        } else {
-            Err(UploadError::Rejected { status, message })
+    /// Sends several days to `POST /api/v1/days/batch`.
+    ///
+    /// The reason a backlog goes this way rather than as a loop of single
+    /// uploads is not the round trips - it is that the agent learns about the
+    /// run as a whole. Each day is written in its own transaction there, so
+    /// one day the server will never accept does not hold back the rest
+    /// (ADR 0005).
+    ///
+    /// The error here covers the *request*: a batch that never arrived, or a
+    /// server that refused the whole shape of it. The fate of the days inside
+    /// a batch that did arrive is in [`BatchResult`], and has to be read per
+    /// day - a `200` here means the request was processed, not that every day
+    /// in it was stored.
+    pub async fn upload_batch(&self, token: &str, days: &[DayUpload]) -> Result<BatchResult, UploadError> {
+        let url = format!("{}/api/v1/days/batch", self.base_url);
+        let batch = BatchUpload { days: days.to_vec() };
+
+        let response = match self.client.post(&url).bearer_auth(token).json(&batch).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                return Err(UploadError::Retryable {
+                    message: format!("cannot reach kasl-server at {}: {}", self.base_url, error),
+                });
+            }
+        };
+
+        let status = response.status();
+        if status.is_success() {
+            return response.json::<BatchResult>().await.map_err(|error| UploadError::Rejected {
+                status,
+                message: format!("the server accepted the batch but answered unreadably: {}", error),
+            });
         }
+
+        // A batch too large for the server to take is refused whole with 413.
+        // It is a rejection of this request, not of the days: the caller
+        // splits the backlog and the same days go again in smaller groups.
+        let message = response.text().await.unwrap_or_default();
+        Err(classify_failure(status, describe_failure(status, &message)))
     }
 
     /// The base URL this client talks to, as stored.
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+}
+
+/// Sorts a failed status into "never going to work" and "try later".
+///
+/// The server's own rule, not a guess (ADR 0005): `4xx` will not be accepted
+/// as sent, `5xx` and `429` are worth repeating. `429` sits inside the `4xx`
+/// range and is the single exception to it.
+///
+/// Shared by both upload paths so the single day and the batch can never
+/// drift into disagreeing about which failures are worth a retry.
+fn classify_failure(status: StatusCode, message: String) -> UploadError {
+    if status == StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+        UploadError::Retryable { message }
+    } else {
+        UploadError::Rejected { status, message }
     }
 }
 

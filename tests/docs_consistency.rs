@@ -87,6 +87,50 @@ mod tests {
         }
     }
 
+    /// The subcommands `kasl <command> --help` lists.
+    fn shipped_subcommands(command: &str) -> Vec<String> {
+        let help = String::from_utf8(
+            std::process::Command::new(env!("CARGO_BIN_EXE_kasl"))
+                .args([command, "--help"])
+                .output()
+                .unwrap_or_else(|error| panic!("cannot run kasl {command} --help: {error}"))
+                .stdout,
+        )
+        .expect("help output is not utf-8");
+
+        help.lines()
+            .skip_while(|l| !l.starts_with("Commands:"))
+            .skip(1)
+            .take_while(|l| l.starts_with("  ") && !l.trim().is_empty())
+            .filter_map(|l| l.split_whitespace().next())
+            .filter(|name| *name != "help")
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[test]
+    fn every_shipped_subcommand_is_documented_on_its_page() {
+        // The coverage gate above only sees top-level commands, so a new
+        // `kasl server flush` could ship with nothing on the page and nothing
+        // complaining - the same gap that let `command-overview.md` go without
+        // `inbox`. A subcommand is documented where its parent lives, so that
+        // is where it is looked for.
+        for command in shipped_commands() {
+            let subcommands = shipped_subcommands(&command);
+            if subcommands.is_empty() {
+                continue;
+            }
+
+            let page = read(format!("{REFERENCE_DIR}/{command}.md"));
+            for subcommand in subcommands {
+                assert!(
+                    page.contains(&format!("{command} {subcommand}")),
+                    "`kasl {command} {subcommand}` ships but is not mentioned in {REFERENCE_DIR}/{command}.md"
+                );
+            }
+        }
+    }
+
     #[test]
     fn every_reference_page_documents_a_shipped_command() {
         // `breaks` kept its page for a while after the command became

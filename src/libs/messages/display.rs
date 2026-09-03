@@ -324,10 +324,51 @@ Run `kasl server connect` to connect again with a token your administrator issue
                     error
                 )
             }
+            Message::KaslServerDayQueued(date) => {
+                format!("{} is queued and will be sent with the next successful push.", date)
+            }
+            Message::KaslServerQueueEmpty => "Nothing is waiting to be sent.".to_string(),
+            Message::KaslServerQueueOwed(count) => match count {
+                1 => "1 day is waiting to be sent:".to_string(),
+                _ => format!("{} days are waiting to be sent:", count),
+            },
+            Message::KaslServerQueueEntry { date, attempts, last_error } => {
+                // The attempt count and the last reason are the answer to
+                // "why is this one still here", which is otherwise invisible.
+                let tried = match attempts {
+                    1 => "1 attempt".to_string(),
+                    _ => format!("{} attempts", attempts),
+                };
+                match last_error {
+                    Some(error) => format!("  {} - {}, last: {}", date, tried, error),
+                    None => format!("  {} - {}", date, tried),
+                }
+            }
+            Message::KaslServerQueueSending(count) => match count {
+                1 => "Sending 1 day...".to_string(),
+                _ => format!("Sending {} days...", count),
+            },
+            Message::KaslServerDayRefused { date, reason } => {
+                format!("{} was refused and has been dropped from the queue: {}", date, reason)
+            }
+            Message::KaslServerDayDeferred { date, reason } => {
+                format!("{} is still waiting: {}", date, reason)
+            }
+            Message::KaslServerFlushSummary { accepted, refused, deferred } => {
+                format!("{} sent, {} refused, {} still waiting", accepted, refused, deferred)
+            }
+            Message::KaslServerBackfillRange { from, to, days } => match days {
+                1 => format!("1 recorded day between {} and {}", from, to),
+                _ => format!("{} recorded days between {} and {}", days, from, to),
+            },
+            Message::KaslServerBackfillNoDays { from, to } => {
+                format!("No workdays recorded between {} and {} - nothing to send.", from, to)
+            }
+            Message::KaslServerBackfillOrderReversed => "The start of the range is after its end; swap --from and --to.".to_string(),
             Message::KaslServerPushRetryable(error) => {
                 format!(
                     "{}
-The day is unchanged here - try again when the server is back.",
+The day is unchanged here and stays queued - `kasl server flush` sends it when the server is back.",
                     error
                 )
             }

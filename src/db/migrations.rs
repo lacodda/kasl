@@ -346,6 +346,40 @@ impl MigrationManager {
             tx.execute("ALTER TABLE jira_inbox ADD COLUMN taken_at TIMESTAMP", [])?;
             Ok(())
         });
+
+        // Version 14: the outbox of days still owed to kasl-server.
+        //
+        // A row is a date, not a payload. The day is rebuilt from the local
+        // tables when it is finally sent, so a week spent offline delivers the
+        // day as it stands at delivery rather than as it stood when the
+        // network first failed - the employee's later correction is the one
+        // that lands, which is also the rule the server plays by (last upload
+        // wins, ADR 0004 in kasl-server).
+        //
+        // `date` is unique: owing a day twice is the same debt, and a queue
+        // that grew a row per failed attempt would send a week's retries as a
+        // week's worth of duplicate days.
+        //
+        // `last_error` and `attempts` are for the person, not the machine.
+        // Nothing branches on them; they answer "why is this still here" when
+        // a day refuses to leave, which is otherwise invisible.
+        self.add_migration(14, "add_server_outbox", |tx| {
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS server_outbox (
+                    id INTEGER PRIMARY KEY,
+                    date DATE NOT NULL UNIQUE,
+                    queued_at TIMESTAMP NOT NULL,
+                    attempts INTEGER NOT NULL DEFAULT 0,
+                    last_attempt_at TIMESTAMP,
+                    last_error TEXT
+                )",
+                [],
+            )?;
+            // Oldest first is the order the queue is drained in, and the only
+            // order it is ever read in.
+            tx.execute("CREATE INDEX IF NOT EXISTS idx_server_outbox_date ON server_outbox(date)", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

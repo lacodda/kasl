@@ -7,7 +7,7 @@
 //! different fix.
 
 use chrono::{DateTime, NaiveDate};
-use kasl::api::kasl_server::{DayUpload, KaslServer};
+use kasl::api::kasl_server::{DayResult, DayUpload, KaslServer};
 use kasl::libs::config::KaslServerConfig;
 use wiremock::matchers::{header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -422,4 +422,159 @@ async fn a_success_that_is_not_a_day_report_is_not_read_as_stored() {
 
     assert!(!error.is_retryable(), "an address answering for something else will not come good on a retry");
     assert!(error.to_string().contains("unreadably"), "unexpected error: {}", error);
+}
+
+/// A day for `date`, so a batch can carry several distinguishable ones.
+fn a_day_on(date: &str) -> DayUpload {
+    DayUpload {
+        date: NaiveDate::parse_from_str(date, "%Y-%m-%d").unwrap(),
+        started_at: DateTime::parse_from_rfc3339(&format!("{}T09:00:00-03:00", date)).unwrap(),
+        ended_at: Some(DateTime::parse_from_rfc3339(&format!("{}T18:00:00-03:00", date)).unwrap()),
+        pauses: vec![],
+        tasks: vec![],
+        tasks_are_complete: true,
+    }
+}
+
+#[tokio::test]
+async fn a_batch_reports_each_day_separately() {
+    let server = MockServer::start().await;
+    // The shape the server actually answers with: a per-day list, not one
+    // verdict for the request (ADR 0005 in kasl-server).
+    Mock::given(method("POST"))
+        .and(path("/api/v1/days/batch"))
+        .and(header("authorization", "Bearer token-kirill"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "accepted": 1,
+            "rejected": 1,
+            "results": [
+                {
+                    "status": "accepted",
+                    "workday_id": "0f7b6f0e-4f2f-4a3e-9a2c-6a2b1c3d4e5f",
+                    "date": "2026-08-30",
+                    "pauses": 2,
+                    "tasks": 3,
+                    "deleted_tasks": 0,
+                    "privacy_level": "full"
+                },
+                {
+                    "status": "rejected",
+                    "date": "2026-08-31",
+                    "error": "tasks[0]: name is empty"
+                }
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let result = client_for(&server)
+        .upload_batch("token-kirill", &[a_day_on("2026-08-30"), a_day_on("2026-08-31")])
+        .await
+        .unwrap();
+
+    assert_eq!(result.accepted, 1);
+    assert_eq!(result.rejected, 1);
+    assert_eq!(result.results.len(), 2);
+
+    match &result.results[0] {
+        DayResult::Accepted { day } => {
+            assert_eq!(day.date, NaiveDate::from_ymd_opt(2026, 8, 30).unwrap());
+            assert_eq!(day.tasks, 3);
+        }
+        other => panic!("the first day was accepted, not {:?}", other),
+    }
+
+    match &result.results[1] {
+        DayResult::Rejected { date, error } => {
+            assert_eq!(*date, NaiveDate::from_ymd_opt(2026, 8, 31).unwrap());
+            assert!(error.contains("name is empty"), "the reason should survive: {}", error);
+        }
+        other => panic!("the second day was rejected, not {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn a_batch_that_answers_200_with_rejections_is_not_read_as_success() {
+    let server = MockServer::start().await;
+    // The trap ADR 0005 names outright: the status describes the request,
+    // which was processed. A client reading only the status believes two days
+    // arrived and drops both from its queue.
+    Mock::given(method("POST"))
+        .and(path("/api/v1/days/batch"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "accepted": 0,
+            "rejected": 2,
+            "results": [
+                {"status": "rejected", "date": "2026-08-30", "error": "started_at has no offset"},
+                {"status": "rejected", "date": "2026-08-31", "error": "started_at has no offset"}
+            ]
+        })))
+        .mount(&server)
+        .await;
+
+    let result = client_for(&server)
+        .upload_batch("token-kirill", &[a_day_on("2026-08-30"), a_day_on("2026-08-31")])
+        .await
+        .expect("the request itself succeeded");
+
+    assert_eq!(result.accepted, 0, "the request was fine; the days were not");
+    assert!(
+        result.results.iter().all(|day| matches!(day, DayResult::Rejected { .. })),
+        "both days should read as rejected"
+    );
+}
+
+#[tokio::test]
+async fn a_batch_too_large_is_refused_without_a_retry() {
+    let server = MockServer::start().await;
+    // 413 past KASL_MAX_BATCH_DAYS. Retrying the identical request would get
+    // the same answer forever; the caller has to send fewer days.
+    Mock::given(method("POST"))
+        .and(path("/api/v1/days/batch"))
+        .respond_with(ResponseTemplate::new(413).set_body_json(serde_json::json!({
+            "error": "a batch carries at most 30 days; split the backlog"
+        })))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server).upload_batch("token-kirill", &[a_day()]).await.unwrap_err();
+
+    assert!(!error.is_retryable(), "the same oversized request will never be accepted");
+    assert!(error.to_string().contains("split the backlog"), "the fix should survive: {}", error);
+}
+
+#[tokio::test]
+async fn a_batch_meeting_a_server_error_keeps_every_day() {
+    let server = MockServer::start().await;
+    // The server aborts a batch it failed on rather than calling the days
+    // rejected, so this must read as "try later" - not as data to discard.
+    Mock::given(method("POST"))
+        .and(path("/api/v1/days/batch"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({"error": "database is unavailable"})))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server)
+        .upload_batch("token-kirill", &[a_day_on("2026-08-30"), a_day_on("2026-08-31")])
+        .await
+        .unwrap_err();
+
+    assert!(error.is_retryable(), "a server that failed on the batch is worth asking again");
+}
+
+#[tokio::test]
+async fn a_rate_limited_batch_is_worth_repeating() {
+    let server = MockServer::start().await;
+    // 429 sits inside the 4xx range and is the one exception to "4xx is
+    // final". Reading it by range alone would throw a backlog away for
+    // sending too fast.
+    Mock::given(method("POST"))
+        .and(path("/api/v1/days/batch"))
+        .respond_with(ResponseTemplate::new(429).set_body_json(serde_json::json!({"error": "too many requests"})))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server).upload_batch("token-kirill", &[a_day()]).await.unwrap_err();
+
+    assert!(error.is_retryable(), "a rate limit is a wait, not a refusal of the data");
 }
