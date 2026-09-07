@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.9.1] - 2026-09-07
+
+### Bug Fixes
+- Treat a failed Jira poll as an error, not an empty inbox
+- Keep the user PATH expandable on Windows
 ## [1.9.0] - 2026-09-03
 
 ### Bug Fixes
