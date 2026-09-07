@@ -82,10 +82,35 @@ try {
 Remove-Item (Join-Path $dir "kasl.bak") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $dir "ka.bak") -Force -ErrorAction SilentlyContinue
 
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if (($userPath -split ";") -notcontains $dir) {
-    [Environment]::SetEnvironmentVariable("Path", "$userPath;$dir", "User")
-    Write-Host "Added $dir to your user PATH - restart the terminal to pick it up."
+# Add the directory to the user PATH in the registry, keeping the value's
+# type. PATH is almost always REG_EXPAND_SZ, with entries like %JAVA_HOME%\bin
+# stored unexpanded; the .NET environment API rewrites it as a plain string
+# and silently breaks every such entry. So: read the raw value, compare
+# case-insensitively without a trailing slash, write it back as an expandable
+# string, and tell running shells about it. A PATH failure must not fail the
+# install.
+try {
+    $key = Get-Item "HKCU:\Environment"
+    $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+    $entries = @($raw -split ";" | Where-Object { $_ })
+    $wanted = $dir.TrimEnd("\")
+    $present = $entries | Where-Object { $_.TrimEnd("\") -ieq $wanted }
+    if (-not $present) {
+        $value = if ($entries.Count -gt 0) { ($entries + $wanted) -join ";" } else { $wanted }
+        Set-ItemProperty -Path "HKCU:\Environment" -Name Path -Value $value -Type ExpandString
+        if (-not ("KaslInstall.Env" -as [type])) {
+            Add-Type -Namespace KaslInstall -Name Env -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint Msg, System.UIntPtr wParam, string lParam, uint fuFlags, uint uTimeout, out System.UIntPtr lpdwResult);
+'@
+        }
+        $result = [System.UIntPtr]::Zero
+        # HWND_BROADCAST = 0xffff, WM_SETTINGCHANGE = 0x1A, SMTO_ABORTIFHUNG = 0x2
+        [KaslInstall.Env]::SendMessageTimeout([IntPtr]0xffff, 0x1A, [UIntPtr]::Zero, "Environment", 0x2, 5000, [ref]$result) | Out-Null
+        Write-Host "Added $dir to your user PATH - open a new terminal to pick it up."
+    }
+} catch {
+    Write-Host "Note: could not update the user PATH ($($_.Exception.Message)); add $dir to it yourself."
 }
 Write-Host "Installed kasl $tag to $dir\kasl.exe"
 
