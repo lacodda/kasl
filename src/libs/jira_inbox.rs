@@ -15,6 +15,20 @@ use anyhow::Result;
 use std::process::Command;
 use tracing::{debug, warn};
 
+/// Above this many toasts of one kind in a single poll, they collapse into
+/// one summary toast.
+///
+/// A first sync of two hundred open issues, or a Jira-side re-scoring of all
+/// of them, is one event, not two hundred; two hundred toasts teach the user
+/// to switch notifications off, after which the one toast that matters is
+/// never seen.
+pub const TOAST_STORM_THRESHOLD: usize = 5;
+
+/// Whether `count` toasts of one kind should become a single summary toast.
+pub fn toasts_collapse(count: usize) -> bool {
+    count > TOAST_STORM_THRESHOLD
+}
+
 /// Outcome of a single inbox sync pass.
 #[derive(Debug, Default)]
 pub struct SyncOutcome {
@@ -124,9 +138,15 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
     let mut notified = 0;
     if notify && !new_keys.is_empty() {
         let to_notify = db.list_unnotified_new(&new_keys)?;
-        for item in &to_notify {
-            if show_toast(item) {
+        if toasts_collapse(to_notify.len()) {
+            if show_summary_toast(jira, &format!("{} new issues", to_notify.len())) {
                 notified += 1;
+            }
+        } else {
+            for item in &to_notify {
+                if show_toast(item) {
+                    notified += 1;
+                }
             }
         }
         let keys: Vec<String> = to_notify.iter().map(|i| i.issue_key.clone()).collect();
@@ -134,21 +154,34 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
     }
 
     if notify && inbox_cfg.notify_changes {
-        for change in changed.iter().filter(|c| !c.dismissed) {
-            if let Ok(Some(item)) = db.get_by_key(&change.issue_key)
-                && show_change_toast(&item, &change.change)
-            {
+        let visible: Vec<&ChangedIssue> = changed.iter().filter(|c| !c.dismissed).collect();
+        if toasts_collapse(visible.len()) {
+            if show_summary_toast(jira, &format!("{} issues changed", visible.len())) {
                 notified += 1;
+            }
+        } else {
+            for change in visible {
+                if let Ok(Some(item)) = db.get_by_key(&change.issue_key)
+                    && show_change_toast(&item, &change.change)
+                {
+                    notified += 1;
+                }
             }
         }
     }
 
     if notify && inbox_cfg.notify_gone {
-        for key in &gone_keys {
-            if let Ok(Some(item)) = db.get_by_key(key)
-                && show_gone_toast(&item)
-            {
+        if toasts_collapse(gone_keys.len()) {
+            if show_summary_toast(jira, &format!("{} issues left the inbox", gone_keys.len())) {
                 notified += 1;
+            }
+        } else {
+            for key in &gone_keys {
+                if let Ok(Some(item)) = db.get_by_key(key)
+                    && show_gone_toast(&item)
+                {
+                    notified += 1;
+                }
             }
         }
     }
@@ -175,6 +208,11 @@ pub fn show_toast(item: &JiraInboxItem) -> bool {
 pub fn show_change_toast(item: &JiraInboxItem, change: &str) -> bool {
     let body = format!("{change} — {}", item.summary);
     show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+}
+
+/// Shows one toast standing in for many; clicking opens the open-issues list in Jira.
+pub fn show_summary_toast(jira: &Jira, what: &str) -> bool {
+    show_raw_toast("Jira inbox", &format!("{what} - see `kasl inbox`"), &jira.open_issues_url(), "inbox")
 }
 
 /// Shows a toast for an issue that left the inbox (closed or reassigned).

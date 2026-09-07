@@ -55,7 +55,9 @@ resolved, or reassigned to someone else - the next sync marks it `gone` and it
 drops off the plain list. It isn't deleted: `kasl inbox --all` still shows it,
 tagged `gone`, sorted below everything present. If it comes back later
 (reopened, reassigned back to you), the next poll clears the `gone` mark and
-it reappears in the normal list like nothing happened.
+it reappears in the normal list like nothing happened. A poll that fails
+(VPN down, Jira unreachable) is not "nothing came back": it changes nothing,
+so an overnight outage does not turn the whole inbox `gone` and then `back`.
 
 **You act on it.** Three ways, and they don't overlap:
 
@@ -121,6 +123,11 @@ kasl inbox open PROJ-412
 A third toast, off by default (`notify_gone: false`), fires when an issue
 leaves the inbox. Most people don't want to be interrupted for that; turn it
 on if you do want to know the moment something closes out from under you.
+
+Whatever the kind, more than five toasts in one poll become one: "12 new
+issues - see `kasl inbox`", clicking through to your open-issues list in
+Jira. A first sync of a long backlog or a mass re-scoring is one event, and
+gets one toast.
 
 ## A morning with the inbox
 

@@ -107,6 +107,8 @@ link outlives the summary it started with.
 
 Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled.
 
+A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. And when one poll would raise more than five toasts of a kind (a first sync of a long backlog, a Jira-side re-scoring), they collapse into a single summary toast that opens your open-issues list in Jira.
+
 ## Configuration
 
 Polling is enabled by adding the `jira_inbox` section to the config; the `jira` section must be configured as well.

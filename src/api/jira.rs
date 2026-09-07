@@ -342,15 +342,14 @@ impl Jira {
     /// through all matching issues (`startAt` / `total`). Extra field ids
     /// (custom fields such as Scoring) are included in the `fields` query.
     ///
-    /// Auth failures and network errors return an empty list (same pattern as
-    /// [`get_completed_issues`]) so callers can keep polling safely.
+    /// A poll that fails is an error, never an empty list. The caller
+    /// reconciles the inbox against whatever comes back, so an empty answer
+    /// for a dropped VPN would mark every issue gone - and the next good poll
+    /// would bring all of them "back", one change toast per issue.
     pub async fn get_assigned_open_issues(&mut self, extra_field_ids: &[String]) -> Result<Vec<JiraIssue>> {
         let mut local_retries = 0;
         loop {
-            let session_id = match self.get_session_id().await {
-                Ok(id) => id,
-                Err(_) => return Ok(Vec::new()),
-            };
+            let session_id = self.get_session_id().await?;
 
             match self.fetch_assigned_open_pages(&session_id, extra_field_ids).await {
                 Ok(issues) => return Ok(issues),
@@ -359,16 +358,18 @@ impl Jira {
                     local_retries += 1;
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
-                Err(_) => return Ok(Vec::new()),
+                Err(e) => return Err(e.into_poll_error()),
             }
         }
     }
 
     /// Like [`get_assigned_open_issues`], but never prompts for a password.
     ///
-    /// Uses a cached session cookie and/or encrypted `.jira_secret`. Returns
+    /// Uses a cached session cookie and/or the keyring secret. Returns
     /// `Ok(None)` when neither is available so background daemons can skip
-    /// the poll without blocking on stdin.
+    /// the poll without blocking on stdin. A poll that fails is an error, for
+    /// the same reason as in [`get_assigned_open_issues`]: the daemon must
+    /// skip the reconcile, not reconcile against nothing.
     pub async fn get_assigned_open_issues_noninteractive(&mut self, extra_field_ids: &[String]) -> Result<Option<Vec<JiraIssue>>> {
         let mut local_retries = 0;
         loop {
@@ -383,7 +384,7 @@ impl Jira {
                     local_retries += 1;
                     tokio::time::sleep(Duration::from_secs(1)).await;
                 }
-                Err(_) => return Ok(Some(Vec::new())),
+                Err(e) => return Err(e.into_poll_error()),
             }
         }
     }
@@ -464,6 +465,15 @@ impl Jira {
         }
     }
 
+    /// Builds the issue-navigator URL listing the user's open issues.
+    ///
+    /// Summary toasts point here: they speak for many issues at once, so no
+    /// single browse URL fits.
+    pub fn open_issues_url(&self) -> String {
+        let base = self.config.api_url.trim_end_matches('/');
+        format!("{base}/issues/?jql=assignee%20%3D%20currentUser()%20AND%20resolution%20is%20EMPTY")
+    }
+
     /// Builds a browse URL for an issue key using this client's API base.
     pub fn issue_browse_url(&self, key: &str) -> String {
         let base = self.config.api_url.trim_end_matches('/');
@@ -504,6 +514,18 @@ impl Jira {
 enum SearchPageError {
     Unauthorized,
     Other(String),
+}
+
+impl SearchPageError {
+    /// Names what went wrong with an inbox poll, and what fixes it.
+    fn into_poll_error(self) -> anyhow::Error {
+        match self {
+            SearchPageError::Unauthorized => {
+                anyhow::anyhow!("Jira rejected the session {MAX_RETRY_COUNT} times; run `kasl inbox sync` to sign in again")
+            }
+            SearchPageError::Other(msg) => anyhow::anyhow!("Jira inbox poll failed: {msg}"),
+        }
+    }
 }
 
 fn build_search_fields(extra_field_ids: &[String]) -> String {
