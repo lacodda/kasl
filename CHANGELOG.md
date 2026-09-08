@@ -2,6 +2,10 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.9.2] - 2026-09-08
+
+### Bug Fixes
+- Render each icon size at its level, largest first
 ## [1.9.1] - 2026-09-07
 
 ### Bug Fixes
