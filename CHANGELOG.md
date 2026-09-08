@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.10.0] - 2026-09-08
+
+### Documentation
+- Declare the i18n collection so every build stops warning
+
+### Features
+- Cut the list by age, change, score, priority and status
 ## [1.9.2] - 2026-09-08
 
 ### Bug Fixes
