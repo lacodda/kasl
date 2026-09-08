@@ -7,23 +7,29 @@ import path from "node:path";
 
 const ASSETS = "C:/Projects/kasl/assets";
 
-// The S tile (filled hex, bold code) is what reads at icon sizes.
+// The three levels of the mark. Which one a raster takes is decided by
+// `levelFor` below, never by habit: `tests/brand_assets.rs` reads the pixels
+// of what this script writes and fails the build when a size carries the
+// wrong level.
 const S = path.join(ASSETS, "logo-s.svg");
 const M = path.join(ASSETS, "logo-m.svg");
 const L = path.join(ASSETS, "logo.svg");
 const BANNER = path.join(ASSETS, "banner.svg");
 
-// Each .ico entry is rendered from the brand level designed for its size:
-// S (filled hex) up to 27px, M (code only) 28-63, L (code + metaphor) 64+.
-const ICO_SIZES = [
-  [16, S],
-  [24, S],
-  [32, M],
-  [48, M],
-  [64, L],
-  [128, L],
-  [256, L],
-];
+// Which level of the mark survives at which size - the line's rule, not a
+// preference: S ≤27px, M 28–63px, L ≥64px. Below 28px the outline and the
+// code collapse into noise, so the filled tile is all that reads; at 48px
+// and up there is room for the mark the product is known by.
+function levelFor(size) {
+  if (size <= 27) return S;
+  if (size <= 63) return M;
+  return L;
+}
+
+// Largest first. Windows picks by *closest size* and ignores order (see
+// "About Icons", Icon Display), but some readers take the first entry
+// verbatim - a 16px first entry is a titlebar stretched from sixteen pixels.
+const ICO_SIZES = [256, 128, 64, 48, 32, 24, 16];
 
 async function png(src, size, out) {
   await sharp(src, { density: 384 }).resize(size, size).png().toFile(out);
@@ -57,25 +63,27 @@ function buildIco(pngBuffers, sizes) {
 }
 
 const icoParts = [];
-for (const [size, src] of ICO_SIZES) {
-  icoParts.push(await sharp(src, { density: 384 }).resize(size, size).png().toBuffer());
+for (const size of ICO_SIZES) {
+  icoParts.push(await sharp(levelFor(size), { density: 384 }).resize(size, size).png().toBuffer());
 }
-fs.writeFileSync(
-  path.join(ASSETS, "icon.ico"),
-  buildIco(
-    icoParts,
-    ICO_SIZES.map(([size]) => size),
-  ),
-);
+fs.writeFileSync(path.join(ASSETS, "icon.ico"), buildIco(icoParts, ICO_SIZES));
 console.log("wrote icon.ico");
 
 // Favicon + docs logo.
+// The one documented exception to `levelFor`: a favicon is drawn into 16px
+// of browser tab whatever size the file is, and the outline does not survive
+// that. The canon names it explicitly, so it is spelled out here rather than
+// left looking like an oversight.
 await png(S, 32, path.join(ASSETS, "favicon-32.png"));
-await png(S, 180, path.join(ASSETS, "apple-touch-icon.png"));
-await png(L, 512, path.join(ASSETS, "logo-512.png"));
-// Toast appLogoOverride renders at 48 DIPs; 96px covers 200% scaling. M level.
-await png(M, 96, path.join(ASSETS, "toast-96.png"));
+await png(levelFor(180), 180, path.join(ASSETS, "apple-touch-icon.png"));
+await png(levelFor(512), 512, path.join(ASSETS, "logo-512.png"));
+// Toast appLogoOverride renders at 48 DIPs; 96px only covers 200% scaling,
+// so the level is the one for 48px (M), not for the file's pixel count.
+await png(levelFor(48), 96, path.join(ASSETS, "toast-96.png"));
 console.log("wrote pngs");
+
+// The docs site serves its own copy of the touch icon.
+fs.copyFileSync(path.join(ASSETS, "apple-touch-icon.png"), "C:/Projects/kasl/docs/public/apple-touch-icon.png");
 
 // GitHub social preview: 1280x640. Two adjustments to the banner: its plate
 // spans the full 720px while the artwork only fills the left ~570px (trim the
