@@ -199,8 +199,7 @@ impl Updater {
 
         let latest_version = tag.trim_start_matches('v').to_string();
 
-        // String comparison; adequate for this project's version scheme.
-        if latest_version > self.version {
+        if is_newer(&latest_version, &self.version) {
             // Asset names follow the release convention: {name}-{tag}-{platform}.tar.gz
             self.download_url = Some(format!(
                 "https://github.com/{}/{}/releases/download/{}/{}-{}-{}.tar.gz",
@@ -402,9 +401,94 @@ impl Updater {
     }
 }
 
+/// Compare `major.minor.patch` numerically. A version carrying a pre-release
+/// suffix loses to the same numbers without one, per semver.
+///
+/// This used to be a string comparison, "adequate for this project's version
+/// scheme" - until 1.10.0, which sorts below 1.9.2 as text. Every 1.9.x
+/// install went quiet at exactly the release it needed to see. turnout had
+/// fixed the same line months earlier; the fix did not travel.
+fn is_newer(candidate: &str, current: &str) -> bool {
+    match (parse_semver(candidate), parse_semver(current)) {
+        (Some(candidate), Some(current)) => candidate > current,
+        _ => false,
+    }
+}
+
+/// `(major, minor, patch, is_final)` - the flag makes `1.0.0` sort above `1.0.0-rc.1`.
+fn parse_semver(version: &str) -> Option<(u64, u64, u64, bool)> {
+    let core = version.split(['-', '+']).next()?;
+    let mut parts = core.split('.');
+    let major = parts.next()?.parse().ok()?;
+    let minor = parts.next()?.parse().ok()?;
+    let patch = parts.next()?.parse().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    Some((major, minor, patch, !version.contains('-')))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn newer_versions_win() {
+        assert!(is_newer("1.10.0", "1.9.2"));
+        assert!(is_newer("1.9.3", "1.9.2"));
+        assert!(is_newer("2.0.0", "1.99.99"));
+        assert!(!is_newer("1.9.2", "1.9.2"));
+        assert!(!is_newer("1.9.1", "1.9.2"));
+    }
+
+    /// Numbers are compared as numbers; the string comparison this replaced
+    /// ranked 1.10.0 below 1.9.2 and went quiet exactly when an update mattered.
+    #[test]
+    fn versions_compare_numerically() {
+        assert!(is_newer("1.10.0", "1.9.9"));
+        assert!(is_newer("1.9.10", "1.9.9"));
+        assert!(!is_newer("1.9.9", "1.10.0"));
+    }
+
+    #[test]
+    fn a_release_beats_its_own_prerelease() {
+        assert!(is_newer("2.0.0", "2.0.0-rc.1"));
+        assert!(!is_newer("2.0.0-rc.1", "2.0.0"));
+    }
+
+    /// Garbage on either side means "say nothing" rather than a wrong hint.
+    #[test]
+    fn unparsable_versions_never_announce() {
+        assert!(!is_newer("next", "1.9.2"));
+        assert!(!is_newer("1.10.0", "unknown"));
+        assert!(!is_newer("1.10.0.1", "1.9.2"));
+    }
+
+    /// The call site, not only the comparison: a redirect to a tag with a
+    /// larger minor must come back as an update, with its download URL.
+    #[tokio::test]
+    async fn a_later_minor_is_seen_as_an_update() {
+        let server = wiremock::MockServer::start().await;
+        wiremock::Mock::given(wiremock::matchers::method("GET"))
+            .and(wiremock::matchers::path("/releases/latest"))
+            .respond_with(wiremock::ResponseTemplate::new(302).insert_header("Location", "https://github.com/lacodda/kasl/releases/tag/v1.10.0"))
+            .mount(&server)
+            .await;
+        let dir = tempfile::tempdir().unwrap();
+        let mut updater = Updater {
+            client: Client::new(),
+            owner: "lacodda".to_string(),
+            name: "kasl".to_string(),
+            version: "1.9.2".to_string(),
+            latest_version: None,
+            download_url: None,
+            releases_url: format!("{}/releases/latest", server.uri()),
+            last_check_file: dir.path().join("last-check"),
+        };
+        assert!(updater.check_for_latest_release().await.unwrap(), "1.10.0 was not seen as newer than 1.9.2");
+        assert_eq!(updater.latest_version.as_deref(), Some("1.10.0"));
+        assert!(updater.download_url.unwrap().contains("/releases/download/v1.10.0/kasl-v1.10.0-"));
+    }
     use flate2::Compression;
     use flate2::write::GzEncoder;
     use tempfile::TempDir;

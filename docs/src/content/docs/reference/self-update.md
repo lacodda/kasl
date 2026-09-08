@@ -9,6 +9,10 @@ This command used to be called `update`. The old name still works and does the
 same thing, printing a notice that points here; it will be removed in 2.0.
 :::
 
+## Upgrading from a 1.9 build
+
+Builds before 1.10 compared version numbers as text, so they rank a 1.10 release below a 1.9 one and report "No update required" - exactly at the release they need. Reinstall once with the installer (`irm https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.ps1 | iex` on Windows, `curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh` elsewhere), `npm i -g kasl-cli` or `cargo install kasl-cli`; from then on `self-update` compares numbers.
+
 ## Usage
 
 ```bash
