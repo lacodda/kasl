@@ -134,8 +134,15 @@ gets one toast.
 Before diving into tasks, clear out what accumulated overnight:
 
 ```bash
-kasl inbox
+kasl inbox --new
 ```
+
+With two hundred open issues, the whole inbox is not a morning read - the
+cuts are. `--new` is what arrived since yesterday; `--changed 7d` is what
+moved this week; `--priority High+ --min-score 5` is what deserves a look
+regardless of age. They combine, and the header says how much of the whole
+you are looking at (`12 of 200 issues`). The same cuts narrow every picker,
+so `kasl inbox take --since 7d` offers this week's issues and nothing else.
 
 Work through the list: `take` what you're picking up today, `dismiss` what
 isn't yours to worry about right now, `pin` anything you want to keep visible

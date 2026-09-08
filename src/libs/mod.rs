@@ -26,6 +26,7 @@ pub mod day_delivery;
 pub mod day_upload;
 pub mod export;
 pub mod formatter;
+pub mod inbox_filter;
 pub mod jira_inbox;
 pub mod locale;
 pub mod messages;

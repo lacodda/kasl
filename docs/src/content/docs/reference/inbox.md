@@ -16,8 +16,22 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 
 ## Options
 
-- `-n, --limit <N>`: Show only the top N issues; the list is sorted by pin state, ranking field (e.g. Scoring), and priority
+- `-n, --limit <N>`: Show only the top N issues after filtering and sorting
 - `--all`: Include issues gone from Jira (closed or reassigned); they sort below the present ones
+
+### Filters
+
+An inbox of two hundred open issues is a pile, not a list. These cuts turn it into one; they combine (every set filter must hold) and apply to the bare `kasl inbox`, to `list`, and to every picker (`take`, `open`, `pin`, `unpin`, `dismiss` without a key), so a `take --since 7d` offers only this week's issues.
+
+- `--since <WINDOW>`: Only issues first seen within the window - `1d`, `7d`, `12h`, `2w`; a bare number is days
+- `--new`: Only issues discovered in the last day (the same window as the `NEW` badge)
+- `--changed <WINDOW>`: Only issues that visibly changed (status, priority, score) within the window; issues that never changed are out
+- `--min-score <N>`: Only issues whose ranking field (e.g. Scoring) is at least N; issues without a score are out
+- `--priority <NAME[+]>`: Only issues of that priority, named as your Jira names it; add `+` for that priority and everything more urgent (`High+`). An unknown name lists the ones the inbox knows
+- `--status <NAME>`: Only issues in that status, by name or id, regardless of case
+- `--sort <score|priority|new|changed>`: Order of the list; `score` is the inbox's own order (ranking field, then priority). Pinned issues lead and gone issues trail whatever the order
+
+A cut list says so in its header - `Jira inbox: 12 of 200 issues (since 7d, score ≥ 5):` - so a filtered view never reads as the whole inbox. When nothing matches, the message names the cuts and the size of the whole.
 
 ## Commands
 
@@ -42,57 +56,58 @@ kasl inbox list [OPTIONS]
 **Options:**
 - `-n, --limit <N>`: Show only the top N issues
 - `--all`: Include issues gone from Jira
+- The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--sort`
 
 The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `gone` outranks everything.
 
 ### `pin` - Pin an inbox issue
 
 ```bash
-kasl inbox pin [KEY]
+kasl inbox pin [KEY] [FILTERS]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
 Pinned issues stay on top of the list.
 
 ### `unpin` - Unpin an inbox issue
 
 ```bash
-kasl inbox unpin [KEY]
+kasl inbox unpin [KEY] [FILTERS]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
 ### `dismiss` - Dismiss an inbox issue
 
 ```bash
-kasl inbox dismiss [KEY]
+kasl inbox dismiss [KEY] [FILTERS]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
 Hides an issue from the list.
 
 ### `open` - Open issue URL in browser
 
 ```bash
-kasl inbox open [KEY]
+kasl inbox open [KEY] [FILTERS]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
 ### `take` - Start working on an issue
 
 ```bash
-kasl inbox take [KEY]
+kasl inbox take [KEY] [FILTERS]
 ```
 
 **Arguments:**
-- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox.
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
 Creates a task named `KEY summary` and records that the issue is in hand: the
 task stores the issue key, and the issue stays in the inbox wearing a `taken`
@@ -143,6 +158,15 @@ kasl inbox
 
 # Top five issues by ranking
 kasl inbox -n 5
+
+# This week's arrivals, most urgent first
+kasl inbox --since 7d --sort priority
+
+# What is worth a look: High or above, scoring at least 5
+kasl inbox --priority High+ --min-score 5
+
+# Pick something to start from what changed today
+kasl inbox take --changed 1d
 
 # Sync now and show the result
 kasl inbox sync

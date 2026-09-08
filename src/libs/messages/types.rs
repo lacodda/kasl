@@ -393,6 +393,17 @@ pub enum Message {
     JiraInboxRequiresJiraConfig,
     JiraInboxEmpty,
     JiraInboxListHeader,
+    /// A cut or truncated list: how many shown of how many active, and the cuts in words.
+    JiraInboxListSliced {
+        shown: usize,
+        total: usize,
+        what: String,
+    },
+    /// The cuts left nothing; `total` is the whole inbox, so the user knows the list is not empty.
+    JiraInboxNoMatch {
+        total: usize,
+        what: String,
+    },
     JiraInboxSynced {
         fetched: usize,
         new_count: usize,

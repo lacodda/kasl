@@ -479,6 +479,14 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl setup` and select Jira.".to_string(),
             Message::JiraInboxEmpty => "Jira inbox is empty.".to_string(),
             Message::JiraInboxListHeader => "Jira inbox:".to_string(),
+            Message::JiraInboxListSliced { shown, total, what } => {
+                if what.is_empty() {
+                    format!("Jira inbox: {} of {} issues:", shown, total)
+                } else {
+                    format!("Jira inbox: {} of {} issues ({}):", shown, total, what)
+                }
+            }
+            Message::JiraInboxNoMatch { total, what } => format!("No issue matches ({}); {} in the inbox.", what, total),
             Message::JiraInboxSynced {
                 fetched,
                 new_count,
