@@ -235,6 +235,43 @@ Sent 2026-08-03 to the server: 2 pauses, 4 tasks
 
 Only dates that actually have a workday are queued, so weekends and leave inside the range are skipped rather than queued as days that can never be sent. The days are queued before they are sent, so a run interrupted halfway leaves the rest owed rather than forgotten - running it again, or `flush`, continues where it stopped.
 
+## Which server this agent needs
+
+kasl and kasl-server ship on their own schedules, so the version of the server
+on the other end is not something this machine chooses. Each subcommand below
+names the endpoint it calls and the server version that first answered it.
+
+| From kasl | Subcommands | Endpoint | Needs kasl-server |
+| --- | --- | --- | --- |
+| v1.7.0 | `connect`, `status`, `disconnect` | `GET /health`, `GET /api/v1/agent/whoami` | **0.14.1** |
+| v1.8.0 | `push` | `POST /api/v1/days` | **0.14.1** |
+| v1.9.0 | `queue`, `flush`, `backfill` | `POST /api/v1/days/batch` | **0.14.1** |
+
+The floor is the same for all of them, and `whoami` is what sets it. The server
+has accepted uploads since 0.3.0 and backlogs since 0.4.0, but `connect` asks
+whose token it is holding before it stores anything, and 0.14.1 is where that
+question could first be answered. A server older than that cannot be connected
+to at all, which is the honest outcome: the alternative would be filing this
+machine's days under a name nobody checked.
+
+### On a server that is too old
+
+`connect` reports the refusal and stores nothing. The server answers an unknown
+`/api` path with `{"error":"no such endpoint"}` and `404`, so the failure names
+the endpoint rather than arriving as a hang or as HTML read back as success.
+
+A `404` counts as a rejection, not a temporary fault, so days are not queued
+against a server that will never take them - see [when a push
+fails](#when-a-push-fails).
+
+### On a newer server
+
+Always safe. `/api/v1` keeps its meaning for as long as agents call it; a change
+that would alter it arrives as `/api/v2` with a migration written for agents.
+Everything the server has grown since - departments, the audit log, signals, the
+month heatmap - is read by people in its web UI and changes nothing this agent
+sends.
+
 ## `kasl server disconnect`
 
 ```bash
