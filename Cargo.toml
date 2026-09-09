@@ -139,8 +139,13 @@ winapi = { version = "0.3", features = [
 
 # Development dependencies for testing
 [dev-dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png"] }
 serial_test = "4.0.1"
 tempfile = "3.27.0"    # Temporary files for tests
 test-context = "0.5.8" # Test setup/teardown utilities
 wiremock = "0.6.5"
-image = { version = "0.25.10", default-features = false, features = ["png"] }
+
+# Line-table debug info keeps backtraces readable while cutting the .pdb weight
+# that dominates target/debug. Full debug info is a one-line revert when needed.
+[profile.dev]
+debug = 1
