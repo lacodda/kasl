@@ -100,7 +100,7 @@ Monthly work productivity: 95.4%
 ## What you get
 
 - **A workday that records itself.** The daemon starts the day on sustained activity rather than the first stray keypress, and closes pauses when you come back. Brief interruptions and real absences count differently, so the productivity figure means something.
-- **Tasks you do not have to remember.** Today's GitLab commits and resolved Jira issues are offered as candidates and deduplicated against what you already logged. A Jira inbox polls assigned issues in the background, raises a desktop notification when something new lands on you or an issue changes, and drops issues that were closed or reassigned instead of letting the list go stale. Taking one into your tasks keeps the link: the task remembers the issue, and the issue shows as taken rather than vanishing. Two hundred open issues cut down to a list by age, change, score, priority or status - the same cuts narrow every picker.
+- **Tasks you do not have to remember.** Today's GitLab commits and resolved Jira issues are offered as candidates and deduplicated against what you already logged. A Jira inbox polls assigned issues in the background, raises a desktop notification when something new lands on you or an issue changes, and drops issues that were closed or reassigned instead of letting the list go stale. Taking one into your tasks keeps the link: the task remembers the issue, and the issue shows as taken rather than vanishing. Two hundred open issues cut down to a list by age, change, score, priority or status - the same cuts narrow every picker, and `kasl inbox triage` walks the slice issue by issue so the whole pile is decided in one sitting. Not everything is a yes or a no: snoozing puts an issue down until a date and brings it back by itself, whether or not Jira is reachable.
 - **Honest numbers.** kasl records absences; it does not invent them. When a day falls below your reporting threshold it says so - and if the cause is a break the monitor missed, you add that break with its real time.
 - **Reports where they need to go.** One command submits the day, or the month, to your corporate API. Exports to CSV, JSON and Excel, including the hourly breakdown that time sheets tend to ask for.
 - **Passwords in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing is encrypted with a key that ships inside the binary. API tokens, which are not prompted for, stay in the config file.
@@ -160,7 +160,7 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 Everything above works today, on Windows, macOS and Linux. What is next:
 
-- [ ] **Finishing the inbox loop** - triage in one pass, snooze with a return date, and toasts you can act on without opening a terminal
+- [ ] **Toasts you can act on** - take, snooze or dismiss an issue straight from the notification, without opening a terminal
 - [ ] **Scriptable output** - `--json` and `NO_COLOR`/`--plain`, then `kasl status` for status bars and `kasl standup` for a markdown summary
 - [ ] **Doctor and notifications** - `kasl doctor` with `--fix`, a nudge when a break is due or the day is still open, quiet hours
 - [ ] **Smarter time** - overnight tracking and a configurable day boundary, so work past midnight belongs to the right day

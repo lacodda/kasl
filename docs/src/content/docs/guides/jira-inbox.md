@@ -59,22 +59,46 @@ it reappears in the normal list like nothing happened. A poll that fails
 (VPN down, Jira unreachable) is not "nothing came back": it changes nothing,
 so an overnight outage does not turn the whole inbox `gone` and then `back`.
 
-**You act on it.** Three ways, and they don't overlap:
+**You act on it.** Four ways, and they don't overlap:
 
 ```bash
-kasl inbox pin PROJ-412       # keep it at the top while you decide
-kasl inbox dismiss PROJ-412   # not now - stop showing it
-kasl inbox take PROJ-412      # turn it into a task
+kasl inbox pin PROJ-412        # keep it at the top while you decide
+kasl inbox take PROJ-412       # turn it into a task
+kasl inbox snooze PROJ-412 3d  # not now - put it down until Thursday
+kasl inbox dismiss PROJ-412    # not mine - stop showing it for good
 ```
 
 `take` creates a local task named `PROJ-412 <summary>` and marks the issue as
 taken. The issue **stays** in the inbox, wearing a `taken` badge: what you have
-picked up is as much a part of the picture as what you have not. Only
-`dismiss` removes an issue from the list.
+picked up is as much a part of the picture as what you have not.
+
+`snooze` and `dismiss` are both ways out of the list, and the difference is
+whether the issue comes back. Dismissal means "never" and is right for an
+issue that is not yours. Snoozing means "not now": the issue leaves the list,
+stops counting among what is waiting, and returns by itself when its time is
+up, with a toast and a `back` badge. The due date is local, so an issue
+deferred to Monday returns on Monday whether or not Jira is reachable.
+`kasl inbox --snoozed` shows what is asleep, and `unsnooze` wakes one early.
 
 The task stores the issue key, so the two stay connected even after you rename
 the task to something that reads better. Taking the same issue twice does not
 create a second task - the command tells you which task it already became.
+
+## Clearing the pile
+
+One issue at a time is right when one issue arrives. When the inbox has drifted
+into two hundred, `kasl inbox triage` walks them and asks about each in turn -
+take, snooze, dismiss, open to look first, skip, or quit - so the pile is
+decided in one sitting instead of two hundred commands. The filters apply, so
+you can triage just the part worth deciding now:
+
+```bash
+kasl inbox triage --since 7d --min-score 5 --snooze-for 3d
+```
+
+When you wonder why an issue sits where it does, `kasl inbox show PROJ-412
+--why` says what its place is made of - which Jira field the score came from,
+what the priority rank is, and what pinning, sleeping or taking did to it.
 
 ## Sort order
 

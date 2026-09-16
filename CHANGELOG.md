@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.11.0] - 2026-09-16
+
+### Bug Fixes
+- Let a compatibility table keep the versions it is about
+- Refuse to close a day that was never started
+
+### Documentation
+- Point the installer at an existing install directory
+- Say which server version this agent needs
+
+### Features
+- Snooze an issue until a moment passes
+- Show one issue, and why it sits where it does
+- Triage the whole pile in one sitting
 ## [1.10.1] - 2026-09-08
 
 ### Bug Fixes
