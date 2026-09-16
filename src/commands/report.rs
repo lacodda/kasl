@@ -219,8 +219,12 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
     let mut workdays_db = Workdays::new()?;
 
-    // Finalize the workday by recording end time
-    workdays_db.insert_end(naive_date)?;
+    // Finalize the workday by recording end time. A day that was never
+    // started cannot be sent, and saying so here beats the fetch below
+    // failing with "could not find after finalizing".
+    if !workdays_db.insert_end(naive_date)? {
+        return Err(msg_error_anyhow!(Message::WorkdayNeverStarted(naive_date.to_string())));
+    }
 
     // Load the finalized workday data
     let workday = workdays_db

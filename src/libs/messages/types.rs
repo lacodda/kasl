@@ -76,6 +76,8 @@ pub enum Message {
 
     // === WORKDAY MESSAGES ===
     WorkdayEnded,
+    /// `end` was asked to close a day that was never opened.
+    WorkdayNeverStarted(String), // date
     WorkdayNotFoundForDate(String),
     WorkdayCreateFailed,
     WorkdayStarting(String),                    // date

@@ -9,7 +9,7 @@
 //! let today = Local::now().date_naive();
 //!
 //! workdays.insert_start(today)?;
-//! workdays.insert_end(today)?;
+//! workdays.insert_end(today)?; // false when the day was never started
 //! # Ok(())
 //! # }
 //! ```
@@ -97,9 +97,11 @@ impl Workdays {
 
     /// Stamps the current time as the day's end; calling again re-stamps.
     ///
-    /// Known gap: when no workday exists for the date, the UPDATE matches
-    /// nothing and this still returns `Ok` - `kasl end` then reports success
-    /// without having written anything (tracked for the doctor stage).
+    /// Returns whether a day was there to close. The UPDATE matches no row
+    /// when the date has no workday, and for a long time that came back as
+    /// plain `Ok` - so `kasl end` announced a day it had not written. The
+    /// answer belongs in the return value rather than in the data: ending an
+    /// unstarted day must still create nothing.
     ///
     /// ```rust,no_run
     /// # use kasl::db::workdays::Workdays;
@@ -110,14 +112,13 @@ impl Workdays {
     /// let today = Local::now().date_naive();
     ///
     /// workdays.insert_start(today)?;
-    /// workdays.insert_end(today)?;
+    /// assert!(workdays.insert_end(today)?);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn insert_end(&mut self, date: NaiveDate) -> Result<()> {
+    pub fn insert_end(&mut self, date: NaiveDate) -> Result<bool> {
         let date_str = date.format("%Y-%m-%d").to_string();
-        self.conn.execute(UPDATE_END, [&date_str])?;
-        Ok(())
+        Ok(self.conn.execute(UPDATE_END, [&date_str])? > 0)
     }
 
     /// Fetches the workday for a date, or `None` if the date has none.

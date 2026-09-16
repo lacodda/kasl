@@ -27,7 +27,7 @@ pub mod template;
 pub mod update;
 pub mod watch;
 
-use crate::{db::workdays::Workdays, libs::messages::types::Message, msg_info, msg_warning};
+use crate::{db::workdays::Workdays, libs::messages::types::Message, msg_error_anyhow, msg_info, msg_warning};
 use anyhow::Result;
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -210,8 +210,14 @@ impl Cli {
             }
             Commands::Task(args) => task::cmd(args).await,
             Commands::End => {
-                // Manually end the current workday
-                Workdays::new()?.insert_end(Local::now().date_naive())?;
+                // Manually end the current workday. A day that was never
+                // opened is a refusal, not a success: saying "ended" over an
+                // empty database taught users to trust a stamp that is not
+                // there.
+                let today = Local::now().date_naive();
+                if !Workdays::new()?.insert_end(today)? {
+                    return Err(msg_error_anyhow!(Message::WorkdayNeverStarted(today.to_string())));
+                }
                 msg_info!(Message::WorkdayEnded);
                 Ok(())
             }

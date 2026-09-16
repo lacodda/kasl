@@ -33,17 +33,20 @@ pauses are untouched - only the closing timestamp is written.
 Running it again overwrites the timestamp with the new current time, so a day
 closed too early can be closed again later.
 
-:::caution[No workday, no record]
-The command updates an existing workday. If no workday was ever started for
-today - the watcher never ran and nothing was recorded - there is nothing to
-update, and `end` still reports success without writing anything. Check with
-`kasl report` if you are unsure whether the day exists.
-:::
+The command closes a day that exists; it never opens one. If nothing was
+recorded for today - the watcher never ran - there is no day to close, and
+`end` says so and fails rather than reporting a stamp it did not write.
 
 ## Sample Output
 
 ```
 ℹ️ Workday ended for today.
+```
+
+With no workday for today:
+
+```
+❌ No workday was started on 2026-01-15, so there is nothing to end. `kasl watch` opens the day, and `kasl report` shows what is recorded.
 ```
 
 ## Examples

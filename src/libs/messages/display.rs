@@ -101,6 +101,12 @@ impl Display for Message {
 
             // === WORKDAY MESSAGES ===
             Message::WorkdayEnded => "Workday ended for today.".to_string(),
+            Message::WorkdayNeverStarted(date) => {
+                format!(
+                    "No workday was started on {}, so there is nothing to end. `kasl watch` opens the day, and `kasl report` shows what is recorded.",
+                    date
+                )
+            }
             Message::WorkdayNotFoundForDate(date) => format!("No workday record found for {}", date),
             Message::WorkdayCreateFailed => "Failed to create workday".to_string(),
             Message::WorkdayStarting(date) => format!("Starting workday for {}", date),
