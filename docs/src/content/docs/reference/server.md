@@ -241,6 +241,8 @@ kasl and kasl-server ship on their own schedules, so the version of the server
 on the other end is not something this machine chooses. Each subcommand below
 names the endpoint it calls and the server version that first answered it.
 
+<!-- historical versions -->
+
 | From kasl | Subcommands | Endpoint | Needs kasl-server |
 | --- | --- | --- | --- |
 | v1.7.0 | `connect`, `status`, `disconnect` | `GET /health`, `GET /api/v1/agent/whoami` | **0.14.1** |
@@ -253,6 +255,8 @@ whose token it is holding before it stores anything, and 0.14.1 is where that
 question could first be answered. A server older than that cannot be connected
 to at all, which is the honest outcome: the alternative would be filing this
 machine's days under a name nobody checked.
+
+<!-- /historical versions -->
 
 ### On a server that is too old
 

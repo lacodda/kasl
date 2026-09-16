@@ -214,6 +214,22 @@ mod tests {
         );
     }
 
+    /// Opens a block where fixed release numbers are the content, not an
+    /// example: which release first answered an endpoint is history, and
+    /// rewriting it to vX.Y.Z would delete the fact the block carries.
+    ///
+    /// The author closes the block with [`HISTORICAL_VERSIONS_END`] rather
+    /// than the check guessing its extent from the shape of the lines. An
+    /// exemption that ended itself at the next heading would silently cover
+    /// the paragraphs after the table - and one that ended at the first
+    /// paragraph would refuse the sentence explaining the table. Both were
+    /// tried here; only a stated end is right at both edges, and it leaves
+    /// the exemption visible in the page.
+    const HISTORICAL_VERSIONS_MARKER: &str = "<!-- historical versions -->";
+
+    /// Closes a [`HISTORICAL_VERSIONS_MARKER`] block.
+    const HISTORICAL_VERSIONS_END: &str = "<!-- /historical versions -->";
+
     #[test]
     fn no_page_pins_a_release_version() {
         // Release numbers written into prose go stale on the next tag and
@@ -222,6 +238,13 @@ mod tests {
         // users to "set KASL_VERSION to a tag like v1.4.0" long after 1.4.0
         // stopped being the newest. Examples use the shape (vX.Y.Z), not a
         // number; the real version belongs in Cargo.toml alone.
+        //
+        // One kind of version does not rot: the release that first did a
+        // thing. A compatibility table saying `push` needs server 0.14.1 is
+        // stating history, and rewriting it to vX.Y.Z would delete the fact
+        // the table exists to carry. Such a block opens with the marker below
+        // and runs to the next heading, so the exemption is narrow, visible in
+        // the page, and cannot quietly spread to the prose around it.
         let mut files: Vec<PathBuf> = walk_markdown(&repo_root().join("docs/src/content/docs"));
         files.push(repo_root().join("README.md"));
         files.push(repo_root().join("tools/install.sh"));
@@ -230,7 +253,19 @@ mod tests {
         for path in files {
             let text = fs::read_to_string(&path).expect("cannot read a documented file");
             let relative = path.strip_prefix(repo_root()).unwrap_or(&path).display().to_string();
+            let mut historical = false;
             for (line_no, line) in text.lines().enumerate() {
+                // The marker opens an exempt block; the next heading closes it.
+                if line.trim() == HISTORICAL_VERSIONS_MARKER {
+                    historical = true;
+                    continue;
+                }
+                if historical {
+                    if line.trim() == HISTORICAL_VERSIONS_END {
+                        historical = false;
+                    }
+                    continue;
+                }
                 // A release version: v?N.N.N. Dependency pins and dates do not
                 // live in these files, so any such triple is a release number.
                 let mut chars = line.char_indices().peekable();
@@ -247,7 +282,7 @@ mod tests {
                     let parts: Vec<&str> = digits_dots.split('.').collect();
                     if parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit())) {
                         panic!(
-                            "{relative}:{} pins the release version {digits_dots}; use the vX.Y.Z shape instead",
+                            "{relative}:{} pins the release version {digits_dots}; use the vX.Y.Z shape instead, or open a compatibility table with `{HISTORICAL_VERSIONS_MARKER}` when the number is history",
                             line_no + 1
                         );
                     }
@@ -257,6 +292,12 @@ mod tests {
                     }
                 }
             }
+            // An unclosed block would exempt everything after it, which is the
+            // quiet default this check exists to refuse.
+            assert!(
+                !historical,
+                "{relative} opens a compatibility block and never closes it with `{HISTORICAL_VERSIONS_END}`"
+            );
         }
     }
 
