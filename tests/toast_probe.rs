@@ -28,6 +28,8 @@ fn toast_shows_with_logo() {
         last_change: None,
         changed_at: None,
         taken_at: None,
+        snoozed_until: None,
+        woke_at: None,
     };
     assert!(kasl::libs::jira_inbox::show_toast(&item));
 }

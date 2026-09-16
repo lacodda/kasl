@@ -506,6 +506,12 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::JiraInboxPinned(key) => format!("Pinned {}.", key),
             Message::JiraInboxUnpinned(key) => format!("Unpinned {}.", key),
             Message::JiraInboxDismissed(key) => format!("Dismissed {}.", key),
+            Message::JiraInboxSnoozed(key, until) => format!("Snoozed {} until {}.", key, until),
+            Message::JiraInboxUnsnoozed(key) => format!("Woke {}.", key),
+            Message::JiraInboxAllSnoozed(count) => {
+                format!("Jira inbox is clear; {} issue(s) are snoozed. `kasl inbox --snoozed` shows them.", count)
+            }
+            Message::JiraInboxWoke(count) => format!("Jira inbox: {} snoozed issue(s) came back.", count),
             Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
             Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
             Message::JiraInboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),

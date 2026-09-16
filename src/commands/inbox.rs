@@ -31,6 +31,10 @@ pub struct InboxArgs {
     #[arg(long)]
     all: bool,
 
+    /// Include issues that are still asleep, with the date they are due back
+    #[arg(long)]
+    snoozed: bool,
+
     #[command(flatten)]
     filter: FilterArgs,
 }
@@ -168,6 +172,10 @@ enum InboxCommand {
         #[arg(long)]
         all: bool,
 
+        /// Include issues that are still asleep, with the date they are due back
+        #[arg(long)]
+        snoozed: bool,
+
         #[command(flatten)]
         filter: FilterArgs,
     },
@@ -216,6 +224,29 @@ enum InboxCommand {
         filter: FilterArgs,
     },
 
+    /// Put an issue to sleep until a moment passes
+    #[command(about = "Snooze an inbox issue")]
+    Snooze {
+        /// Issue key, e.g. PROJ-123; omit to pick from the inbox
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+
+        /// How long to sleep: 3d, 12h, 2w (default 1d)
+        #[arg(value_name = "FOR")]
+        duration: Option<String>,
+
+        #[command(flatten)]
+        filter: FilterArgs,
+    },
+
+    /// Wake a sleeping issue now
+    #[command(about = "Wake a snoozed inbox issue")]
+    Unsnooze {
+        /// Issue key, e.g. PROJ-123; omit to pick from the sleeping ones
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+    },
+
     /// Import an issue into local tasks
     #[command(about = "Import issue into tasks")]
     Take {
@@ -244,21 +275,26 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
             }
             Ok(())
         }
-        Some(InboxCommand::List { limit, all, filter }) => list_inbox(limit.or(args.limit), all || args.all, &filter.or(top)),
+        Some(InboxCommand::List { limit, all, snoozed, filter }) => list_inbox(limit.or(args.limit), all || args.all, snoozed || args.snoozed, &filter.or(top)),
         Some(InboxCommand::Pin { key, filter }) => set_pinned(&resolve_key(key, "Pin which issue?", false, &filter.or(top))?, true),
         Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
         Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
+        Some(InboxCommand::Snooze { key, duration, filter }) => {
+            let key = resolve_key(key, "Snooze which issue?", false, &filter.or(top))?;
+            snooze(&key, duration.as_deref())
+        }
+        Some(InboxCommand::Unsnooze { key }) => unsnooze(key),
         Some(InboxCommand::Take { key, filter }) => take_issue(&resolve_key(key, "Take which issue?", false, &filter.or(top))?),
         // Bare `kasl inbox` shows the list, as it always has.
-        None => list_inbox(args.limit, args.all, &top),
+        None => list_inbox(args.limit, args.all, args.snoozed, &top),
     }
 }
 
 /// The active issues, cut and ordered as asked. Returns the slice and the
 /// size of the whole, so a cut list never reads as the whole inbox.
-fn sliced(include_gone: bool, args: &FilterArgs) -> Result<(Vec<JiraInboxItem>, usize)> {
-    let items = JiraInbox::new()?.list_active(include_gone)?;
+fn sliced(include_gone: bool, include_snoozed: bool, args: &FilterArgs) -> Result<(Vec<JiraInboxItem>, usize)> {
+    let items = JiraInbox::new()?.list_active_at(include_gone, include_snoozed)?;
     let total = items.len();
     let filter = args.to_filter(&items)?;
     let mut items = filter.apply(items, Local::now().naive_local());
@@ -276,7 +312,7 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
     if let Some(key) = key {
         return Ok(key);
     }
-    let (items, total) = sliced(false, filter)?;
+    let (items, total) = sliced(false, false, filter)?;
     if items.is_empty() && total > 0 {
         bail!("no issue matches the filter ({}) - {total} in the inbox", filter.describe().join(", "));
     }
@@ -290,10 +326,17 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
     pick::inbox_issue(&items, prompt)
 }
 
-fn list_inbox(limit: Option<usize>, include_gone: bool, filter: &FilterArgs) -> Result<()> {
-    let (mut items, total) = sliced(include_gone, filter)?;
+fn list_inbox(limit: Option<usize>, include_gone: bool, include_snoozed: bool, filter: &FilterArgs) -> Result<()> {
+    let (mut items, total) = sliced(include_gone, include_snoozed, filter)?;
     if total == 0 {
-        msg_info!(Message::JiraInboxEmpty);
+        // "Empty" over an inbox that is only asleep would read as nothing to
+        // do, when in fact everything in it is coming back.
+        let asleep = if include_snoozed { 0 } else { JiraInbox::new()?.count_snoozed()? };
+        if asleep > 0 {
+            msg_info!(Message::JiraInboxAllSnoozed(asleep));
+        } else {
+            msg_info!(Message::JiraInboxEmpty);
+        }
         return Ok(());
     }
     let cuts = filter.describe();
@@ -356,6 +399,53 @@ fn open_issue(key: &str) -> Result<()> {
         Ok(()) => msg_success!(Message::JiraInboxOpened(key.to_string())),
         Err(e) => msg_error!(Message::JiraInboxOpenFailed(e.to_string())),
     }
+    Ok(())
+}
+
+/// Puts an issue to sleep for a while.
+///
+/// The default is a day: the common case is "not today", and a snooze that
+/// demanded a duration every time would be slower than reading past the row.
+fn snooze(key: &str, duration: Option<&str>) -> Result<()> {
+    let window = inbox_filter::parse_window(duration.unwrap_or("1d"))?;
+    let until = Local::now().naive_local() + window;
+
+    let db = JiraInbox::new()?;
+    if !db.set_snoozed(key, Some(until))? {
+        msg_error!(Message::JiraInboxNotFound(key.to_string()));
+        return Ok(());
+    }
+    msg_success!(Message::JiraInboxSnoozed(key.to_string(), until.format("%b %-d %H:%M").to_string()));
+    Ok(())
+}
+
+/// Wakes a sleeping issue before its time.
+///
+/// The picker offers only sleeping issues: waking an awake one does nothing,
+/// and offering it would be offering work with no effect.
+fn unsnooze(key: Option<String>) -> Result<()> {
+    let db = JiraInbox::new()?;
+    let key = match key {
+        Some(key) => key,
+        None => {
+            let now = Local::now().naive_local();
+            let asleep: Vec<JiraInboxItem> = db
+                .list_active_at(false, true)?
+                .into_iter()
+                .filter(|i| i.snoozed_until.is_some_and(|until| until > now))
+                .collect();
+            if asleep.is_empty() {
+                bail!("no issues are asleep - `kasl inbox snooze KEY 3d` puts one to sleep");
+            }
+            pick::inbox_issue(&asleep, "Wake which issue?")?
+        }
+    };
+
+    if !db.set_snoozed(&key, None)? {
+        msg_error!(Message::JiraInboxNotFound(key.clone()));
+        return Ok(());
+    }
+    msg_success!(Message::JiraInboxUnsnoozed(key));
     Ok(())
 }
 

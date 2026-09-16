@@ -43,6 +43,14 @@ pub struct JiraInboxItem {
     /// A taken issue stays in the list - the point is to see what is in hand,
     /// not to hide it. Dismissal remains separate and still means "not mine".
     pub taken_at: Option<NaiveDateTime>,
+    /// When a snoozed issue is due back, if it is asleep.
+    ///
+    /// Dismissal says "never"; this says "not now". A sleeping issue is out
+    /// of the list until the moment passes, then it is in it again - which is
+    /// the whole point, and why the date is stored rather than a flag.
+    pub snoozed_until: Option<NaiveDateTime>,
+    /// When a snooze last ran out, so the return is announced once.
+    pub woke_at: Option<NaiveDateTime>,
 }
 
 /// What the inbox holds right now, for the daily report line.
@@ -74,10 +82,24 @@ impl JiraInboxItem {
         if self.gone_at.is_some() {
             return Some("gone".to_string());
         }
+        // Only `--snoozed` shows a sleeping issue at all, and when it does,
+        // when it is due is the only thing worth saying about it.
+        if let Some(until) = self.snoozed_until
+            && until > now
+        {
+            return Some(format!("zzz {}", until.format("%b %-d")));
+        }
         // Taken outranks NEW and change badges: once an issue is in hand, that
         // is the fact worth seeing, and it does not fade with time.
         if self.taken_at.is_some() {
             return Some("taken".to_string());
+        }
+        // A snooze that just ran out is why the issue is back in the list;
+        // without saying so it reads as an issue that was never away.
+        if let Some(woke) = self.woke_at
+            && fresh(woke)
+        {
+            return Some("back".to_string());
         }
         if fresh(self.first_seen) {
             return Some("NEW".to_string());
@@ -261,20 +283,38 @@ impl JiraInbox {
         Ok(newly_gone)
     }
 
-    /// Active (non-dismissed) items: pinned, then sort_value DESC, then priority.
+    /// Active (non-dismissed, awake) items: pinned, then sort_value DESC, then priority.
     ///
     /// Gone issues are hidden unless `include_gone` is set (`--all`), in which
-    /// case they sort below the present ones.
+    /// case they sort below the present ones. Sleeping issues are hidden the
+    /// same way: a snooze that still showed the issue would be a no-op.
+    ///
+    /// The clock is SQLite's own local time rather than a bound parameter, so
+    /// "due" means the same thing here as in [`Self::wake_due`] - two readings
+    /// of the same moment could otherwise disagree about one row.
     pub fn list_active(&self, include_gone: bool) -> Result<Vec<JiraInboxItem>> {
+        self.list_active_at(include_gone, false)
+    }
+
+    /// Active items, optionally including the ones still asleep.
+    ///
+    /// `include_snoozed` is what `inbox list --snoozed` asks for: a snooze is
+    /// only trustworthy if there is a way to see what is in it.
+    pub fn list_active_at(&self, include_gone: bool, include_snoozed: bool) -> Result<Vec<JiraInboxItem>> {
         let gone_filter = if include_gone { "" } else { " AND i.gone_at IS NULL" };
+        let snooze_filter = if include_snoozed {
+            ""
+        } else {
+            " AND (i.snoozed_until IS NULL OR i.snoozed_until <= datetime(CURRENT_TIMESTAMP, 'localtime'))"
+        };
         let query = format!(
             "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
                     i.priority, i.priority_rank, i.sort_value, i.url,
                     i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                    i.gone_at, i.last_change, i.changed_at, i.taken_at
+                    i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at
              FROM jira_inbox i
              LEFT JOIN jira_statuses s ON s.id = i.status_id
-             WHERE i.dismissed = 0{gone_filter}
+             WHERE i.dismissed = 0{gone_filter}{snooze_filter}
              ORDER BY i.gone_at IS NOT NULL, i.pinned DESC, i.sort_value IS NULL, i.sort_value DESC,
                       i.priority_rank ASC, i.last_seen DESC"
         );
@@ -291,7 +331,7 @@ impl JiraInbox {
                 "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
                         i.priority, i.priority_rank, i.sort_value, i.url,
                         i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                        i.gone_at, i.last_change, i.changed_at, i.taken_at
+                        i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at
                  FROM jira_inbox i
                  LEFT JOIN jira_statuses s ON s.id = i.status_id
                  WHERE i.issue_key = ?1",
@@ -332,8 +372,9 @@ impl JiraInbox {
                         COUNT(taken_at),
                         SUM(CASE WHEN taken_at IS NULL AND first_seen >= ?1 THEN 1 ELSE 0 END)
                  FROM jira_inbox
-                 WHERE dismissed = 0 AND gone_at IS NULL",
-                params![fresh_since],
+                 WHERE dismissed = 0 AND gone_at IS NULL
+                   AND (snoozed_until IS NULL OR snoozed_until <= ?2)",
+                params![fresh_since, now],
                 |row| {
                     Ok(InboxCounts {
                         total: row.get(0)?,
@@ -356,6 +397,60 @@ impl JiraInbox {
             .conn
             .execute("UPDATE jira_inbox SET taken_at = ?1 WHERE issue_key = ?2", params![value, key])?;
         Ok(n > 0)
+    }
+
+    /// Puts an issue to sleep until `until`, or wakes it when `None`.
+    ///
+    /// Snoozing clears `woke_at`: the mark exists to announce one return, and
+    /// a stale one would announce the wrong sleep.
+    pub fn set_snoozed(&self, key: &str, until: Option<NaiveDateTime>) -> Result<bool> {
+        let n = self.db.conn.execute(
+            "UPDATE jira_inbox SET snoozed_until = ?1, woke_at = NULL WHERE issue_key = ?2",
+            params![until, key],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Wakes every issue whose snooze has run out, and returns them.
+    ///
+    /// Waking is local bookkeeping, so it does not wait on a Jira poll: an
+    /// issue deferred to Monday comes back on Monday whether or not the VPN
+    /// is up. `snoozed_until` is cleared and `woke_at` stamped in the same
+    /// statement, so an issue is returned here exactly once - a second caller,
+    /// or a second poll a minute later, finds nothing left to wake.
+    pub fn wake_due(&self) -> Result<Vec<JiraInboxItem>> {
+        let now = Local::now().naive_local();
+        let mut stmt = self
+            .db
+            .conn
+            .prepare("SELECT issue_key FROM jira_inbox WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?1 AND dismissed = 0")?;
+        let due: Vec<String> = stmt.query_map(params![now], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+
+        let mut woken = Vec::with_capacity(due.len());
+        for key in due {
+            self.db.conn.execute(
+                "UPDATE jira_inbox SET snoozed_until = NULL, woke_at = ?1 WHERE issue_key = ?2",
+                params![now, key],
+            )?;
+            if let Some(item) = self.get_by_key(&key)? {
+                woken.push(item);
+            }
+        }
+        Ok(woken)
+    }
+
+    /// How many issues are asleep right now.
+    pub fn count_snoozed(&self) -> Result<i64> {
+        let now = Local::now().naive_local();
+        self.db
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM jira_inbox WHERE dismissed = 0 AND gone_at IS NULL AND snoozed_until > ?1",
+                params![now],
+                |row| row.get(0),
+            )
+            .map_err(Into::into)
     }
 
     pub fn mark_notified(&self, keys: &[String]) -> Result<()> {
@@ -459,5 +554,7 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
         last_change: row.get(16)?,
         changed_at: row.get(17)?,
         taken_at: row.get(18)?,
+        snoozed_until: row.get(19)?,
+        woke_at: row.get(20)?,
     })
 }

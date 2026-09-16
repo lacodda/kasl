@@ -380,6 +380,20 @@ impl MigrationManager {
             tx.execute("CREATE INDEX IF NOT EXISTS idx_server_outbox_date ON server_outbox(date)", [])?;
             Ok(())
         });
+
+        self.add_migration(15, "snooze_inbox_issues", |tx| {
+            // Snoozing is "not now", which dismissal could never say: a
+            // dismissed issue is gone for good, so the only way to defer one
+            // was to leave it in the list and keep reading past it.
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN snoozed_until TIMESTAMP", [])?;
+            // When the issue came back, so the return can be announced once
+            // and not on every poll after it.
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN woke_at TIMESTAMP", [])?;
+            // The waking query asks for rows due before now; the index is what
+            // keeps that off a full scan once the inbox is two hundred rows.
+            tx.execute("CREATE INDEX IF NOT EXISTS idx_jira_inbox_snoozed ON jira_inbox(snoozed_until)", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

@@ -197,6 +197,56 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
     })
 }
 
+/// Returns every issue whose snooze has run out, toasting each one.
+///
+/// Returns how many came back. A snooze the user set is a promise to be
+/// reminded, so the return is announced even though the issue was already
+/// known - that reminder is the whole reason to snooze rather than dismiss.
+pub fn wake_snoozed(notify: bool) -> Result<usize> {
+    let woken = JiraInbox::new()?.wake_due()?;
+    if woken.is_empty() {
+        return Ok(0);
+    }
+    if notify {
+        if toasts_collapse(woken.len()) {
+            // A summary toast whose click did nothing would be the worst of
+            // both: the base comes off an issue's own browse URL, so the list
+            // opens without this reaching for the Jira config.
+            let list_url = open_issues_url_from(&woken[0].url);
+            show_raw_toast(
+                "Jira inbox",
+                &format!("{} snoozed issues are back - see `kasl inbox`", woken.len()),
+                &list_url,
+                "inbox",
+            );
+        } else {
+            for item in &woken {
+                show_snoozed_toast(item);
+            }
+        }
+    }
+    Ok(woken.len())
+}
+
+/// The assigned-open-issues list, derived from an issue's browse URL.
+///
+/// Waking is local, so it must not need the Jira config to be readable; the
+/// base is already carried on every row as `{base}/browse/{key}`. A URL that
+/// does not have that shape yields the row's own URL, which still opens
+/// something true.
+fn open_issues_url_from(issue_url: &str) -> String {
+    match issue_url.rsplit_once("/browse/") {
+        Some((base, _)) => format!("{base}/issues/?jql=assignee%20%3D%20currentUser()%20AND%20resolution%20is%20EMPTY"),
+        None => issue_url.to_string(),
+    }
+}
+
+/// Shows a toast for an issue whose snooze has run out.
+pub fn show_snoozed_toast(item: &JiraInboxItem) -> bool {
+    let body = format!("Back from snooze - {}", item.summary);
+    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+}
+
 /// Shows a desktop toast for a newly discovered inbox item.
 ///
 /// Clicking the toast opens [`JiraInboxItem::url`] in the default browser.
@@ -361,6 +411,16 @@ pub async fn run_poller() {
         if !inbox_cfg.enabled || config.jira.is_none() {
             tokio::time::sleep(std::time::Duration::from_secs(inbox_cfg.poll_interval_secs.max(60))).await;
             continue;
+        }
+
+        // Waking is local bookkeeping and runs before the sync, on its own:
+        // an issue deferred to Monday is due on Monday whether or not Jira
+        // answers, and hanging the return off a successful poll would mean a
+        // VPN outage silently held issues asleep past their moment.
+        match wake_snoozed(inbox_cfg.notify) {
+            Ok(count) if count > 0 => msg_info!(Message::JiraInboxWoke(count)),
+            Ok(_) => {}
+            Err(e) => warn!("Jira inbox wake error: {}", e),
         }
 
         match sync_noninteractive(&inbox_cfg).await {

@@ -2,7 +2,7 @@
 title: "inbox"
 ---
 
-The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, dismiss, open in the browser, or take an issue into your task list.
+The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, snooze, dismiss, open in the browser, or take an issue into your task list.
 
 Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
@@ -18,6 +18,7 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 
 - `-n, --limit <N>`: Show only the top N issues after filtering and sorting
 - `--all`: Include issues gone from Jira (closed or reassigned); they sort below the present ones
+- `--snoozed`: Include issues that are still asleep, each showing the date it is due back
 
 ### Filters
 
@@ -56,9 +57,10 @@ kasl inbox list [OPTIONS]
 **Options:**
 - `-n, --limit <N>`: Show only the top N issues
 - `--all`: Include issues gone from Jira
+- `--snoozed`: Include issues that are still asleep
 - The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--sort`
 
-The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `gone` outranks everything.
+The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything.
 
 ### `pin` - Pin an inbox issue
 
@@ -89,7 +91,45 @@ kasl inbox dismiss [KEY] [FILTERS]
 **Arguments:**
 - `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
-Hides an issue from the list.
+Hides an issue from the list, for good. Dismissal is the answer to "this is
+not mine"; for "not now", see [`snooze`](#snooze---snooze-an-inbox-issue).
+
+### `snooze` - Snooze an inbox issue
+
+```bash
+kasl inbox snooze [KEY] [FOR] [FILTERS]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
+- `FOR`: How long to sleep - `3d`, `12h`, `2w`; a bare number is days. Defaults to `1d`.
+
+Puts an issue down until the moment passes. It leaves the list, stops counting
+among what is waiting, and comes back on its own when its time is up - with a
+toast and a `back` badge saying why it has returned.
+
+The difference from `dismiss` is the returning. Dismissal means "never" and is
+right for an issue that is not yours; snoozing means "not now" and is right for
+the issue you will deal with on Monday. Without it the only way to defer an
+issue was to keep reading past it, which is how an inbox stops being read.
+
+Sleeping issues come back whether or not Jira is reachable: the due date is
+local bookkeeping, so a VPN outage cannot hold an issue past its moment.
+
+```
+[✓] Snoozed PROJ-123 until Mar 4 09:30.
+```
+
+### `unsnooze` - Wake a snoozed inbox issue
+
+```bash
+kasl inbox unsnooze [KEY]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the sleeping issues - only those, since waking an awake issue does nothing.
+
+Brings a sleeping issue back before its time.
 
 ### `open` - Open issue URL in browser
 
@@ -120,7 +160,7 @@ link outlives the summary it started with.
 
 ## Background Polling
 
-Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled.
+Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
 
 A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. And when one poll would raise more than five toasts of a kind (a first sync of a long backlog, a Jira-side re-scoring), they collapse into a single summary toast that opens your open-issues list in Jira.
 

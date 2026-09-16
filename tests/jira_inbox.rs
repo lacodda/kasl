@@ -196,6 +196,8 @@ fn test_badge_precedence_and_freshness() {
         last_change: None,
         changed_at: None,
         taken_at: None,
+        snoozed_until: None,
+        woke_at: None,
     };
 
     // Old, unchanged issue: no badge.
@@ -306,4 +308,72 @@ fn test_counts_report_what_still_asks_for_attention(_ctx: &mut InboxTestContext)
     db.set_dismissed("KA-20", true).unwrap();
     db.set_dismissed("KA-23", true).unwrap();
     assert!(db.counts().unwrap().is_empty(), "an inbox with nothing waiting reports empty");
+}
+
+#[test_context(InboxTestContext)]
+#[test]
+#[serial]
+fn a_snoozed_issue_leaves_the_list_and_comes_back_by_itself(_ctx: &mut InboxTestContext) {
+    // Snooze is the answer dismissal could never give. Dismissing says
+    // "never" and hides the issue for good; without a "not now" the only way
+    // to defer one was to keep reading past it every day, which is how an
+    // inbox stops being read at all.
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-30"), upsert("KA-31")]).unwrap();
+
+    let until = Local::now().naive_local() + Duration::hours(3);
+    assert!(db.set_snoozed("KA-30", Some(until)).unwrap());
+
+    let awake: Vec<String> = db.list_active(false).unwrap().into_iter().map(|i| i.issue_key).collect();
+    assert_eq!(awake, vec!["KA-31".to_string()], "a sleeping issue must leave the list");
+
+    // It is asleep, not gone: `--snoozed` still finds it, wearing its due date.
+    let with_asleep = db.list_active_at(false, true).unwrap();
+    assert_eq!(with_asleep.len(), 2, "--snoozed shows what is sleeping");
+    let sleeper = with_asleep.iter().find(|i| i.issue_key == "KA-30").unwrap();
+    assert!(sleeper.snoozed_until.is_some());
+    assert!(
+        sleeper.badge(Local::now().naive_local()).is_some_and(|b| b.starts_with("zzz")),
+        "a sleeping issue says when it is due back"
+    );
+
+    // Still asleep, so waking finds nothing to do.
+    assert!(db.wake_due().unwrap().is_empty(), "an issue due in three hours must not wake now");
+    assert_eq!(db.count_snoozed().unwrap(), 1);
+
+    // Once the moment passes it comes back on its own, and says why it is back.
+    let past = Local::now().naive_local() - Duration::minutes(1);
+    db.set_snoozed("KA-30", Some(past)).unwrap();
+    let woken: Vec<String> = db.wake_due().unwrap().into_iter().map(|i| i.issue_key).collect();
+    assert_eq!(woken, vec!["KA-30".to_string()], "a snooze that ran out returns the issue");
+
+    let back = db.get_by_key("KA-30").unwrap().unwrap();
+    assert!(back.snoozed_until.is_none(), "waking clears the sleep");
+    assert_eq!(back.badge(Local::now().naive_local()).as_deref(), Some("back"));
+    assert_eq!(db.list_active(false).unwrap().len(), 2, "a woken issue is in the list again");
+
+    // And it wakes exactly once: a second poll a minute later must not
+    // announce the same return, which is what a flag instead of a timestamp
+    // would have done.
+    assert!(db.wake_due().unwrap().is_empty(), "an issue already woken must not wake twice");
+}
+
+#[test_context(InboxTestContext)]
+#[test]
+#[serial]
+fn snoozed_issues_do_not_count_as_waiting(_ctx: &mut InboxTestContext) {
+    // The daily report line says what still asks for attention. An issue the
+    // user deliberately put down is not asking, so counting it would make the
+    // snooze feel like it did nothing.
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-40"), upsert("KA-41")]).unwrap();
+    assert_eq!(db.counts().unwrap().total, 2);
+
+    db.set_snoozed("KA-40", Some(Local::now().naive_local() + Duration::days(3))).unwrap();
+    assert_eq!(db.counts().unwrap().total, 1, "a sleeping issue is not waiting");
+
+    // Waking it by hand puts it back among what is waiting.
+    assert!(db.set_snoozed("KA-40", None).unwrap());
+    assert_eq!(db.counts().unwrap().total, 2, "an issue woken by hand is waiting again");
+    assert_eq!(db.count_snoozed().unwrap(), 0);
 }

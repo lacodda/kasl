@@ -417,6 +417,13 @@ pub enum Message {
     JiraInboxPinned(String),
     JiraInboxUnpinned(String),
     JiraInboxDismissed(String),
+    /// Key, and when it is due back.
+    JiraInboxSnoozed(String, String),
+    JiraInboxUnsnoozed(String),
+    /// Nothing is awake, but this many are asleep.
+    JiraInboxAllSnoozed(i64),
+    /// How many snoozed issues came back.
+    JiraInboxWoke(usize),
     JiraInboxOpened(String),
     JiraInboxTaken(String),
 
