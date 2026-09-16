@@ -6,7 +6,7 @@
 
 use chrono::{Duration, Local, NaiveDateTime};
 use kasl::db::jira_inbox::JiraInboxItem;
-use kasl::libs::inbox_filter::{InboxFilter, InboxSort, PriorityCut, parse_window, priority_cut_named, sort};
+use kasl::libs::inbox_filter::{InboxFilter, InboxSort, PriorityCut, explain, parse_window, priority_cut_named, sort};
 
 fn now() -> NaiveDateTime {
     Local::now().naive_local()
@@ -217,4 +217,89 @@ fn the_score_order_is_the_inbox_order_it_came_in() {
     let mut items = vec![item("KA-1"), item("KA-2"), item("KA-3")];
     sort(&mut items, InboxSort::Score);
     assert_eq!(keys(&items), vec!["KA-1", "KA-2", "KA-3"]);
+}
+
+#[test]
+fn why_names_the_field_the_score_came_from() {
+    // The number in the SCORE column is meaningless without the name of the
+    // Jira field it was read from - that name is most of the answer, and it
+    // lives in config rather than on the row.
+    let item = item("KA-1");
+    let reasons = explain(&item, Some("Scoring"), now());
+
+    let score = reasons.iter().find(|r| r.what == "score").expect("score is always explained");
+    assert_eq!(score.value, "5");
+    assert!(score.because.contains("Scoring"), "the answer must name the field: {}", score.because);
+
+    // With no configured field there is still an honest answer, just a vaguer
+    // one - never a number presented as if it explained itself.
+    let unnamed = explain(&item, None, now());
+    let score = unnamed.iter().find(|r| r.what == "score").unwrap();
+    assert!(score.because.contains("ranking field"));
+}
+
+#[test]
+fn why_explains_the_order_rather_than_inventing_a_formula() {
+    // kasl does not compute importance: the score is Jira's field and the rank
+    // is Jira's priority id. A decomposed local score ("High +3, due tomorrow
+    // +2") would be a second answer disagreeing with Jira's, so the explanation
+    // must stay about the order and never add points up.
+    let mut item = item("KA-2");
+    item.priority = Some("High".to_string());
+    item.priority_rank = 2;
+    item.pinned = true;
+
+    let reasons = explain(&item, Some("Scoring"), now());
+    let whats: Vec<&str> = reasons.iter().map(|r| r.what).collect();
+    assert!(whats.contains(&"score") && whats.contains(&"priority") && whats.contains(&"pinned"));
+
+    let priority = reasons.iter().find(|r| r.what == "priority").unwrap();
+    assert_eq!(priority.value, "High");
+    assert!(priority.because.contains("2"), "the rank is Jira's priority id, and saying so is the point");
+
+    // Nothing anywhere claims a score was added up from parts.
+    for reason in &reasons {
+        assert!(!reason.because.contains('+'), "no reason may read as a term in a formula: {}", reason.because);
+    }
+}
+
+#[test]
+fn why_says_what_each_mark_does_to_the_list() {
+    // The marks are exactly the things that move a row somewhere the score
+    // does not explain, so each one has to say what it did.
+    let mut item = item("KA-3");
+    let now = now();
+    item.snoozed_until = Some(now + Duration::days(2));
+    item.taken_at = Some(now - Duration::hours(5));
+    item.last_change = Some("status→In Progress".to_string());
+    item.changed_at = Some(now - Duration::hours(1));
+
+    let reasons = explain(&item, Some("Scoring"), now);
+    let whats: Vec<&str> = reasons.iter().map(|r| r.what).collect();
+    assert!(whats.contains(&"snoozed"), "a sleeping issue must say it is asleep");
+    assert!(whats.contains(&"taken"));
+    assert!(whats.contains(&"changed"));
+
+    // A snooze that has already run out is not a reason for anything.
+    item.snoozed_until = Some(now - Duration::minutes(1));
+    let reasons = explain(&item, Some("Scoring"), now);
+    assert!(!reasons.iter().any(|r| r.what == "snoozed"), "a snooze that ran out no longer explains the row");
+}
+
+#[test]
+fn why_is_honest_about_a_missing_score() {
+    // An issue with no value in the ranking field is the case where the user
+    // most needs the explanation: it sits at the bottom for a reason that is
+    // invisible in the list.
+    let mut item = item("KA-4");
+    item.sort_value = None;
+    item.priority = None;
+
+    let reasons = explain(&item, Some("Scoring"), now());
+    let score = reasons.iter().find(|r| r.what == "score").unwrap();
+    assert_eq!(score.value, "—");
+    assert!(score.because.contains("empty"), "an empty field must be named as empty: {}", score.because);
+
+    let priority = reasons.iter().find(|r| r.what == "priority").unwrap();
+    assert!(priority.because.contains("no priority"), "{}", priority.because);
 }

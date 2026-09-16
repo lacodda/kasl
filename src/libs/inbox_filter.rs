@@ -163,3 +163,101 @@ pub fn sort(items: &mut [JiraInboxItem], by: InboxSort) {
         })
     });
 }
+
+/// One line of the answer to "why is this issue here?".
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reason {
+    /// What is being explained: `score`, `priority`, `pinned`.
+    pub what: &'static str,
+    /// The value as the row carries it.
+    pub value: String,
+    /// Where it comes from and what it does to the order.
+    pub because: String,
+}
+
+/// Explains an issue's place in the list.
+///
+/// Deliberately not a decomposed score. kasl does not compute importance: the
+/// score is a number read straight out of a Jira field the user named, and the
+/// priority rank is Jira's own priority id. Inventing a local formula to
+/// decompose - "High +3, due tomorrow +2" - would put a second, disagreeing
+/// answer next to Jira's about which issue matters, and the user would have no
+/// way to tell which one is real. So this explains what the order is actually
+/// made of and where each part came from.
+///
+/// `score_label` is what the configured ranking field is called (typically
+/// `Scoring`); naming it is most of the answer, because the number means
+/// nothing without knowing which field it is.
+pub fn explain(item: &JiraInboxItem, score_label: Option<&str>, now: NaiveDateTime) -> Vec<Reason> {
+    let mut out = Vec::new();
+    let label = score_label.unwrap_or("the ranking field");
+
+    match item.sort_value {
+        Some(score) => out.push(Reason {
+            what: "score",
+            value: format!("{score}"),
+            because: format!("read from {label} in Jira; the list is ordered by it, highest first"),
+        }),
+        None => out.push(Reason {
+            what: "score",
+            value: "—".to_string(),
+            because: format!("{label} is empty on this issue in Jira; issues without a score sort below those with one"),
+        }),
+    }
+
+    out.push(Reason {
+        what: "priority",
+        value: item.priority.clone().unwrap_or_else(|| "—".to_string()),
+        because: match item.priority.as_deref() {
+            Some(_) => format!(
+                "Jira priority id {}, which breaks ties on equal scores - lower is more urgent",
+                item.priority_rank
+            ),
+            None => "no priority set in Jira, so this sorts last among equal scores".to_string(),
+        },
+    });
+
+    if item.pinned {
+        out.push(Reason {
+            what: "pinned",
+            value: "yes".to_string(),
+            because: "pinned issues lead the list whatever the order".to_string(),
+        });
+    }
+
+    if let Some(until) = item.snoozed_until
+        && until > now
+    {
+        out.push(Reason {
+            what: "snoozed",
+            value: until.format("%b %-d %H:%M").to_string(),
+            because: "asleep until then, so it is out of the list and out of the waiting count".to_string(),
+        });
+    }
+
+    if let Some(taken) = item.taken_at {
+        out.push(Reason {
+            what: "taken",
+            value: taken.format("%b %-d").to_string(),
+            because: "already a task; it stays in the list so what is in hand stays visible".to_string(),
+        });
+    }
+
+    if let Some(gone) = item.gone_at {
+        out.push(Reason {
+            what: "gone",
+            value: gone.format("%b %-d").to_string(),
+            because: "stopped appearing in the Jira poll - closed or reassigned; only `--all` shows it".to_string(),
+        });
+    }
+
+    if let (Some(change), Some(at)) = (&item.last_change, item.changed_at) {
+        out.push(Reason {
+            what: "changed",
+            value: change.clone(),
+            because: format!("seen on {}; the badge fades after a day", at.format("%b %-d %H:%M")),
+        });
+    }
+
+    out
+}

@@ -152,6 +152,69 @@ pub fn parse_date(date_str: &str) -> anyhow::Result<chrono::NaiveDate> {
     }
 }
 
+/// Wraps text to a display width, breaking between words.
+///
+/// The counterpart to [`truncate_to_width`], and the choice between them is
+/// about what the column is for. A list of many rows is scanned, so a long
+/// summary is cut and the eye moves on; a sentence the user asked to read is
+/// ruined by being cut, so it wraps instead.
+///
+/// Width is display width, not bytes, so CJK and fullwidth text wrap where
+/// they look like they should. A single word longer than the budget is broken
+/// rather than allowed to overflow the column.
+pub fn wrap_to_width(s: &str, max_width: usize) -> String {
+    if max_width == 0 {
+        return String::new();
+    }
+
+    let mut lines: Vec<String> = Vec::new();
+    let mut line = String::new();
+    let mut line_width = 0;
+
+    for word in s.split_whitespace() {
+        let word_width = word.width();
+
+        // A word that cannot fit on any line is broken across lines; leaving
+        // it whole would push the column past the terminal.
+        if word_width > max_width {
+            if !line.is_empty() {
+                lines.push(std::mem::take(&mut line));
+            }
+            let mut chunk = String::new();
+            let mut chunk_width = 0;
+            for c in word.chars() {
+                let c_width = c.width().unwrap_or(0);
+                if chunk_width + c_width > max_width {
+                    lines.push(std::mem::take(&mut chunk));
+                    chunk_width = 0;
+                }
+                chunk.push(c);
+                chunk_width += c_width;
+            }
+            line = chunk;
+            line_width = chunk_width;
+            continue;
+        }
+
+        let needed = if line.is_empty() { word_width } else { line_width + 1 + word_width };
+        if needed > max_width {
+            lines.push(std::mem::take(&mut line));
+            line_width = 0;
+        }
+        if !line.is_empty() {
+            line.push(' ');
+            line_width += 1;
+        }
+        line.push_str(word);
+        line_width += word_width;
+    }
+
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -180,5 +243,43 @@ mod tests {
     #[test]
     fn truncate_zero_width_returns_empty() {
         assert_eq!(truncate_to_width("hello", 0), "");
+    }
+
+    #[test]
+    fn wrap_breaks_between_words_and_keeps_every_one() {
+        let wrapped = wrap_to_width("the list is ordered by it, highest first", 12);
+        for line in wrapped.lines() {
+            assert!(line.width() <= 12, "line over budget: {line:?}");
+        }
+        // Wrapping is not truncation: nothing may be dropped.
+        assert_eq!(
+            wrapped.split_whitespace().collect::<Vec<_>>(),
+            "the list is ordered by it, highest first".split_whitespace().collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn wrap_breaks_a_word_too_long_to_fit() {
+        // Left whole it would overflow the column and break the table.
+        let wrapped = wrap_to_width("supercalifragilistic", 6);
+        for line in wrapped.lines() {
+            assert!(line.width() <= 6, "line over budget: {line:?}");
+        }
+        assert_eq!(wrapped.replace('\n', ""), "supercalifragilistic");
+    }
+
+    #[test]
+    fn wrap_respects_display_width() {
+        // Fullwidth letters are two columns each, so three fit in six.
+        let wrapped = wrap_to_width("ＡＢＣ ＤＥＦ", 6);
+        assert_eq!(wrapped, "ＡＢＣ\nＤＥＦ");
+        for line in wrapped.lines() {
+            assert!(line.width() <= 6);
+        }
+    }
+
+    #[test]
+    fn wrap_zero_width_returns_empty() {
+        assert_eq!(wrap_to_width("hello", 0), "");
     }
 }

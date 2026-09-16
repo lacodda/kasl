@@ -36,7 +36,7 @@
 use super::task::Task;
 use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
-use crate::libs::formatter::{format_duration, terminal_cols, truncate_to_width};
+use crate::libs::formatter::{format_duration, terminal_cols, truncate_to_width, wrap_to_width};
 use crate::libs::messages::Message;
 use crate::libs::pause::Pause;
 use crate::libs::report;
@@ -400,6 +400,76 @@ impl View {
             ]);
         }
 
+        table.printstd();
+        Ok(())
+    }
+
+    /// One issue in full: the fields a table row has no room for.
+    pub fn jira_inbox_issue(item: &crate::db::jira_inbox::JiraInboxItem) -> Result<()> {
+        let now = chrono::Local::now().naive_local();
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["FIELD", "VALUE"]);
+
+        let mut add = |field: &str, value: String| {
+            table.add_row(row![field, value]);
+        };
+        add("key", item.issue_key.clone());
+        add("summary", item.summary.clone());
+        add(
+            "status",
+            if item.status_name.is_empty() {
+                item.status_id.clone().unwrap_or_else(|| "—".to_string())
+            } else {
+                item.status_name.clone()
+            },
+        );
+        add("priority", item.priority.clone().unwrap_or_else(|| "—".to_string()));
+        add("score", item.sort_value.map(|v| format!("{v}")).unwrap_or_else(|| "—".to_string()));
+        if let Some(badge) = item.badge(now) {
+            add("badge", badge);
+        }
+        add("first seen", item.first_seen.format("%Y-%m-%d %H:%M").to_string());
+        add("last seen", item.last_seen.format("%Y-%m-%d %H:%M").to_string());
+        if let Some(at) = item.changed_at {
+            add("changed", at.format("%Y-%m-%d %H:%M").to_string());
+        }
+        if let Some(at) = item.taken_at {
+            add("taken", at.format("%Y-%m-%d %H:%M").to_string());
+        }
+        if let Some(at) = item.snoozed_until {
+            add("snoozed until", at.format("%Y-%m-%d %H:%M").to_string());
+        }
+        if let Some(at) = item.gone_at {
+            add("gone", at.format("%Y-%m-%d %H:%M").to_string());
+        }
+        add("url", item.url.clone());
+
+        table.printstd();
+        Ok(())
+    }
+
+    /// Where an issue's place in the list comes from.
+    pub fn jira_inbox_why(reasons: &[crate::libs::inbox_filter::Reason]) -> Result<()> {
+        let what_width = reasons.iter().map(|r| r.what.width()).max().unwrap_or(1).max("WHAT".width());
+        let value_width = reasons.iter().map(|r| r.value.width()).max().unwrap_or(1).max("VALUE".width()).min(24);
+
+        // WHAT, VALUE, WHY
+        let frame_overhead = 3 * 3 + 1;
+        let why_width = terminal_cols().saturating_sub(frame_overhead + what_width + value_width).max(20);
+
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["WHAT", "VALUE", "WHY"]);
+        for reason in reasons {
+            // Wrapped, not truncated: this column exists to be read, and a
+            // cut-off explanation explains nothing.
+            table.add_row(row![
+                reason.what,
+                truncate_to_width(&reason.value, value_width),
+                wrap_to_width(&reason.because, why_width),
+            ]);
+        }
         table.printstd();
         Ok(())
     }

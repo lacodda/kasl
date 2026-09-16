@@ -4,6 +4,7 @@
 
 use crate::db::jira_inbox::{JiraInbox, JiraInboxItem};
 use crate::db::tasks::Tasks;
+use crate::libs::config::Config;
 use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_named};
 use crate::libs::jira_inbox as inbox_lib;
 use crate::libs::messages::Message;
@@ -224,6 +225,21 @@ enum InboxCommand {
         filter: FilterArgs,
     },
 
+    /// Show one issue in full, and why it sits where it does
+    #[command(about = "Show one inbox issue")]
+    Show {
+        /// Issue key, e.g. PROJ-123; omit to pick from the inbox
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+
+        /// Explain where the ranking comes from and what each mark means
+        #[arg(long)]
+        why: bool,
+
+        #[command(flatten)]
+        filter: FilterArgs,
+    },
+
     /// Put an issue to sleep until a moment passes
     #[command(about = "Snooze an inbox issue")]
     Snooze {
@@ -280,6 +296,10 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
         Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
         Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
+        Some(InboxCommand::Show { key, why, filter }) => {
+            let key = resolve_key(key, "Show which issue?", false, &filter.or(top))?;
+            show_issue(&key, why)
+        }
         Some(InboxCommand::Snooze { key, duration, filter }) => {
             let key = resolve_key(key, "Snooze which issue?", false, &filter.or(top))?;
             snooze(&key, duration.as_deref())
@@ -400,6 +420,41 @@ fn open_issue(key: &str) -> Result<()> {
         Err(e) => msg_error!(Message::JiraInboxOpenFailed(e.to_string())),
     }
     Ok(())
+}
+
+/// Shows one issue in full, optionally explaining its place in the list.
+///
+/// A row in the table is six narrow columns; this is where the whole summary,
+/// the URL and the dates fit. `--why` adds where the ordering comes from,
+/// which is the question a list sorted by a field nobody can see invites.
+fn show_issue(key: &str, why: bool) -> Result<()> {
+    let db = JiraInbox::new()?;
+    let Some(item) = db.get_by_key(key)? else {
+        msg_error!(Message::JiraInboxNotFound(key.to_string()));
+        return Ok(());
+    };
+
+    View::jira_inbox_issue(&item)?;
+    if why {
+        // The label lives in config, not on the row: the number means nothing
+        // without the name of the field it was read from.
+        let label = Config::read()
+            .ok()
+            .and_then(|c| c.jira_inbox)
+            .and_then(|cfg| cfg.sort_by_field.and_then(|id| score_field_label(&cfg.custom_fields, &id)));
+        let reasons = inbox_filter::explain(&item, label.as_deref(), Local::now().naive_local());
+        View::jira_inbox_why(&reasons)?;
+    }
+    Ok(())
+}
+
+/// The human name of the ranking field, when the user gave it one.
+fn score_field_label(fields: &[crate::libs::config::JiraCustomField], id: &str) -> Option<String> {
+    fields
+        .iter()
+        .find(|f| f.id.trim() == id.trim())
+        .map(|f| f.label.clone())
+        .or_else(|| Some(id.to_string()))
 }
 
 /// Puts an issue to sleep for a while.

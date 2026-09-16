@@ -62,6 +62,36 @@ kasl inbox list [OPTIONS]
 
 The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything.
 
+### `show` - Show one inbox issue
+
+```bash
+kasl inbox show [KEY] [--why] [FILTERS]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
+
+**Options:**
+- `--why`: Explain where the ranking comes from and what each mark means
+
+One issue in full: the whole summary, the URL, and the dates a six-column table row has no room for.
+
+`--why` answers the question a list sorted by an invisible field invites - why is this issue *here*:
+
+```
++----------+--------------+---------------------------------------------------+
+| WHAT     | VALUE        | WHY                                               |
++----------+--------------+---------------------------------------------------+
+| score    | 8            | read from Scoring in Jira; the list is ordered by  |
+|          |              | it, highest first                                 |
+| priority | High         | Jira priority id 2, which breaks ties on equal     |
+|          |              | scores - lower is more urgent                     |
+| pinned   | yes          | pinned issues lead the list whatever the order     |
++----------+--------------+---------------------------------------------------+
+```
+
+Note what this is not: a score broken into points. kasl does not compute importance. The score is a number read straight out of the Jira field you named in [configuration](#configuration), and the priority rank is Jira's own priority id - so `--why` names where each part came from rather than inventing a local formula that would disagree with Jira about which issue matters.
+
 ### `pin` - Pin an inbox issue
 
 ```bash
