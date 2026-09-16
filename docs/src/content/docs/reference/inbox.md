@@ -2,7 +2,7 @@
 title: "inbox"
 ---
 
-The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, snooze, dismiss, open in the browser, or take an issue into your task list.
+The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, snooze, dismiss, open in the browser, or take an issue into your task list - one at a time, or the whole pile in one sitting with `triage`.
 
 Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
@@ -61,6 +61,35 @@ kasl inbox list [OPTIONS]
 - The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--sort`
 
 The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything.
+
+### `triage` - Triage the inbox issue by issue
+
+```bash
+kasl inbox triage [--snooze-for <FOR>] [FILTERS]
+```
+
+**Options:**
+- `--snooze-for <FOR>`: How long `snooze` sleeps during this run - `3d`, `12h`, `2w`. Defaults to `1d`.
+- The [filters](#filters) above, so `triage --since 7d --min-score 5` walks exactly that slice
+
+Walks the inbox one issue at a time and asks what to do with each. Two hundred issues are not triaged by running `take`, `snooze` and `dismiss` two hundred times, each re-reading the list to find the next row.
+
+Each issue is shown with its position, badge, score and priority, and offers:
+
+- **take** - make it a task and start
+- **snooze** - not now, bring it back later (for `--snooze-for`)
+- **dismiss** - not mine, hide it for good
+- **open** - look at it in the browser, then decide
+- **skip** - leave it and move on (the default)
+- **quit** - stop here; everything not yet decided is left untouched
+
+`open` is a look, not a decision: the issue is asked about again once the browser is up. `skip` leads because the common answer in a long run is "not this one", and it is the only choice that changes nothing if the finger slips. A run ends with what it came to:
+
+```
+[✓] Triaged: 3 taken, 5 snoozed, 2 dismissed, 12 skipped.
+```
+
+Triage is a conversation, so it needs a terminal. In a script, use `inbox take`, `inbox snooze` and `inbox dismiss` with explicit keys.
 
 ### `show` - Show one inbox issue
 
@@ -244,6 +273,19 @@ kasl inbox list
 
 # Check what left the inbox
 kasl inbox list --all
+
+# Clear the whole pile in one sitting
+kasl inbox triage
+
+# Triage only this week's serious ones, sleeping the rest for three days
+kasl inbox triage --since 7d --min-score 5 --snooze-for 3d
+
+# Put one issue down until Thursday, and see what is asleep
+kasl inbox snooze PROJ-123 3d
+kasl inbox --snoozed
+
+# Why is this issue at the top?
+kasl inbox show PROJ-123 --why
 
 # Work with a specific issue
 kasl inbox pin PROJ-123

@@ -8,7 +8,7 @@ use crate::libs::config::Config;
 use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_named};
 use crate::libs::jira_inbox as inbox_lib;
 use crate::libs::messages::Message;
-use crate::libs::pick;
+use crate::libs::pick::{self, TriageAction, TriageAnswer};
 use crate::libs::task::{Task, TaskFilter};
 use crate::libs::view::View;
 use crate::{msg_error, msg_info, msg_print, msg_success};
@@ -225,6 +225,17 @@ enum InboxCommand {
         filter: FilterArgs,
     },
 
+    /// Walk the inbox one issue at a time, deciding each
+    #[command(about = "Triage the inbox issue by issue")]
+    Triage {
+        /// How long `snooze` sleeps during this run: 3d, 12h, 2w
+        #[arg(long, value_name = "FOR", default_value = "1d")]
+        snooze_for: String,
+
+        #[command(flatten)]
+        filter: FilterArgs,
+    },
+
     /// Show one issue in full, and why it sits where it does
     #[command(about = "Show one inbox issue")]
     Show {
@@ -296,6 +307,7 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
         Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
         Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
+        Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &filter.or(top)),
         Some(InboxCommand::Show { key, why, filter }) => {
             let key = resolve_key(key, "Show which issue?", false, &filter.or(top))?;
             show_issue(&key, why)
@@ -420,6 +432,98 @@ fn open_issue(key: &str) -> Result<()> {
         Err(e) => msg_error!(Message::JiraInboxOpenFailed(e.to_string())),
     }
     Ok(())
+}
+
+/// Walks the filtered inbox, asking what to do with each issue.
+///
+/// The point is the whole pile in one sitting: two hundred issues are not
+/// triaged by running `take`, `snooze` and `dismiss` two hundred times, each
+/// re-reading the list to find the next row. The cuts apply first, so
+/// `triage --since 7d --min-score 5` walks exactly that slice.
+///
+/// Every action goes through the same function the standalone command calls,
+/// so triage cannot drift from `inbox take` in what it actually does. The list
+/// is a snapshot taken once: actions are by key, so a row going stale mid-run
+/// changes nothing, and re-reading between every question would make the order
+/// shift under the user's hands.
+fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
+    // Parsed before the first question rather than at the first snooze: being
+    // told the duration is unreadable after deciding twenty issues would be
+    // the worst possible moment to find out.
+    inbox_filter::parse_window(snooze_for)?;
+
+    let (items, total) = sliced(false, false, filter)?;
+    if total == 0 {
+        msg_info!(Message::JiraInboxEmpty);
+        return Ok(());
+    }
+    if items.is_empty() {
+        msg_info!(Message::JiraInboxNoMatch {
+            total,
+            what: filter.describe().join(", ")
+        });
+        return Ok(());
+    }
+
+    let count = items.len();
+    let mut done = TriageTally::default();
+    for (index, item) in items.iter().enumerate() {
+        // Opening is a look, not a decision, so the issue is asked about again
+        // once the browser is up - otherwise "let me see it first" would
+        // silently mean "skip". Asked once: a second `open` means "I have
+        // looked", and reopening the same page would be a loop with no way
+        // forward.
+        let action = match pick::triage_action(item, index + 1, count)? {
+            TriageAnswer::Decided(action) => action,
+            TriageAnswer::Open => {
+                open_issue(&item.issue_key)?;
+                match pick::triage_action(item, index + 1, count)? {
+                    TriageAnswer::Decided(action) => action,
+                    TriageAnswer::Open => TriageAction::Skip,
+                }
+            }
+        };
+
+        match action {
+            TriageAction::Take => {
+                take_issue(&item.issue_key)?;
+                done.taken += 1;
+            }
+            TriageAction::Snooze => {
+                snooze(&item.issue_key, Some(snooze_for))?;
+                done.snoozed += 1;
+            }
+            TriageAction::Dismiss => {
+                dismiss(&item.issue_key)?;
+                done.dismissed += 1;
+            }
+            TriageAction::Skip => done.skipped += 1,
+            TriageAction::Quit => {
+                done.left = count - index;
+                break;
+            }
+        }
+    }
+
+    msg_success!(Message::JiraInboxTriaged {
+        taken: done.taken,
+        snoozed: done.snoozed,
+        dismissed: done.dismissed,
+        skipped: done.skipped,
+        left: done.left,
+    });
+    Ok(())
+}
+
+/// What a triage run came to, for the closing line.
+#[derive(Default)]
+struct TriageTally {
+    taken: usize,
+    snoozed: usize,
+    dismissed: usize,
+    skipped: usize,
+    /// Issues never asked about, because the run was stopped early.
+    left: usize,
 }
 
 /// Shows one issue in full, optionally explaining its place in the list.

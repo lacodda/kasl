@@ -159,3 +159,73 @@ pub fn pause(pauses: &[Pause], prompt: &str) -> Result<i32> {
 
     Ok(pauses[select(prompt, &labels)?].id)
 }
+
+/// What the user answered about one issue during `inbox triage`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriageAnswer {
+    /// Open it in the browser; the real decision comes after looking.
+    Open,
+    /// A decision about the issue itself.
+    Decided(TriageAction),
+}
+
+/// What to do with one issue during `inbox triage`.
+///
+/// `Open` is deliberately not here. Looking at an issue is not a decision
+/// about it, and the loop resolves it into one before acting - so the code
+/// that acts has no "what do I do about open?" case to get wrong.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriageAction {
+    /// Turn it into a task and start work.
+    Take,
+    /// Put it down until a moment passes.
+    Snooze,
+    /// It is not mine; hide it for good.
+    Dismiss,
+    /// Leave it exactly as it is and move on.
+    Skip,
+    /// Stop here; everything not yet decided is left untouched.
+    Quit,
+}
+
+/// Asks what to do with one issue, showing what it is while asking.
+///
+/// The prompt carries the issue's own row - key, badge, score, summary - because
+/// a triage run is a hundred of these in a minute and "PROJ-4471?" alone is not
+/// a question anyone can answer.
+///
+/// Skipping and quitting are both here on purpose. A loop that can only act
+/// forces a decision on every issue, which is how a triage run gets abandoned
+/// in the middle - and an abandoned run with no way out is worse than the pile
+/// it was meant to clear.
+pub fn triage_action(item: &JiraInboxItem, position: usize, total: usize) -> Result<TriageAnswer> {
+    ensure_interactive("triage needs a terminal; use `kasl inbox take/snooze/dismiss KEY` in a script")?;
+
+    let now = Local::now().naive_local();
+    let badge = item.badge(now).map(|b| format!(" [{b}]")).unwrap_or_default();
+    let score = item.sort_value.map(|v| format!("{v}")).unwrap_or_else(|| "—".to_string());
+    let priority = item.priority.as_deref().unwrap_or("—");
+    let prompt = format!(
+        "({position}/{total}) {}{badge}  [score {score}] [{priority}]\n  {}",
+        item.issue_key, item.summary
+    );
+
+    const ACTIONS: [(&str, TriageAnswer); 6] = [
+        ("take - make it a task and start", TriageAnswer::Decided(TriageAction::Take)),
+        ("snooze - not now, bring it back later", TriageAnswer::Decided(TriageAction::Snooze)),
+        ("dismiss - not mine, hide it for good", TriageAnswer::Decided(TriageAction::Dismiss)),
+        ("open - look at it in the browser", TriageAnswer::Open),
+        ("skip - leave it and move on", TriageAnswer::Decided(TriageAction::Skip)),
+        ("quit - stop here", TriageAnswer::Decided(TriageAction::Quit)),
+    ];
+
+    let labels: Vec<String> = ACTIONS.iter().map(|(label, _)| (*label).to_string()).collect();
+    // Skip leads: the common answer in a long run is "not this one", and it is
+    // the only choice that changes nothing if the finger slips.
+    let chosen = Select::with_theme(&ColorfulTheme::default())
+        .with_prompt(prompt)
+        .items(&labels)
+        .default(4)
+        .interact()?;
+    Ok(ACTIONS[chosen].1)
+}

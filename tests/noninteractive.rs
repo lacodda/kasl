@@ -19,6 +19,31 @@ mod tests {
         cmd
     }
 
+    /// Puts one issue in the inbox of `dir`, so commands that answer an empty
+    /// inbox early reach the path under test instead.
+    fn seed_one_issue(dir: &Path) {
+        // SAFETY: these tests are #[serial]
+        unsafe {
+            std::env::set_var("HOME", dir);
+            std::env::set_var("LOCALAPPDATA", dir);
+        }
+        kasl::db::jira_inbox::JiraInbox::new()
+            .unwrap()
+            .upsert_batch(&[kasl::db::jira_inbox::JiraInboxUpsert {
+                issue_key: "PROJ-1".to_string(),
+                issue_id: "1".to_string(),
+                summary: "Something to decide about".to_string(),
+                status_id: None,
+                status_name: String::new(),
+                priority: Some("Medium".to_string()),
+                priority_rank: 3,
+                sort_value: Some(5.0),
+                url: "https://jira.example.com/browse/PROJ-1".to_string(),
+                raw_updated: None,
+            }])
+            .unwrap();
+    }
+
     #[serial]
     #[test]
     fn task_add_with_a_name_needs_no_terminal() {
@@ -284,5 +309,62 @@ mod tests {
                 String::from_utf8_lossy(&out.stderr)
             );
         }
+    }
+
+    #[serial]
+    #[test]
+    fn triage_refuses_without_a_terminal_and_names_what_to_use_instead() {
+        let dir = TempDir::new().unwrap();
+
+        // An empty inbox is answered before any prompt, so the refusal can
+        // only be reached with something in the list to ask about.
+        seed_one_issue(dir.path());
+
+        // `triage` is a conversation; with no one to answer it must fail, not
+        // hang. The message has to name the commands a script should use, or
+        // the failure tells the caller nothing they can act on.
+        let out = kasl_cmd(dir.path()).args(["inbox", "triage"]).output().unwrap();
+
+        assert!(!out.status.success(), "triage with no terminal must fail rather than proceed");
+        let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert!(
+            combined.contains("terminal"),
+            "the refusal must say a terminal is needed:
+{combined}"
+        );
+        assert!(
+            combined.contains("snooze") || combined.contains("take"),
+            "the refusal must name what a script should use instead:
+{combined}"
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn triage_rejects_an_unreadable_snooze_window_before_asking_anything() {
+        let dir = TempDir::new().unwrap();
+
+        // Parsed up front on purpose: being told the duration is nonsense
+        // after deciding twenty issues would be the worst possible moment.
+        let out = kasl_cmd(dir.path()).args(["inbox", "triage", "--snooze-for", "soon"]).output().unwrap();
+
+        assert!(!out.status.success(), "an unreadable window must fail");
+        let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert!(
+            combined.contains("window"),
+            "the error must name the problem:
+{combined}"
+        );
+    }
+
+    #[serial]
+    #[test]
+    fn snooze_rejects_an_unreadable_window() {
+        let dir = TempDir::new().unwrap();
+
+        let out = kasl_cmd(dir.path()).args(["inbox", "snooze", "PROJ-1", "soon"]).output().unwrap();
+        assert!(!out.status.success());
+        let combined = format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
+        assert!(combined.contains("window"), "{combined}");
     }
 }

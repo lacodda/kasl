@@ -512,6 +512,35 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
                 format!("Jira inbox is clear; {} issue(s) are snoozed. `kasl inbox --snoozed` shows them.", count)
             }
             Message::JiraInboxWoke(count) => format!("Jira inbox: {} snoozed issue(s) came back.", count),
+            Message::JiraInboxTriaged {
+                taken,
+                snoozed,
+                dismissed,
+                skipped,
+                left,
+            } => {
+                // Only what happened: a run of twenty skips should not read as
+                // a wall of zeroes about things that did not.
+                let mut parts = Vec::new();
+                if *taken > 0 {
+                    parts.push(format!("{} taken", taken));
+                }
+                if *snoozed > 0 {
+                    parts.push(format!("{} snoozed", snoozed));
+                }
+                if *dismissed > 0 {
+                    parts.push(format!("{} dismissed", dismissed));
+                }
+                if *skipped > 0 {
+                    parts.push(format!("{} skipped", skipped));
+                }
+                let what = if parts.is_empty() { "nothing decided".to_string() } else { parts.join(", ") };
+                if *left > 0 {
+                    format!("Triaged: {}; {} left untouched.", what, left)
+                } else {
+                    format!("Triaged: {}.", what)
+                }
+            }
             Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
             Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
             Message::JiraInboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),

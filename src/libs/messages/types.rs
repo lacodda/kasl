@@ -424,6 +424,15 @@ pub enum Message {
     JiraInboxAllSnoozed(i64),
     /// How many snoozed issues came back.
     JiraInboxWoke(usize),
+    /// What a triage run came to.
+    JiraInboxTriaged {
+        taken: usize,
+        snoozed: usize,
+        dismissed: usize,
+        skipped: usize,
+        /// Never asked about, because the run was stopped early.
+        left: usize,
+    },
     JiraInboxOpened(String),
     JiraInboxTaken(String),
 
