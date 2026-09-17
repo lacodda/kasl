@@ -146,6 +146,44 @@ mod tests {
         }
     }
 
+    /// Commands deliberately kept out of `--help`, and why.
+    ///
+    /// A hidden command owes no reference page, because nobody types it. That
+    /// exemption is exactly how a real command could lose its documentation
+    /// by accident, so the list is written down: hiding one is a decision, and
+    /// adding a name here is where it gets made.
+    const HIDDEN_ON_PURPOSE: [(&str, &str); 1] = [(
+        "toast-action",
+        "launched by a toast button's shortcut, never typed; the commands a person types are `inbox take`, `snooze`, `dismiss`",
+    )];
+
+    #[test]
+    fn every_hidden_command_is_hidden_on_purpose() {
+        // The coverage gate reads `--help`, so anything hidden slips past it
+        // unnoticed. This reads the parser instead, and fails on a hidden
+        // command that nobody wrote down a reason for.
+        use clap::CommandFactory;
+        let hidden: Vec<String> = kasl::commands::Cli::command()
+            .get_subcommands()
+            .filter(|c| c.is_hide_set())
+            .map(|c| c.get_name().to_string())
+            .filter(|name| !DEBUG_ONLY.contains(&name.as_str()))
+            .collect();
+
+        for name in &hidden {
+            assert!(
+                HIDDEN_ON_PURPOSE.iter().any(|(known, _)| known == name),
+                "`kasl {name}` is hidden from --help, so no reference page is owed for it.                  If that is intended, add it to HIDDEN_ON_PURPOSE with the reason;                  if not, unhide it and give it a page."
+            );
+        }
+        for (name, _) in HIDDEN_ON_PURPOSE {
+            assert!(
+                hidden.iter().any(|h| h == name),
+                "`kasl {name}` is listed as hidden on purpose but is not hidden any more; it now needs a reference page"
+            );
+        }
+    }
+
     #[test]
     fn every_reference_page_documents_a_shipped_command() {
         // `breaks` kept its page for a while after the command became
