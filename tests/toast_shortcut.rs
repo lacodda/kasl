@@ -112,17 +112,21 @@ fn the_written_file_is_a_real_shell_link(ctx: &mut ShortcutContext) {
     );
 
     // The command line is what carries the ask, since the button cannot.
-    let text: String = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|pair| u16::from_le_bytes(*pair))
-        .filter(|unit| *unit != 0)
-        .filter_map(|unit| char::from_u32(u32::from(unit)))
-        .collect();
-    assert!(text.contains("toast-action"), "the shortcut must run the courier; arguments read: {text}");
-    assert!(text.contains("take"), "the shortcut must name its action");
-    assert!(text.contains("KA-2"), "the shortcut must name its issue");
+    //
+    // Searched for as raw UTF-16 bytes rather than by decoding the file:
+    // the arguments sit at an offset that depends on the target path, so
+    // decoding from byte zero lands on the wrong parity half the time. That
+    // is exactly how the first version of this test passed here and failed
+    // on CI, where the shortcut's prefix is one byte longer.
+    for needle in ["toast-action", "take", "KA-2"] {
+        assert!(contains_utf16(&bytes, needle), "the shortcut must carry {needle:?} on its command line");
+    }
+}
+
+/// Whether `haystack` contains `needle` encoded as little-endian UTF-16.
+fn contains_utf16(haystack: &[u8], needle: &str) -> bool {
+    let wide: Vec<u8> = needle.encode_utf16().flat_map(u16::to_le_bytes).collect();
+    haystack.windows(wide.len()).any(|window| window == wide.as_slice())
 }
 
 #[test_context(ShortcutContext)]
