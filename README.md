@@ -158,15 +158,10 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 ## Status
 
-Everything above works today, on Windows, macOS and Linux. What is next:
-
-- [ ] **Toasts you can act on** - take, snooze or dismiss an issue straight from the notification, without opening a terminal
-- [ ] **Scriptable output** - `--json` and `NO_COLOR`/`--plain`, then `kasl status` for status bars and `kasl standup` for a markdown summary
-- [ ] **Doctor and notifications** - `kasl doctor` with `--fix`, a nudge when a break is due or the day is still open, quiet hours
-- [ ] **Smarter time** - overnight tracking and a configurable day boundary, so work past midnight belongs to the right day
-- [ ] **Beyond the terminal** - a live TUI, a companion in the tray, and `kasl-plugin-*` subprocesses with Jira and GitLab behind the same interface
-
-Released versions and what landed in each: [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
+v1.11.0, in daily use on Windows, macOS and Linux. Everything above works
+today: the daemon, the Jira and GitLab integrations, the reports and the
+optional team server. What landed in each version:
+[CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation
 
