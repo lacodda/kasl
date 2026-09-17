@@ -99,15 +99,31 @@ Monthly work productivity: 95.4%
 
 ## What you get
 
-- **A workday that records itself.** The daemon starts the day on sustained activity rather than the first stray keypress, and closes pauses when you come back. Brief interruptions and real absences count differently, so the productivity figure means something.
-- **Tasks you do not have to remember.** Today's GitLab commits and resolved Jira issues are offered as candidates and deduplicated against what you already logged. A Jira inbox polls assigned issues in the background, raises a desktop notification when something new lands on you or an issue changes, and drops issues that were closed or reassigned instead of letting the list go stale. Taking one into your tasks keeps the link: the task remembers the issue, and the issue shows as taken rather than vanishing. Two hundred open issues cut down to a list by age, change, score, priority or status - the same cuts narrow every picker, and `kasl inbox triage` walks the slice issue by issue so the whole pile is decided in one sitting. Not everything is a yes or a no: snoozing puts an issue down until a date and brings it back by itself, whether or not Jira is reachable.
-- **Honest numbers.** kasl records absences; it does not invent them. When a day falls below your reporting threshold it says so - and if the cause is a break the monitor missed, you add that break with its real time.
-- **Reports where they need to go.** One command submits the day, or the month, to your corporate API. Exports to CSV, JSON and Excel, including the hourly breakdown that time sheets tend to ask for.
-- **Passwords in the OS keyring** - Windows Credential Manager, macOS Keychain, Linux Secret Service. Nothing is encrypted with a key that ships inside the binary. API tokens, which are not prompted for, stay in the config file.
-- **Nothing that hangs.** Every prompt checks for a terminal first, so kasl under cron, under CI or under the daemon fails with a message naming the flag you needed instead of waiting forever for an answer nobody can give.
-- **A team server, when there is one.** `kasl server connect` points this machine at a self-hosted [kasl-server](https://github.com/lacodda/kasl-server) with a token your administrator issues, and says whose token it is before storing anything - a token pasted from the wrong window would otherwise file your days under a colleague's name. `kasl server push` then sends a day whole, timestamps carrying this machine's UTC offset so days from different countries can be compared at all; the last upload wins, so re-sending a corrected day corrects it there and sending an unchanged one costs nothing. A day that cannot be delivered is queued, and the next successful push carries the backlog with it - a laptop back from a week offline pays the whole debt in one request, without you knowing a queue exists. The token goes in the OS keyring; the config file records the address only. Connecting is optional and changes nothing locally.
-
-- **A short alias.** `ka` is installed alongside `kasl` by every channel as a *link* to the same binary, so both names answer with the same code and an update can never leave one behind. Completions are available for bash, zsh, fish, PowerShell and elvish.
+- **A workday that records itself.** The daemon starts the day on sustained
+  activity rather than the first stray keypress, and closes pauses when you
+  come back, so the productivity figure means something.
+- **Tasks you do not have to remember.** Today's GitLab commits and resolved
+  Jira issues arrive as candidates, deduplicated against what you already
+  logged; `kasl inbox triage` walks a slice of the backlog issue by issue, and
+  snoozing puts one down until a date and brings it back by itself.
+- **Honest numbers.** kasl records absences rather than inventing them, and
+  says so when a day falls below your reporting threshold.
+- **Reports where they need to go.** One command files the day or the month to
+  your corporate API; exports to CSV, JSON and Excel, hourly breakdown
+  included.
+- **Passwords in the OS keyring** - Credential Manager, Keychain, Secret
+  Service. Nothing is encrypted with a key that ships inside the binary.
+- **Nothing that hangs.** Every prompt checks for a terminal first, so kasl
+  under cron or under the daemon fails with the flag you needed instead of
+  waiting for an answer nobody can give.
+- **A team server, when there is one.** `kasl server connect` points this
+  machine at a self-hosted
+  [kasl-server](https://github.com/lacodda/kasl-server); a day that cannot be
+  delivered is queued, and the next push carries the backlog with it.
+  Connecting is optional and changes nothing locally.
+- **A short alias.** `ka` is installed beside `kasl` as a *link* to the same
+  binary, so an update can never leave one behind. Completions for bash, zsh,
+  fish, PowerShell and elvish.
 
 ## Install
 
