@@ -286,6 +286,11 @@ the `jira` block; the inbox stays off when this one is absent.
 - **Default**: `false`
 - **Description**: Toast when an issue leaves the inbox, closed or reassigned. Off by default: a departure is rarely something to interrupt you for
 
+### `toast_snooze_for`
+- **Type**: `String`
+- **Default**: `"1d"`
+- **Description**: How long a toast's **Snooze** button sleeps - `3d`, `12h`, `2w`. Shares its spelling with `inbox triage --snooze-for`, so a button and the picker cannot put an issue to sleep for different lengths
+
 ### `custom_fields`
 - **Type**: `{ "id": String, "label": String }[]`
 - **Default**: `[]`
@@ -306,6 +311,7 @@ the `jira` block; the inbox stays off when this one is absent.
     "notify": true,
     "notify_changes": true,
     "notify_gone": false,
+    "toast_snooze_for": "1d",
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
     "sort_by_field": "customfield_12345"
   }

@@ -217,9 +217,37 @@ Taking the same issue twice does not create a second task; the command says
 which task it already became. The stored key survives renaming the task, so the
 link outlives the summary it started with.
 
+## Toast buttons
+
+A toast about one issue carries the three decisions worth making about it, so the pile can be triaged without opening a terminal:
+
+- **Take** - imports the issue into your tasks, exactly as `kasl inbox take` does
+- **Snooze** - puts it to sleep for `toast_snooze_for` (a day by default)
+- **Dismiss** - hides it from the list
+
+Clicking the toast *body*, as before, opens the issue in the browser.
+
+The press is carried out by the running `kasl watch` daemon, which answers with a second toast saying what happened - `KA-1 is now a task`, `KA-1 sleeps until Sep 18 09:30`. An answer within a couple of seconds is the point: a button that changes something in silence leaves you unsure the press registered.
+
+Pressing a button for an issue that Jira has since closed or reassigned says so (`KA-1 is no longer in the inbox`) instead of failing quietly. Pressing **Take** twice reports the task that already exists rather than making a second copy - which matters, because a toast can be pressed from the notification centre long after it appeared.
+
+Stopping the watcher does not leave a dead button: with no daemon running, the press is carried out on the spot instead.
+
+### What each platform can do
+
+| Platform | Toast body | Buttons |
+| --- | --- | --- |
+| Windows | Opens the issue | **Take**, **Snooze**, **Dismiss** |
+| Linux (and other XDG desktops) | Opens the issue | **Take**, **Snooze**, **Dismiss** |
+| macOS | Display only | None - use `kasl inbox triage` |
+
+On macOS the notification API cannot report a click at all, so the buttons are not drawn rather than drawn dead: `kasl inbox triage` walks the same three decisions with room to think.
+
+Windows needs no registry entry and no protocol of its own. A toast button there can only ask the shell to launch a URI, and no argument survives that trip, so the watcher writes one shortcut per (action, issue) under `toast-buttons/` in the data directory and the button launches that. The shortcuts of a decided issue are removed once it is settled.
+
 ## Background Polling
 
-Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
+Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux, and its buttons decide it. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
 
 A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. And when one poll would raise more than five toasts of a kind (a first sync of a long backlog, a Jira-side re-scoring), they collapse into a single summary toast that opens your open-issues list in Jira.
 
@@ -235,6 +263,7 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
     "notify": true,
     "notify_changes": true,
     "notify_gone": false,
+    "toast_snooze_for": "1d",
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
     "sort_by_field": "customfield_12345"
   }
@@ -246,6 +275,7 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
 - `notify`: Show desktop toasts for new issues (default `true`); when `false`, all inbox toasts are off
 - `notify_changes`: Toast when an existing issue changes status, priority, or score (default `true`)
 - `notify_gone`: Toast when an issue leaves the inbox — closed or reassigned (default `false`)
+- `toast_snooze_for`: How long a toast's **Snooze** button sleeps — `3d`, `12h`, `2w` (default `1d`), the same spelling as `triage --snooze-for`
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field
 - `sort_by_field`: Field id used to rank the list in descending order
 

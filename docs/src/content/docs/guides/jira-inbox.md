@@ -130,19 +130,49 @@ its value has no label to display with. Issues without a value for that field
 sort after ones that have it, in the priority/freshness order described
 above.
 
-## Toasts, and where they take you
+## Toasts, and what you can do from them
 
-Clicking the toast opens the issue in your browser - on Windows and Linux.
-That's a real click-to-open action wired to the notification.
+A toast about an issue is not just a notice - it carries the three decisions
+worth making about that issue, so most of the pile never needs a terminal:
 
-On macOS it doesn't: the underlying notification API there has no way to
-report that a notification was clicked, so the toast is informational only -
-it tells you something happened, but clicking it does nothing. Use the CLI to
-open the issue instead:
+- **Take** - the issue becomes a task, exactly as `kasl inbox take` would
+- **Snooze** - it sleeps for `toast_snooze_for`, a day by default
+- **Dismiss** - it leaves the list
+
+Clicking the toast *body* still opens the issue in your browser.
+
+The press is carried out by the `kasl watch` daemon, which answers within a
+couple of seconds with a second toast: `PROJ-412 is now a task`, or
+`PROJ-412 sleeps until Sep 18 09:30`. That answer is the point - a button
+that changes something in silence leaves you wondering whether it registered,
+and pressing again is the natural response to that doubt.
+
+Two things that would otherwise surprise you:
+
+- Pressing **Take** twice reports the task you already have instead of making
+  a second one. A toast can be pressed from the notification centre long
+  after it appeared, so this is common rather than exotic.
+- Pressing anything for an issue Jira has since closed or reassigned says
+  `PROJ-412 is no longer in the inbox` rather than failing quietly.
+
+On macOS the buttons are not there. The notification API on that platform has
+no way to report that a notification was clicked at all, so the toast is
+informational only, and the buttons are left out rather than drawn dead. The
+same three decisions are one command away:
 
 ```bash
+kasl inbox triage      # walk the pile, deciding each
 kasl inbox open PROJ-412
 ```
+
+| Platform | Toast body | Buttons |
+| --- | --- | --- |
+| Windows | Opens the issue | **Take**, **Snooze**, **Dismiss** |
+| Linux (and other XDG desktops) | Opens the issue | **Take**, **Snooze**, **Dismiss** |
+| macOS | Display only | None - use `kasl inbox triage` |
+
+Stopping the watcher does not leave a dead button behind: with no daemon
+running, a press is carried out on the spot instead.
 
 A third toast, off by default (`notify_gone: false`), fires when an issue
 leaves the inbox. Most people don't want to be interrupted for that; turn it

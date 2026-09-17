@@ -4,6 +4,8 @@ title: "watch"
 
 The `watch` command is kasl's activity monitor. It watches keyboard and mouse input to detect when a workday starts, records pauses when input stops, and closes the day when activity ends for good.
 
+It also does two things for the [Jira inbox](/reference/inbox/): it polls Jira on its own cadence, and it is what answers the **Take** / **Snooze** / **Dismiss** buttons on an inbox toast. Both run in daemon and `--foreground` modes alike. With the watcher stopped, a toast button still works - the press is carried out on the spot instead - but nothing polls Jira, so no new toast appears.
+
 ## Usage
 
 ```bash
