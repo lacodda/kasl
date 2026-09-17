@@ -89,8 +89,15 @@ async fn run_monitor() -> Result<()> {
         crate::libs::jira_inbox::run_poller().await;
     });
 
+    // Foreground mode answers toast buttons too, so debugging a button does
+    // not require running the detached daemon.
+    let mailbox_handle = tokio::spawn(async move {
+        crate::libs::jira_inbox::run_mailbox_watcher().await;
+    });
+
     let result = monitor.run().await;
     inbox_handle.abort();
+    mailbox_handle.abort();
     result
 }
 

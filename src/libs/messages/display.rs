@@ -543,6 +543,9 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             }
             Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
             Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
+            Message::ToastActionUnknown(name) => format!("Unknown toast action '{}'; expected take, snooze or dismiss.", name),
+            Message::ToastActionApplied(what) => format!("{}.", what),
+            Message::ToastActionFailed(key, why) => format!("Could not act on {} from the toast: {}", key, why),
             Message::JiraInboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),
             Message::JiraInboxSummary { total, fresh, taken } => {
                 // Only the parts that carry information: "3 in the inbox" says

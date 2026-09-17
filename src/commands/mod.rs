@@ -24,6 +24,7 @@ pub mod sum;
 pub mod tag;
 pub mod task;
 pub mod template;
+pub mod toast_action;
 pub mod update;
 pub mod watch;
 
@@ -151,6 +152,16 @@ enum Commands {
         shell: clap_complete::Shell,
     },
 
+    /// Carry one toast button press to the watcher (internal)
+    ///
+    /// Launched by the shortcut behind a toast's Take / Snooze / Dismiss
+    /// button, because a toast button cannot pass an argument of its own.
+    /// It posts the decision to the watcher and exits without printing.
+    /// Hidden from help and completion: the commands a person types for this
+    /// are `kasl inbox take`, `snooze` and `dismiss`, which say what they did.
+    #[command(hide = true, about = "Carry a toast button press to the watcher")]
+    ToastAction(toast_action::ToastActionArgs),
+
     /// Database migration management utilities (debug builds only)
     ///
     /// Provides tools for database schema management, migration history,
@@ -239,6 +250,7 @@ impl Cli {
             }
             Commands::Server(args) => server::cmd(args).await,
             Commands::Inbox(args) => inbox::cmd(args).await,
+            Commands::ToastAction(args) => toast_action::cmd(args),
 
             // Database migrations only available in debug builds
             #[cfg(debug_assertions)]

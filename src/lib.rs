@@ -47,6 +47,12 @@ pub fn run() -> anyhow::Result<()> {
         let args: Vec<String> = std::env::args().collect();
         if args.len() > 1 && args[1] == "--daemon-run" {
             commands::watch::run_as_daemon().await?;
+        } else if args.len() > 1 && args[1] == "toast-action" {
+            // The courier runs from a toast button press, so it skips the
+            // update notification: a background check the user never asked
+            // for would delay the one thing they did ask for, and there is
+            // no terminal to show its answer on.
+            commands::Cli::menu().await?;
         } else {
             // Non-blocking; only surfaces a notification when one is due.
             libs::update::Updater::show_update_notification().await;

@@ -3,13 +3,12 @@
 //! Manages the local `jira_inbox` table populated from assigned open Jira issues.
 
 use crate::db::jira_inbox::{JiraInbox, JiraInboxItem};
-use crate::db::tasks::Tasks;
 use crate::libs::config::Config;
 use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_named};
 use crate::libs::jira_inbox as inbox_lib;
 use crate::libs::messages::Message;
 use crate::libs::pick::{self, TriageAction, TriageAnswer};
-use crate::libs::task::{Task, TaskFilter};
+use crate::libs::toast_apply::{self, Applied};
 use crate::libs::view::View;
 use crate::{msg_error, msg_info, msg_print, msg_success};
 use anyhow::{Result, bail};
@@ -411,12 +410,10 @@ fn set_pinned(key: &str, pinned: bool) -> Result<()> {
 }
 
 fn dismiss(key: &str) -> Result<()> {
-    let db = JiraInbox::new()?;
-    if !db.set_dismissed(key, true)? {
-        msg_error!(Message::JiraInboxNotFound(key.to_string()));
-        return Ok(());
+    match toast_apply::dismiss(key)? {
+        Applied::NotFound => msg_error!(Message::JiraInboxNotFound(key.to_string())),
+        _ => msg_success!(Message::JiraInboxDismissed(key.to_string())),
     }
-    msg_success!(Message::JiraInboxDismissed(key.to_string()));
     Ok(())
 }
 
@@ -567,14 +564,10 @@ fn score_field_label(fields: &[crate::libs::config::JiraCustomField], id: &str) 
 /// demanded a duration every time would be slower than reading past the row.
 fn snooze(key: &str, duration: Option<&str>) -> Result<()> {
     let window = inbox_filter::parse_window(duration.unwrap_or("1d"))?;
-    let until = Local::now().naive_local() + window;
-
-    let db = JiraInbox::new()?;
-    if !db.set_snoozed(key, Some(until))? {
-        msg_error!(Message::JiraInboxNotFound(key.to_string()));
-        return Ok(());
+    match toast_apply::snooze(key, window)? {
+        Applied::Snoozed(until) => msg_success!(Message::JiraInboxSnoozed(key.to_string(), until.format("%b %-d %H:%M").to_string())),
+        _ => msg_error!(Message::JiraInboxNotFound(key.to_string())),
     }
-    msg_success!(Message::JiraInboxSnoozed(key.to_string(), until.format("%b %-d %H:%M").to_string()));
     Ok(())
 }
 
@@ -615,31 +608,10 @@ fn unsnooze(key: Option<String>) -> Result<()> {
 /// issue had ever been picked up. Now the task carries `jira_key`, and the
 /// issue stays in the list wearing a `taken` badge.
 fn take_issue(key: &str) -> Result<()> {
-    let db = JiraInbox::new()?;
-    let Some(item) = db.get_by_key(key)? else {
-        msg_error!(Message::JiraInboxNotFound(key.to_string()));
-        return Ok(());
-    };
-
-    // Taking the same issue twice should not fan out into duplicate tasks -
-    // the second call is almost always a repeated keystroke, not a request
-    // for a second copy of the same work.
-    let mut tasks = Tasks::new()?;
-    let existing = tasks.fetch(TaskFilter::ByJiraKey(key.to_string()))?;
-    if let Some(task) = existing.first() {
-        msg_info!(Message::JiraInboxAlreadyTaken(key.to_string(), task.name.clone()));
-        // Repair the mark if only the task survived - an issue taken before
-        // this became possible has a task but no `taken_at`.
-        if item.taken_at.is_none() {
-            let _ = db.set_taken(key, true)?;
-        }
-        return Ok(());
+    match toast_apply::take(key)? {
+        Applied::Taken => msg_success!(Message::JiraInboxTaken(key.to_string())),
+        Applied::AlreadyTaken(name) => msg_info!(Message::JiraInboxAlreadyTaken(key.to_string(), name)),
+        _ => msg_error!(Message::JiraInboxNotFound(key.to_string())),
     }
-
-    let name = format!("{} {}", item.issue_key, item.summary);
-    let task = Task::new(&name, "", Some(0)).from_jira(key);
-    tasks.insert(&task)?;
-    let _ = db.set_taken(key, true)?;
-    msg_success!(Message::JiraInboxTaken(key.to_string()));
     Ok(())
 }

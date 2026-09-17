@@ -102,12 +102,19 @@ pub async fn run_with_signal_handling() -> Result<()> {
         crate::libs::jira_inbox::run_poller().await;
     });
 
+    // Toast buttons are answered on their own, much faster cadence: this is
+    // the task that makes the daemon the one that receives a click.
+    let mailbox_handle = tokio::spawn(async move {
+        crate::libs::jira_inbox::run_mailbox_watcher().await;
+    });
+
     // Wait for either the monitor to finish or a shutdown signal
     // This provides coordinated shutdown between different components
     tokio::select! {
         result = monitor_handle => {
             // Monitor task completed (either successfully or with error)
             inbox_handle.abort();
+            mailbox_handle.abort();
             match result {
                 Ok(Ok(())) => msg_info!(Message::MonitorExitedNormally),
                 Ok(Err(e)) => msg_error!(Message::MonitorError(e.to_string())),
@@ -117,6 +124,7 @@ pub async fn run_with_signal_handling() -> Result<()> {
         _ = shutdown_rx => {
             // Received shutdown signal
             inbox_handle.abort();
+            mailbox_handle.abort();
             msg_info!(Message::MonitorShuttingDown);
             // The monitor will be dropped when this function exits
         }

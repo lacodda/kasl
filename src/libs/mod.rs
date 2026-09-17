@@ -41,5 +41,9 @@ pub mod secret;
 pub mod stdin_drain;
 pub mod summary;
 pub mod task;
+pub mod toast_action;
+pub mod toast_apply;
+#[cfg(windows)]
+pub mod toast_shortcut;
 pub mod update;
 pub mod view;

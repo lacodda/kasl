@@ -4,12 +4,20 @@
 //! shows desktop toast notifications for newly discovered keys. Toast click
 //! opens the issue browse URL (Windows: win-toast-notify protocol activation;
 //! other platforms: notify-rust action callback).
+//!
+//! A toast about an issue also carries the three decisions worth making about
+//! it - Take, Snooze, Dismiss - so the pile can be triaged without opening a
+//! terminal. How a button press gets back to the daemon is
+//! [`crate::libs::toast_action`]; what it then does is
+//! [`crate::libs::toast_apply`].
 
 use crate::api::jira::Jira;
 use crate::db::jira_inbox::{ChangedIssue, JiraInbox, JiraInboxItem, JiraInboxUpsert, UpsertBatchResult};
 use crate::db::jira_statuses::JiraStatuses;
 use crate::libs::config::{Config, JiraInboxConfig};
 use crate::libs::messages::Message;
+use crate::libs::toast_action::{Mailbox, ToastAction};
+use crate::libs::toast_apply;
 use crate::{msg_info, msg_warning};
 use anyhow::Result;
 use std::process::Command;
@@ -218,6 +226,7 @@ pub fn wake_snoozed(notify: bool) -> Result<usize> {
                 &format!("{} snoozed issues are back - see `kasl inbox`", woken.len()),
                 &list_url,
                 "inbox",
+                &[],
             );
         } else {
             for item in &woken {
@@ -244,42 +253,54 @@ fn open_issues_url_from(issue_url: &str) -> String {
 /// Shows a toast for an issue whose snooze has run out.
 pub fn show_snoozed_toast(item: &JiraInboxItem) -> bool {
     let body = format!("Back from snooze - {}", item.summary);
-    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+    show_issue_toast(item, &body)
 }
 
 /// Shows a desktop toast for a newly discovered inbox item.
 ///
-/// Clicking the toast opens [`JiraInboxItem::url`] in the default browser.
+/// Clicking the toast body opens [`JiraInboxItem::url`] in the default
+/// browser; the buttons decide the issue without leaving the desktop.
 pub fn show_toast(item: &JiraInboxItem) -> bool {
-    show_raw_toast(&format!("Jira {}", item.issue_key), &toast_body(item), &item.url, &item.issue_key)
+    show_issue_toast(item, &toast_body(item))
 }
 
 /// Shows a toast for a visible change on an existing inbox item.
 pub fn show_change_toast(item: &JiraInboxItem, change: &str) -> bool {
     let body = format!("{change} — {}", item.summary);
-    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+    show_issue_toast(item, &body)
 }
 
 /// Shows one toast standing in for many; clicking opens the open-issues list in Jira.
+///
+/// No buttons: a summary is about a pile, and there is no one issue for Take
+/// to take. The pile is triaged in `kasl inbox triage`, which the body says.
 pub fn show_summary_toast(jira: &Jira, what: &str) -> bool {
-    show_raw_toast("Jira inbox", &format!("{what} - see `kasl inbox`"), &jira.open_issues_url(), "inbox")
+    show_raw_toast("Jira inbox", &format!("{what} - see `kasl inbox`"), &jira.open_issues_url(), "inbox", &[])
 }
 
 /// Shows a toast for an issue that left the inbox (closed or reassigned).
+///
+/// No buttons either: the issue is already gone, so all three decisions are
+/// about work that is no longer there.
 pub fn show_gone_toast(item: &JiraInboxItem) -> bool {
     let body = format!("Left the inbox — {}", item.summary);
-    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key)
+    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[])
 }
 
-/// Platform dispatch for a toast with a click-to-open URL.
-fn show_raw_toast(title: &str, body: &str, url: &str, key: &str) -> bool {
+/// A toast about one live issue: the body opens it, the buttons decide it.
+fn show_issue_toast(item: &JiraInboxItem, body: &str) -> bool {
+    show_raw_toast(&format!("Jira {}", item.issue_key), body, &item.url, &item.issue_key, &ToastAction::ALL)
+}
+
+/// Platform dispatch for a toast with a click-to-open URL and buttons.
+fn show_raw_toast(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction]) -> bool {
     #[cfg(windows)]
     {
-        show_toast_windows(title, body, url, key)
+        show_toast_windows(title, body, url, key, actions)
     }
     #[cfg(not(windows))]
     {
-        show_toast_other(title, body, url, key)
+        show_toast_other(title, body, url, key, actions)
     }
 }
 
@@ -307,11 +328,41 @@ fn toast_logo_path() -> Option<std::path::PathBuf> {
     Some(path)
 }
 
+/// The buttons for one issue, each pointing at its own shortcut.
+///
+/// A shortcut that cannot be written costs that button and nothing else: a
+/// toast with two buttons is still useful, and a toast that failed to appear
+/// because of a file permission would not be.
 #[cfg(windows)]
-fn show_toast_windows(title: &str, body: &str, url: &str, key: &str) -> bool {
+fn windows_buttons(key: &str, actions: &[ToastAction]) -> Vec<win_toast_notify::Action> {
+    actions
+        .iter()
+        .filter_map(|action| match crate::libs::toast_shortcut::ensure(*action, key) {
+            Ok(uri) => Some(win_toast_notify::Action {
+                activation_type: win_toast_notify::ActivationType::Protocol,
+                action_content: action.label().to_string(),
+                arguments: uri,
+                image_url: None,
+            }),
+            Err(e) => {
+                warn!("No {} button on the {} toast: {}", action.as_str(), key, e);
+                None
+            }
+        })
+        .collect()
+}
+
+#[cfg(windows)]
+fn show_toast_windows(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction]) -> bool {
     let mut toast = win_toast_notify::WinToastNotify::new().set_title(title).set_messages(vec![body]).set_open(url);
     if let Some(logo) = toast_logo_path() {
         toast = toast.set_logo(&logo.to_string_lossy(), win_toast_notify::CropCircle::False);
+    }
+    if !actions.is_empty() {
+        let buttons = windows_buttons(key, actions);
+        if !buttons.is_empty() {
+            toast = toast.set_actions(buttons);
+        }
     }
 
     match toast.show() {
@@ -326,20 +377,40 @@ fn show_toast_windows(title: &str, body: &str, url: &str, key: &str) -> bool {
     }
 }
 
+/// Linux and other XDG desktops: buttons are D-Bus actions on the
+/// notification, so the press arrives in this process directly and there is
+/// no shortcut and no courier - the mailbox is posted to in-process.
+///
+/// The wait runs on its own thread because `wait_for_action` blocks until the
+/// notification is closed, and the poller must not stop for it.
 #[cfg(all(not(windows), not(target_os = "macos")))]
-fn show_toast_other(title: &str, body: &str, url: &str, key: &str) -> bool {
+fn show_toast_other(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction]) -> bool {
     let url = url.to_string();
     let owned_key = key.to_string();
 
-    match notify_rust::Notification::new().summary(title).body(body).action("default", "Open").show() {
+    let mut notification = notify_rust::Notification::new();
+    notification.summary(title).body(body).action("default", "Open");
+    for action in actions {
+        notification.action(action.as_str(), action.label());
+    }
+
+    match notification.show() {
         Ok(handle) => {
             // Wait for click off the poller thread so sync stays responsive.
             std::thread::spawn(move || {
                 handle.wait_for_action(|action| {
-                    if action == "default"
-                        && let Err(e) = open_url(&url)
-                    {
-                        warn!("Failed to open {} from toast: {}", owned_key, e);
+                    if action == "default" {
+                        if let Err(e) = open_url(&url) {
+                            warn!("Failed to open {} from toast: {}", owned_key, e);
+                        }
+                    } else if let Some(chosen) = ToastAction::parse(action) {
+                        let request = crate::libs::toast_action::ToastRequest::new(chosen, &owned_key);
+                        // Posted rather than applied here so both platforms
+                        // settle a decision in exactly one place: the drain.
+                        match Mailbox::open().and_then(|m| m.post(&request)) {
+                            Ok(()) => debug!("Posted {} {} from a toast button", action, owned_key),
+                            Err(e) => warn!("Failed to post {} {} from a toast button: {}", action, owned_key, e),
+                        }
                     }
                 });
             });
@@ -354,9 +425,11 @@ fn show_toast_other(title: &str, body: &str, url: &str, key: &str) -> bool {
 }
 
 /// macOS: notify-rust cannot wait for notification clicks (no actions API),
-/// so the toast is display-only and opening stays on the CLI (`inbox --open`).
+/// so the toast is display-only, and both opening and deciding stay on the
+/// CLI (`kasl inbox triage`). The buttons are not rendered rather than
+/// rendered dead: a button that does nothing is worse than no button.
 #[cfg(target_os = "macos")]
-fn show_toast_other(title: &str, body: &str, _url: &str, key: &str) -> bool {
+fn show_toast_other(title: &str, body: &str, _url: &str, key: &str, _actions: &[ToastAction]) -> bool {
     match notify_rust::Notification::new().summary(title).body(body).show() {
         Ok(_) => {
             debug!("Showed toast for {}", key);
@@ -384,6 +457,80 @@ pub fn open_url(url: &str) -> Result<()> {
         Command::new("xdg-open").arg(url).spawn()?;
     }
     Ok(())
+}
+
+/// Performs every toast button press waiting in the mailbox.
+///
+/// Returns how many were carried out. Each one answers on a toast, because
+/// the decision was made on a toast: a button that changes the database in
+/// silence leaves the user unsure whether the press registered, and pressing
+/// again is the natural response to that doubt.
+///
+/// One failing request does not stop the rest. A click is a user action that
+/// already happened; refusing to carry out the next one because the previous
+/// key was missing would lose work the user did.
+pub fn drain_toast_actions() -> Result<usize> {
+    let requests = Mailbox::open()?.collect()?;
+    if requests.is_empty() {
+        return Ok(0);
+    }
+
+    let db = JiraInbox::new()?;
+    let mut done = 0;
+    for request in &requests {
+        // Read the row before acting: the answering toast should still open
+        // the issue it is about, and a dismiss or a take may be the last
+        // moment its URL is easy to reach.
+        let url = db.get_by_key(&request.issue_key).ok().flatten().map(|item| item.url).unwrap_or_default();
+        match toast_apply::apply(request) {
+            Ok(outcome) => {
+                debug!("Toast action {} {}: {:?}", request.action.as_str(), request.issue_key, outcome);
+                if outcome.settled() {
+                    // The buttons of a decided issue are shortcuts that still
+                    // run; nothing points at them any more, so they go.
+                    #[cfg(windows)]
+                    crate::libs::toast_shortcut::forget(&request.issue_key);
+                }
+                msg_info!(Message::ToastActionApplied(outcome.summary(&request.issue_key)));
+                // The answer opens the issue, not nothing: an empty launch
+                // target makes the toast body a dead click area, which reads
+                // as the toast being broken.
+                show_raw_toast("Jira inbox", &outcome.summary(&request.issue_key), &url, &request.issue_key, &[]);
+                done += 1;
+            }
+            Err(e) => {
+                warn!("Toast action {} {} failed: {}", request.action.as_str(), request.issue_key, e);
+                msg_warning!(Message::ToastActionFailed(request.issue_key.clone(), e.to_string()));
+            }
+        }
+    }
+    Ok(done)
+}
+
+/// How often the daemon looks in the toast mailbox.
+///
+/// A button has to answer in the time a person waits after pressing one, so
+/// this is seconds, not the poll interval. It cannot ride on the Jira poll:
+/// that runs every five minutes by default, and a button that answers in
+/// five minutes is not a button - the user would press it again, or conclude
+/// it does not work.
+const MAILBOX_INTERVAL_SECS: u64 = 2;
+
+/// Watches the toast mailbox and performs what lands in it.
+///
+/// Its own loop rather than a step of the Jira poll, and it keeps running
+/// when polling is disabled or Jira is unreachable: a press on a toast that
+/// is already on screen is a decision about a local row, and owes nothing to
+/// the network.
+pub async fn run_mailbox_watcher() {
+    loop {
+        match drain_toast_actions() {
+            Ok(0) => {}
+            Ok(count) => debug!("Carried out {} toast action(s)", count),
+            Err(e) => warn!("Jira inbox: failed to drain toast actions: {}", e),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(MAILBOX_INTERVAL_SECS)).await;
+    }
 }
 
 /// Background poll loop used by `kasl watch`.

@@ -345,6 +345,7 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
         // wizard stays short and these are tuned via the config file.
         notify_changes: default.notify_changes,
         notify_gone: default.notify_gone,
+        toast_snooze_for: default.toast_snooze_for.clone(),
         custom_fields,
         sort_by_field,
     })

@@ -446,6 +446,14 @@ pub enum Message {
         taken: i64,
     },
     JiraInboxOpenFailed(String),
+
+    /// A courier was handed an action name that is not one of the three.
+    ToastActionUnknown(String),
+    /// What a toast button came to: the one-line outcome, already worded.
+    ToastActionApplied(String),
+    /// A toast button could not be carried out: key, then why.
+    ToastActionFailed(String, String),
+
     PromptJiraInboxEnabled,
     PromptJiraInboxPollInterval,
     PromptJiraInboxNotify,

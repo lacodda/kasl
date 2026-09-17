@@ -246,6 +246,14 @@ pub struct JiraInboxConfig {
     /// Field id used for ranking (DESC), typically Scoring (`customfield_…`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sort_by_field: Option<String>,
+
+    /// How long a toast's Snooze button sleeps: 3d, 12h, 2w.
+    ///
+    /// Shares its spelling with `inbox triage --snooze-for`, because a button
+    /// and the picker putting an issue to sleep for different lengths would be
+    /// two behaviours wearing one word.
+    #[serde(default = "default_toast_snooze_for")]
+    pub toast_snooze_for: String,
 }
 
 /// A user-configured Jira custom field for inbox sync / display.
@@ -265,6 +273,10 @@ fn default_jira_inbox_poll_interval() -> u64 {
     300
 }
 
+fn default_toast_snooze_for() -> String {
+    "1d".to_string()
+}
+
 impl Default for JiraInboxConfig {
     fn default() -> Self {
         Self {
@@ -275,6 +287,7 @@ impl Default for JiraInboxConfig {
             notify_gone: false,
             custom_fields: Vec::new(),
             sort_by_field: None,
+            toast_snooze_for: default_toast_snooze_for(),
         }
     }
 }
