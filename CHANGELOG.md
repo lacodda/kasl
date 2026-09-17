@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.12.0] - 2026-09-17
+
+### Bug Fixes
+- Let the changelog link carry the version
+- Separate releases with a blank line
+
+### Documentation
+- Replace the status checklist with what ships today
+- Shorten the feature list to one or two lines an item
+- Document the toast buttons and the platform matrix
+
+### Features
+- Decide an issue from its toast
+
+### Testing
+- Make a hidden command a decision with a reason
+
 ## [1.11.0] - 2026-09-16
 
 ### Bug Fixes
@@ -16,10 +33,12 @@ All notable changes to this project are documented in this file.
 - Snooze an issue until a moment passes
 - Show one issue, and why it sits where it does
 - Triage the whole pile in one sitting
+
 ## [1.10.1] - 2026-09-08
 
 ### Bug Fixes
 - Compare versions as numbers, not text
+
 ## [1.10.0] - 2026-09-08
 
 ### Documentation
@@ -27,15 +46,18 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Cut the list by age, change, score, priority and status
+
 ## [1.9.2] - 2026-09-08
 
 ### Bug Fixes
 - Render each icon size at its level, largest first
+
 ## [1.9.1] - 2026-09-07
 
 ### Bug Fixes
 - Treat a failed Jira poll as an error, not an empty inbox
 - Keep the user PATH expandable on Windows
+
 ## [1.9.0] - 2026-09-03
 
 ### Bug Fixes
@@ -43,6 +65,7 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Queue undelivered days and send a backlog in one request
+
 ## [1.8.1] - 2026-08-31
 
 ### Breaking Changes
@@ -53,10 +76,12 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Ship one binary and make ka a link
+
 ## [1.8.0] - 2026-08-31
 
 ### Features
 - Send a day to the connected kasl-server
+
 ## [1.7.0] - 2026-08-29
 
 ### Bug Fixes
@@ -64,10 +89,12 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Connect this machine to a kasl-server
+
 ## [1.6.0] - 2026-08-26
 
 ### Features
 - Make take the start of work rather than an import
+
 ## [1.5.0] - 2026-08-26
 
 ### Bug Fixes
@@ -75,10 +102,12 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 - Revise every page against the code and add five guides
+
 ## [1.4.1] - 2026-08-19
 
 ### Bug Fixes
 - Point Windows shells at the PowerShell installer
+
 ## [1.4.0] - 2026-08-19
 
 ### Bug Fixes
@@ -86,6 +115,7 @@ All notable changes to this project are documented in this file.
 
 ### Testing
 - Remove duplicated suites and make skipped tests visible
+
 ## [1.3.0] - 2026-08-14
 
 ### Documentation
@@ -102,6 +132,7 @@ All notable changes to this project are documented in this file.
 - Separate the data model from the setup wizard
 - Move discovery into its own module
 - Route the remaining hand-rolled pickers through libs/pick
+
 ## [1.2.0] - 2026-08-14
 
 ### Documentation
@@ -113,14 +144,17 @@ All notable changes to this project are documented in this file.
 
 ### Testing
 - Check completions across all five shells
+
 ## [1.1.1] - 2026-08-13
 
 ### Bug Fixes
 - Resolve the latest tag without the GitHub API
+
 ## [1.1.0] - 2026-08-13
 
 ### Features
 - Reconcile gone issues and surface visible changes
+
 ## [1.0.3] - 2026-08-12
 
 ### Bug Fixes
@@ -132,10 +166,12 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Tier the exe icon by level and show the logo on toasts
+
 ## [1.0.2] - 2026-08-09
 
 ### Bug Fixes
 - One README and one description across all three pages
+
 ## [1.0.1] - 2026-08-09
 
 ### Bug Fixes
@@ -145,6 +181,7 @@ All notable changes to this project are documented in this file.
 - Rewrite in the turnout style
 - Bring the landing in line with turnout
 - Use the L tile for the header mark
+
 ## [1.0.0] - 2026-08-09
 
 ### Breaking Changes
@@ -181,6 +218,7 @@ All notable changes to this project are documented in this file.
 
 ### style
 - Rustfmt and clippy cleanup for gitlab and jira changes
+
 ## [0.10.1] - 2026-08-07
 
 ### Bug Fixes
@@ -200,6 +238,7 @@ All notable changes to this project are documented in this file.
 
 ### Testing
 - Capture stop output for CI diagnostics
+
 ## [0.10.0] - 2026-08-07
 
 ### Bug Fixes
@@ -228,6 +267,7 @@ All notable changes to this project are documented in this file.
 
 ### Testing
 - Serialize env-dependent tests and harden the daemon harness
+
 ## [0.9.0] - 2026-08-07
 
 ### Bug Fixes
@@ -242,6 +282,7 @@ All notable changes to this project are documented in this file.
 - Add hourly daily report with localization and design templates
 - Unify task discovery into a single filtered MultiSelect
 - Add configurable ignore list for task discovery
+
 ## [0.8.2] - 2025-08-24
 
 ### Bug Fixes
@@ -268,6 +309,7 @@ All notable changes to this project are documented in this file.
 ### Testing
 - Move inline tests from src/libs/report.rs to tests/report_functions.rs
 - Re-enable tests and fix related warnings
+
 ## [0.8.1] - 2025-08-22
 
 ### Documentation
@@ -283,6 +325,7 @@ All notable changes to this project are documented in this file.
 ### Testing
 - Implement missing test coverage for critical components
 - Add comprehensive test suite for breaks functionality and productivity features
+
 ## [0.8.0] - 2025-08-20
 
 ### Bug Fixes
@@ -327,6 +370,7 @@ All notable changes to this project are documented in this file.
 
 ### style
 - Unify code comment formatting across all source files
+
 ## [0.6.0] - 2024-08-01
 
 ### Bug Fixes
@@ -383,6 +427,7 @@ All notable changes to this project are documented in this file.
 ### Testing
 - Add tests for config
 - Tests for report have been fixed
+
 ## [0.5.0] - 2024-07-11
 
 ### Bug Fixes
@@ -391,6 +436,7 @@ All notable changes to this project are documented in this file.
 ### Features
 - Improved view of the list of issues proposed for adding (divided into groups: Incomplete, Gitlab, Jira, etc.)
 - Tasks are divided into groups for even distribution in the report
+
 ## [0.4.1] - 2024-06-30
 
 ### Bug Fixes
@@ -398,6 +444,7 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Added a function for sending a monthly summary report in the Si module
+
 ## [0.4.0] - 2024-06-25
 
 ### Bug Fixes
@@ -410,6 +457,7 @@ All notable changes to this project are documented in this file.
 
 ### Refactoring
 - API module configs have been moved from the libs/config.rs file to the corresponding module files
+
 ## [0.3.0] - 2024-06-18
 
 ### Bug Fixes
@@ -420,6 +468,7 @@ All notable changes to this project are documented in this file.
 - Added average operating time to the sum command report
 - Added gitlab api module
 - Added commits from gitlab to create a list of tasks
+
 ## [0.2.0] - 2024-05-17
 
 ### Bug Fixes
@@ -427,6 +476,7 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Added "raw" flag to the "event" command
+
 ## [0.1.1] - 2024-04-08
 
 ### Bug Fixes
@@ -437,6 +487,7 @@ All notable changes to this project are documented in this file.
 ### Features
 - Watch command has been added
 - Added aliases for event command
+
 ## [0.1.0] - 2024-03-25
 
 ### Bug Fixes
@@ -446,6 +497,7 @@ All notable changes to this project are documented in this file.
 ### Features
 - A simple wizard has been added to set configuration settings
 - Summary command has been added
+
 ## [0.0.2] - 2024-03-19
 
 ### Bug Fixes
@@ -453,6 +505,7 @@ All notable changes to this project are documented in this file.
 
 ### Features
 - Bash installation script has been slightly modified
+
 ## [0.0.1] - 2024-03-18
 
 ### Bug Fixes
@@ -497,3 +550,4 @@ All notable changes to this project are documented in this file.
 - Database modules are moved to separate files
 - The FormatEvents trait and FormatEvent structure have been added to the Event module
 - The FormatTasks trait has been added to the Task module
+

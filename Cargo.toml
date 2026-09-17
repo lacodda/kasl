@@ -6,7 +6,7 @@
 # to an unrelated project); the binary, library and app identity stay "kasl".
 [package]
 name = "kasl-cli"
-version = "1.11.0"
+version = "1.12.0"
 edition = "2024"
 rust-version = "1.95"
 description = "Work activity tracker CLI: automatic workday and break detection, task management with Jira/GitLab integration, productivity reports and exports"
@@ -135,6 +135,14 @@ winapi = { version = "0.3", features = [
     "consoleapi",
     "synchapi",
     "wincontypes",
+    # Toast buttons: a shell link per (action, issue), built via IShellLinkW
+    # because the shell refuses a hand-written .lnk (no LinkTargetIDList).
+    "combaseapi",
+    "objbase",
+    "objidl",
+    "shobjidl_core",
+    "wtypesbase",
+    "winuser",
 ] }
 
 # Development dependencies for testing
