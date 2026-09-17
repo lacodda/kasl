@@ -18,6 +18,7 @@ All notable changes to this project are documented in this file.
 
 ### Testing
 - Make a hidden command a decision with a reason
+- Find the shortcut's arguments by bytes, not by parity
 
 ## [1.11.0] - 2026-09-16
 
