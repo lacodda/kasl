@@ -106,6 +106,10 @@ Monthly work productivity: 95.4%
   Jira issues arrive as candidates, deduplicated against what you already
   logged; `kasl inbox triage` walks a slice of the backlog issue by issue, and
   snoozing puts one down until a date and brings it back by itself.
+- **A toast you can answer.** A notification about a Jira issue carries Take,
+  Snooze and Dismiss, so most of the backlog is triaged without opening a
+  terminal. Windows and Linux; on macOS the notification API cannot report a
+  click, so the buttons are left out rather than drawn dead.
 - **Honest numbers.** kasl records absences rather than inventing them, and
   says so when a day falls below your reporting threshold.
 - **Reports where they need to go.** One command files the day or the month to
@@ -174,9 +178,9 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 ## Status
 
-v1.11.0, in daily use on Windows, macOS and Linux. Everything above works
-today: the daemon, the Jira and GitLab integrations, the reports and the
-optional team server. What landed in each version:
+In daily use on Windows, macOS and Linux. Everything above works today: the
+daemon, the Jira and GitLab integrations, the reports and the optional team
+server. The current version and what landed in it:
 [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation
