@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.13.0] - 2026-09-21
+
+### Documentation
+- Document the manifest, the payload preview and the open backfill
+- Carry the new commands into the guides that list them
+
+### Features
+- Show what leaves this machine, before it leaves
+
 ## [1.12.0] - 2026-09-17
 
 ### Bug Fixes
