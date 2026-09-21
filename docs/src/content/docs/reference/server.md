@@ -287,7 +287,7 @@ This level was last set 2026-09-02 11:30.
 The level is the installation's, set by an administrator on the server. kasl shows it; it cannot widen or narrow it from here.
 ```
 
-Every word of that comes from the server. The manifest is generated there from the level the server actually enforces when a day arrives, not written by hand and not kept here - so it describes the installation you report to rather than the one kasl was built against, and it cannot claim a restraint the server does not apply.
+Every word of that comes from the server. The manifest is generated there from the level the server actually enforces when a day arrives, not written by hand and not kept here - so it describes the installation you report to rather than the one kasl was built against, and it cannot claim a restraint the server does not apply. The last-set time is the exception to "printed as received": the server reports it in UTC and kasl shows it in your own time zone.
 
 ### The level is the installation's
 
