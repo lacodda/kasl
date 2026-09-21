@@ -30,26 +30,51 @@ mod tests {
         String::from_utf8_lossy(&out.stdout).to_string()
     }
 
+    /// The data directory kasl itself would use under `dir`.
+    ///
+    /// Asked of `DataStorage` rather than spelled out, because the layout
+    /// differs per platform - `LOCALAPPDATA/lacodda/kasl` on Windows,
+    /// `~/.local/share/lacodda/kasl` on Linux, `~/Library/Application
+    /// Support/lacodda/kasl` on macOS. Writing one of those by hand makes a
+    /// test that passes on the machine it was written on and fails on the
+    /// other two, which is exactly what it did.
+    fn data_dir(dir: &Path) -> std::path::PathBuf {
+        // SAFETY: these tests are #[serial]
+        unsafe {
+            std::env::set_var("HOME", dir);
+            std::env::set_var("LOCALAPPDATA", dir);
+        }
+        kasl::libs::data_storage::DataStorage::new()
+            .get_path("config.json")
+            .unwrap()
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    }
+
     /// Writes a config naming a corporate API that does not exist.
     ///
     /// The address is unroutable on purpose. `--show` must not need it, and a
     /// preview that reached the network would hang here rather than print -
     /// which is the point: the failure is loud instead of invisible.
     fn configure_si(dir: &Path) {
-        let config_dir = dir.join("lacodda").join("kasl");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("config.json"),
-            serde_json::to_string_pretty(&serde_json::json!({
+        write_config(
+            dir,
+            serde_json::json!({
                 "si": {
                     "login": "employee",
                     "auth_url": "http://127.0.0.1:1",
                     "api_url": "http://127.0.0.1:1/api"
                 }
-            }))
-            .unwrap(),
-        )
-        .unwrap();
+            }),
+        );
+    }
+
+    /// Writes `config` into the data directory kasl reads under `dir`.
+    fn write_config(dir: &Path, config: serde_json::Value) {
+        let config_dir = data_dir(dir);
+        std::fs::create_dir_all(&config_dir).unwrap();
+        std::fs::write(config_dir.join("config.json"), serde_json::to_string_pretty(&config).unwrap()).unwrap();
     }
 
     /// Starts today with one task on it, so there is a report to describe.
@@ -75,6 +100,32 @@ mod tests {
             .output()
             .unwrap();
         assert!(out.status.success(), "seeding a task failed: {}", String::from_utf8_lossy(&out.stderr));
+    }
+
+    #[serial]
+    #[test]
+    fn the_harness_writes_the_config_where_kasl_reads_it() {
+        // This ran green on Windows and red on Linux and macOS, because the
+        // helper spelled out `LOCALAPPDATA/lacodda/kasl` while kasl looks
+        // under `~/.local/share` and `~/Library/Application Support` there.
+        // Every other test in this file then exercised the "no SiServer
+        // configured" path and asserted nothing it meant to.
+        //
+        // Checked by the observable consequence rather than by comparing
+        // paths: a config that kasl cannot find produces a different answer,
+        // and that is the difference worth failing on.
+        let dir = TempDir::new().unwrap();
+        configure_si(dir.path());
+        seed_a_day_with_a_task(dir.path());
+
+        let out = kasl_cmd(dir.path()).args(["report", "--send", "--show"]).output().unwrap();
+        let complaint = String::from_utf8_lossy(&out.stderr);
+
+        assert!(
+            !complaint.contains("SiServer configuration not found"),
+            "kasl did not find the config this test wrote - the layout differs on this platform:
+{complaint}"
+        );
     }
 
     #[serial]
@@ -209,17 +260,13 @@ mod tests {
 
         // A config pointed at the mock, and a cached session so `send`
         // reaches the request without a keyring or a prompt.
-        let config_dir = dir.path().join("lacodda").join("kasl");
-        std::fs::create_dir_all(&config_dir).unwrap();
-        std::fs::write(
-            config_dir.join("config.json"),
-            serde_json::to_string_pretty(&serde_json::json!({
+        write_config(
+            dir.path(),
+            serde_json::json!({
                 "si": { "login": "employee", "auth_url": server.uri(), "api_url": server.uri() }
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-        std::fs::write(config_dir.join(".si_session_id"), "cached-session").unwrap();
+            }),
+        );
+        std::fs::write(data_dir(dir.path()).join(".si_session_id"), "cached-session").unwrap();
 
         seed_a_day_with_a_task(dir.path());
 
