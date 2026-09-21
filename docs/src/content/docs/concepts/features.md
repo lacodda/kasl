@@ -120,6 +120,8 @@ kasl inbox take ISSUE-123
 
 `kasl setup` configures the corporate reporting endpoint used by `kasl report --send` and `kasl sum --send`. Authentication differs by integration: SiServer credentials go through the OS keyring like Jira's; a plain reporting server (`server.auth_token` in `config.json`) is authenticated with a static token sent on every submission.
 
+What a submission contains is readable before it is made: [`kasl report --send --show`](/reference/report/#what-gets-sent) prints the multipart form field by field and posts nothing. For the other channel, [`kasl server manifest`](/reference/server/#kasl-server-manifest) reads what the team server stores about you from the server itself.
+
 ## System Integration
 
 ### Autostart

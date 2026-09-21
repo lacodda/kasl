@@ -33,7 +33,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 ### System Integration
 
-- **[`server`](/reference/server/)** - Connect to a team kasl-server and send your days to it
+- **[`server`](/reference/server/)** - Connect to a team kasl-server, send your days to it, and read what it stores about you
 - **[`autostart`](/reference/autostart/)** - Configure automatic startup
 - **[`self-update`](/reference/self-update/)** - Update application to latest version
 - **[`completions`](/reference/completions/)** - Print a shell completion script
@@ -155,7 +155,7 @@ Commands for generating insights and reports:
 ### System Management
 Commands for application configuration and maintenance:
 - `setup` - Initial setup and configuration
-- `server` - Connection to a team server, and the queue of days owed to it
+- `server` - Connection to a team server, the queue of days owed to it, and its privacy manifest
 - `autostart` - System integration
 - `self-update` - Application updates
 

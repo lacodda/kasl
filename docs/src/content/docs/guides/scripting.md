@@ -45,11 +45,18 @@ kasl completions bash < /dev/null
 kasl server queue < /dev/null
 kasl server flush < /dev/null
 kasl server push < /dev/null
+kasl server manifest < /dev/null
+kasl report --send --show < /dev/null
 ```
 
 `report` and `sum` print whatever the database has (or a "no workday record"
 message) and exit 0; `export` exits 1 if there is nothing to export, same as
 it would interactively.
+
+`report --send --show` is the one member of the `--send` family that needs no
+credential: it prints the payload and stops before the request, so it neither
+opens a session nor reaches the network. `server manifest` does reach the
+server, and exits 1 when this machine is not connected to one.
 
 ## Commands that need flags instead of answers
 
