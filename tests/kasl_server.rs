@@ -578,3 +578,141 @@ async fn a_rate_limited_batch_is_worth_repeating() {
 
     assert!(error.is_retryable(), "a rate limit is a wait, not a refusal of the data");
 }
+
+/// A manifest body in the shape the server sends it.
+fn manifest_body(level: &str) -> serde_json::Value {
+    serde_json::json!({
+        "level": level,
+        "summary": "This server stores your working hours, when you were interrupted, and the names of tasks you logged - but none of the text you typed about them.",
+        "stored": [
+            { "what": "workdays", "detail": "the date, when the day started, when it ended" },
+            { "what": "pauses", "detail": "each interruption: when it began and how long it lasted" },
+            { "what": "tasks", "detail": "what you logged: the name and how complete you marked it" }
+        ],
+        "never_collected": ["keystrokes or what you type", "window titles", "screenshots or camera images"],
+        "visible_to": ["you, in your own account", "the manager of your department"],
+        "retention": "Kept for as long as the installation keeps it: there is no automatic deletion.",
+        "on_change": "Changing this setting affects what arrives from now on.",
+        "updated_at": "2026-09-02T11:30:00Z"
+    })
+}
+
+#[tokio::test]
+async fn the_manifest_is_read_as_the_server_wrote_it() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .and(header("authorization", "Bearer token-kirill"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_body("moderate")))
+        .mount(&server)
+        .await;
+
+    let manifest = client_for(&server).privacy("token-kirill").await.unwrap();
+
+    // Every field comes from the server. The point of the command is that
+    // kasl repeats the installation's own words rather than describing the
+    // server from this side, so a field silently defaulted here would be kasl
+    // inventing a promise.
+    assert_eq!(manifest.level, "moderate");
+    assert!(manifest.summary.contains("none of the text you typed"), "summary: {}", manifest.summary);
+    assert_eq!(manifest.stored.len(), 3);
+    assert_eq!(manifest.stored[1].what, "pauses");
+    assert!(manifest.stored[1].detail.contains("each interruption"), "detail: {}", manifest.stored[1].detail);
+    assert_eq!(manifest.never_collected.len(), 3);
+    assert!(manifest.never_collected.iter().any(|line| line.contains("window titles")));
+    assert_eq!(manifest.visible_to.len(), 2);
+    assert!(manifest.retention.contains("no automatic deletion"), "retention: {}", manifest.retention);
+    assert!(manifest.on_change.contains("from now on"), "on_change: {}", manifest.on_change);
+    assert!(manifest.updated_at.is_some(), "the server sent a timestamp and it should survive parsing");
+}
+
+#[tokio::test]
+async fn a_manifest_without_a_timestamp_is_still_read() {
+    let server = MockServer::start().await;
+    // A server that does not record when the level was set. The field being
+    // absent must not cost the rest of the manifest, which is the part the
+    // employee is reading.
+    let mut body = manifest_body("full");
+    body.as_object_mut().unwrap().remove("updated_at");
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(&server)
+        .await;
+
+    let manifest = client_for(&server).privacy("token-kirill").await.unwrap();
+
+    assert_eq!(manifest.level, "full");
+    assert!(manifest.updated_at.is_none(), "an absent timestamp is absent, not invented");
+}
+
+#[tokio::test]
+async fn a_refused_token_on_the_manifest_is_named_as_a_token_problem() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(serde_json::json!({"error": "unknown token"})))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server).privacy("token-kirill").await.unwrap_err().to_string();
+
+    assert!(error.contains("rejected this token"), "unexpected error: {}", error);
+}
+
+#[tokio::test]
+async fn a_server_with_no_manifest_route_says_so_rather_than_showing_nothing() {
+    let server = MockServer::start().await;
+    // An installation older than the route. Read as "no manifest" it would
+    // look like a server that keeps nothing, which is the one wrong reading
+    // this failure must never produce.
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({"error": "no such endpoint"})))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server).privacy("token-kirill").await.unwrap_err().to_string();
+
+    assert!(error.contains("does not publish a privacy manifest"), "unexpected error: {}", error);
+    assert!(error.contains("0.10.0"), "the error should name the version that has it: {}", error);
+}
+
+#[tokio::test]
+async fn a_manifest_that_is_not_a_manifest_is_not_read_as_one() {
+    let server = MockServer::start().await;
+    // A proxy answering 200 with a page. Showing that as a privacy manifest
+    // would be the product lying about the thing it exists to be honest about.
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_string("<html>OK</html>"))
+        .mount(&server)
+        .await;
+
+    let error = client_for(&server).privacy("token-kirill").await.unwrap_err().to_string();
+
+    assert!(error.contains("cannot read the server's privacy manifest"), "unexpected error: {}", error);
+}
+
+#[tokio::test]
+async fn whoami_carries_the_versions_that_decide_compatibility() {
+    let server = MockServer::start().await;
+    // `server status` prints these two. They arrive from the server rather
+    // than being assumed, so an agent talking to an installation it does not
+    // match can say which pair it is looking at.
+    Mock::given(method("GET"))
+        .and(path("/api/v1/agent/whoami"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "user_name": "Kirill Lakhtachev",
+            "agent_name": "laptop",
+            "api_version": "v1",
+            "server_version": "0.22.2"
+        })))
+        .mount(&server)
+        .await;
+
+    let identity = client_for(&server).identify("token-kirill").await.unwrap();
+
+    assert_eq!(identity.server_version, "0.22.2");
+    assert_eq!(identity.api_version, "v1");
+}

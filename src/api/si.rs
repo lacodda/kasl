@@ -222,6 +222,15 @@ impl Si {
     /// # Ok(())
     /// # }
     /// ```
+    /// The address the daily report is posted to.
+    ///
+    /// Read by `kasl report --send --show`, so the preview names where the
+    /// payload is going rather than only what is in it. Where it goes is half
+    /// of "what leaves this machine".
+    pub fn daily_report_url(&self) -> String {
+        format!("{}/{}", self.config.api_url, REPORT_URL)
+    }
+
     pub async fn send(&mut self, data: &str, date: &NaiveDate) -> Result<StatusCode> {
         let mut local_retries = 0;
         loop {
@@ -229,13 +238,10 @@ impl Si {
             let url = format!("{}/{}", self.config.api_url, REPORT_URL);
             let date = date.format("%Y-%m-%d").to_string();
 
-            let form = multipart::Form::new()
-                .text("date", date)
-                .text("tasks", data.to_owned())
-                .text("comment", "")
-                .text("day_type", "1")
-                .text("duty", "0")
-                .text("only_save", "0");
+            let mut form = multipart::Form::new();
+            for (name, value) in daily_report_fields(&date, data) {
+                form = form.text(name, value);
+            }
 
             let mut headers = HeaderMap::new();
             headers.insert(COOKIE, HeaderValue::from_str(&format!("{}{}", COOKIE_KEY, session_id))?);
@@ -417,6 +423,29 @@ impl Si {
 
         Ok(date == &last_day_of_month)
     }
+}
+
+/// Every field of the daily report form, in the order it is sent.
+///
+/// One list rather than a literal inside [`Si::send`], because
+/// `kasl report --send --show` prints this and a payload preview assembled
+/// separately would eventually describe a request that is no longer the one
+/// made. The preview and the request read the same function, so they cannot
+/// disagree - only the transport differs.
+///
+/// The constants are the corporate form's, not kasl's: `day_type` 1 is a
+/// working day, `duty` 0 is not on call, `only_save` 0 means submit rather
+/// than keep as a draft. They are sent as text because the endpoint takes a
+/// multipart form.
+pub fn daily_report_fields(date: &str, tasks: &str) -> Vec<(&'static str, String)> {
+    vec![
+        ("date", date.to_string()),
+        ("tasks", tasks.to_string()),
+        ("comment", String::new()),
+        ("day_type", "1".to_string()),
+        ("duty", "0".to_string()),
+        ("only_save", "0".to_string()),
+    ]
 }
 
 /// SiServer connection settings; auth and API live on separate hosts.

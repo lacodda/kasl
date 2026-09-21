@@ -30,6 +30,16 @@ const INSERT_START: &str = "INSERT INTO workdays (date, start) VALUES (?1, datet
 const UPDATE_END: &str = "UPDATE workdays SET end = datetime(CURRENT_TIMESTAMP, 'localtime') WHERE date = ?1";
 const SELECT_BY_DATE: &str = "SELECT id, date, start, end FROM workdays WHERE date = ?1";
 const SELECT_BY_MONTH: &str = "SELECT id, date, start, end FROM workdays WHERE strftime('%Y-%m', date) = strftime('%Y-%m', ?1)";
+/// Every recorded date, oldest first, optionally bounded on either side.
+///
+/// The bounds are compared as text because `date` is stored as `YYYY-MM-DD`,
+/// which sorts and compares identically to the dates it spells. A NULL bound
+/// means "no bound on this side", so one statement answers a range, an open
+/// end, and the whole history without branching in SQL.
+const SELECT_RECORDED_DATES: &str = "SELECT date FROM workdays
+    WHERE (?1 IS NULL OR date >= ?1) AND (?2 IS NULL OR date <= ?2)
+    ORDER BY date";
+
 const UPDATE_START: &str = "UPDATE workdays SET start = ?1 WHERE date = ?2";
 const UPDATE_END_TIME: &str = "UPDATE workdays SET end = ?1 WHERE date = ?2";
 const UNSET_END_TIME: &str = "UPDATE workdays SET end = NULL WHERE date = ?1";
@@ -229,6 +239,45 @@ impl Workdays {
     /// # Ok(())
     /// # }
     /// ```
+    /// The dates that actually have a workday, oldest first.
+    ///
+    /// `from` and `to` are inclusive, and either may be left open: with both
+    /// open this is the whole history the database holds.
+    ///
+    /// One query rather than a `fetch` per calendar day, because the caller
+    /// that wants this is backfill, and walking a year of calendar to find
+    /// two hundred workdays asks the database three hundred and sixty five
+    /// questions to which it already knows the whole answer.
+    ///
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
+    /// # fn main() -> anyhow::Result<()> {
+    /// let mut workdays = Workdays::new()?;
+    ///
+    /// // Everything ever recorded on this machine.
+    /// let all = workdays.recorded_dates(None, None)?;
+    /// println!("{} days recorded", all.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn recorded_dates(&mut self, from: Option<NaiveDate>, to: Option<NaiveDate>) -> Result<Vec<NaiveDate>> {
+        let from = from.map(|date| date.format("%Y-%m-%d").to_string());
+        let to = to.map(|date| date.format("%Y-%m-%d").to_string());
+
+        let mut stmt = self.conn.prepare(SELECT_RECORDED_DATES)?;
+        let dates = stmt
+            .query_map(rusqlite::params![from, to], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<String>, _>>()?;
+
+        dates
+            .into_iter()
+            .map(|text| {
+                NaiveDate::parse_from_str(&text, "%Y-%m-%d")
+                    .map_err(|error| anyhow::anyhow!("the workdays table holds '{}', which is not a date: {}", text, error))
+            })
+            .collect()
+    }
+
     pub fn update_start(&mut self, date: NaiveDate, new_start: NaiveDateTime) -> Result<()> {
         let date_str = date.format("%Y-%m-%d").to_string();
         let start_str = new_start.format("%Y-%m-%d %H:%M:%S").to_string();

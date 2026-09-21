@@ -6,7 +6,7 @@
 //! Productivity module.
 
 use crate::{
-    api::si::Si,
+    api::si::{Si, daily_report_fields},
     db::{
         jira_inbox::JiraInbox,
         pauses::Pauses,
@@ -59,6 +59,25 @@ pub struct ReportArgs {
     /// organizational reporting requirements at month-end.
     #[arg(long, help = "Submit monthly report")]
     month: bool,
+
+    /// Print the payload before it is sent, and send nothing
+    ///
+    /// The same transparency `kasl server manifest` gives for the team
+    /// server, for the corporate channel: what leaves this machine, in full,
+    /// before it does. Requires `--send`, because what it describes is the
+    /// sending.
+    ///
+    /// Conflicts with `--month` rather than growing a monthly preview: the
+    /// monthly report sends a date and nothing else, so there is no payload
+    /// to inspect, and accepting the flag there would answer a question about
+    /// the daily payload with silence.
+    #[arg(
+        long,
+        requires = "send",
+        conflicts_with = "month",
+        help = "Show the payload that --send would post, and post nothing"
+    )]
+    show: bool,
 }
 
 /// Main entry point for the report command.
@@ -89,7 +108,9 @@ pub struct ReportArgs {
 pub async fn cmd(args: ReportArgs) -> Result<()> {
     let date = determine_report_date(args.last);
 
-    if args.month {
+    if args.show {
+        show_daily_payload(date).await
+    } else if args.month {
         handle_monthly_report(date).await
     } else {
         handle_daily_report(args.send, date).await
@@ -209,6 +230,102 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
             current: productivity.calculate_productivity(),
             threshold: productivity.config.min_productivity_threshold,
         });
+    }
+
+    Ok(())
+}
+
+/// Prints the payload `--send` would post, and posts nothing.
+///
+/// The point is being able to read what leaves this machine before it does.
+/// That only means something if the preview is the real payload, so this
+/// builds it through the same functions the send path uses - the same
+/// interval filtering, the same task distribution, the same form fields from
+/// [`daily_report_fields`] - and stops one step short of the request.
+///
+/// Three things the send path does are deliberately *not* done here.
+///
+/// The day is not finalized. `--send` writes an end timestamp before it
+/// assembles anything, and a preview that quietly ended someone's working day
+/// would be the opposite of a command you run to find out what would happen.
+/// The day is read as it stands, open end and all.
+///
+/// The productivity threshold is not enforced. It decides whether a report
+/// may be submitted, not what the submission contains, and refusing to show
+/// the payload of a day that is below it would hide exactly the day someone
+/// wants to look at.
+///
+/// Nothing is authenticated. No session is opened, no credential is read: the
+/// address comes from the config, and a preview that logged in would reach
+/// the network to tell you what it would do if it reached the network.
+async fn show_daily_payload(date: DateTime<Local>) -> Result<()> {
+    let naive_date = date.date_naive();
+
+    let workday = match Workdays::new()?.fetch(naive_date)? {
+        Some(workday) => workday,
+        None => {
+            msg_print!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()), true);
+            return Ok(());
+        }
+    };
+
+    let mut tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
+    if tasks.is_empty() {
+        // The same stop `--send` makes, and for the same reason: there is no
+        // report to describe. Reported rather than shown as an empty payload,
+        // which would read as "this day sends nothing" when what it means is
+        // "this day cannot be sent".
+        msg_error!(Message::TasksNotFoundForDate(date.format("%B %-d, %Y").to_string()));
+        return Ok(());
+    }
+
+    let config = Config::read()?;
+    let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
+
+    let long_pauses = Pauses::new()?
+        .set_min_duration(monitor_config.min_pause_duration)
+        .get_workday_pauses(&workday)?;
+
+    let intervals = report::calculate_work_intervals(&workday, &long_pauses);
+    let (filtered_intervals, _) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
+
+    let report_json = build_report_payload(&workday, &mut tasks, &filtered_intervals);
+    let events_json = serde_json::to_string(&report_json)?;
+
+    // The destination is half the answer to "what leaves this machine", so it
+    // is named from the configured client rather than described in prose.
+    let si = get_si_service()?;
+    msg_info!(Message::ReportPayloadHeading {
+        url: si.daily_report_url(),
+        date: naive_date.to_string(),
+    });
+
+    // Every field of the form, not only the interesting one. `tasks` is where
+    // the work is described, but a person asking what is sent about them is
+    // owed the whole request - a field they were not shown is a field they
+    // were not told about.
+    for (name, value) in daily_report_fields(&naive_date.format("%Y-%m-%d").to_string(), &events_json) {
+        // The tasks field holds the report as JSON; pretty-printing it is the
+        // difference between a payload someone can read and one they can only
+        // confirm exists.
+        if name == "tasks" {
+            msg_print!(format!("  {}:", name));
+            // Indented one step further than the field lines. The JSON is the
+            // only multi-line value here, and without a shift its own braces
+            // sit in the same column as a field name - readable enough to a
+            // person, and indistinguishable to anything reading the preview
+            // back, which the parity check against the real request does.
+            for line in serde_json::to_string_pretty(&report_json)?.lines() {
+                msg_print!(format!("    {}", line));
+            }
+        } else if value.is_empty() {
+            // Shown as empty rather than skipped: a field sent empty is still
+            // a field sent, and leaving it out would describe a smaller
+            // request than the one made.
+            msg_print!(format!("  {}: (empty)", name));
+        } else {
+            msg_print!(format!("  {}: {}", name, value));
+        }
     }
 
     Ok(())

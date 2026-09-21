@@ -59,6 +59,10 @@ enum ServerCommand {
     #[command(about = "Show the days still waiting to reach the server")]
     Queue,
 
+    /// Show what this server keeps about you
+    #[command(about = "Show what the connected kasl-server stores about you")]
+    Manifest,
+
     /// Queue a stretch of past days
     #[command(about = "Queue every recorded day in a date range and send them")]
     Backfill(BackfillArgs),
@@ -71,9 +75,9 @@ enum ServerCommand {
 /// Arguments accepted by `kasl server backfill`.
 #[derive(Debug, Args)]
 pub struct BackfillArgs {
-    /// First date of the range, YYYY-MM-DD
+    /// First date of the range, YYYY-MM-DD; without it, the whole history
     #[arg(long, value_name = "YYYY-MM-DD")]
-    from: NaiveDate,
+    from: Option<NaiveDate>,
 
     /// Last date of the range, YYYY-MM-DD; defaults to today
     #[arg(long, value_name = "YYYY-MM-DD")]
@@ -112,6 +116,7 @@ pub async fn cmd(args: ServerArgs) -> Result<()> {
         ServerCommand::Push(args) => push(args).await,
         ServerCommand::Flush => flush().await,
         ServerCommand::Queue => queue(),
+        ServerCommand::Manifest => manifest().await,
         ServerCommand::Backfill(args) => backfill(args).await,
         ServerCommand::Disconnect => disconnect(),
     }
@@ -236,12 +241,80 @@ async fn status() -> Result<()> {
     }
 
     match client.identify(&token).await {
-        Ok(identity) => msg_success!(Message::KaslServerConnected {
-            user_name: identity.user_name,
-            agent_name: identity.agent_name,
-        }),
+        Ok(identity) => {
+            msg_success!(Message::KaslServerConnected {
+                user_name: identity.user_name,
+                agent_name: identity.agent_name,
+            });
+            // The two versions that decide whether this agent and that server
+            // understand each other, printed where someone diagnosing a
+            // refused upload is already looking. `whoami` has reported both
+            // since kasl-server 0.14.1, which is also the floor `connect`
+            // enforces, so an answer here means the pair is compatible - the
+            // only way to reach this line at all is to have connected.
+            msg_info!(Message::KaslServerCompatibility {
+                server_version: identity.server_version,
+                api_version: identity.api_version,
+            });
+        }
         Err(error) => msg_warning!(Message::KaslServerTokenRejected(error.to_string())),
     }
+
+    Ok(())
+}
+
+/// Prints what the connected server stores about this person.
+///
+/// Read from the server every time rather than described from here. The
+/// manifest is generated on the server out of the level it enforces at ingest
+/// (ADR 0011 in kasl-server), so it describes the installation this machine
+/// actually reports to; a copy kept in kasl would describe the server kasl
+/// was built against, and would be most wrong exactly when it mattered - on
+/// an installation that had narrowed what it keeps.
+///
+/// Showing is all this command does. The level belongs to the installation
+/// and an administrator sets it; there is no personal opt-out (ADR 0011), and
+/// a flag here that appeared to narrow it would be a promise kasl cannot
+/// keep.
+async fn manifest() -> Result<()> {
+    let (client, token) = connected_client()?;
+
+    let manifest = client.privacy(&token).await?;
+
+    msg_info!(Message::KaslServerPrivacyHeading(manifest.level));
+    msg_print!(Message::KaslServerPrivacySummary(manifest.summary));
+
+    msg_print!(Message::KaslServerPrivacyStoredHeading);
+    for stored in manifest.stored {
+        msg_print!(Message::KaslServerPrivacyStored {
+            what: stored.what,
+            detail: stored.detail,
+        });
+    }
+
+    msg_print!(Message::KaslServerPrivacyNeverHeading);
+    for line in manifest.never_collected {
+        msg_print!(Message::KaslServerPrivacyBullet(line));
+    }
+
+    msg_print!(Message::KaslServerPrivacyVisibleHeading);
+    for line in manifest.visible_to {
+        msg_print!(Message::KaslServerPrivacyBullet(line));
+    }
+
+    msg_print!(Message::KaslServerPrivacyRetention(manifest.retention));
+    msg_print!(Message::KaslServerPrivacyOnChange(manifest.on_change));
+
+    // Only when the server says. An absent timestamp means this server does
+    // not record when the level was set, which is not the same as a level
+    // that was never changed - printing "never" for it would invent a fact.
+    if let Some(updated_at) = manifest.updated_at {
+        msg_print!(Message::KaslServerPrivacyUpdatedAt(
+            updated_at.with_timezone(&Local).format("%Y-%m-%d %H:%M").to_string()
+        ));
+    }
+
+    msg_print!(Message::KaslServerPrivacySetByAdmin);
 
     Ok(())
 }
@@ -440,41 +513,60 @@ fn queue() -> Result<()> {
 
 /// Queues every recorded day in a range and sends them.
 ///
-/// The range is walked against the database rather than the calendar: only
-/// dates that actually have a workday are queued, so a month containing
-/// weekends and leave does not fill the outbox with days that were never
-/// worked and can never be sent.
+/// The range is read out of the database rather than walked across the
+/// calendar: only dates that actually have a workday are queued, so a month
+/// containing weekends and leave does not fill the outbox with days that were
+/// never worked and can never be sent.
+///
+/// Without `--from` the range opens at the first day this machine ever
+/// recorded. That is the honest default for what the command is for - a
+/// machine that tracked locally before the team had a server owes everything,
+/// and asking the employee to first find out when they started using kasl in
+/// order to say so is asking the database's own question back at them.
 async fn backfill(args: BackfillArgs) -> Result<()> {
     let to = args.to.unwrap_or_else(|| Local::now().date_naive());
-    if args.from > to {
+    if let Some(from) = args.from
+        && from > to
+    {
         return Err(msg_error_anyhow!(Message::KaslServerBackfillOrderReversed));
     }
 
     let (client, token) = connected_client()?;
 
-    let mut workdays = Workdays::new()?;
-    let mut dates = Vec::new();
-    let mut date = args.from;
-    while date <= to {
-        if workdays.fetch(date)?.is_some() {
-            dates.push(date);
-        }
-        date += Duration::days(1);
-    }
+    let dates = Workdays::new()?.recorded_dates(args.from, Some(to))?;
 
     if dates.is_empty() {
-        msg_print!(Message::KaslServerBackfillNoDays {
-            from: args.from.to_string(),
-            to: to.to_string(),
-        });
+        match args.from {
+            Some(from) => msg_print!(Message::KaslServerBackfillNoDays {
+                from: from.to_string(),
+                to: to.to_string(),
+            }),
+            // A different sentence on purpose. "No workdays between the
+            // beginning and today" would read as a range that happened to be
+            // empty; what it actually means is that this machine has never
+            // recorded a day, and the fix is to start one rather than to pick
+            // other dates.
+            None => msg_print!(Message::KaslServerBackfillNothingRecorded),
+        }
         return Ok(());
     }
 
-    msg_info!(Message::KaslServerBackfillRange {
-        from: args.from.to_string(),
-        to: to.to_string(),
-        days: dates.len(),
-    });
+    match args.from {
+        Some(from) => msg_info!(Message::KaslServerBackfillRange {
+            from: from.to_string(),
+            to: to.to_string(),
+            days: dates.len(),
+        }),
+        // The first recorded date is named rather than left as "the
+        // beginning": it is the one fact that tells the employee how much of
+        // their history is about to reach the server, which is the thing
+        // worth knowing before it does.
+        None => msg_info!(Message::KaslServerBackfillWholeHistory {
+            from: dates[0].to_string(),
+            to: to.to_string(),
+            days: dates.len(),
+        }),
+    }
 
     // Queued before they are sent, so an interrupted backfill is not lost: a
     // run cut off halfway leaves the rest owed rather than forgotten.

@@ -153,6 +153,9 @@ impl Display for Message {
             Message::MonthlyReportSendFailed(status) => format!("Failed to send monthly report. Status: {}", status),
             Message::ReportHeader(date) => format!("Report for {}", date),
             Message::WorkingHoursForMonth(month_year) => format!("Working hours for {}", month_year),
+            Message::ReportPayloadHeading { url, date } => {
+                format!("This is what {} would send to {}, as a multipart form:", date, url)
+            }
 
             // === EXPORT MESSAGES ===
             Message::ExportingData(data, format) => format!("Exporting {} in {} format...", data, format),
@@ -371,6 +374,27 @@ Run `kasl server connect` to connect again with a token your administrator issue
                 format!("No workdays recorded between {} and {} - nothing to send.", from, to)
             }
             Message::KaslServerBackfillOrderReversed => "The start of the range is after its end; swap --from and --to.".to_string(),
+            Message::KaslServerBackfillWholeHistory { from, to, days } => match days {
+                1 => format!("1 recorded day, the whole history from {} to {}", from, to),
+                _ => format!("{} recorded days, the whole history from {} to {}", days, from, to),
+            },
+            Message::KaslServerBackfillNothingRecorded => "No workday has ever been recorded on this machine - nothing to send.".to_string(),
+            Message::KaslServerCompatibility { server_version, api_version } => {
+                format!("server {} · api {} · ok", server_version, api_version)
+            }
+            Message::KaslServerPrivacyHeading(level) => format!("Privacy level on this server: {}", level),
+            Message::KaslServerPrivacySummary(summary) => summary.clone(),
+            Message::KaslServerPrivacyStoredHeading => "What it stores:".to_string(),
+            Message::KaslServerPrivacyStored { what, detail } => format!("  {} - {}", what, detail),
+            Message::KaslServerPrivacyNeverHeading => "What it never collects:".to_string(),
+            Message::KaslServerPrivacyBullet(line) => format!("  {}", line),
+            Message::KaslServerPrivacyVisibleHeading => "Who can see it:".to_string(),
+            Message::KaslServerPrivacyRetention(text) => format!("Retention: {}", text),
+            Message::KaslServerPrivacyOnChange(text) => format!("If the level changes: {}", text),
+            Message::KaslServerPrivacyUpdatedAt(when) => format!("This level was last set {}.", when),
+            Message::KaslServerPrivacySetByAdmin => {
+                "The level is the installation's, set by an administrator on the server. kasl shows it; it cannot widen or narrow it from here.".to_string()
+            }
             Message::KaslServerPushRetryable(error) => {
                 format!(
                     "{}

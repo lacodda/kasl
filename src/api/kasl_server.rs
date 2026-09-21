@@ -24,7 +24,7 @@
 
 use crate::libs::config::KaslServerConfig;
 use anyhow::{Context, Result, bail};
-use chrono::{DateTime, FixedOffset, NaiveDate};
+use chrono::{DateTime, FixedOffset, NaiveDate, Utc};
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -80,6 +80,53 @@ pub struct AgentIdentity {
 
     /// The server's own version.
     pub server_version: String,
+}
+
+/// The privacy manifest, as `GET /api/v1/privacy/agent` reports it.
+///
+/// Generated on the server from the level it actually enforces at ingest
+/// (ADR 0011 in kasl-server), which is the whole point of reading it rather
+/// than describing the server from this side: a manifest written into kasl
+/// would describe the server kasl was built against, not the one this
+/// machine reports to.
+///
+/// Every field is owned by the server. Nothing here is defaulted or filled
+/// in locally - a manifest this agent could complete on its own would be one
+/// it could also get wrong.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PrivacyManifest {
+    /// The installation's level: `full`, `moderate` or `coarse`.
+    pub level: String,
+
+    /// One sentence an employee can read without knowing the levels exist.
+    pub summary: String,
+
+    /// What is kept, field by field.
+    pub stored: Vec<StoredKind>,
+
+    /// Named explicitly, because a reader cannot tell "we do not collect
+    /// this" from "this was left off the list".
+    pub never_collected: Vec<String>,
+
+    /// Who can see a given person's data.
+    pub visible_to: Vec<String>,
+
+    /// How long it is kept.
+    pub retention: String,
+
+    /// What changing the level does - and does not do - to what is stored.
+    pub on_change: String,
+
+    /// When the level was last set, if the server says.
+    #[serde(default)]
+    pub updated_at: Option<DateTime<Utc>>,
+}
+
+/// One kind of data the server holds, in the manifest's own words.
+#[derive(Debug, Clone, Deserialize)]
+pub struct StoredKind {
+    pub what: String,
+    pub detail: String,
 }
 
 /// One day as this agent recorded it, in the shape the server accepts.
@@ -351,6 +398,40 @@ impl KaslServer {
             StatusCode::OK => response.json::<AgentIdentity>().await.context("cannot read the server's answer"),
             StatusCode::UNAUTHORIZED => bail!("the server rejected this token - it may be mistyped, revoked, or issued for a deactivated account"),
             status => bail!("the server answered {} when asked whose token this is", status),
+        }
+    }
+
+    /// Reads the installation's privacy manifest from
+    /// `GET /api/v1/privacy/agent`.
+    ///
+    /// Answered to the agent token rather than to a login, which is the point
+    /// of the route existing at all: the employee finds out what the server
+    /// keeps about them from the CLI they already run, instead of signing
+    /// into the server that watches them in order to ask.
+    ///
+    /// A `404` means the server predates the route and is reported as such.
+    /// It is the one failure here with a different fix - the administrator
+    /// upgrading the server, not the employee doing anything - and reading it
+    /// as "no manifest" would let an old server look like one that keeps
+    /// nothing. In practice it should not be reachable: `connect` already
+    /// needs 0.14.1 for `whoami`, and the route arrived four minors before
+    /// that. It is handled anyway, because "should not be reachable" is a
+    /// statement about today's floor and not about the wire.
+    pub async fn privacy(&self, token: &str) -> Result<PrivacyManifest> {
+        let url = format!("{}/api/v1/privacy/agent", self.base_url);
+        let response = self
+            .client
+            .get(&url)
+            .bearer_auth(token)
+            .send()
+            .await
+            .with_context(|| format!("cannot reach kasl-server at {}", self.base_url))?;
+
+        match response.status() {
+            StatusCode::OK => response.json::<PrivacyManifest>().await.context("cannot read the server's privacy manifest"),
+            StatusCode::UNAUTHORIZED => bail!("the server rejected this token - it may be mistyped, revoked, or issued for a deactivated account"),
+            StatusCode::NOT_FOUND => bail!("this server does not publish a privacy manifest to agents - the route arrived in kasl-server 0.10.0"),
+            status => bail!("the server answered {} when asked what it stores", status),
         }
     }
 

@@ -110,6 +110,10 @@ pub enum Message {
     MonthlyReportSendFailed(String), // status
     ReportHeader(String),            // date
     WorkingHoursForMonth(String),    // month/year
+    ReportPayloadHeading {
+        url: String,
+        date: String,
+    },
 
     // === EXPORT MESSAGES ===
     ExportingData(String, String), // data type, format
@@ -296,6 +300,30 @@ pub enum Message {
         to: String,
     },
     KaslServerBackfillOrderReversed, // --from is later than --to
+    KaslServerBackfillWholeHistory {
+        from: String,
+        to: String,
+        days: usize,
+    },
+    KaslServerBackfillNothingRecorded, // the database holds no workday at all
+    KaslServerCompatibility {
+        server_version: String,
+        api_version: String,
+    },
+    KaslServerPrivacyHeading(String), // the level, as the server names it
+    KaslServerPrivacySummary(String), // the server's one-sentence summary
+    KaslServerPrivacyStoredHeading,
+    KaslServerPrivacyStored {
+        what: String,
+        detail: String,
+    },
+    KaslServerPrivacyNeverHeading,
+    KaslServerPrivacyBullet(String), // one line of a list the server sent
+    KaslServerPrivacyVisibleHeading,
+    KaslServerPrivacyRetention(String), // the server's retention sentence
+    KaslServerPrivacyOnChange(String),  // what changing the level does
+    KaslServerPrivacyUpdatedAt(String), // when the level was last set
+    KaslServerPrivacySetByAdmin,
 
     // === DATABASE MESSAGES ===
     DatabaseOperationFailed {
