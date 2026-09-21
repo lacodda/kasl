@@ -74,6 +74,13 @@ You never started a timer or stopped one. The daemon has been watching activity 
 		different time zones comparable. A week offline costs nothing: undelivered
 		days are queued and the backlog goes in one request. Optional; kasl works alone.
 	</Card>
+	<Card title="Shows what leaves the machine" icon="seti:lock">
+		Before a day goes anywhere, you can read exactly what would go.
+		[`kasl server manifest`](/reference/server/#kasl-server-manifest) prints
+		what the team server stores about you, in that installation's own words;
+		[`kasl report --send --show`](/reference/report/#what-gets-sent) prints
+		the payload the corporate API would receive, and sends nothing.
+	</Card>
 	<Card title="Stays out of the way" icon="approve-check">
 		Single binary, no runtime dependencies, credentials in the OS keyring.
 		Windows, macOS and Linux.

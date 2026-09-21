@@ -115,6 +115,11 @@ Monthly work productivity: 95.4%
 - **Reports where they need to go.** One command files the day or the month to
   your corporate API; exports to CSV, JSON and Excel, hourly breakdown
   included.
+- **What leaves the machine, shown before it does.** `kasl server manifest`
+  prints what the team server stores about you, in that installation's own
+  words, read from the server rather than described here;
+  `kasl report --send --show` prints the payload the corporate API would
+  receive, field by field, and sends nothing.
 - **Passwords in the OS keyring** - Credential Manager, Keychain, Secret
   Service. Nothing is encrypted with a key that ships inside the binary.
 - **Nothing that hangs.** Every prompt checks for a terminal first, so kasl

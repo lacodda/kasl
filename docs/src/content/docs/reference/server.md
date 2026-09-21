@@ -19,6 +19,7 @@ kasl server <SUBCOMMAND>
 | `push` | Send a day's work to the server |
 | `flush` | Send every day still waiting to reach the server |
 | `queue` | Show the days still waiting, and why |
+| `manifest` | Show what this server stores about you |
 | `backfill` | Queue every recorded day in a date range and send them |
 | `disconnect` | Forget the connection and remove the stored token |
 
@@ -82,9 +83,12 @@ $ kasl server status
 Configured server: https://kasl.example.com
 https://kasl.example.com is kasl-server vX.Y.Z
 Connected as Kirill Lakhtachev (agent 'laptop')
+server vX.Y.Z - api v1 - ok
 ```
 
 Each part can fail on its own, and each failure names its own fix - the server unreachable, the token no longer accepted (revoked, or the account deactivated), or a configured server with no token stored, which means connecting again.
+
+The last line is the pair that decides whether this agent and that server understand each other: the server's own version, and the API version it serves this agent under. Both come from the server rather than being assumed here, so when an upload is refused you can see which two versions are actually talking. Reaching that line at all means they are compatible - the checks above it are what `connect` enforces.
 
 ## `kasl server push`
 
@@ -216,10 +220,10 @@ Nothing is waiting to be sent.
 ### `kasl server backfill`
 
 ```bash
-kasl server backfill --from <YYYY-MM-DD> [--to <YYYY-MM-DD>]
+kasl server backfill [--from <YYYY-MM-DD>] [--to <YYYY-MM-DD>]
 ```
 
-- `--from <YYYY-MM-DD>`: First date of the range.
+- `--from <YYYY-MM-DD>`: First date of the range. Without it, the whole history.
 - `--to <YYYY-MM-DD>`: Last date; defaults to today.
 
 For history that predates the connection - a machine that tracked locally for months before the team got a server:
@@ -233,7 +237,73 @@ Sent 2026-08-03 to the server: 2 pauses, 4 tasks
 21 sent, 0 refused, 0 still waiting
 ```
 
+With no `--from`, the range opens at the first day this machine ever recorded - which is usually what a machine connecting for the first time actually owes:
+
+```console
+$ kasl server backfill
+214 recorded days, the whole history from 2025-11-04 to 2026-09-21
+Sending 214 days...
+...
+214 sent, 0 refused, 0 still waiting
+```
+
+The first recorded date is named rather than left as "the beginning", because it is the one fact worth reading before a year of your days reaches the server.
+
 Only dates that actually have a workday are queued, so weekends and leave inside the range are skipped rather than queued as days that can never be sent. The days are queued before they are sent, so a run interrupted halfway leaves the rest owed rather than forgotten - running it again, or `flush`, continues where it stopped.
+
+## `kasl server manifest`
+
+```bash
+kasl server manifest
+```
+
+What this installation stores about you, read from the server itself:
+
+```console
+$ kasl server manifest
+Privacy level on this server: moderate
+This server stores your working hours, when you were interrupted, and the names of tasks you logged - but none of the text you typed about them.
+What it stores:
+  workdays - the date, when the day started, when it ended, and whether you marked it as leave, sick or a day off
+  pauses - each interruption: when it began, how long it lasted, and whether it was a break you entered yourself
+  tasks - what you logged: the name and how complete you marked it - not your comment
+  account - your email, display name, role, department, and which machines report for you
+  live status - whether your agent currently reports you as working, on a break, or not in a day - the latest one only, replaced each time it arrives, never kept as a history
+What it never collects:
+  keystrokes or what you type
+  window titles
+  which applications you run
+  screenshots or camera images
+  web pages you visit
+  file names or paths
+  your location
+Who can see it:
+  you, in your own account
+  the manager of your department
+  administrators of this installation
+Retention: Kept for as long as the installation keeps it: there is no automatic deletion. A deactivated account keeps its history rather than losing it.
+If the level changes: Changing this setting affects what arrives from now on. Narrowing it does not erase what is already stored, and widening it does not bring back what was dropped.
+This level was last set 2026-09-02 11:30.
+The level is the installation's, set by an administrator on the server. kasl shows it; it cannot widen or narrow it from here.
+```
+
+Every word of that comes from the server. The manifest is generated there from the level the server actually enforces when a day arrives, not written by hand and not kept here - so it describes the installation you report to rather than the one kasl was built against, and it cannot claim a restraint the server does not apply.
+
+### The level is the installation's
+
+kasl shows the level; it does not set it. An administrator chooses it for the whole installation, and there is no personal opt-out - a flag here that appeared to narrow what leaves your machine would be a promise kasl cannot keep, because the filtering happens on the server as the day is written.
+
+What the command is for is the other half of that: if you are asked to run an agent that notices when you stop typing, you can read what it results in from the terminal you already have open, instead of signing into the server that watches you in order to find out what it watches.
+
+### What the levels mean
+
+| Level | What the server keeps |
+| --- | --- |
+| `full` | Your hours, every interruption with the reason you gave, and your tasks with their comments |
+| `moderate` | Your hours, when you were interrupted, and task names - but none of the text you typed |
+| `coarse` | Your hours and how much of the day you were away - not when, and not what you worked on |
+
+Narrowing happens at ingest, not on a screen: a field a level excludes is dropped before the day is written, so it never reaches the server's database or its backups.
 
 ## Which server this agent needs
 
@@ -248,11 +318,12 @@ names the endpoint it calls and the server version that first answered it.
 | v1.7.0 | `connect`, `status`, `disconnect` | `GET /health`, `GET /api/v1/agent/whoami` | **0.14.1** |
 | v1.8.0 | `push` | `POST /api/v1/days` | **0.14.1** |
 | v1.9.0 | `queue`, `flush`, `backfill` | `POST /api/v1/days/batch` | **0.14.1** |
+| v1.13.0 | `manifest` | `GET /api/v1/privacy/agent` | **0.14.1** |
 
 The floor is the same for all of them, and `whoami` is what sets it. The server
-has accepted uploads since 0.3.0 and backlogs since 0.4.0, but `connect` asks
-whose token it is holding before it stores anything, and 0.14.1 is where that
-question could first be answered. A server older than that cannot be connected
+has accepted uploads since 0.3.0, backlogs since 0.4.0 and the agent privacy
+manifest since 0.10.0, but `connect` asks whose token it is holding before it
+stores anything, and 0.14.1 is where that question could first be answered. A server older than that cannot be connected
 to at all, which is the honest outcome: the alternative would be filing this
 machine's days under a name nobody checked.
 
@@ -316,8 +387,14 @@ kasl server queue
 # Send everything that is waiting
 kasl server flush
 
+# Read what this server stores about you
+kasl server manifest
+
 # Upload history recorded before this machine was connected
 kasl server backfill --from 2026-08-01
+
+# Upload everything this machine has ever recorded
+kasl server backfill
 
 # Forget the connection on a machine being handed on
 kasl server disconnect
