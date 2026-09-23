@@ -45,8 +45,10 @@ PROJ-412   Fix export timeout on large...    To Do        High      NEW
 
 **It changes.** If its status, priority, or ranking score moves before you've
 acted on it, the row keeps its key but the `CHANGE` column now shows what
-moved - `status→In Progress`, `↑prio High`, `score 5→8` - and, with
-`notify_changes` (also on by default), a second toast. Both the `NEW` badge
+moved - `status→In Progress`, `↑prio High`, `score 5→8`. A status or priority
+change also raises a second toast, with `notify_changes` (on by default); a
+score change does not - scores are recomputed by Jira for the whole backlog,
+often in batches through the day, and would toast every issue you have. Both the `NEW` badge
 and a change badge fade after 24 hours; the issue is still there, just without
 the highlight.
 
@@ -56,8 +58,15 @@ drops off the plain list. It isn't deleted: `kasl inbox --all` still shows it,
 tagged `gone`, sorted below everything present. If it comes back later
 (reopened, reassigned back to you), the next poll clears the `gone` mark and
 it reappears in the normal list like nothing happened. A poll that fails
-(VPN down, Jira unreachable) is not "nothing came back": it changes nothing,
-so an overnight outage does not turn the whole inbox `gone` and then `back`.
+(VPN down, Jira unreachable, a session that expired overnight) is not
+"nothing came back": it changes nothing, so an outage does not turn the whole
+inbox `gone` and then `back`. A return is shown as a `back` badge and never
+toasts: the issue was already announced once.
+
+**It stays quiet in bulk.** Toasts are budgeted over time, not per poll: at
+most five single toasts an hour, then one summary that says how many more
+arrived, then silence until the hour has room again. Whatever was held back
+is in `kasl inbox` with its badge.
 
 **You act on it.** Four ways, and they don't overlap:
 

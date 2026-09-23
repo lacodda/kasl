@@ -247,9 +247,11 @@ Windows needs no registry entry and no protocol of its own. A toast button there
 
 ## Background Polling
 
-Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux, and its buttons decide it. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Visible changes to existing issues (status, priority, score) also toast, and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
+Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux, and its buttons decide it. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Status and priority changes on existing issues also toast (a score change or a return after a missed poll only sets the badge), and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
 
-A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. And when one poll would raise more than five toasts of a kind (a first sync of a long backlog, a Jira-side re-scoring), they collapse into a single summary toast that opens your open-issues list in Jira.
+A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. Two answers that look like answers are refused the same way: an expired session that Jira serves as the anonymous user (an empty page with status 200), and a list shorter than the total Jira counted, which happens when an issue is created or resolved while the pages are read.
+
+Toasts are budgeted over time, not per poll. Within any hour at most five single toasts show; past that, one summary toast says how many issues were new, changed or left and opens your open-issues list in Jira, and the rest of the hour stays quiet. A trickle of three changes every five minutes is held to the same bound as two hundred at once.
 
 ## Configuration
 
@@ -273,7 +275,7 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
 - `enabled`: Whether the watcher polls Jira (default `true` when the section is present)
 - `poll_interval_secs`: Seconds between polls (default `300`)
 - `notify`: Show desktop toasts for new issues (default `true`); when `false`, all inbox toasts are off
-- `notify_changes`: Toast when an existing issue changes status, priority, or score (default `true`)
+- `notify_changes`: Toast when an existing issue changes status or priority (default `true`); score changes only set the badge
 - `notify_gone`: Toast when an issue leaves the inbox — closed or reassigned (default `false`)
 - `toast_snooze_for`: How long a toast's **Snooze** button sleeps — `3d`, `12h`, `2w` (default `1d`), the same spelling as `triage --snooze-for`
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field

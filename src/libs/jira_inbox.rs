@@ -20,11 +20,15 @@ use crate::libs::toast_action::{Mailbox, ToastAction};
 use crate::libs::toast_apply;
 use crate::{msg_info, msg_warning};
 use anyhow::Result;
+use chrono::{Duration, Local, NaiveDateTime};
+use std::collections::VecDeque;
 use std::process::Command;
 use tracing::{debug, warn};
 
-/// Above this many toasts of one kind in a single poll, they collapse into
-/// one summary toast.
+/// Above this many toasts, they collapse into one summary toast.
+///
+/// The poller counts against it over an hour ([`ToastBudget`]); waking
+/// snoozed issues, which the user scheduled, counts per wake.
 ///
 /// A first sync of two hundred open issues, or a Jira-side re-scoring of all
 /// of them, is one event, not two hundred; two hundred toasts teach the user
@@ -35,6 +39,88 @@ pub const TOAST_STORM_THRESHOLD: usize = 5;
 /// Whether `count` toasts of one kind should become a single summary toast.
 pub fn toasts_collapse(count: usize) -> bool {
     count > TOAST_STORM_THRESHOLD
+}
+
+/// The span over which [`ToastBudget`] counts the toasts it let through.
+pub const TOAST_WINDOW_MINUTES: i64 = 60;
+
+/// What one poll's toasts turn into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToastPlan {
+    /// Each issue gets its own toast.
+    Each,
+    /// One toast stands in for all of them.
+    Summary,
+    /// Nothing is shown; the list in `kasl inbox` carries the news.
+    Quiet,
+}
+
+/// How many issue toasts the poller may show, counted over time rather than per poll.
+///
+/// A limit per poll does not hold against a trickle. Jira-side automation
+/// that rescores two hundred issues a few at a time, or a list that keeps
+/// losing and regaining issues, arrives as three or four changes on every
+/// poll - under any per-poll threshold, and all of them toasted, poll after
+/// poll, for as long as it lasts. Counting over the last hour makes the
+/// total what is bounded: at most [`TOAST_STORM_THRESHOLD`] single toasts,
+/// then one summary, then quiet until the hour has room again.
+///
+/// Held in memory by the poller. A restart forgets the count, which costs at
+/// most one more budget's worth, and keeps the budget from outliving the
+/// process that spends it.
+#[derive(Debug, Default)]
+pub struct ToastBudget {
+    shown: VecDeque<NaiveDateTime>,
+    summary_at: Option<NaiveDateTime>,
+}
+
+impl ToastBudget {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Decides how `count` toasts from one poll at `now` are shown, and spends the budget.
+    pub fn admit(&mut self, now: NaiveDateTime, count: usize) -> ToastPlan {
+        let since = now - Duration::minutes(TOAST_WINDOW_MINUTES);
+        while self.shown.front().is_some_and(|t| *t <= since) {
+            self.shown.pop_front();
+        }
+        if self.summary_at.is_some_and(|t| t <= since) {
+            self.summary_at = None;
+        }
+
+        if count == 0 {
+            return ToastPlan::Each;
+        }
+        if self.shown.len() + count <= TOAST_STORM_THRESHOLD {
+            self.shown.extend(std::iter::repeat_n(now, count));
+            return ToastPlan::Each;
+        }
+        if self.summary_at.is_none() {
+            self.summary_at = Some(now);
+            return ToastPlan::Summary;
+        }
+        ToastPlan::Quiet
+    }
+}
+
+/// A toast one poll would like to show.
+enum Pending {
+    New(JiraInboxItem),
+    Changed(JiraInboxItem, String),
+    Gone(JiraInboxItem),
+}
+
+/// The line a summary toast opens with: what arrived, by kind.
+fn summary_line(pending: &[Pending]) -> String {
+    let count = |f: fn(&Pending) -> bool| pending.iter().filter(|p| f(p)).count();
+    let parts = [
+        (count(|p| matches!(p, Pending::New(_))), "new"),
+        (count(|p| matches!(p, Pending::Changed(..))), "changed"),
+        (count(|p| matches!(p, Pending::Gone(_))), "left the inbox"),
+    ];
+    let said: Vec<String> = parts.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
+    format!("Issues: {}", said.join(", "))
 }
 
 /// Outcome of a single inbox sync pass.
@@ -55,7 +141,8 @@ pub struct SyncOutcome {
 /// Runs one interactive sync (may prompt for Jira password).
 ///
 /// `--sync` always fetches even when the inbox poller is disabled in config;
-/// toasts respect `jira_inbox.notify` when that section exists.
+/// toasts respect `jira_inbox.notify` when that section exists. A sync run
+/// by hand gets a budget of its own: it is one poll, asked for.
 pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
     let config = Config::read()?;
     let Some(jira_config) = config.jira.clone() else {
@@ -71,11 +158,14 @@ pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
 
     let mut jira = Jira::new(&jira_config);
     let issues = jira.get_assigned_open_issues(&inbox_cfg.extra_field_ids()).await?;
-    apply_issues(&jira, &issues, &inbox_cfg, allow_toast).await
+    apply_issues(&jira, &issues, &inbox_cfg, allow_toast, &mut ToastBudget::new()).await
 }
 
 /// Runs one non-interactive sync for the background watcher.
-pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig) -> Result<SyncOutcome> {
+///
+/// `budget` is the poller's, carried from poll to poll, so the toasts it
+/// allows are counted across polls rather than within one.
+pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig, budget: &mut ToastBudget) -> Result<SyncOutcome> {
     if !inbox_cfg.enabled {
         return Ok(SyncOutcome {
             skipped: true,
@@ -100,10 +190,16 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig) -> Result<SyncOutc
         });
     };
 
-    apply_issues(&jira, &issues, inbox_cfg, inbox_cfg.notify).await
+    apply_issues(&jira, &issues, inbox_cfg, inbox_cfg.notify, budget).await
 }
 
-async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox_cfg: &JiraInboxConfig, notify: bool) -> Result<SyncOutcome> {
+async fn apply_issues(
+    jira: &Jira,
+    issues: &[crate::api::jira::JiraIssue],
+    inbox_cfg: &JiraInboxConfig,
+    notify: bool,
+    budget: &mut ToastBudget,
+) -> Result<SyncOutcome> {
     let statuses = JiraStatuses::new()?;
     let sort_field = inbox_cfg.sort_by_field.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
@@ -143,55 +239,53 @@ async fn apply_issues(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox
     let present_keys: Vec<String> = upserts.iter().map(|u| u.issue_key.clone()).collect();
     let gone_keys = db.mark_gone(&present_keys)?;
 
-    let mut notified = 0;
+    // Every toast this poll would show is gathered first and shown under
+    // one decision, so the budget sees the poll as a whole.
+    let mut pending = Vec::new();
     if notify && !new_keys.is_empty() {
         let to_notify = db.list_unnotified_new(&new_keys)?;
-        if toasts_collapse(to_notify.len()) {
-            if show_summary_toast(jira, &format!("{} new issues", to_notify.len())) {
-                notified += 1;
-            }
-        } else {
-            for item in &to_notify {
-                if show_toast(item) {
-                    notified += 1;
-                }
-            }
-        }
         let keys: Vec<String> = to_notify.iter().map(|i| i.issue_key.clone()).collect();
+        pending.extend(to_notify.into_iter().map(Pending::New));
+        // Notified means announced or deliberately not: a new issue held back
+        // by the budget is in the list with its NEW badge, and toasting it an
+        // hour later would be old news.
         db.mark_notified(&keys)?;
     }
-
     if notify && inbox_cfg.notify_changes {
-        let visible: Vec<&ChangedIssue> = changed.iter().filter(|c| !c.dismissed).collect();
-        if toasts_collapse(visible.len()) {
-            if show_summary_toast(jira, &format!("{} issues changed", visible.len())) {
-                notified += 1;
+        for change in changed.iter().filter(|c| c.notable && !c.dismissed) {
+            if let Ok(Some(item)) = db.get_by_key(&change.issue_key) {
+                pending.push(Pending::Changed(item, change.change.clone()));
             }
-        } else {
-            for change in visible {
-                if let Ok(Some(item)) = db.get_by_key(&change.issue_key)
-                    && show_change_toast(&item, &change.change)
-                {
-                    notified += 1;
-                }
+        }
+    }
+    if notify && inbox_cfg.notify_gone {
+        for key in &gone_keys {
+            if let Ok(Some(item)) = db.get_by_key(key) {
+                pending.push(Pending::Gone(item));
             }
         }
     }
 
-    if notify && inbox_cfg.notify_gone {
-        if toasts_collapse(gone_keys.len()) {
-            if show_summary_toast(jira, &format!("{} issues left the inbox", gone_keys.len())) {
-                notified += 1;
-            }
-        } else {
-            for key in &gone_keys {
-                if let Ok(Some(item)) = db.get_by_key(key)
-                    && show_gone_toast(&item)
-                {
+    let mut notified = 0;
+    match budget.admit(Local::now().naive_local(), pending.len()) {
+        ToastPlan::Each => {
+            for toast in &pending {
+                let shown = match toast {
+                    Pending::New(item) => show_toast(item),
+                    Pending::Changed(item, change) => show_change_toast(item, change),
+                    Pending::Gone(item) => show_gone_toast(item),
+                };
+                if shown {
                     notified += 1;
                 }
             }
         }
+        ToastPlan::Summary => {
+            if show_summary_toast(jira, &summary_line(&pending)) {
+                notified += 1;
+            }
+        }
+        ToastPlan::Quiet => debug!("Jira inbox: held back {} toast(s); the hour's budget is spent", pending.len()),
     }
 
     Ok(SyncOutcome {
@@ -539,6 +633,7 @@ pub async fn run_mailbox_watcher() {
 /// `kasl setup` can enable polling without restarting the watcher in most cases
 /// (restart still recommended after config changes).
 pub async fn run_poller() {
+    let mut budget = ToastBudget::new();
     loop {
         let config = match Config::read() {
             Ok(c) => c,
@@ -570,7 +665,7 @@ pub async fn run_poller() {
             Err(e) => warn!("Jira inbox wake error: {}", e),
         }
 
-        match sync_noninteractive(&inbox_cfg).await {
+        match sync_noninteractive(&inbox_cfg, &mut budget).await {
             Ok(outcome) if !outcome.skipped => {
                 if !outcome.new_keys.is_empty() {
                     msg_info!(Message::JiraInboxNewIssues(outcome.new_keys.len()));

@@ -279,7 +279,7 @@ the `jira` block; the inbox stays off when this one is absent.
 ### `notify_changes`
 - **Type**: `bool`
 - **Default**: `true`
-- **Description**: Toast when an issue already in the inbox visibly changes - status, priority or score
+- **Description**: Toast when an issue already in the inbox changes status or priority. A score change shows as a badge and never toasts
 
 ### `notify_gone`
 - **Type**: `bool`

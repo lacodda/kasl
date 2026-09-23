@@ -134,6 +134,15 @@ pub struct ChangedIssue {
     /// Human-readable change summary, e.g. `status→In Progress, score 5→8`.
     pub change: String,
     pub dismissed: bool,
+    /// Whether a person moved the issue: its status or priority changed.
+    ///
+    /// Only these are worth interrupting for. A score is derived - Jira-side
+    /// automation recomputes it for every issue, often in batches over the
+    /// day - and "back" is the inbox correcting its own view after a poll that
+    /// missed the issue. Both stay on the badge; neither raises a toast,
+    /// because both arrive for the whole pile at once and say nothing new
+    /// about any one issue.
+    pub notable: bool,
 }
 
 /// Result of an upsert batch: new keys and visibly changed issues.
@@ -213,8 +222,7 @@ impl JiraInbox {
                 )?;
                 result.updated += 1;
 
-                let change = describe_change(&old, item);
-                if let Some(change) = change {
+                if let Some(Change { text: change, notable }) = describe_change(&old, item) {
                     self.db.conn.execute(
                         "UPDATE jira_inbox SET last_change = ?1, changed_at = ?2 WHERE issue_key = ?3",
                         params![change, now, item.issue_key],
@@ -223,6 +231,7 @@ impl JiraInbox {
                         issue_key: item.issue_key.clone(),
                         change,
                         dismissed: old.dismissed,
+                        notable,
                     });
                 }
             } else {
@@ -485,8 +494,14 @@ struct ExistingRow {
     dismissed: bool,
 }
 
+/// A visible change on an existing row: what to show, and whether to toast it.
+struct Change {
+    text: String,
+    notable: bool,
+}
+
 /// Builds a human-readable change summary, or `None` when nothing visible changed.
-fn describe_change(old: &ExistingRow, new: &JiraInboxUpsert) -> Option<String> {
+fn describe_change(old: &ExistingRow, new: &JiraInboxUpsert) -> Option<Change> {
     let mut parts = Vec::new();
 
     if old.gone_at.is_some() {
@@ -515,6 +530,8 @@ fn describe_change(old: &ExistingRow, new: &JiraInboxUpsert) -> Option<String> {
         parts.push(format!("{arrow} {name}"));
     }
 
+    let notable = old.status_id != new.status_id || old.priority_rank != new.priority_rank || old.priority != new.priority;
+
     let score_changed = match (old.sort_value, new.sort_value) {
         (Some(a), Some(b)) => (a - b).abs() > f64::EPSILON,
         (None, None) => false,
@@ -525,7 +542,14 @@ fn describe_change(old: &ExistingRow, new: &JiraInboxUpsert) -> Option<String> {
         parts.push(format!("score {}→{}", fmt(old.sort_value), fmt(new.sort_value)));
     }
 
-    if parts.is_empty() { None } else { Some(parts.join(", ")) }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(Change {
+            text: parts.join(", "),
+            notable,
+        })
+    }
 }
 
 /// Formats a score without a trailing `.0` for whole numbers.

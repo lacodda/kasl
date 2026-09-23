@@ -229,8 +229,8 @@ pub struct JiraInboxConfig {
     #[serde(default = "default_true")]
     pub notify: bool,
 
-    /// Whether to show a toast when an existing issue visibly changes
-    /// (status, priority, score).
+    /// Whether to show a toast when an existing issue changes status or
+    /// priority. Score changes and returns only set the badge.
     #[serde(default = "default_true")]
     pub notify_changes: bool,
 
