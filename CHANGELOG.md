@@ -2,11 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.13.1] - 2026-09-23
+
+### Bug Fixes
+- Refuse an anonymous or short issue list as a poll answer
+- Budget toasts per hour and toast only status or priority changes
+
 ## [1.13.0] - 2026-09-21
+
+### Bug Fixes
+- Find the data directory instead of spelling it out
 
 ### Documentation
 - Document the manifest, the payload preview and the open backfill
 - Carry the new commands into the guides that list them
+- Say that the manifest timestamp is shown in local time
 
 ### Features
 - Show what leaves this machine, before it leaves
