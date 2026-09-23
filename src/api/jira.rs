@@ -314,6 +314,9 @@ impl Jira {
                 .await
                 .map_err(|e| SearchPageError::Other(format!("request failed: {e}")))?;
 
+            if session_is_anonymous(res.headers()) {
+                return Err(SearchPageError::Unauthorized);
+            }
             match res.status() {
                 StatusCode::UNAUTHORIZED => return Err(SearchPageError::Unauthorized),
                 status if !status.is_success() => {
@@ -390,13 +393,22 @@ impl Jira {
     }
 
     /// Fetches all pages of assigned open issues for a valid session cookie.
+    ///
+    /// The order is by key, not by priority or update time: pages are cut by
+    /// offset, and an order that an ordinary edit can reshuffle moves issues
+    /// across a page boundary while the pages are read - one issue skipped is
+    /// one issue marked gone, then toasted "back" a poll later. Key order only
+    /// moves when an issue is created or resolved, and that case is caught by
+    /// [`check_complete`]. The inbox sorts on its own, so nothing here reads
+    /// this order.
     async fn fetch_assigned_open_pages(&self, session_id: &str, extra_field_ids: &[String]) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
-        let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY priority ASC, updated DESC";
+        let jql = "assignee = currentUser() AND resolution is EMPTY ORDER BY key ASC";
         let fields = build_search_fields(extra_field_ids);
         let url = format!("{}/{}", self.config.api_url, SEARCH_URL);
 
-        let mut all = Vec::new();
+        let mut all: Vec<JiraIssue> = Vec::new();
         let mut start_at: u32 = 0;
+        let mut first_total: Option<u32> = None;
 
         loop {
             let mut headers = HeaderMap::new();
@@ -419,6 +431,9 @@ impl Jira {
                 .await
                 .map_err(|e| SearchPageError::Other(format!("request failed: {e}")))?;
 
+            if session_is_anonymous(res.headers()) {
+                return Err(SearchPageError::Unauthorized);
+            }
             match res.status() {
                 StatusCode::UNAUTHORIZED => return Err(SearchPageError::Unauthorized),
                 status if !status.is_success() => {
@@ -430,6 +445,7 @@ impl Jira {
 
             let page: JiraSearchResults = res.json().await.map_err(|e| SearchPageError::Other(format!("invalid JSON: {e}")))?;
             let batch_len = page.issues.len() as u32;
+            first_total.get_or_insert(page.total);
             all.extend(page.issues);
 
             start_at += batch_len;
@@ -438,7 +454,7 @@ impl Jira {
             }
         }
 
-        Ok(all)
+        check_complete(all, first_total.unwrap_or(0))
     }
 
     /// Resolves a session from cache / secret without prompting.
@@ -526,6 +542,43 @@ impl SearchPageError {
             SearchPageError::Other(msg) => anyhow::anyhow!("Jira inbox poll failed: {msg}"),
         }
     }
+}
+
+/// Whether Jira answered as nobody: the cookie was sent but the session behind it is gone.
+///
+/// Jira Server and Data Center do not always answer an expired session with
+/// 401. The request goes through as the anonymous user, with 200, and
+/// `currentUser()` in the JQL then matches nothing. Read as an answer, that
+/// empty page marks the whole inbox gone overnight, and the first poll with
+/// a fresh session brings every issue "back". Jira says so in headers:
+/// `X-AUSERNAME: anonymous`, and `X-Seraph-LoginReason` when the cookie it
+/// was given failed.
+fn session_is_anonymous(headers: &HeaderMap) -> bool {
+    let header = |name: &str| headers.get(name).and_then(|v| v.to_str().ok()).unwrap_or_default();
+    let reason = header("x-seraph-loginreason");
+    header("x-ausername").eq_ignore_ascii_case("anonymous") || reason.contains("AUTHENTICATED_FAILED") || reason.contains("AUTHENTICATION_DENIED")
+}
+
+/// Keeps a paged search only if it holds every issue Jira counted.
+///
+/// Pages are cut by offset, so an issue created or resolved while they are
+/// read shifts the rest by one, and one issue falls between two pages. Such
+/// a list is short by an issue that is still open, and the sync would mark
+/// it gone. A poll is either the whole inbox or not an answer; the next poll
+/// a few minutes later reads a list that holds still. More than counted is
+/// fine - an issue read twice is still one issue, and a new one is simply
+/// early - so duplicates are folded and only a shortfall fails.
+fn check_complete(issues: Vec<JiraIssue>, total: u32) -> std::result::Result<Vec<JiraIssue>, SearchPageError> {
+    let mut seen = std::collections::HashSet::new();
+    let unique: Vec<JiraIssue> = issues.into_iter().filter(|issue| seen.insert(issue.key.clone())).collect();
+    if (unique.len() as u64) < u64::from(total) {
+        return Err(SearchPageError::Other(format!(
+            "the pages held {} of {} issues; the list changed while it was read",
+            unique.len(),
+            total
+        )));
+    }
+    Ok(unique)
 }
 
 fn build_search_fields(extra_field_ids: &[String]) -> String {
