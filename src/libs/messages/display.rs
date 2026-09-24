@@ -240,6 +240,8 @@ impl Display for Message {
             Message::WatcherNotRunning => "Watcher is not running.".to_string(),
             Message::WatcherNotRunningPidNotFound => "Watcher does not appear to be running (PID file not found).".to_string(),
             Message::WatcherStartingForeground => "Starting watcher in foreground... Press Ctrl+C to exit.".to_string(),
+            Message::WatcherAlreadyRunningPid(pid) => format!("A watcher is already running (PID: {}) - left it as it is.", pid),
+            Message::WatcherAlreadyRunning => "A watcher is already running for this user - stop it with `kasl watch --stop`, then run this again.".to_string(),
             Message::WatcherStoppingExisting(pid) => format!("Stopping existing watcher (PID: {})...", pid),
             Message::WatcherFailedToStopExisting(error) => format!("Warning: Failed to stop existing daemon: {}", error),
             Message::WatcherReceivedSigterm => "Received SIGTERM, shutting down gracefully...".to_string(),

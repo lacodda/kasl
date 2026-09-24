@@ -193,6 +193,8 @@ pub enum Message {
     WatcherNotRunning,
     WatcherNotRunningPidNotFound,
     WatcherStartingForeground,
+    WatcherAlreadyRunning,
+    WatcherAlreadyRunningPid(String),    // PID
     WatcherStoppingExisting(String),     // PID
     WatcherFailedToStopExisting(String), // error
     WatcherReceivedSigterm,

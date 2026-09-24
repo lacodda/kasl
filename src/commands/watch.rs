@@ -16,7 +16,7 @@
 //! ```
 
 use crate::libs::{config::Config, daemon, messages::Message, monitor::Monitor};
-use crate::msg_print;
+use crate::{msg_bail_anyhow, msg_print};
 use anyhow::Result;
 use clap::Args;
 use tracing::instrument;
@@ -64,6 +64,11 @@ pub async fn cmd(args: WatchArgs) -> Result<()> {
         // Stop any running background daemon
         daemon::stop()?;
     } else if args.foreground {
+        // A foreground watcher beside a background one would poll Jira and
+        // toast twice; the one already running is stopped first on purpose.
+        let Some(_lock) = daemon::WatcherLock::acquire()? else {
+            msg_bail_anyhow!(Message::WatcherAlreadyRunning);
+        };
         // Run in foreground mode with enhanced logging
         msg_print!(Message::WatcherStartingForeground);
         run_monitor().await?;

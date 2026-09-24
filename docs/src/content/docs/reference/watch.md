@@ -17,6 +17,12 @@ kasl watch [OPTIONS]
 
 Running `kasl watch` with no options starts the background daemon - the normal way to use it day to day.
 
+## One watcher at a time
+
+There is one watcher per user, however it is started. `kasl watch` stops the watcher it knows about and starts a new one; a watcher it does not know about - started by another copy of kasl, or at the same moment by two autostart entries - is left running, and `watch` says so instead of starting a second. `--foreground` refuses while a watcher runs: stop it with `kasl watch --stop` first. Two watchers would poll Jira twice and show every toast twice.
+
+`--stop` stops only a kasl process: when the recorded process has ended and its number now belongs to another program, the stale record is cleared and nothing is killed.
+
 ## Examples
 
 ```bash

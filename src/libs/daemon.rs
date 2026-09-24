@@ -19,12 +19,52 @@ use crate::libs::messages::Message;
 use crate::libs::monitor::Monitor;
 use crate::{msg_bail_anyhow, msg_error, msg_error_anyhow, msg_info, msg_warning};
 use anyhow::Result;
+use std::process::Stdio;
 use std::time::Duration;
 use tracing::{debug, info, instrument, warn};
 
-/// PID file in the app data directory; written on spawn, removed on
-/// shutdown, and the single source of "is a daemon running".
+/// PID file in the app data directory; written by the watcher that holds
+/// [`WatcherLock`], removed on its shutdown, and what `--stop` reads.
 const PID_FILE: &str = "kasl-watch.pid";
+
+/// Lock file in the app data directory, held for a watcher's whole life.
+const LOCK_FILE: &str = "kasl-watch.lock";
+
+/// Proof that this process is the one watcher for this user.
+///
+/// Two watchers are two pollers with two toast budgets, and every toast
+/// shown twice; they also count the same activity into one database. The PID
+/// file cannot prevent that: it is read and written by whoever starts a
+/// watcher, and two starts at the same moment (a scheduled task and a Run
+/// key both firing at login) both read "nobody" and both write. An exclusive
+/// lock on a file is taken atomically by the OS and let go by the OS when
+/// the process dies however it dies, so there is no stale state to clean up.
+///
+/// The lock sits in the data directory, not beside the binary: two copies of
+/// kasl installed in two places share one data directory and one lock.
+#[derive(Debug)]
+pub struct WatcherLock {
+    _file: std::fs::File,
+}
+
+impl WatcherLock {
+    /// Takes the lock, or returns `None` when another watcher holds it.
+    pub fn acquire() -> Result<Option<Self>> {
+        let path = DataStorage::new().get_path(LOCK_FILE)?;
+        let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(&path)?;
+        match file.try_lock() {
+            Ok(()) => Ok(Some(Self { _file: file })),
+            Err(std::fs::TryLockError::WouldBlock) => Ok(None),
+            Err(std::fs::TryLockError::Error(e)) => Err(e.into()),
+        }
+    }
+}
+
+/// The PID the PID file names, if it names one.
+fn recorded_pid() -> Option<String> {
+    let path = DataStorage::new().get_path(PID_FILE).ok()?;
+    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string()).filter(|s| !s.is_empty())
+}
 
 /// The daemon entry point: runs the monitor and the Jira inbox poller,
 /// shutting both down on SIGTERM/SIGINT (Ctrl+C on Windows) and removing
@@ -32,6 +72,20 @@ const PID_FILE: &str = "kasl-watch.pid";
 #[instrument]
 pub async fn run_with_signal_handling() -> Result<()> {
     info!("Starting daemon with signal handling");
+
+    // A second watcher leaves quietly: the one holding the lock is already
+    // doing this job, and the PID file is its to own - not touched here.
+    let Some(_lock) = WatcherLock::acquire()? else {
+        info!(
+            "Another watcher holds the lock (PID {}); exiting",
+            recorded_pid().unwrap_or_else(|| "?".to_string())
+        );
+        return Ok(());
+    };
+    // Written here, by the winner, rather than only by whoever spawned it:
+    // when two starts race, the spawner's write may name the loser.
+    let pid_path = DataStorage::new().get_path(PID_FILE)?;
+    std::fs::write(&pid_path, std::process::id().to_string())?;
 
     // Set up a channel to handle shutdown signals
     // This allows coordinated shutdown between signal handlers and the monitor
@@ -132,7 +186,6 @@ pub async fn run_with_signal_handling() -> Result<()> {
 
     // Clean up PID file on exit
     // This ensures the PID file doesn't become stale
-    let pid_path = DataStorage::new().get_path(PID_FILE)?;
     if pid_path.exists() {
         let _ = std::fs::remove_file(&pid_path);
     }
@@ -190,13 +243,19 @@ pub fn spawn() -> Result<()> {
     // Get the current executable path for spawning
     let current_exe = std::env::current_exe().unwrap_or_else(|_| panic!("{}", Message::FailedToGetCurrentExecutable.to_string()));
 
+    // The daemon outlives this command, so it gets none of its stdio: an
+    // inherited stdout prints the monitor's chatter into whatever ran
+    // `watch`, and an inherited pipe keeps a caller that reads to the end
+    // (self-update, an installer, a script) waiting for as long as the
+    // daemon lives.
+
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;
 
         // Spawn daemon process with session detachment
         let mut command = std::process::Command::new(current_exe);
-        command.arg("--daemon-run");
+        command.arg("--daemon-run").stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
         // SAFETY: setsid is async-signal-safe and touches no shared state,
         // which is all pre_exec requires between fork and exec.
         unsafe {
@@ -209,9 +268,7 @@ pub fn spawn() -> Result<()> {
         }
         let child = command.spawn()?;
 
-        let pid = child.id();
-        std::fs::write(pid_path, pid.to_string())?;
-        msg_info!(Message::WatcherStarted(pid));
+        report_spawned(child)?;
     }
 
     #[cfg(windows)]
@@ -221,15 +278,18 @@ pub fn spawn() -> Result<()> {
         // Windows-specific flags for background process creation
         const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+        stop_inheriting_stdio();
+
         // Spawn daemon process without console window
         let child = std::process::Command::new(current_exe)
             .arg("--daemon-run")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()?;
 
-        let pid = child.id();
-        std::fs::write(pid_path, pid.to_string())?;
-        msg_info!(Message::WatcherStarted(pid));
+        report_spawned(child)?;
     }
 
     #[cfg(not(any(unix, windows)))]
@@ -238,6 +298,35 @@ pub fn spawn() -> Result<()> {
         msg_bail_anyhow!(Message::DaemonModeNotSupported);
     }
 
+    Ok(())
+}
+
+/// How long `spawn` waits for its child to take the lock and say so.
+const REGISTER_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Waits until the spawned watcher has registered itself, and says what happened.
+///
+/// The child writes the PID file once it holds [`WatcherLock`], so a PID
+/// file naming the child means it is the watcher. A child that exits first
+/// lost the lock to a watcher this `spawn` did not know about - one started
+/// by another copy of kasl, or at the same moment - and saying "started"
+/// would name a process that is already gone.
+fn report_spawned(mut child: std::process::Child) -> Result<()> {
+    let pid = child.id();
+    let deadline = std::time::Instant::now() + REGISTER_TIMEOUT;
+    while std::time::Instant::now() < deadline {
+        if recorded_pid().as_deref() == Some(pid.to_string().as_str()) {
+            msg_info!(Message::WatcherStarted(pid));
+            return Ok(());
+        }
+        if child.try_wait()?.is_some() {
+            msg_info!(Message::WatcherAlreadyRunningPid(recorded_pid().unwrap_or_else(|| "?".to_string())));
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // Still alive and still not registered: slow to start, not refused.
+    msg_info!(Message::WatcherStarted(pid));
     Ok(())
 }
 
@@ -265,46 +354,92 @@ pub fn is_running() -> bool {
     };
 
     // Check if process is actually running
-    is_process_running(pid)
+    is_kasl_process(pid)
 }
 
-/// Platform-specific "does this PID exist" probe.
-fn is_process_running(pid: u32) -> bool {
+/// Keeps this process's standard handles out of the daemon it spawns.
+///
+/// `Stdio::null()` decides what the child calls its stdout, not which
+/// handles it carries: std spawns with handle inheritance on, and a pipe
+/// this process was given is inheritable, so the daemon would hold the
+/// caller's pipe open for its whole life and a caller reading to the end
+/// would never finish. Unix closes them on exec by itself. `watch` exits
+/// right after spawning, so its own handles lose nothing.
+#[cfg(windows)]
+fn stop_inheriting_stdio() {
+    use winapi::um::handleapi::{INVALID_HANDLE_VALUE, SetHandleInformation};
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::{HANDLE_FLAG_INHERIT, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+
+    for which in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+        // SAFETY: GetStdHandle has no preconditions; SetHandleInformation is
+        // only called on a handle it returned, and fails harmlessly on one
+        // that is not inheritable to begin with.
+        unsafe {
+            let handle = GetStdHandle(which);
+            if !handle.is_null() && handle != INVALID_HANDLE_VALUE {
+                SetHandleInformation(handle, HANDLE_FLAG_INHERIT, 0);
+            }
+        }
+    }
+}
+
+/// Whether `pid` is a live kasl process - the only kind `stop` may kill.
+///
+/// A PID file outlives its process whenever the watcher is killed rather
+/// than stopped (an installer, Task Manager, a crash), and the OS hands the
+/// number to the next process that starts. Killing by the number alone then
+/// hits whatever runs under it now, or fails on a process that is still
+/// being torn down. The image name is what makes the number ours.
+fn is_kasl_process(pid: u32) -> bool {
     #[cfg(windows)]
     {
-        use winapi::um::errhandlingapi::GetLastError;
+        use winapi::shared::minwindef::DWORD;
         use winapi::um::handleapi::CloseHandle;
-        use winapi::um::processthreadsapi::OpenProcess;
-        use winapi::um::winnt::PROCESS_QUERY_INFORMATION;
+        use winapi::um::processthreadsapi::{GetExitCodeProcess, OpenProcess};
+        use winapi::um::winbase::QueryFullProcessImageNameW;
+        use winapi::um::winnt::PROCESS_QUERY_LIMITED_INFORMATION;
+
+        const STILL_ACTIVE: DWORD = 259;
 
         unsafe {
-            let handle = OpenProcess(PROCESS_QUERY_INFORMATION, 0, pid);
+            let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
             if handle.is_null() {
-                let error = GetLastError();
-                // ERROR_INVALID_PARAMETER (87) means process doesn't exist
-                return error != 87;
+                return false;
             }
+            let mut exit_code: DWORD = 0;
+            let alive = GetExitCodeProcess(handle, &mut exit_code) != 0 && exit_code == STILL_ACTIVE;
+            let mut buffer = [0u16; 1024];
+            let mut len = buffer.len() as DWORD;
+            let named = QueryFullProcessImageNameW(handle, 0, buffer.as_mut_ptr(), &mut len) != 0;
             CloseHandle(handle);
-            true
+            alive && named && is_kasl_image(&String::from_utf16_lossy(&buffer[..len as usize]))
         }
     }
 
     #[cfg(unix)]
     {
-        use std::process::Command;
-
-        // Use ps command to check if process exists
-        match Command::new("ps").arg("-p").arg(pid.to_string()).output() {
-            Ok(output) => output.status.success(),
-            Err(_) => false,
+        let pid = pid.to_string();
+        match std::process::Command::new("ps").args(["-p", pid.as_str(), "-o", "comm="]).output() {
+            Ok(output) if output.status.success() => is_kasl_image(String::from_utf8_lossy(&output.stdout).trim()),
+            _ => false,
         }
     }
 
     #[cfg(not(any(unix, windows)))]
     {
-        // For unsupported platforms, assume not running
+        let _ = pid;
         false
     }
+}
+
+/// Whether an executable path or process name is kasl or its `ka` alias.
+fn is_kasl_image(image: &str) -> bool {
+    let stem = std::path::Path::new(image)
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    stem == "kasl" || stem == "ka"
 }
 
 /// Stops the daemon; "already stopped" counts as success, so cleanup
@@ -352,8 +487,9 @@ fn stop_internal() -> Result<()> {
     };
     let pid: u32 = pid_str.trim().parse().map_err(|_| msg_error_anyhow!(Message::InvalidPidFileContent))?;
 
-    // Attempt to terminate the process
-    let killed = kill_process(pid)?;
+    // Attempt to terminate the process - only if the number still names one
+    // of ours; otherwise the file is stale and removing it is the whole job.
+    let killed = is_kasl_process(pid) && kill_process(pid)?;
 
     // Clean up the PID file regardless of whether the process was found
     // This prevents stale PID files from interfering with future operations
