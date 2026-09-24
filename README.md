@@ -164,7 +164,7 @@ On Windows use the PowerShell line above: `install.sh` carries the macOS and Lin
 
 **Binary releases** - grab the archive for your platform from [Releases](https://github.com/lacodda/kasl/releases/latest) (Windows x86_64, Linux x86_64, macOS arm64), unpack and put `kasl` on your `PATH`. The archive carries one binary; `ka` is a link the installers create beside it, and you can make one yourself the same way.
 
-Both installers take the newest release by default; set `KASL_VERSION` to a tag to pin one, `KASL_INSTALL_DIR` to choose where the binary lands, and `KASL_NO_ALIAS=1` to skip the `ka` alias.
+Both installers take the newest release by default; set `KASL_VERSION` to a tag to pin one, `KASL_INSTALL_DIR` to choose where the binary lands (by default, over the `kasl` already on your `PATH`), and `KASL_NO_ALIAS=1` to skip the `ka` alias.
 
 ## Quick start
 

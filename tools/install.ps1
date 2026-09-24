@@ -27,7 +27,36 @@ if (-not $tag -or $tag -notmatch '^v\d') {
 
 $name = "kasl-$tag-x86_64-pc-windows-msvc"
 $url = "https://github.com/$repo/releases/download/$tag/$name.tar.gz"
-$dir = if ($env:KASL_INSTALL_DIR) { $env:KASL_INSTALL_DIR } else { Join-Path $env:LOCALAPPDATA "Programs\kasl" }
+$defaultDir = Join-Path $env:LOCALAPPDATA "Programs\kasl"
+
+# Upgrade in place. A kasl already on PATH is the one the user runs, the one
+# autostart names and the one self-update replaces; installing a second copy
+# next to it leaves the old one answering and the old watcher running. Found
+# in the field: two copies, each started at login, each toasting.
+$copies = @(Get-Command kasl -CommandType Application -All -ErrorAction SilentlyContinue |
+    ForEach-Object { $_.Source } | Where-Object { $_ -like "*.exe" } | Select-Object -Unique)
+$dir = if ($env:KASL_INSTALL_DIR) {
+    $env:KASL_INSTALL_DIR
+} elseif ($copies.Count -gt 0) {
+    Split-Path $copies[0]
+} else {
+    $defaultDir
+}
+$target = Join-Path $dir "kasl.exe"
+
+# A running watcher holds its binary open, so it is stopped before the copy -
+# every watcher, from any copy: after this install exactly one is started
+# again, from the binary just installed.
+$watchers = @(Get-CimInstance Win32_Process -Filter "Name='kasl.exe' OR Name='ka.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match '--daemon-run|\swatch(\s|$)' -and $_.CommandLine -notmatch '--stop' })
+foreach ($watcher in $watchers) {
+    Stop-Process -Id $watcher.ProcessId -Force -ErrorAction SilentlyContinue
+}
+if ($watchers.Count -gt 0) {
+    Write-Host "Stopped $($watchers.Count) running watcher(s) for the upgrade"
+    # The OS lets go of the binary a moment after the process ends.
+    Start-Sleep -Milliseconds 500
+}
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "kasl-install-$([guid]::NewGuid())"
 New-Item -ItemType Directory -Force $tmp | Out-Null
 
@@ -95,7 +124,9 @@ try {
     $entries = @($raw -split ";" | Where-Object { $_ })
     $wanted = $dir.TrimEnd("\")
     $present = $entries | Where-Object { $_.TrimEnd("\") -ieq $wanted }
-    if (-not $present) {
+    # A directory some copy already ran from is on PATH already, often the
+    # machine PATH; a user entry would only duplicate it.
+    if (-not $present -and -not ($copies -contains $target)) {
         $value = if ($entries.Count -gt 0) { ($entries + $wanted) -join ";" } else { $wanted }
         Set-ItemProperty -Path "HKCU:\Environment" -Name Path -Value $value -Type ExpandString
         if (-not ("KaslInstall.Env" -as [type])) {
@@ -112,7 +143,54 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
 } catch {
     Write-Host "Note: could not update the user PATH ($($_.Exception.Message)); add $dir to it yourself."
 }
-Write-Host "Installed kasl $tag to $dir\kasl.exe"
+Write-Host "Installed kasl $tag to $target"
+
+# Other copies on PATH. One this installer put in its default directory
+# before it knew to upgrade in place is its own leftover and goes; anything
+# else was put there some other way (cargo, npm, by hand) and is only named.
+foreach ($copy in $copies) {
+    $copyDir = Split-Path $copy
+    if ($copyDir.TrimEnd("\") -ieq $dir.TrimEnd("\")) { continue }
+    if ($copyDir.TrimEnd("\") -ieq $defaultDir.TrimEnd("\")) {
+        Remove-Item (Join-Path $copyDir "kasl.exe"), (Join-Path $copyDir "ka.exe") -Force -ErrorAction SilentlyContinue
+        try {
+            $key = Get-Item "HKCU:\Environment"
+            $raw = [string]$key.GetValue("Path", "", "DoNotExpandEnvironmentNames")
+            $kept = @($raw -split ";" | Where-Object { $_ -and $_.TrimEnd("\") -ine $copyDir.TrimEnd("\") })
+            Set-ItemProperty -Path "HKCU:\Environment" -Name Path -Value ($kept -join ";") -Type ExpandString
+        } catch {
+            Write-Host "Note: remove $copyDir from your user PATH yourself."
+        }
+        Write-Host "Removed the second copy an earlier install left in $copyDir"
+    } else {
+        Write-Host "Note: another kasl is at $copy - remove it, or it may run instead of $target."
+    }
+}
+
+# Autostart names a binary by its full path, so an entry written by another
+# copy would start that copy at every login.
+$wantedRun = "`"$target`" watch"
+$runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$run = (Get-ItemProperty $runKey -ErrorAction SilentlyContinue).Kasl
+if ($run -and $run -ne $wantedRun) {
+    Set-ItemProperty -Path $runKey -Name Kasl -Value $wantedRun
+    Write-Host "Autostart now starts $target"
+}
+# Through cmd: Windows PowerShell turns a native command's stderr into an
+# error, and under "Stop" a missing task would end the install.
+$task = cmd /c "schtasks /Query /TN KaslAutostart /XML 2>nul"
+if ($LASTEXITCODE -eq 0 -and ($task -join "`n") -match "<Command>([^<]+)</Command>") {
+    $taskExe = $Matches[1].Trim('"')
+    if ($taskExe -ine $target) {
+        # Changing a scheduled task can ask for a password, which a piped
+        # install cannot answer; the fix is one command in an elevated shell.
+        Write-Host "Note: the KaslAutostart task starts $taskExe - run 'kasl autostart enable' in an elevated terminal to point it here."
+    }
+}
+
+if ($watchers.Count -gt 0) {
+    & $target watch
+}
 
 # `init` is an interactive wizard, so it cannot run from here: this script is
 # usually piped into iex, which leaves no terminal for prompts.

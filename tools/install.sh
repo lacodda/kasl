@@ -49,7 +49,17 @@ trap 'rm -rf "$TMP"' EXIT
 echo "Downloading $URL"
 curl -fsSL "$URL" | tar xz -C "$TMP"
 
-BIN_DIR="${KASL_INSTALL_DIR:-$HOME/.local/bin}"
+# Upgrade in place. A kasl already on PATH is the one the user runs and the
+# one autostart names; installing a second copy elsewhere leaves it answering.
+# A symlink is someone else's layout (npm, a package manager) and is left be.
+CURRENT=$(command -v kasl 2>/dev/null || true)
+if [ -n "${KASL_INSTALL_DIR:-}" ]; then
+    BIN_DIR="$KASL_INSTALL_DIR"
+elif [ -n "$CURRENT" ] && [ -f "$CURRENT" ] && [ ! -L "$CURRENT" ]; then
+    BIN_DIR=$(dirname "$CURRENT")
+else
+    BIN_DIR="$HOME/.local/bin"
+fi
 mkdir -p "$BIN_DIR"
 # The archive may or may not carry a top-level directory; take the binary from
 # wherever it landed rather than assuming a layout.
@@ -57,6 +67,15 @@ BIN=$(find "$TMP" -type f -name kasl -perm -u+x | head -n 1)
 [ -n "$BIN" ] || { echo "The archive did not contain a kasl binary" >&2; exit 1; }
 install -m 755 "$BIN" "$BIN_DIR/kasl"
 echo "Installed kasl $TAG to $BIN_DIR/kasl"
+
+# A running watcher keeps executing the binary it started from, replaced file
+# or not, so it is restarted onto the new one: through systemd when that is
+# what runs it, otherwise by `kasl watch`, which stops the old one first.
+if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet kasl.service 2>/dev/null; then
+    systemctl --user restart kasl.service && echo "Restarted the kasl service"
+elif pgrep -f 'kasl --daemon-run' >/dev/null 2>&1; then
+    "$BIN_DIR/kasl" watch
+fi
 
 # Short alias `ka`, unless something else in PATH already answers to that name
 # (ours from a previous run does not count). KASL_NO_ALIAS=1 skips it.

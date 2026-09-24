@@ -43,8 +43,12 @@ Both scripts read three environment variables:
 | Variable | Effect |
 | --- | --- |
 | `KASL_VERSION` | Install this tag (`vX.Y.Z`) instead of the newest release |
-| `KASL_INSTALL_DIR` | Where the binaries land; defaults to `%LOCALAPPDATA%\Programs\kasl` on Windows and `~/.local/bin` elsewhere |
+| `KASL_INSTALL_DIR` | Where the binaries land; defaults to the directory of the `kasl` already on your `PATH`, and without one to `%LOCALAPPDATA%\Programs\kasl` on Windows and `~/.local/bin` elsewhere |
 | `KASL_NO_ALIAS` | Set to `1` to skip the short `ka` alias |
+
+### Upgrading with the installer
+
+Run the installer again to upgrade: it replaces the `kasl` already on your `PATH` in place rather than installing a second copy beside it, stops a running watcher for the swap and starts it again from the new binary. On Windows it also points the autostart entry at the upgraded binary, and removes a second copy that an earlier installer left in `%LOCALAPPDATA%\Programs\kasl`. A copy it did not put there (cargo, npm, by hand) is only named, for you to remove.
 
 ### The `ka` alias
 
