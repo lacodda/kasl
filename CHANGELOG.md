@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.13.2] - 2026-09-24
+
+### Bug Fixes
+- Keep one watcher per user
+- Upgrade the kasl on PATH in place
+
+### Documentation
+- Serve a 404 page of our own
+
 ## [1.13.1] - 2026-09-23
 
 ### Bug Fixes
