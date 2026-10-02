@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.14.0] - 2026-10-02
+
+### Documentation
+- List the server tables and migrations 14 to 16
+
+### Features
+- Tell the team server whether you are working right now
+
 ## [1.13.2] - 2026-09-24
 
 ### Bug Fixes
