@@ -149,6 +149,38 @@ CREATE TABLE jira_statuses (
 );
 ```
 
+#### `server_outbox`
+Days owed to kasl-server - a date, never a payload, so a day corrected while the network was down is the version that arrives:
+```sql
+CREATE TABLE server_outbox (
+    id INTEGER PRIMARY KEY,
+    date DATE NOT NULL UNIQUE,
+    queued_at TIMESTAMP NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TIMESTAMP,
+    last_error TEXT
+);
+```
+
+#### `server_pulse`
+The watcher's last [pulse](/reference/server/#kasl-server-pulse) and how it went, so `kasl server status` - a different process - can report on it:
+```sql
+CREATE TABLE server_pulse (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    attempted_at TIMESTAMP NOT NULL,
+    next_at TIMESTAMP NOT NULL,
+    sent_at TIMESTAMP,
+    state TEXT,
+    stale_after_seconds INTEGER,
+    clock_skew_seconds INTEGER,
+    error TEXT
+);
+```
+
+- One row, never a log. The server keeps only the latest pulse, and a local minute-by-minute record of when someone was at their desk would be the history the pulse was designed not to leave.
+- Times here are UTC: the only question asked of them is "how long ago".
+- `next_at` is when the watcher means to try again. A watcher that has stopped leaves it behind, which is how `status` tells "quiet because nothing changed" from "quiet because nobody is sending".
+
 #### `migrations`
 Tracks database schema version:
 ```sql
@@ -201,6 +233,9 @@ Schema history, in order:
 11. `fold_breaks_into_protected_pauses` - adds `protected`/`reason` to `pauses`, migrates rows out of `breaks` as protected pauses, drops `breaks`
 12. `jira_inbox_gone_and_change_tracking` - adds `gone_at`, `last_change`, `changed_at` to `jira_inbox`
 13. `link_taken_issues_to_their_tasks` - adds `jira_key` and its index to `tasks`, and `taken_at` to `jira_inbox`
+14. `add_server_outbox` - `server_outbox`
+15. `snooze_inbox_issues` - adds `snoozed_until` and `woke_at` to `jira_inbox`
+16. `add_server_pulse` - `server_pulse`
 
 Each migration runs inside a transaction; a failure rolls back that migration.
 
