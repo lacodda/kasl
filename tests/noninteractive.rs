@@ -261,15 +261,12 @@ mod tests {
         // this suite deleted the real agent token of whoever ran it, and a
         // connected machine silently stopped sending days. Nothing in a test
         // may run a command that writes the keyring.
-        for args in [vec!["server", "status"]] {
-            let out = kasl_cmd(dir.path()).args(&args).output().unwrap();
-            assert!(
-                out.status.success(),
-                "`kasl {}` failed unattended: {}",
-                args.join(" "),
-                String::from_utf8_lossy(&out.stderr)
-            );
-        }
+        let out = kasl_cmd(dir.path()).args(["server", "status"]).output().unwrap();
+        assert!(
+            out.status.success(),
+            "`kasl server status` failed unattended: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 
     #[serial]
