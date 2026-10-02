@@ -249,13 +249,19 @@ mod tests {
 
     #[serial]
     #[test]
-    fn server_status_and_disconnect_work_unattended() {
+    fn server_status_works_unattended() {
         let dir = TempDir::new().unwrap();
 
-        // Neither reads a secret from the user, so both belong in a script:
-        // `status` is the natural health check, and `disconnect` has to work
-        // when a machine is being decommissioned by one.
-        for args in [vec!["server", "status"], vec!["server", "disconnect"]] {
+        // It reads no secret from the user, so it belongs in a script: it is
+        // the natural health check.
+        //
+        // `disconnect` used to be run here too, and must not be. HOME and
+        // LOCALAPPDATA move the data directory, not the OS keyring, and
+        // disconnect removes the token before anything else - so every run of
+        // this suite deleted the real agent token of whoever ran it, and a
+        // connected machine silently stopped sending days. Nothing in a test
+        // may run a command that writes the keyring.
+        for args in [vec!["server", "status"]] {
             let out = kasl_cmd(dir.path()).args(&args).output().unwrap();
             assert!(
                 out.status.success(),
