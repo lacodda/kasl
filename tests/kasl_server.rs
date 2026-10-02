@@ -17,6 +17,7 @@ fn client_for(server: &MockServer) -> KaslServer {
     KaslServer::new(&KaslServerConfig {
         url: server.uri(),
         ca_certificate: None,
+        pulse: false,
     })
     .expect("the client should build for a plain http url")
 }
@@ -168,6 +169,7 @@ async fn a_server_that_is_not_listening_is_reported_by_url() {
         // Port 1 is reserved and never has a listener.
         url: "http://127.0.0.1:1".to_string(),
         ca_certificate: None,
+        pulse: false,
     };
 
     let error = KaslServer::new(&config).unwrap().health().await.unwrap_err().to_string();
@@ -194,6 +196,7 @@ async fn a_url_with_a_trailing_slash_still_addresses_the_endpoints() {
     let client = KaslServer::new(&KaslServerConfig {
         url: format!("{}/", server.uri()),
         ca_certificate: None,
+        pulse: false,
     })
     .unwrap();
 
@@ -398,6 +401,7 @@ async fn an_unreachable_server_keeps_the_day() {
         // Port 1 is reserved and never has a listener.
         url: "http://127.0.0.1:1".to_string(),
         ca_certificate: None,
+        pulse: false,
     })
     .unwrap();
 

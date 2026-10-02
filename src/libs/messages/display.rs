@@ -397,6 +397,49 @@ Run `kasl server connect` to connect again with a token your administrator issue
             Message::KaslServerPrivacySetByAdmin => {
                 "The level is the installation's, set by an administrator on the server. kasl shows it; it cannot widen or narrow it from here.".to_string()
             }
+            // === PULSE MESSAGES ===
+            Message::PulseOff => "Pulse: off - the server is not told whether you are working right now. `kasl server pulse enable` turns it on.".to_string(),
+            Message::PulseNothingYet => {
+                "Pulse: on - nothing has been sent since it was turned on. A running watcher sends one within seconds; `kasl watch` starts one.".to_string()
+            }
+            Message::PulseLastSent { ago, state } => match state {
+                Some(state) => format!("Pulse: on - the last one went {} ago ({}).", ago, state),
+                None => format!("Pulse: on - the last one went {} ago.", ago),
+            },
+            Message::PulseFailing { ago, error } => format!("Pulse: on, but the last one ({} ago) did not arrive: {}", ago, error),
+            Message::PulseLastArrived(ago) => format!("The last one that arrived went {} ago.", ago),
+            Message::PulseSilent(ago) => format!(
+                "The watcher was due to send another {} ago and has not - it is not running, or has stopped. `kasl watch` starts it.",
+                ago
+            ),
+            Message::PulseShownOffline(stale_after) => {
+                format!("The server stops believing a pulse after {}, so it now shows you as offline.", stale_after)
+            }
+            Message::PulseClockSkew(seconds) => format!(
+                "This machine's clock is {} s {} the server's - every time it records is off by as much, and the server refuses a pulse stamped more than a minute ahead. Set the clock right.",
+                seconds.abs(),
+                if *seconds > 0 { "ahead of" } else { "behind" }
+            ),
+            Message::PulseEnabled(url) => format!(
+                "Pulse on: the watcher tells {} once a minute whether you are working, on a break, or not in a day - the state only, never the task or the reason for a break.",
+                url
+            ),
+            Message::PulseNoWatcher => "No background watcher is running, so nothing goes out until one starts - `kasl watch`.".to_string(),
+            Message::PulseFirstArrived(state) => format!("The first pulse arrived: the server shows you as {}.", state),
+            Message::PulseFirstFailed(error) => format!(
+                "The first pulse did not arrive: {}
+The watcher keeps trying; `kasl server status` shows how it goes.",
+                error
+            ),
+            Message::PulseFirstPending => "The watcher has not sent one yet; `kasl server status` shows when it does.".to_string(),
+            Message::PulseDisabled(stale_after) => match stale_after {
+                Some(stale_after) => format!(
+                    "Pulse off. The server keeps the last state it received, and shows you as offline once that is {} old.",
+                    stale_after
+                ),
+                None => "Pulse off. The server keeps the last state it received, and shows you as offline once it stops believing it.".to_string(),
+            },
+            Message::PulseAlreadyOff => "The pulse is already off.".to_string(),
             Message::KaslServerPushRetryable(error) => {
                 format!(
                     "{}

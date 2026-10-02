@@ -167,6 +167,18 @@ pub struct KaslServerConfig {
     /// switching it off - would also accept anyone else's certificate.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ca_certificate: Option<String>,
+
+    /// Whether the watcher tells this server, once a minute, if you are
+    /// working, on a break, or not in a day.
+    ///
+    /// Off until the employee turns it on with `kasl server pulse enable`:
+    /// connecting agrees to send finished days, and a live signal of whether
+    /// someone is at their keyboard is a different thing to agree to. It
+    /// lives here, beside the address, so the consent belongs to this
+    /// connection - disconnecting forgets it, and connecting to another
+    /// server does not inherit it.
+    #[serde(default)]
+    pub pulse: bool,
 }
 
 /// The root configuration. Every module is optional, and unset modules

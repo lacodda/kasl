@@ -129,7 +129,9 @@ Monthly work productivity: 95.4%
   machine at a self-hosted
   [kasl-server](https://github.com/lacodda/kasl-server); a day that cannot be
   delivered is queued, and the next push carries the backlog with it.
-  Connecting is optional and changes nothing locally.
+  `kasl server pulse enable` lets the team dashboard show whether you are
+  working right now - off until you turn it on. Connecting is optional and
+  changes nothing locally.
 - **A short alias.** `ka` is installed beside `kasl` as a *link* to the same
   binary, so an update can never leave one behind. Completions for bash, zsh,
   fish, PowerShell and elvish.

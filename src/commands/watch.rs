@@ -89,6 +89,10 @@ async fn run_monitor() -> Result<()> {
     // Initialize the activity monitor with configuration
     let mut monitor = Monitor::new(monitor_config)?;
 
+    // The pulse runs here too, so a foreground watcher reports the same
+    // present as a background one would.
+    let pulse_handle = tokio::spawn(crate::libs::pulse::run(monitor.pause_flag()));
+
     // Sibling poller so foreground mode also keeps the Jira inbox warm
     let inbox_handle = tokio::spawn(async move {
         crate::libs::jira_inbox::run_poller().await;
@@ -103,6 +107,7 @@ async fn run_monitor() -> Result<()> {
     let result = monitor.run().await;
     inbox_handle.abort();
     mailbox_handle.abort();
+    pulse_handle.abort();
     result
 }
 

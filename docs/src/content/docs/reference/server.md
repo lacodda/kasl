@@ -21,6 +21,7 @@ kasl server <SUBCOMMAND>
 | `queue` | Show the days still waiting, and why |
 | `manifest` | Show what this server stores about you |
 | `backfill` | Queue every recorded day in a date range and send them |
+| `pulse` | Tell the server whether you are working right now - off until you turn it on |
 | `disconnect` | Forget the connection and remove the stored token |
 
 ## Getting a token
@@ -84,11 +85,14 @@ Configured server: https://kasl.example.com
 https://kasl.example.com is kasl-server vX.Y.Z
 Connected as Kirill Lakhtachev (agent 'laptop')
 server vX.Y.Z - api v1 - ok
+Pulse: on - the last one went 12 s ago (working).
 ```
 
 Each part can fail on its own, and each failure names its own fix - the server unreachable, the token no longer accepted (revoked, or the account deactivated), or a configured server with no token stored, which means connecting again.
 
-The last line is the pair that decides whether this agent and that server understand each other: the server's own version, and the API version it serves this agent under. Both come from the server rather than being assumed here, so when an upload is refused you can see which two versions are actually talking. Reaching that line at all means they are compatible - the checks above it are what `connect` enforces.
+The `server ... api ...` line is the pair that decides whether this agent and that server understand each other: the server's own version, and the API version it serves this agent under. Both come from the server rather than being assumed here, so when an upload is refused you can see which two versions are actually talking. Reaching that line at all means they are compatible - the checks above it are what `connect` enforces.
+
+The last line is [the pulse](#kasl-server-pulse). It is read from what the watcher recorded, not from the server, so it is printed whatever the checks above it found - a server that cannot be reached is exactly when "the last one went 20 min ago" is worth reading.
 
 ## `kasl server push`
 
@@ -305,6 +309,75 @@ What the command is for is the other half of that: if you are asked to run an ag
 
 Narrowing happens at ingest, not on a screen: a field a level excludes is dropped before the day is written, so it never reaches the server's database or its backups.
 
+## `kasl server pulse`
+
+```bash
+kasl server pulse [enable | disable]
+```
+
+- `enable`: Start telling the server whether you are working right now.
+- `disable`: Stop telling it.
+- With neither, shows how the pulse is going, without touching the network.
+
+Everything else this command sends is about the past: a day goes up when it is pushed. The pulse is the one thing about the present. Once it is on, the watcher tells the server once a minute whether you are **working** (in an open workday, not in a pause), **paused** (in an open workday, in a pause) or **idle** (no workday open - before it starts, or after `kasl end`). The team dashboard shows it as who is working right now.
+
+```console
+$ kasl server pulse enable
+Pulse on: the watcher tells https://kasl.example.com once a minute whether you are working, on a break, or not in a day - the state only, never the task or the reason for a break.
+The first pulse arrived: the server shows you as working.
+```
+
+### Off until you turn it on
+
+Connecting agrees to send finished days. A live signal of whether you are at your keyboard is a different thing to agree to, so connecting does not turn it on, and nothing on the server can. The choice belongs to the connection: [`disconnect`](#kasl-server-disconnect) forgets it, and connecting to a different server starts with it off again - agreeing to tell one installation where you are is not agreeing to tell the next.
+
+### What it sends
+
+The state and the moment it was observed, with your UTC offset - nothing else. Not the task you are on and not the reason for a break: those belong to the day, under the privacy level [the manifest](#kasl-server-manifest) describes. The server keeps the latest pulse only, replacing it each time, never as a history, and the manifest lists it at every level. The token says which machine is reporting, so the pulse does not carry a name of its own.
+
+A change goes at once rather than at the next minute: the dashboard is looked at when someone wonders where a colleague went, and a break reported a minute late is wrong at exactly that moment. The interval is the server's - it answers every pulse with how often it wants one and how long it believes one - so there is nothing to configure here.
+
+### Who sends it
+
+The [watcher](/reference/watch/). It is the one process that knows whether this is a pause, so it is the only sender; `enable` turns the pulse on, waits for the watcher's first one and tells you how it went, and sends nothing of its own. With no watcher running, nothing goes:
+
+```console
+$ kasl server pulse enable
+Pulse on: the watcher tells https://kasl.example.com once a minute whether you are working, on a break, or not in a day - the state only, never the task or the reason for a break.
+No background watcher is running, so nothing goes out until one starts - `kasl watch`.
+```
+
+The setting is read by the running watcher within seconds, so turning the pulse on or off needs no restart.
+
+### How it is going
+
+```console
+$ kasl server pulse
+Pulse: on - the last one went 12 s ago (working).
+```
+
+When pulses stop arriving, the reason and the last one that got through are both shown:
+
+```console
+$ kasl server pulse
+Pulse: on, but the last one (20 s ago) did not arrive: cannot reach kasl-server at https://kasl.example.com: connection refused
+The last one that arrived went 6 min ago.
+The server stops believing a pulse after 3 min, so it now shows you as offline.
+```
+
+A server that could not answer is asked again at the next interval; one that refused - a revoked token, a server older than the pulse, a clock too far ahead - is asked again five minutes later, and running `enable` again asks at once. A watcher that has stopped is spotted too: it is overdue for its next attempt, and `pulse` says so and names `kasl watch`.
+
+The server measures your clock on every pulse. Past ten seconds, `pulse` says how far and in which direction, because every time this machine records is off by as much - and the server refuses a pulse stamped more than a minute ahead.
+
+### Turning it off
+
+```console
+$ kasl server pulse disable
+Pulse off. The server keeps the last state it received, and shows you as offline once that is 3 min old.
+```
+
+There is no "stop" to send - the server goes by silence. So the dashboard does not go blank the moment the pulse is off: it shows the last state until that is too old to believe, and then shows you as offline.
+
 ## Which server this agent needs
 
 kasl and kasl-server ship on their own schedules, so the version of the server
@@ -319,13 +392,20 @@ names the endpoint it calls and the server version that first answered it.
 | v1.8.0 | `push` | `POST /api/v1/days` | **0.14.1** |
 | v1.9.0 | `queue`, `flush`, `backfill` | `POST /api/v1/days/batch` | **0.14.1** |
 | v1.13.0 | `manifest` | `GET /api/v1/privacy/agent` | **0.14.1** |
+| v1.14.0 | `pulse` | `POST /api/v1/agent/heartbeat` | **0.17.0** |
 
-The floor is the same for all of them, and `whoami` is what sets it. The server
-has accepted uploads since 0.3.0, backlogs since 0.4.0 and the agent privacy
-manifest since 0.10.0, but `connect` asks whose token it is holding before it
-stores anything, and 0.14.1 is where that question could first be answered. A server older than that cannot be connected
-to at all, which is the honest outcome: the alternative would be filing this
-machine's days under a name nobody checked.
+The floor is the same for all but the pulse, and `whoami` is what sets it. The
+server has accepted uploads since 0.3.0, backlogs since 0.4.0 and the agent
+privacy manifest since 0.10.0, but `connect` asks whose token it is holding
+before it stores anything, and 0.14.1 is where that question could first be
+answered. A server older than that cannot be connected to at all, which is the
+honest outcome: the alternative would be filing this machine's days under a
+name nobody checked.
+
+The pulse is the one exception. A server between 0.14.1 and 0.17.0 takes the
+connection and the days, and answers a pulse with `404`; `kasl server pulse`
+then says the server does not take one and names 0.17.0, and the watcher asks
+again only every five minutes. Days are unaffected.
 
 <!-- /historical versions -->
 
@@ -353,7 +433,7 @@ sends.
 kasl server disconnect
 ```
 
-Removes the stored token, then the configured address - in that order, so a failure never leaves a working credential behind with nothing pointing at it. Disconnecting does not revoke the token on the server; ask an administrator to revoke it if the machine is being handed on.
+Removes the stored token, then the configured address - in that order, so a failure never leaves a working credential behind with nothing pointing at it. The pulse goes with the address: a later `connect` starts with it off. Disconnecting does not revoke the token on the server; ask an administrator to revoke it if the machine is being handed on.
 
 Local data is untouched. Days already uploaded stay on the server, and everything in the local database stays where it is.
 
@@ -390,6 +470,15 @@ kasl server flush
 # Read what this server stores about you
 kasl server manifest
 
+# Let the team dashboard show whether you are working right now
+kasl server pulse enable
+
+# See how the pulse is going, without touching the network
+kasl server pulse
+
+# Stop telling the server
+kasl server pulse disable
+
 # Upload history recorded before this machine was connected
 kasl server backfill --from 2026-08-01
 
@@ -402,5 +491,6 @@ kasl server disconnect
 
 ## Related commands
 
+- **[`watch`](/reference/watch/)** - The watcher, which sends the pulse once it is on
 - **[`report`](/reference/report/)** - The daily report, which the corporate `si` integration submits separately
 - **[`setup`](/reference/setup/)** - Configure the rest of kasl, including that separate reporting API

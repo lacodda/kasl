@@ -49,6 +49,7 @@ mod tests {
         KaslServer::new(&KaslServerConfig {
             url: server.uri(),
             ca_certificate: None,
+            pulse: false,
         })
         .unwrap()
     }

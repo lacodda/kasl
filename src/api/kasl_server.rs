@@ -13,6 +13,7 @@
 //! let config = KaslServerConfig {
 //!     url: "https://kasl.example.com".to_string(),
 //!     ca_certificate: None,
+//!     pulse: false,
 //! };
 //!
 //! let server = KaslServer::new(&config)?;
@@ -127,6 +128,88 @@ pub struct PrivacyManifest {
 pub struct StoredKind {
     pub what: String,
     pub detail: String,
+}
+
+/// What this agent claims its person is doing right now.
+///
+/// Mirrors the server's `agent_state` enum (ADR 0014 in kasl-server), wire
+/// names included. The server's live status is wider - `offline` and
+/// `unknown` - but those are what it concludes from silence, and an agent
+/// cannot claim them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentState {
+    /// In an open workday, and not inside a pause.
+    Working,
+    /// In an open workday, inside a pause.
+    Paused,
+    /// Running, but not in a workday: before it starts, or after it ended.
+    Idle,
+}
+
+impl AgentState {
+    /// The wire name, which is also how the state is stored locally.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            AgentState::Working => "working",
+            AgentState::Paused => "paused",
+            AgentState::Idle => "idle",
+        }
+    }
+
+    /// Reads a stored wire name back; anything else is `None`, not a guess.
+    pub fn parse(name: &str) -> Option<Self> {
+        match name {
+            "working" => Some(AgentState::Working),
+            "paused" => Some(AgentState::Paused),
+            "idle" => Some(AgentState::Idle),
+            _ => None,
+        }
+    }
+}
+
+impl std::fmt::Display for AgentState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.pad(self.as_str())
+    }
+}
+
+/// One pulse, as `POST /api/v1/agent/heartbeat` takes it.
+///
+/// The state and the moment, and nothing else: not the task, not the reason
+/// for a break. Those belong to the day, under the privacy level that governs
+/// it, and a pulse that carried them would be a live feed of what someone is
+/// doing this minute (ADR 0014 in kasl-server).
+#[derive(Debug, Clone, Serialize)]
+pub struct Pulse {
+    pub state: AgentState,
+
+    /// When the state was observed, with this machine's UTC offset like every
+    /// instant in this API. The server ages a pulse by its own clock, so this
+    /// is what it measures the skew against, not what it trusts.
+    pub at: DateTime<FixedOffset>,
+}
+
+/// What the server answers to a pulse.
+///
+/// The cadence comes from here rather than from configuration: the interval
+/// and the point at which the server stops believing a pulse have to agree,
+/// and only the server can own that.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PulseAccepted {
+    /// Seconds until the next pulse is wanted.
+    pub interval_seconds: i64,
+
+    /// After how many seconds of silence the server shows this person as
+    /// offline.
+    pub stale_after_seconds: i64,
+
+    /// The state as recorded, echoed back.
+    pub state: AgentState,
+
+    /// How far this machine's clock is from the server's, in seconds,
+    /// positive when this machine is ahead.
+    pub clock_skew_seconds: i64,
 }
 
 /// One day as this agent recorded it, in the shape the server accepts.
@@ -514,6 +597,44 @@ impl KaslServer {
         Err(classify_failure(status, describe_failure(status, &message)))
     }
 
+    /// Sends one pulse to `POST /api/v1/agent/heartbeat`.
+    ///
+    /// Failures split the way uploads do (ADR 0005): a server that could not
+    /// answer is worth asking again at the next interval, a refusal is not
+    /// worth asking again soon. A `404` is a server older than the route and
+    /// is named as such, because its fix is the administrator's - and it is
+    /// the one failure an employee who just turned the pulse on is likely to
+    /// meet.
+    pub async fn heartbeat(&self, token: &str, pulse: &Pulse) -> Result<PulseAccepted, UploadError> {
+        let url = format!("{}/api/v1/agent/heartbeat", self.base_url);
+        let response = match self.client.post(&url).bearer_auth(token).json(pulse).send().await {
+            Ok(response) => response,
+            Err(error) => {
+                return Err(UploadError::Retryable {
+                    message: format!("cannot reach kasl-server at {}: {}", self.base_url, error),
+                });
+            }
+        };
+
+        let status = response.status();
+        if status.is_success() {
+            return response.json::<PulseAccepted>().await.map_err(|error| UploadError::Rejected {
+                status,
+                message: format!("the server took the pulse but answered unreadably: {}", error),
+            });
+        }
+
+        if status == StatusCode::NOT_FOUND {
+            return Err(UploadError::Rejected {
+                status,
+                message: "this server does not take a pulse - the route arrived in kasl-server 0.17.0".to_string(),
+            });
+        }
+
+        let message = response.text().await.unwrap_or_default();
+        Err(classify_failure(status, describe_failure(status, &message)))
+    }
+
     /// The base URL this client talks to, as stored.
     pub fn base_url(&self) -> &str {
         &self.base_url
@@ -614,6 +735,7 @@ mod tests {
         let config = KaslServerConfig {
             url: "https://kasl.example.com/".to_string(),
             ca_certificate: None,
+            pulse: false,
         };
 
         let server = KaslServer::new(&config).unwrap();
@@ -625,6 +747,7 @@ mod tests {
         let config = KaslServerConfig {
             url: "https://kasl.example.com".to_string(),
             ca_certificate: Some("/nonexistent/company-ca.pem".to_string()),
+            pulse: false,
         };
 
         let error = KaslServer::new(&config).unwrap_err().to_string();
@@ -659,6 +782,7 @@ mod tests {
             let config = KaslServerConfig {
                 url: "https://kasl.example.com".to_string(),
                 ca_certificate: Some(path.to_string_lossy().into_owned()),
+                pulse: false,
             };
 
             let error = match KaslServer::new(&config) {
@@ -682,6 +806,7 @@ mod tests {
         let config = KaslServerConfig {
             url: "https://kasl.example.com".to_string(),
             ca_certificate: Some(path.to_string_lossy().into_owned()),
+            pulse: false,
         };
 
         // Accepted by our check; whether the bytes decode is the backend's

@@ -1,6 +1,7 @@
 //! Background process management for `kasl watch`: spawn detached,
 //! track by PID file, stop, and the daemon's own signal-handled entry
-//! point.
+//! point, which runs the monitor with its siblings - the Jira inbox poller,
+//! the toast mailbox and the kasl-server pulse.
 //!
 //! ```rust,no_run
 //! # async fn f() -> anyhow::Result<()> {
@@ -142,10 +143,24 @@ pub async fn run_with_signal_handling() -> Result<()> {
         msg_warning!(Message::WatcherSignalHandlingNotSupported);
     }
 
+    // Built here rather than inside its task, so the pulse can be handed the
+    // monitor's view of whether this is a pause before the loop starts.
+    let mut monitor = match new_monitor() {
+        Ok(monitor) => monitor,
+        Err(e) => {
+            // Reported and cleaned up the way a monitor failing inside its
+            // task is, so a bad config does not leave a PID file behind.
+            msg_error!(Message::MonitorError(e.to_string()));
+            let _ = std::fs::remove_file(&pid_path);
+            return Ok(());
+        }
+    };
+    let pulse_handle = tokio::spawn(crate::libs::pulse::run(monitor.pause_flag()));
+
     // Run the monitor in a separate task
     // This allows concurrent execution with signal handling
     let monitor_handle = tokio::spawn(async move {
-        match run_monitor().await {
+        match monitor.run().await {
             Ok(()) => Ok(()),
             Err(e) => Err(Message::MonitorError(e.to_string())),
         }
@@ -169,6 +184,7 @@ pub async fn run_with_signal_handling() -> Result<()> {
             // Monitor task completed (either successfully or with error)
             inbox_handle.abort();
             mailbox_handle.abort();
+            pulse_handle.abort();
             match result {
                 Ok(Ok(())) => msg_info!(Message::MonitorExitedNormally),
                 Ok(Err(e)) => msg_error!(Message::MonitorError(e.to_string())),
@@ -179,6 +195,7 @@ pub async fn run_with_signal_handling() -> Result<()> {
             // Received shutdown signal
             inbox_handle.abort();
             mailbox_handle.abort();
+            pulse_handle.abort();
             msg_info!(Message::MonitorShuttingDown);
             // The monitor will be dropped when this function exits
         }
@@ -193,13 +210,10 @@ pub async fn run_with_signal_handling() -> Result<()> {
     Ok(())
 }
 
-/// Loads config (defaults for missing sections) and runs the monitor loop.
-async fn run_monitor() -> Result<()> {
+/// Builds the monitor from the config, with defaults for missing sections.
+fn new_monitor() -> Result<Monitor> {
     let config = Config::read()?;
-    let monitor_config = config.monitor.unwrap_or_default();
-
-    let mut monitor = Monitor::new(monitor_config)?;
-    monitor.run().await
+    Monitor::new(config.monitor.unwrap_or_default())
 }
 
 /// Re-launches the current executable detached (`--daemon-run`), first

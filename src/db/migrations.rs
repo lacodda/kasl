@@ -394,6 +394,34 @@ impl MigrationManager {
             tx.execute("CREATE INDEX IF NOT EXISTS idx_jira_inbox_snoozed ON jira_inbox(snoozed_until)", [])?;
             Ok(())
         });
+
+        // The pulse's last word, kept so `kasl server status` - a different
+        // process from the watcher that sends it - can say how it is going.
+        //
+        // One row, never a log: the server keeps only the latest claim (ADR
+        // 0014 in kasl-server), and a local minute-by-minute history of when
+        // someone was at their desk would be the record the server refuses
+        // to be. `CHECK (id = 1)` makes a second row unwritable rather than
+        // merely unwritten.
+        //
+        // Times are UTC: the only question asked of them is "how long ago",
+        // and a wall-clock stamp answers that wrongly for an hour twice a year.
+        self.add_migration(16, "add_server_pulse", |tx| {
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS server_pulse (
+                    id INTEGER PRIMARY KEY CHECK (id = 1),
+                    attempted_at TIMESTAMP NOT NULL,
+                    next_at TIMESTAMP NOT NULL,
+                    sent_at TIMESTAMP,
+                    state TEXT,
+                    stale_after_seconds INTEGER,
+                    clock_skew_seconds INTEGER,
+                    error TEXT
+                )",
+                [],
+            )?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

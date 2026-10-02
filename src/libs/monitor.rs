@@ -33,6 +33,7 @@ use crate::{msg_debug, msg_error, msg_info};
 use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use rdev::{EventType, listen};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::time::{self, Duration, Instant};
 use tracing::{Level, debug, instrument, span};
@@ -72,6 +73,14 @@ pub struct Monitor {
 
     /// Current loop state.
     state: State,
+
+    /// Whether the loop is inside a pause, readable from outside it.
+    ///
+    /// The pulse needs to know whether someone is on a break right now, and
+    /// the loop is the only thing that does: the pauses table cannot say,
+    /// because a pause left open by a watcher that was killed mid-break stays
+    /// open there long after the person came back.
+    in_pause: Arc<AtomicBool>,
 }
 
 impl Monitor {
@@ -143,6 +152,7 @@ impl Monitor {
             last_activity,
             activity_start,
             state: State::Active,
+            in_pause: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -222,6 +232,20 @@ impl Monitor {
         }
     }
 
+    /// A handle that reads whether the loop is inside a pause.
+    ///
+    /// Taken before [`Monitor::run`] consumes the monitor's attention, and
+    /// read by the pulse on its own cadence.
+    pub fn pause_flag(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.in_pause)
+    }
+
+    /// Moves the loop into `state`, keeping [`Monitor::pause_flag`] in step.
+    fn enter(&mut self, state: State) {
+        self.state = state;
+        self.in_pause.store(state == State::InPause, Ordering::Relaxed);
+    }
+
     /// True when input was seen within the last poll interval.
     ///
     /// ```rust,no_run
@@ -285,7 +309,7 @@ impl Monitor {
             let pause_start_time = Local::now().naive_local() - chrono::Duration::seconds(self.config.pause_threshold as i64);
             self.pauses.insert_start_with_time(pause_start_time)?;
 
-            self.state = State::InPause;
+            self.enter(State::InPause);
 
             // Reset the streak so a post-pause workday start requires
             // sustained activity again.
@@ -304,7 +328,7 @@ impl Monitor {
     fn handle_return_from_pause(&mut self) -> Result<()> {
         msg_info!(Message::PauseEnded);
         self.pauses.insert_end()?;
-        self.state = State::Active;
+        self.enter(State::Active);
         Ok(())
     }
 

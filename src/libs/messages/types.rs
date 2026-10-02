@@ -327,6 +327,29 @@ pub enum Message {
     KaslServerPrivacyUpdatedAt(String), // when the level was last set
     KaslServerPrivacySetByAdmin,
 
+    // === PULSE MESSAGES ===
+    PulseOff,
+    PulseNothingYet,
+    PulseLastSent {
+        ago: String,
+        state: Option<String>,
+    },
+    PulseFailing {
+        ago: String,
+        error: String,
+    },
+    PulseLastArrived(String),  // how long ago the last accepted pulse went
+    PulseSilent(String),       // how long ago the watcher was due to try again
+    PulseShownOffline(String), // how long the server believes a pulse
+    PulseClockSkew(i64),       // seconds, positive when this machine is ahead
+    PulseEnabled(String),      // the server url
+    PulseNoWatcher,
+    PulseFirstArrived(String), // the state the server recorded
+    PulseFirstFailed(String),  // why the first pulse did not arrive
+    PulseFirstPending,
+    PulseDisabled(Option<String>), // how long the server believes a pulse, when known
+    PulseAlreadyOff,
+
     // === DATABASE MESSAGES ===
     DatabaseOperationFailed {
         operation: String,

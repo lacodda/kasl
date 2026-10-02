@@ -57,6 +57,9 @@ pub mod tasks;
 /// Days owed to kasl-server after a failed or skipped upload.
 pub mod server_outbox;
 
+/// The last pulse sent to kasl-server, and how it went.
+pub mod server_pulse;
+
 /// Reusable task templates.
 pub mod templates;
 

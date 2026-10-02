@@ -6,6 +6,8 @@ The `watch` command is kasl's activity monitor. It watches keyboard and mouse in
 
 It also does two things for the [Jira inbox](/reference/inbox/): it polls Jira on its own cadence, and it is what answers the **Take** / **Snooze** / **Dismiss** buttons on an inbox toast. Both run in daemon and `--foreground` modes alike. With the watcher stopped, a toast button still works - the press is carried out on the spot instead - but nothing polls Jira, so no new toast appears.
 
+If this machine is connected to a team server and you have turned on [the pulse](/reference/server/#kasl-server-pulse), the watcher is also what sends it: once a minute, and at once on a change, whether you are working, paused or not in a day. With the watcher stopped, no pulse goes, and the server shows you as offline once the last one is too old to believe.
+
 ## Usage
 
 ```bash

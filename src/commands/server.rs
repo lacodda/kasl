@@ -9,6 +9,12 @@
 //! rather than in a readable config file, and saying whose token it is out
 //! loud, while a person is watching.
 //!
+//! The pulse is the one part that is not about days: whether this person is
+//! working right now. It is turned on separately (`kasl server pulse
+//! enable`), because connecting agrees to send finished days and a live
+//! signal is a different thing to agree to. The watcher sends it; this
+//! command only switches it and reports on it.
+//!
 //! That last check is the one worth spelling out. A token is an opaque string;
 //! one pasted from the wrong chat window works perfectly and files this
 //! machine's days under a colleague's name. The server is asked who it thinks
@@ -16,15 +22,18 @@
 
 use crate::api::kasl_server::{AGENT_TOKEN_PROMPT, AGENT_TOKEN_SECRET, KaslServer, UploadError, normalize_url};
 use crate::db::server_outbox::ServerOutbox;
+use crate::db::server_pulse::ServerPulse;
 use crate::db::workdays::Workdays;
 use crate::libs::config::{Config, KaslServerConfig};
+use crate::libs::daemon;
 use crate::libs::day_delivery::{Delivered, deliver, record_single};
 use crate::libs::day_upload::build_day_upload;
 use crate::libs::messages::Message;
+use crate::libs::pulse::{self, format_ago};
 use crate::libs::secret::Secret;
 use crate::{msg_error_anyhow, msg_info, msg_print, msg_success, msg_warning};
 use anyhow::{Context, Result};
-use chrono::{Duration, Local, NaiveDate};
+use chrono::{Duration, Local, NaiveDate, Utc};
 use clap::{Args, Subcommand};
 use dialoguer::{Input, Password, theme::ColorfulTheme};
 use reqwest::StatusCode;
@@ -67,6 +76,10 @@ enum ServerCommand {
     #[command(about = "Queue every recorded day in a date range and send them")]
     Backfill(BackfillArgs),
 
+    /// Tell the server whether you are working right now
+    #[command(about = "Turn the live pulse on or off, or show how it is going")]
+    Pulse(PulseArgs),
+
     /// Forget the connection and the stored token
     #[command(about = "Forget the connection and the stored agent token")]
     Disconnect,
@@ -82,6 +95,26 @@ pub struct BackfillArgs {
     /// Last date of the range, YYYY-MM-DD; defaults to today
     #[arg(long, value_name = "YYYY-MM-DD")]
     to: Option<NaiveDate>,
+}
+
+/// Arguments accepted by `kasl server pulse`.
+#[derive(Debug, Args)]
+pub struct PulseArgs {
+    #[command(subcommand)]
+    command: Option<PulseCommand>,
+}
+
+/// What `kasl server pulse` can do; without one, it shows how the pulse is
+/// going.
+#[derive(Debug, Subcommand)]
+enum PulseCommand {
+    /// Start telling the server whether you are working right now
+    #[command(about = "Start telling the server whether you are working, on a break, or not in a day")]
+    Enable,
+
+    /// Stop telling it
+    #[command(about = "Stop telling the server whether you are working right now")]
+    Disable,
 }
 
 /// Arguments accepted by `kasl server push`.
@@ -118,6 +151,11 @@ pub async fn cmd(args: ServerArgs) -> Result<()> {
         ServerCommand::Queue => queue(),
         ServerCommand::Manifest => manifest().await,
         ServerCommand::Backfill(args) => backfill(args).await,
+        ServerCommand::Pulse(args) => match args.command {
+            Some(PulseCommand::Enable) => pulse_enable().await,
+            Some(PulseCommand::Disable) => pulse_disable(),
+            None => pulse_show(),
+        },
         ServerCommand::Disconnect => disconnect(),
     }
 }
@@ -162,6 +200,7 @@ async fn connect(args: ConnectArgs) -> Result<()> {
         ca_certificate: args
             .ca_certificate
             .or_else(|| config.kasl_server.as_ref().and_then(|s| s.ca_certificate.clone())),
+        pulse: keeps_pulse(config.kasl_server.as_ref(), &url),
     };
 
     let client = KaslServer::new(&candidate)?;
@@ -218,7 +257,16 @@ async fn status() -> Result<()> {
     };
 
     msg_info!(Message::KaslServerConfigured(server_config.url.clone()));
+    report_connection(&server_config).await?;
 
+    // Last, and whatever the connection checks found: the pulse's record is
+    // local, and a server that cannot be reached is exactly when "the last
+    // one went 20 min ago" is worth reading.
+    report_pulse(server_config.pulse)
+}
+
+/// The connection checks of `status`: the token, the server, whose token it is.
+async fn report_connection(server_config: &KaslServerConfig) -> Result<()> {
     let secret = Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT);
     let Some(token) = secret.try_get_cached() else {
         // The config says connected and the keyring disagrees: reconnecting is
@@ -227,7 +275,7 @@ async fn status() -> Result<()> {
         return Ok(());
     };
 
-    let client = KaslServer::new(&server_config)?;
+    let client = KaslServer::new(server_config)?;
 
     match client.health().await {
         Ok(health) => msg_info!(Message::KaslServerReached {
@@ -261,6 +309,119 @@ async fn status() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Prints how the pulse is going, from what the watcher last recorded.
+fn report_pulse(enabled: bool) -> Result<()> {
+    let record = if enabled { ServerPulse::new()?.last()? } else { None };
+    for line in pulse::describe(enabled, record.as_ref(), Utc::now()) {
+        if line.warning {
+            msg_warning!(line.message);
+        } else {
+            msg_info!(line.message);
+        }
+    }
+    Ok(())
+}
+
+/// Whether a connection being made keeps the pulse the previous one had.
+///
+/// Only for the same server. The consent was given to one installation, and
+/// reconnecting to another - a new employer, a test instance - must not start
+/// reporting to it what the employee agreed to report somewhere else.
+fn keeps_pulse(previous: Option<&KaslServerConfig>, url: &str) -> bool {
+    previous.is_some_and(|previous| previous.pulse && previous.url == url)
+}
+
+/// How long to wait for the watcher's first pulse after turning it on.
+///
+/// A tick, a request and a margin. Long enough that a watcher that is running
+/// answers inside it; short enough that one that is not costs little.
+const FIRST_PULSE_WAIT: std::time::Duration = std::time::Duration::from_secs(12);
+
+/// Turns the pulse on, then waits to see the first one go.
+///
+/// The watcher is the only sender, so this does not send a pulse of its own:
+/// it clears the record, which is the watcher's cue to send at once, and reads
+/// back what the watcher wrote. A second sender here would put two claims about
+/// the present on the server, one of them made by a process that cannot see
+/// whether this is a pause.
+async fn pulse_enable() -> Result<()> {
+    let mut config = Config::read().unwrap_or_default();
+    let Some(server) = config.kasl_server.as_mut() else {
+        return Err(msg_error_anyhow!(Message::KaslServerNotConnected));
+    };
+    // Checked now rather than discovered by the watcher: a pulse turned on
+    // without a token would fail every five minutes where nobody is looking.
+    if Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT).try_get_cached().is_none() {
+        return Err(msg_error_anyhow!(Message::KaslServerTokenMissing));
+    }
+
+    ServerPulse::new()?.clear()?;
+    server.pulse = true;
+    let url = server.url.clone();
+    config.save()?;
+    msg_success!(Message::PulseEnabled(url));
+
+    if !daemon::is_running() {
+        msg_warning!(Message::PulseNoWatcher);
+        return Ok(());
+    }
+
+    let deadline = std::time::Instant::now() + FIRST_PULSE_WAIT;
+    loop {
+        if let Some(record) = ServerPulse::new()?.last()? {
+            match (record.error, record.state) {
+                (None, Some(state)) => msg_success!(Message::PulseFirstArrived(state.to_string())),
+                (Some(error), _) => msg_warning!(Message::PulseFirstFailed(error)),
+                (None, None) => msg_info!(Message::PulseFirstPending),
+            }
+            return Ok(());
+        }
+        if std::time::Instant::now() >= deadline {
+            msg_info!(Message::PulseFirstPending);
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+    }
+}
+
+/// Turns the pulse off.
+///
+/// Nothing is sent to say so: the server has no way to be told "stop", only
+/// silence, which it shows as offline once the last pulse is too old to
+/// believe. Saying that here is the honest part - the employee should not
+/// expect the dashboard to go blank.
+fn pulse_disable() -> Result<()> {
+    let mut config = Config::read().unwrap_or_default();
+    let Some(server) = config.kasl_server.as_mut() else {
+        msg_print!(Message::KaslServerNotConnected);
+        return Ok(());
+    };
+    if !server.pulse {
+        msg_print!(Message::PulseAlreadyOff);
+        return Ok(());
+    }
+
+    server.pulse = false;
+    config.save()?;
+
+    let mut store = ServerPulse::new()?;
+    let stale_after = store.last()?.and_then(|record| record.stale_after_seconds).map(format_ago);
+    store.clear()?;
+
+    msg_success!(Message::PulseDisabled(stale_after));
+    Ok(())
+}
+
+/// Shows how the pulse is going, without touching the network.
+fn pulse_show() -> Result<()> {
+    let config = Config::read().unwrap_or_default();
+    let Some(server) = config.kasl_server else {
+        msg_print!(Message::KaslServerNotConnected);
+        return Ok(());
+    };
+    report_pulse(server.pulse)
 }
 
 /// Prints what the connected server stores about this person.
@@ -616,6 +777,9 @@ fn disconnect() -> Result<()> {
 
     if config.kasl_server.take().is_some() {
         config.save()?;
+        // The pulse's consent went with the connection; its record goes too,
+        // so a later connection does not start out reporting an old one.
+        ServerPulse::new()?.clear()?;
         msg_success!(Message::KaslServerDisconnected);
     } else {
         // The token is gone either way, which is what was asked for.
@@ -623,4 +787,31 @@ fn disconnect() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn connection(url: &str, pulse: bool) -> KaslServerConfig {
+        KaslServerConfig {
+            url: url.to_string(),
+            ca_certificate: None,
+            pulse,
+        }
+    }
+
+    #[test]
+    fn reconnecting_to_the_same_server_keeps_the_pulse() {
+        assert!(keeps_pulse(Some(&connection("https://kasl.example.com", true)), "https://kasl.example.com"));
+    }
+
+    #[test]
+    fn another_server_does_not_inherit_the_consent() {
+        // Agreeing to tell one installation whether you are at your desk is
+        // not agreeing to tell the next one you connect to.
+        assert!(!keeps_pulse(Some(&connection("https://kasl.example.com", true)), "https://kasl.other.example"));
+        assert!(!keeps_pulse(Some(&connection("https://kasl.example.com", false)), "https://kasl.example.com"));
+        assert!(!keeps_pulse(None, "https://kasl.example.com"));
+    }
 }
