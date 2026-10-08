@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.15.0] - 2026-10-08
+
+### CI
+- Mark historical versions in workflow comments
+
+### Features
+- Start and close Jira issues, and hear when Jira finishes
+
+### Testing
+- Stop deleting the real agent token from the keyring
+- Check status unattended without a one-element loop
+
 ## [1.14.0] - 2026-10-02
 
 ### Documentation
