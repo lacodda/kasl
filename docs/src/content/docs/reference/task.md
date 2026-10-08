@@ -60,6 +60,8 @@ kasl task edit [ID]
 
 Editing only ever touches name, comment and completeness - tags are left as they are; assign them with `task add --tags` instead.
 
+An edit that takes a task [taken from the inbox](/reference/inbox/#take---start-working-on-an-issue) to 100% asks what to do with its issue in Jira - leave it (the default), close it, or comment on it. See [Closing the loop](/reference/inbox/#closing-the-loop).
+
 ### `remove` - Remove tasks by id, or all of today's
 
 ```bash
@@ -81,6 +83,8 @@ kasl task find
 - Filters out tasks already logged today, near-duplicate names, and names from `task_discovery.ignore_names`.
 - After import selection, optionally add items to the persistent ignore list.
 - Selected incomplete tasks prompt for an updated completeness percentage before insert.
+- An unfinished task whose Jira issue was resolved is marked `resolved in Jira`, ticked in advance, and proposed at 100%: the lasting form of the offer a sync makes once. See [Closing the loop](/reference/inbox/#closing-the-loop).
+- Carrying any other task taken from Jira to 100% asks what to do with its issue, as `task edit` does.
 
 ## Examples
 

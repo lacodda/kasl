@@ -6,6 +6,8 @@ The `inbox` command manages a local inbox of open Jira issues assigned to you. T
 
 Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
+The inbox also writes to Jira, in two places and no more: `start` moves an issue into progress, `close` resolves it, and `comment` leaves a note. Those are the two moments a local task and its issue meet - taking the issue and finishing the work - and [Closing the loop](#closing-the-loop) is how they connect.
+
 ## Usage
 
 ```bash
@@ -60,7 +62,7 @@ kasl inbox list [OPTIONS]
 - `--snoozed`: Include issues that are still asleep
 - The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--sort`
 
-The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything.
+The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything - and for an issue you took, it reads `resolved` once Jira has said that is why it left.
 
 ### `triage` - Triage the inbox issue by issue
 
@@ -217,13 +219,141 @@ Taking the same issue twice does not create a second task; the command says
 which task it already became. The stored key survives renaming the task, so the
 link outlives the summary it started with.
 
+With [`start_on_take`](#configuration) on, the take also starts the issue in
+Jira, exactly as [`start`](#start---start-an-issue-in-jira) would. The task is
+made first and stands whatever Jira answers: a VPN that is down costs the move,
+not the task, and the answer says so and names `kasl inbox start KEY` to try
+again.
+
+```
+[✓] Imported PROJ-123 into tasks.
+[✓] PROJ-123 is now In Progress in Jira.
+```
+
+### `start` - Start an issue in Jira
+
+```bash
+kasl inbox start [KEY] [--to <NAME>] [FILTERS]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
+
+**Options:**
+- `--to <NAME>`: Which way, when Jira offers several - the target status (`In Review`) or the transition (`Start Review`), either spelling, any case
+
+Moves the issue into progress: through the transition whose target status is in
+Jira's *in progress* category. kasl never moves an issue by status name - names
+are your workflow's own and come translated ("In Progress", "В работе"), while
+the category is the same on every Jira, so this works on any workflow without
+setup. An issue already in progress is left as it is and the command says so.
+
+When more than one transition leads into progress, kasl asks on a terminal and
+refuses to guess anywhere else; `--to` settles it in a script. A move that does
+not happen - no way from the current status, several ways and nobody to ask,
+an issue Jira does not show you - fails the command, so a script can tell.
+
+### `close` - Close an issue in Jira
+
+```bash
+kasl inbox close [KEY] [--comment <TEXT>] [--to <NAME>] [--resolution <NAME>] [FILTERS]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
+
+**Options:**
+- `-m, --comment <TEXT>`: A comment to add before closing
+- `--to <NAME>`: Which way, when Jira offers several (`Resolved`, `Closed`, `Resolve Issue`)
+- `--resolution <NAME>`: The resolution, when closing asks for one (`Done`, `Fixed`, `Won't Fix`)
+
+Moves the issue into Jira's *done* category, the same way `start` moves it into
+progress. When the close screen requires a resolution, kasl does not assume
+one - `Fixed`, `Done` and `Won't Do` all close an issue and mean different
+things on the team's reports. A single allowed value is no choice at all; on a
+terminal several are asked about; in a script `--resolution` names one, and
+without it the command lists them and fails.
+
+The comment goes first. A closed issue is often no longer editable, and Jira
+then refuses comments on it too, so closing first could leave the note with
+nowhere to go. A comment Jira refuses stops the close.
+
+Other required fields on the close screen are Jira's to explain: its own words
+come back as the error - `customfield_10100: Story points are required.` -
+and the issue is finished in the browser.
+
+### `comment` - Comment on an issue in Jira
+
+```bash
+kasl inbox comment [KEY] [TEXT] [FILTERS]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
+- `TEXT`: The comment. Omit it on a terminal to type it; elsewhere it is required.
+
+## Closing the loop
+
+A task taken from the inbox and the issue it came from are one piece of work
+in two places, and each side hears when the other finishes.
+
+**Finished here, so Jira is asked.** When a task taken from an issue reaches
+100% - in `kasl task edit`, or when `kasl task find` carries it to 100% - kasl
+asks what to do in Jira:
+
+```
+? PROJ-123 is done here. In Jira ›
+❯ Leave PROJ-123 as it is
+  Close PROJ-123
+  Comment on PROJ-123
+```
+
+Leaving it is the default, so Enter on a question about a shared tracker
+changes nothing in it. The question is only asked on a terminal, and not when
+the inbox already knows Jira resolved the issue.
+
+**Resolved in Jira, so the task is offered.** When an issue you took leaves the
+inbox, kasl asks Jira why - one request per departed issue, and only for issues
+you took. Resolved, the row is marked `resolved`; unresolved (reassigned, moved
+out of reach) it stays `gone`. If the task is still open, the offer is made
+once, wherever the departure was seen:
+
+- the watcher shows a toast with a single **Mark done** button;
+- `kasl inbox sync` on a terminal asks, with every such task ticked:
+
+```
+? Resolved in Jira - mark these tasks done (space toggles, enter confirms) ›
+✔ PROJ-123 Fix login redirect (Done)
+```
+
+- `kasl inbox sync` in a script says it instead:
+
+```
+[i] PROJ-123 was resolved in Jira (Done); its task is still open - `kasl task find` offers to finish it.
+```
+
+The offer does not repeat on every poll. What lasts is
+[`kasl task find`](/reference/task/#find---find-incomplete-tasks-and-import-from-gitlabjira): an unfinished
+task whose issue Jira resolved is marked `resolved in Jira`, ticked, and
+proposed at 100%.
+
+Marking a task done moves its newest day to 100%: today's row when there is
+one, otherwise a row for today that continues the task - the same thing
+`task find` does when work carries over, so today's report shows it finished
+today. An answer Jira did not give (VPN down) is asked for again on the next
+poll.
+
 ## Toast buttons
 
 A toast about one issue carries the three decisions worth making about it, so the pile can be triaged without opening a terminal:
 
-- **Take** - imports the issue into your tasks, exactly as `kasl inbox take` does
+- **Take** - imports the issue into your tasks, exactly as `kasl inbox take` does - including the move in Jira when `start_on_take` is on
 - **Snooze** - puts it to sleep for `toast_snooze_for` (a day by default)
 - **Dismiss** - hides it from the list
+
+The toast saying a taken issue was [resolved in Jira](#closing-the-loop) has one button of its own, **Mark done**, which finishes the task.
+
+A button has nobody to ask, so a take from a toast moves the issue only when Jira offers exactly one way into progress, and only with a session kasl already holds (a cached login or the password in the keyring). Otherwise the answer toast says what stopped it and names `kasl inbox start KEY`.
 
 Clicking the toast *body*, as before, opens the issue in the browser.
 
@@ -237,8 +367,8 @@ Stopping the watcher does not leave a dead button: with no daemon running, the p
 
 | Platform | Toast body | Buttons |
 | --- | --- | --- |
-| Windows | Opens the issue | **Take**, **Snooze**, **Dismiss** |
-| Linux (and other XDG desktops) | Opens the issue | **Take**, **Snooze**, **Dismiss** |
+| Windows | Opens the issue | **Take**, **Snooze**, **Dismiss**; **Mark done** on a resolved issue |
+| Linux (and other XDG desktops) | Opens the issue | **Take**, **Snooze**, **Dismiss**; **Mark done** on a resolved issue |
 | macOS | Display only | None - use `kasl inbox triage` |
 
 On macOS the notification API cannot report a click at all, so the buttons are not drawn rather than drawn dead: `kasl inbox triage` walks the same three decisions with room to think.
@@ -248,6 +378,8 @@ Windows needs no registry entry and no protocol of its own. A toast button there
 ## Background Polling
 
 Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux, and its buttons decide it. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Status and priority changes on existing issues also toast (a score change or a return after a missed poll only sets the badge), and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
+
+When an issue you took leaves the inbox, the poll also asks Jira why, and a resolved one with an open task gets the **Mark done** toast described in [Closing the loop](#closing-the-loop). That toast counts against the same hourly budget as the rest, and is not held back by `notify_gone`: it is a question about your task, not news that an issue left.
 
 A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. Two answers that look like answers are refused the same way: an expired session that Jira serves as the anonymous user (an empty page with status 200), and a list shorter than the total Jira counted, which happens when an issue is created or resolved while the pages are read.
 
@@ -266,6 +398,7 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
     "notify_changes": true,
     "notify_gone": false,
     "toast_snooze_for": "1d",
+    "start_on_take": false,
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
     "sort_by_field": "customfield_12345"
   }
@@ -278,6 +411,7 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
 - `notify_changes`: Toast when an existing issue changes status or priority (default `true`); score changes only set the badge
 - `notify_gone`: Toast when an issue leaves the inbox — closed or reassigned (default `false`)
 - `toast_snooze_for`: How long a toast's **Snooze** button sleeps — `3d`, `12h`, `2w` (default `1d`), the same spelling as `triage --snooze-for`
+- `start_on_take`: Every take - command, triage, toast button - also starts the issue in Jira (default `false`). Off by default because it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list"
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field
 - `sort_by_field`: Field id used to rank the list in descending order
 
@@ -323,6 +457,11 @@ kasl inbox show PROJ-123 --why
 kasl inbox pin PROJ-123
 kasl inbox open PROJ-123
 kasl inbox take PROJ-123
+
+# Move it in Jira by hand
+kasl inbox start PROJ-123
+kasl inbox close PROJ-123 --comment "Fixed in 2.3" --resolution Done
+kasl inbox comment PROJ-123 "Waiting on the API team"
 ```
 
 ## Scripting
@@ -333,7 +472,10 @@ Every subcommand takes its issue key as an argument, so the inbox can be driven 
 kasl inbox sync
 kasl inbox take PROJ-123
 kasl inbox dismiss PROJ-456
+kasl inbox close PROJ-123 --to Closed --resolution Done
 ```
+
+`start` and `close` exit non-zero when the issue did not end up where they were sent, and name the flag that settles it.
 
 ## Related commands
 

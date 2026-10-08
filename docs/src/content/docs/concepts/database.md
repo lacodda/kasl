@@ -68,7 +68,7 @@ CREATE TABLE tasks (
 );
 ```
 
-- `task_id` groups a task with its own history across days - it points at the id of the first task in the chain, so `task find` can offer yesterday's unfinished work and see today's progress as the same item. It is not an external reference.
+- `task_id` groups a task with its own history across days - it points at the id of the first task in the chain, so `task find` can offer yesterday's unfinished work and see today's progress as the same item. A task that continues nothing is its own chain (`task_id = id`); the column default of 0 is never left on a row. It is not an external reference.
 - `jira_key` is the Jira issue the task was taken from, set by `kasl inbox take`. The `UPDATE` behind `kasl task edit` does not list this column, so renaming a task cannot detach it from its issue.
 - `deleted_at` was added for soft delete, but nothing in the current codebase sets or reads it - `kasl task remove` deletes rows outright. Treat the column as reserved.
 
@@ -129,7 +129,11 @@ CREATE TABLE jira_inbox (
     gone_at TIMESTAMP,
     last_change TEXT,
     changed_at TIMESTAMP,
-    taken_at TIMESTAMP
+    taken_at TIMESTAMP,
+    snoozed_until TIMESTAMP,
+    woke_at TIMESTAMP,
+    left_reason TEXT CHECK (left_reason IN ('resolved', 'moved')),
+    resolution TEXT
 );
 ```
 
@@ -139,6 +143,8 @@ CREATE TABLE jira_inbox (
 - `last_change` / `changed_at` record the most recent visible change (status, priority, or score) so the list can badge it.
 - `taken_at` is stamped by `kasl inbox take`. Unlike `dismissed`, it keeps the row in the list: a taken issue is still part of the picture, it is just already in hand.
 - `pinned` and `dismissed` are set by `kasl inbox pin` / `kasl inbox dismiss`.
+- `snoozed_until` is when a snoozed issue is due back; `woke_at` marks the moment it came back, so the return is announced once.
+- `left_reason` says why a taken issue left the inbox, once Jira has answered: `resolved`, with the resolution's name in `resolution`, or `moved` (unresolved - reassigned, out of reach, deleted). NULL means not asked yet, which is how a question that failed gets asked again on the next poll. Both clear when the issue reappears.
 
 #### `jira_statuses`
 Local catalog of Jira workflow statuses, populated from issue sync so `jira_inbox.status_id` can resolve to a name:
@@ -236,6 +242,7 @@ Schema history, in order:
 14. `add_server_outbox` - `server_outbox`
 15. `snooze_inbox_issues` - adds `snoozed_until` and `woke_at` to `jira_inbox`
 16. `add_server_pulse` - `server_pulse`
+17. `close_the_loop_with_jira` - adds `left_reason` and `resolution` to `jira_inbox`, and gives every task left on `task_id = 0` a chain of its own
 
 Each migration runs inside a transaction; a failure rolls back that migration.
 

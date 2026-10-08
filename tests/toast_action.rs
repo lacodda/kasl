@@ -6,6 +6,8 @@
 
 use chrono::Duration;
 use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::tasks::Tasks;
+use kasl::libs::task::TaskFilter;
 use kasl::libs::toast_action::{Mailbox, ToastAction, ToastRequest, validate_issue_key};
 use kasl::libs::toast_apply::{self, Applied};
 use serial_test::serial;
@@ -42,6 +44,11 @@ fn upsert(key: &str) -> JiraInboxUpsert {
         url: format!("https://example.invalid/browse/{key}"),
         raw_updated: None,
     }
+}
+
+/// Runs one async decision to completion, as the watcher's runtime would.
+fn block<F: std::future::Future>(future: F) -> F::Output {
+    tokio::runtime::Runtime::new().unwrap().block_on(future)
 }
 
 #[test_context(ToastContext)]
@@ -143,15 +150,15 @@ fn take_from_a_toast_makes_the_same_task_the_cli_would(_ctx: &mut ToastContext) 
     let db = JiraInbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-10")]).unwrap();
 
-    let outcome = toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-10")).unwrap();
-    assert_eq!(outcome, Applied::Taken);
+    let outcome = block(toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-10"))).unwrap();
+    assert_eq!(outcome, Applied::Taken { started: None });
 
     let item = db.get_by_key("KA-10").unwrap().unwrap();
     assert!(item.taken_at.is_some(), "the issue must wear the taken mark, as `inbox take` leaves it");
 
     // The second press is the interesting one: a toast can be pressed again
     // from the notification centre long after it appeared.
-    let again = toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-10")).unwrap();
+    let again = block(toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-10"))).unwrap();
     assert!(
         matches!(again, Applied::AlreadyTaken(_)),
         "a second press must report the existing task, not make a duplicate one, got {again:?}"
@@ -190,7 +197,7 @@ fn dismiss_from_a_toast_hides_the_issue(_ctx: &mut ToastContext) {
     db.upsert_batch(&[upsert("KA-12")]).unwrap();
 
     assert_eq!(
-        toast_apply::apply(&ToastRequest::new(ToastAction::Dismiss, "KA-12")).unwrap(),
+        block(toast_apply::apply(&ToastRequest::new(ToastAction::Dismiss, "KA-12"))).unwrap(),
         Applied::Dismissed
     );
     let awake = db.list_active_at(false, false).unwrap();
@@ -205,7 +212,7 @@ fn a_press_on_an_issue_that_is_gone_says_so_instead_of_failing(_ctx: &mut ToastC
     // is synced away, then the button is pressed.
     let _ = JiraInbox::new().unwrap();
     for action in ToastAction::ALL {
-        let outcome = toast_apply::apply(&ToastRequest::new(action, "KA-404")).unwrap();
+        let outcome = block(toast_apply::apply(&ToastRequest::new(action, "KA-404"))).unwrap();
         assert_eq!(outcome, Applied::NotFound, "{:?} on a missing key must report it, not error", action);
         assert!(!outcome.settled(), "a missing issue is not settled, so its buttons must stay");
     }
@@ -225,7 +232,7 @@ fn the_drain_carries_out_everything_waiting(_ctx: &mut ToastContext) {
     mailbox.post(&ToastRequest::new(ToastAction::Take, "KA-404")).unwrap();
     mailbox.post(&ToastRequest::new(ToastAction::Snooze, "KA-22")).unwrap();
 
-    let done = kasl::libs::jira_inbox::drain_toast_actions().unwrap();
+    let done = block(kasl::libs::jira_inbox::drain_toast_actions()).unwrap();
     assert_eq!(done, 4, "all four presses are decisions the user already made; each must be answered");
 
     assert!(db.get_by_key("KA-20").unwrap().unwrap().taken_at.is_some());
@@ -242,10 +249,17 @@ fn every_outcome_says_what_happened_and_names_the_issue() {
     // A toast answering a press is the only feedback the user gets, so an
     // empty or key-less summary would leave them unsure it registered.
     let outcomes = [
-        Applied::Taken,
+        Applied::Taken { started: None },
+        Applied::Taken {
+            started: Some(Err("Jira did not start it: timed out".into())),
+        },
         Applied::AlreadyTaken("KA-1 something".into()),
         Applied::Snoozed(chrono::Local::now().naive_local()),
         Applied::Dismissed,
+        Applied::Completed("KA-1 something".into()),
+        Applied::Completed("renamed by hand".into()),
+        Applied::AlreadyDone("renamed by hand".into()),
+        Applied::NoTask,
         Applied::NotFound,
     ];
     for outcome in outcomes {
@@ -268,4 +282,69 @@ fn the_three_buttons_are_the_three_triage_decisions() {
     );
     let labels: Vec<&str> = ToastAction::ALL.iter().map(|a| a.label()).collect();
     assert_eq!(labels, vec!["Take", "Snooze", "Dismiss"]);
+}
+
+#[test_context(ToastContext)]
+#[test]
+#[serial]
+fn a_done_press_finishes_the_task_taken_from_the_issue(_ctx: &mut ToastContext) {
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-30")]).unwrap();
+    block(toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-30"))).unwrap();
+    assert!(toast_apply::task_open("KA-30").unwrap(), "a fresh take is an open task");
+
+    let outcome = block(toast_apply::apply(&ToastRequest::new(ToastAction::Done, "KA-30"))).unwrap();
+    assert_eq!(outcome, Applied::Completed("KA-30 Summary for KA-30".to_string()));
+    assert!(!toast_apply::task_open("KA-30").unwrap(), "the task must read as done afterwards");
+
+    // Taken today, done today: one row raised, not a second row for the same day.
+    let rows = Tasks::new().unwrap().fetch(TaskFilter::ByJiraKey("KA-30".to_string())).unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert_eq!(rows[0].completeness, Some(100));
+
+    let again = block(toast_apply::apply(&ToastRequest::new(ToastAction::Done, "KA-30"))).unwrap();
+    assert!(matches!(again, Applied::AlreadyDone(_)), "a second press reports, it does not add: {again:?}");
+}
+
+#[test_context(ToastContext)]
+#[test]
+#[serial]
+fn done_carries_an_older_task_into_today(_ctx: &mut ToastContext) {
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-31")]).unwrap();
+    block(toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-31"))).unwrap();
+    // The take happened three days ago, at 40%.
+    kasl::db::db::Db::new()
+        .unwrap()
+        .conn
+        .execute(
+            "UPDATE tasks SET timestamp = datetime('now', 'localtime', '-3 day'), completeness = 40 WHERE jira_key = 'KA-31'",
+            [],
+        )
+        .unwrap();
+    let before = Tasks::new().unwrap().fetch(TaskFilter::ByJiraKey("KA-31".to_string())).unwrap();
+    let chain = before[0].task_id;
+    assert!(chain.is_some_and(|c| c != 0), "a taken task starts its own chain, not chain 0: {chain:?}");
+
+    let outcome = toast_apply::complete("KA-31").unwrap();
+    assert!(matches!(outcome, Applied::Completed(_)), "{outcome:?}");
+
+    let rows = Tasks::new().unwrap().fetch(TaskFilter::ByJiraKey("KA-31".to_string())).unwrap();
+    assert_eq!(rows.len(), 2, "the old day keeps its 40%, and today says done: {rows:?}");
+    let today = rows.iter().find(|r| r.completeness == Some(100)).expect("a row at 100%");
+    assert_eq!(today.task_id, chain, "today's row continues the same chain");
+    assert!(
+        rows.iter().any(|r| r.completeness == Some(40)),
+        "the earlier day is history and stays as it was"
+    );
+}
+
+#[test_context(ToastContext)]
+#[test]
+#[serial]
+fn done_on_an_issue_never_taken_says_so(_ctx: &mut ToastContext) {
+    let db = JiraInbox::new().unwrap();
+    db.upsert_batch(&[upsert("KA-32")]).unwrap();
+    assert_eq!(toast_apply::complete("KA-32").unwrap(), Applied::NoTask);
+    assert!(Applied::NoTask.summary("KA-32").contains("never taken"));
 }

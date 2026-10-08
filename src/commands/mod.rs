@@ -138,9 +138,12 @@ enum Commands {
     /// Jira inbox of assigned open issues
     ///
     /// Syncs assigned unresolved Jira issues into a local table, lists them
-    /// by priority, and supports pin / dismiss / open / import into tasks.
+    /// by priority, and supports pin / dismiss / open / import into tasks,
+    /// and starting, closing and commenting on issues in Jira.
+    // Boxed: a filter set on every subcommand makes these the largest
+    // arguments by far, and every other variant would carry their size.
     #[command(about = "Manage Jira inbox issues")]
-    Inbox(inbox::InboxArgs),
+    Inbox(Box<inbox::InboxArgs>),
 
     /// Print a shell completion script
     ///
@@ -249,8 +252,8 @@ impl Cli {
                 Ok(())
             }
             Commands::Server(args) => server::cmd(args).await,
-            Commands::Inbox(args) => inbox::cmd(args).await,
-            Commands::ToastAction(args) => toast_action::cmd(args),
+            Commands::Inbox(args) => inbox::cmd(*args).await,
+            Commands::ToastAction(args) => toast_action::cmd(args).await,
 
             // Database migrations only available in debug builds
             #[cfg(debug_assertions)]

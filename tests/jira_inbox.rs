@@ -198,6 +198,8 @@ fn test_badge_precedence_and_freshness() {
         taken_at: None,
         snoozed_until: None,
         woke_at: None,
+        left_reason: None,
+        resolution: None,
     };
 
     // Old, unchanged issue: no badge.

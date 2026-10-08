@@ -79,6 +79,9 @@ fn a_toast_button_reaches_the_mailbox() {
     }
 
     // And the whole way through: the daemon side carries it out.
-    let done = kasl::libs::jira_inbox::drain_toast_actions().unwrap();
+    let done = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(kasl::libs::jira_inbox::drain_toast_actions())
+        .unwrap();
     println!("Drain carried out {done} action(s); a second toast should now say what happened.");
 }

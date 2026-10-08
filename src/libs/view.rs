@@ -442,6 +442,12 @@ impl View {
         }
         if let Some(at) = item.gone_at {
             add("gone", at.format("%Y-%m-%d %H:%M").to_string());
+            match (item.left_reason, item.resolution.as_deref()) {
+                (Some(crate::db::jira_inbox::LeftReason::Resolved), Some(resolution)) => add("left", format!("resolved in Jira ({resolution})")),
+                (Some(crate::db::jira_inbox::LeftReason::Resolved), None) => add("left", "resolved in Jira".to_string()),
+                (Some(crate::db::jira_inbox::LeftReason::Moved), _) => add("left", "unresolved - reassigned or out of reach".to_string()),
+                (None, _) => {}
+            }
         }
         add("url", item.url.clone());
 

@@ -93,6 +93,44 @@ The task stores the issue key, so the two stay connected even after you rename
 the task to something that reads better. Taking the same issue twice does not
 create a second task - the command tells you which task it already became.
 
+## Keeping Jira in step
+
+A taken issue is one piece of work in two places, and kasl keeps the two from
+drifting apart at the two moments that matter - starting and finishing.
+
+**Starting.** If taking an issue means starting it in your team, turn on
+`start_on_take` and every take moves the issue into progress in Jira as well:
+
+```json
+{
+  "jira_inbox": {
+    "start_on_take": true
+  }
+}
+```
+
+kasl picks the transition by what it leads to - Jira's *in progress* category -
+not by its name, so a Russian "В работе" or a custom "Doing" works the same as
+"In Progress". When the workflow offers more than one way in (Start Progress,
+Start Review), a take from the terminal asks which, and a take from a toast
+leaves the issue where it is and says `kasl inbox start PROJ-412` settles it.
+
+**Finishing here.** Mark the task 100% in `kasl task edit` and kasl asks about
+the issue:
+
+```
+? PROJ-412 is done here. In Jira ›
+❯ Leave PROJ-412 as it is
+  Close PROJ-412
+  Comment on PROJ-412
+```
+
+**Finishing there.** When Jira resolves an issue you took and its task is still
+open, the watcher shows a toast with one button, **Mark done**. Missed it? The
+next `kasl task find` lists the task as `resolved in Jira`, already ticked and
+proposed at 100%. In `kasl inbox --all` the issue reads `resolved` rather than
+`gone`.
+
 ## Clearing the pile
 
 One issue at a time is right when one issue arrives. When the inbox has drifted

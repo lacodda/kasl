@@ -51,6 +51,44 @@ pub struct JiraInboxItem {
     pub snoozed_until: Option<NaiveDateTime>,
     /// When a snooze last ran out, so the return is announced once.
     pub woke_at: Option<NaiveDateTime>,
+    /// Why a taken issue left the inbox, once Jira has said.
+    ///
+    /// `None` while the issue is present, for issues never taken (kasl does
+    /// not ask about those), and for a departure not yet explained.
+    pub left_reason: Option<LeftReason>,
+    /// The resolution Jira gave, when the issue left resolved ("Done", "Won't Fix").
+    pub resolution: Option<String>,
+}
+
+/// Why an issue left the inbox.
+///
+/// The poll sees only absence; these are the two things absence can mean, and
+/// they ask for opposite things - a resolved issue's task is ready to be marked
+/// done, a moved issue's is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LeftReason {
+    /// Jira resolved it.
+    Resolved,
+    /// Unresolved but no longer yours: reassigned, moved out of reach, deleted.
+    Moved,
+}
+
+impl LeftReason {
+    /// The stored spelling; the column's CHECK accepts exactly these.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LeftReason::Resolved => "resolved",
+            LeftReason::Moved => "moved",
+        }
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        match text {
+            "resolved" => Some(LeftReason::Resolved),
+            "moved" => Some(LeftReason::Moved),
+            _ => None,
+        }
+    }
 }
 
 /// What the inbox holds right now, for the daily report line.
@@ -80,6 +118,11 @@ impl JiraInboxItem {
     pub fn badge(&self, now: NaiveDateTime) -> Option<String> {
         let fresh = |t: NaiveDateTime| now.signed_duration_since(t) < Duration::hours(FRESH_BADGE_HOURS);
         if self.gone_at.is_some() {
+            // Said only when Jira has said it: kasl asks why a taken issue
+            // left, and "gone" is the honest word for everything else.
+            if self.left_reason == Some(LeftReason::Resolved) {
+                return Some("resolved".to_string());
+            }
             return Some("gone".to_string());
         }
         // Only `--snoozed` shows a sleeping issue at all, and when it does,
@@ -205,7 +248,9 @@ impl JiraInbox {
                         url = ?7,
                         last_seen = ?8,
                         raw_updated = ?9,
-                        gone_at = NULL
+                        gone_at = NULL,
+                        left_reason = NULL,
+                        resolution = NULL
                      WHERE issue_key = ?10",
                     params![
                         item.issue_id,
@@ -292,6 +337,45 @@ impl JiraInbox {
         Ok(newly_gone)
     }
 
+    /// Taken issues that left the inbox and whose reason kasl has not learnt yet.
+    ///
+    /// Oldest departure first, at most `limit`: the first poll after an
+    /// upgrade finds every taken issue that ever left unexplained, and asking
+    /// Jira about all of them in one poll would stall it. The rest are asked
+    /// about on the polls that follow. Dismissed rows are included - a
+    /// dismissed issue that was taken still has a task waiting on the answer.
+    pub fn unexplained_departures(&self, limit: usize) -> Result<Vec<String>> {
+        let mut stmt = self.db.conn.prepare(
+            "SELECT issue_key FROM jira_inbox
+             WHERE gone_at IS NOT NULL AND taken_at IS NOT NULL AND left_reason IS NULL
+             ORDER BY gone_at, issue_key
+             LIMIT ?1",
+        )?;
+        let keys = stmt.query_map(params![limit as i64], |row| row.get(0))?.collect::<Result<Vec<String>, _>>()?;
+        Ok(keys)
+    }
+
+    /// Sets the issue's status, as kasl itself just moved it in Jira.
+    ///
+    /// Leaves the change badge alone: the change is the person's own, and the
+    /// badge is for news.
+    pub fn set_status(&self, key: &str, status_id: &str) -> Result<bool> {
+        let n = self
+            .db
+            .conn
+            .execute("UPDATE jira_inbox SET status_id = ?1 WHERE issue_key = ?2", params![status_id, key])?;
+        Ok(n > 0)
+    }
+
+    /// Records why an issue left: resolved with `resolution`, or moved away.
+    pub fn set_left(&self, key: &str, reason: LeftReason, resolution: Option<&str>) -> Result<bool> {
+        let n = self.db.conn.execute(
+            "UPDATE jira_inbox SET left_reason = ?1, resolution = ?2 WHERE issue_key = ?3 AND gone_at IS NOT NULL",
+            params![reason.as_str(), resolution, key],
+        )?;
+        Ok(n > 0)
+    }
+
     /// Active (non-dismissed, awake) items: pinned, then sort_value DESC, then priority.
     ///
     /// Gone issues are hidden unless `include_gone` is set (`--all`), in which
@@ -320,7 +404,8 @@ impl JiraInbox {
             "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
                     i.priority, i.priority_rank, i.sort_value, i.url,
                     i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                    i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at
+                    i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
+                    i.left_reason, i.resolution
              FROM jira_inbox i
              LEFT JOIN jira_statuses s ON s.id = i.status_id
              WHERE i.dismissed = 0{gone_filter}{snooze_filter}
@@ -340,7 +425,8 @@ impl JiraInbox {
                 "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
                         i.priority, i.priority_rank, i.sort_value, i.url,
                         i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                        i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at
+                        i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
+                        i.left_reason, i.resolution
                  FROM jira_inbox i
                  LEFT JOIN jira_statuses s ON s.id = i.status_id
                  WHERE i.issue_key = ?1",
@@ -580,5 +666,7 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
         taken_at: row.get(18)?,
         snoozed_until: row.get(19)?,
         woke_at: row.get(20)?,
+        left_reason: row.get::<_, Option<String>>(21)?.as_deref().and_then(LeftReason::parse),
+        resolution: row.get(22)?,
     })
 }

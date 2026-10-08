@@ -30,6 +30,8 @@ fn toast_shows_with_logo() {
         taken_at: None,
         snoozed_until: None,
         woke_at: None,
+        left_reason: None,
+        resolution: None,
     };
     assert!(kasl::libs::jira_inbox::show_toast(&item));
 }

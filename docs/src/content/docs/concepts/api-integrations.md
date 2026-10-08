@@ -2,14 +2,14 @@
 title: "API Integrations"
 ---
 
-kasl talks to three kinds of external service: GitLab and Jira supply candidate tasks, and a corporate reporting API receives the finished day. All three are optional - kasl records the workday without any of them.
+kasl talks to three kinds of external service: GitLab and Jira supply candidate tasks, Jira also hears when you start and finish an issue, and a corporate reporting API receives the finished day. All three are optional - kasl records the workday without any of them.
 
 ## What each integration does
 
 | Service | Direction | What it is for |
 | --- | --- | --- |
 | GitLab | reads | Today's commits become candidate tasks in `kasl task find` |
-| Jira | reads | Resolved issues become candidates; assigned open issues feed `kasl inbox` |
+| Jira | reads, writes | Resolved issues become candidates; assigned open issues feed `kasl inbox`; `inbox start`, `close` and `comment` move and annotate issues |
 | SiServer | writes | `kasl report --send` and `kasl sum --send` file the day and the month |
 
 Each is configured through the `kasl setup` wizard. Logins and URLs go to
@@ -59,6 +59,31 @@ kasl task find
 Two separate features read from Jira: `task find` offers issues you resolved
 today as completed tasks, and the [inbox](/reference/inbox/) polls issues
 assigned to you that are still open.
+
+### What kasl writes to Jira
+
+Three things, each only when you ask for it:
+
+- **A move into progress** - `kasl inbox start`, or every take when
+  `jira_inbox.start_on_take` is on.
+- **A move into done** - `kasl inbox close`, or the question after a task taken
+  from an issue reaches 100%.
+- **A comment** - `kasl inbox comment`, or `close --comment`.
+
+Moves go through Jira's own transitions, chosen by the target status's
+*category* (in progress, done) rather than its name, so a localized or custom
+workflow needs no mapping. When several transitions fit, kasl asks on a
+terminal and does nothing unattended. The requests:
+
+| Request | What for |
+| --- | --- |
+| `GET rest/api/2/issue/{key}?fields=status,resolution` | Where the issue stands; also why a taken issue left the inbox |
+| `GET rest/api/2/issue/{key}/transitions?expand=transitions.fields` | The ways out of its status, and whether closing needs a resolution |
+| `POST rest/api/2/issue/{key}/transitions` | The move itself, with a resolution when the screen requires one |
+| `POST rest/api/2/issue/{key}/comment` | The comment |
+
+Every request gives up after 30 seconds, so a Jira that does not answer cannot
+hold the watcher.
 
 ### Setup
 

@@ -612,9 +612,20 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             }
             Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
             Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
-            Message::ToastActionUnknown(name) => format!("Unknown toast action '{}'; expected take, snooze or dismiss.", name),
+            Message::ToastActionUnknown(name) => format!("Unknown toast action '{}'; expected take, snooze, dismiss or done.", name),
             Message::ToastActionApplied(what) => format!("{}.", what),
             Message::ToastActionFailed(key, why) => format!("Could not act on {} from the toast: {}", key, why),
+            Message::JiraMoved(sentence) => format!("{}.", sentence),
+            Message::JiraCommented(key) => format!("Commented on {} in Jira.", key),
+            Message::JiraWriteFailed(key, why) => format!("Jira was not updated for {}: {}", key, why),
+            Message::JiraResolvedTaskOpen(key, resolution) => format!(
+                "{} was resolved in Jira{}; its task is still open - `kasl task find` offers to finish it.",
+                key, resolution
+            ),
+            Message::PromptJiraAfterDone(key) => format!("{} is done here. In Jira", key),
+            Message::PromptJiraCloseComment => "Comment to leave on the issue (empty for none)".to_string(),
+            Message::PromptJiraComment => "Comment".to_string(),
+            Message::PromptMarkResolvedDone => "Resolved in Jira - mark these tasks done (space toggles, enter confirms)".to_string(),
             Message::JiraInboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),
             Message::JiraInboxSummary { total, fresh, taken } => {
                 // Only the parts that carry information: "3 in the inbox" says

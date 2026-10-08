@@ -291,6 +291,11 @@ the `jira` block; the inbox stays off when this one is absent.
 - **Default**: `"1d"`
 - **Description**: How long a toast's **Snooze** button sleeps - `3d`, `12h`, `2w`. Shares its spelling with `inbox triage --snooze-for`, so a button and the picker cannot put an issue to sleep for different lengths
 
+### `start_on_take`
+- **Type**: `bool`
+- **Default**: `false`
+- **Description**: Every take - `kasl inbox take`, triage, a toast's **Take** button - also starts the issue in Jira, through the transition into its workflow's in-progress category. Off by default: it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list". See [`inbox start`](/reference/inbox/#start---start-an-issue-in-jira)
+
 ### `custom_fields`
 - **Type**: `{ "id": String, "label": String }[]`
 - **Default**: `[]`
@@ -312,6 +317,7 @@ the `jira` block; the inbox stays off when this one is absent.
     "notify_changes": true,
     "notify_gone": false,
     "toast_snooze_for": "1d",
+    "start_on_take": false,
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
     "sort_by_field": "customfield_12345"
   }

@@ -4,9 +4,11 @@
 
 use crate::{
     api::{gitlab::GitLab, jira::Jira},
+    db::jira_inbox::{JiraInbox, LeftReason},
     db::tasks::Tasks,
     libs::{
         config::Config,
+        jira_bridge,
         messages::Message,
         prompt::ensure_interactive,
         task::{Task, TaskFilter, is_ignored_name, normalize_task_name},
@@ -38,6 +40,9 @@ struct DiscoveryItem {
     task: Task,
     /// Short GitLab commit SHA when available (display only)
     short_sha: Option<String>,
+    /// For an unfinished task taken from Jira: the issue was resolved there,
+    /// with this resolution (empty when Jira gave none by name).
+    resolved_in_jira: Option<String>,
 }
 
 impl TaskSource {
@@ -54,7 +59,12 @@ impl TaskSource {
 fn format_discovery_item(item: &DiscoveryItem) -> String {
     match item.source {
         TaskSource::Incomplete => {
-            format!("↻ {} — {}%", item.task.name, item.task.completeness.unwrap_or(0))
+            let resolved = match item.resolved_in_jira.as_deref() {
+                Some("") => " · resolved in Jira".to_string(),
+                Some(resolution) => format!(" · resolved in Jira ({resolution})"),
+                None => String::new(),
+            };
+            format!("↻ {} — {}%{}", item.task.name, item.task.completeness.unwrap_or(0), resolved)
         }
         TaskSource::Jira => format!("◉ {}", item.task.name),
         TaskSource::Gitlab => match &item.short_sha {
@@ -150,6 +160,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
     };
 
     let mut candidates: Vec<DiscoveryItem> = Vec::new();
+    let inbox = JiraInbox::new()?;
 
     for task in incomplete_tasks {
         if is_ignored_name(&task.name, &ignore_names) {
@@ -158,10 +169,20 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
         if today_names.contains(&normalize_task_name(&task.name)) {
             continue;
         }
+        // The lasting form of the offer a sync makes once: an unfinished task
+        // whose issue Jira resolved is marked, ticked, and proposed at 100%.
+        let resolved_in_jira = match &task.jira_key {
+            Some(key) => inbox
+                .get_by_key(key)?
+                .filter(|item| item.left_reason == Some(LeftReason::Resolved))
+                .map(|item| item.resolution.unwrap_or_default()),
+            None => None,
+        };
         candidates.push(DiscoveryItem {
             source: TaskSource::Incomplete,
             task,
             short_sha: None,
+            resolved_in_jira,
         });
     }
 
@@ -177,6 +198,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
             source: TaskSource::Jira,
             task: Task::new(&name, "", Some(100)),
             short_sha: None,
+            resolved_in_jira: None,
         });
     }
 
@@ -198,6 +220,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
             source: TaskSource::Gitlab,
             task: Task::new(&commit.message, "", Some(100)),
             short_sha,
+            resolved_in_jira: None,
         });
     }
 
@@ -224,11 +247,15 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
     // Build one MultiSelect: incomplete first, optional separator, then the rest.
     let mut labels: Vec<String> = Vec::new();
     let mut index_map: Vec<Option<usize>> = Vec::new();
+    // Ticked from the start: tasks whose issues Jira already resolved. That
+    // is the one case where carrying the task on is very likely the answer.
+    let mut ticked: Vec<bool> = Vec::new();
 
     for (idx, item) in items.iter().enumerate() {
         if item.source == TaskSource::Incomplete {
             labels.push(format_discovery_item(item));
             index_map.push(Some(idx));
+            ticked.push(item.resolved_in_jira.is_some());
         }
     }
 
@@ -236,18 +263,21 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
     if incomplete_count > 0 && has_rest {
         labels.push(Message::TasksDiscoverySeparator.to_string());
         index_map.push(None);
+        ticked.push(false);
     }
 
     for (idx, item) in items.iter().enumerate() {
         if item.source != TaskSource::Incomplete {
             labels.push(format_discovery_item(item));
             index_map.push(Some(idx));
+            ticked.push(false);
         }
     }
 
     let selected = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt(Message::PromptSelectTasksToImport.to_string())
         .items(&labels)
+        .defaults(&ticked)
         .interact()
         .unwrap_or_default();
 
@@ -260,6 +290,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
         };
 
         let mut task = item.task.clone();
+        let was_done = task.completeness == Some(100);
 
         if item.source == TaskSource::Incomplete {
             msg_print!(Message::SelectingTask(task.name.clone()));
@@ -268,7 +299,13 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
                 task.task_id = task.id;
             }
 
-            let default_completeness = (task.completeness.unwrap_or(0) + 1).min(100);
+            // Resolved in Jira means finished, so that is the proposal; any
+            // other unfinished task is proposed one step further along.
+            let default_completeness = if item.resolved_in_jira.is_some() {
+                100
+            } else {
+                (task.completeness.unwrap_or(0) + 1).min(100)
+            };
             task.completeness = Some(
                 Input::with_theme(&ColorfulTheme::default())
                     .allow_empty(true)
@@ -280,6 +317,18 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
         }
 
         let _ = Tasks::new()?.insert(&task);
+
+        // Carrying an unfinished Jira task to 100% is finishing it, and is
+        // asked about like an edit that does the same - unless Jira resolved
+        // the issue already, which is why the task was proposed at 100%.
+        if item.source == TaskSource::Incomplete
+            && !was_done
+            && task.completeness == Some(100)
+            && item.resolved_in_jira.is_none()
+            && let Some(key) = &task.jira_key
+        {
+            jira_bridge::offer_after_done(key).await;
+        }
     }
 
     // Optional: add selected discovery items to the persistent ignore list.
@@ -322,16 +371,19 @@ mod tests {
                 source: TaskSource::Gitlab,
                 task: Task::new("New commit.", "", Some(100)),
                 short_sha: Some("abc1234".into()),
+                resolved_in_jira: None,
             },
             DiscoveryItem {
                 source: TaskSource::Jira,
                 task: Task::new("New commit", "", Some(100)),
                 short_sha: None,
+                resolved_in_jira: None,
             },
             DiscoveryItem {
                 source: TaskSource::Incomplete,
                 task: Task::new(" New commit", "", Some(40)),
                 short_sha: None,
+                resolved_in_jira: None,
             },
         ];
 

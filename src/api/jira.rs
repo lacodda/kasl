@@ -45,6 +45,16 @@ const AUTH_URL: &str = "rest/auth/1/session";
 
 const SEARCH_URL: &str = "rest/api/2/search";
 
+const ISSUE_URL: &str = "rest/api/2/issue";
+
+/// How long one Jira request may take before it is abandoned.
+///
+/// The watcher drains toast buttons and polls on the same runtime; a request
+/// that never answers would hold a pressed button, or every poll after it,
+/// forever. Generous, because a page of a hundred issues on a slow Jira is
+/// legitimately slow.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Login pair, held in memory only while authenticating.
 #[derive(Serialize, Clone, Debug)]
 pub struct LoginCredentials {
@@ -99,13 +109,112 @@ pub struct JiraIssueFields {
 }
 
 /// Workflow status; names vary by configuration and locale.
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct JiraStatus {
     /// Stable status id from Jira (preferred for storage / joins)
     #[serde(default, deserialize_with = "deserialize_jira_id")]
     pub id: String,
     /// Status name (e.g., "Done", "In Progress", "Решена" for Russian locale)
     pub name: String,
+    /// The fixed category the status belongs to, whatever it is called.
+    #[serde(default, rename = "statusCategory", skip_serializing_if = "Option::is_none")]
+    pub category: Option<JiraCategory>,
+}
+
+impl JiraStatus {
+    /// Which of Jira's fixed categories the status is in.
+    pub fn category(&self) -> StatusCategory {
+        self.category
+            .as_ref()
+            .map(|c| StatusCategory::from_key(&c.key))
+            .unwrap_or(StatusCategory::Unknown)
+    }
+}
+
+/// A status category as Jira sends it; only the key is stable.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JiraCategory {
+    /// `new`, `indeterminate` or `done` - the same on every Jira, in every language.
+    pub key: String,
+}
+
+/// Jira's three status categories, which every workflow status maps onto.
+///
+/// Status names are the workflow's own and come translated ("In Progress",
+/// "В работе"); the category keys do not. Anything kasl decides about where an
+/// issue stands is decided on these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusCategory {
+    /// `new`: not started.
+    ToDo,
+    /// `indeterminate`: in progress.
+    InProgress,
+    /// `done`: finished, whatever the resolution.
+    Done,
+    /// A key this version does not know, or none sent.
+    Unknown,
+}
+
+impl StatusCategory {
+    /// Reads a category key as Jira sends it.
+    pub fn from_key(key: &str) -> Self {
+        match key {
+            "new" => StatusCategory::ToDo,
+            "indeterminate" => StatusCategory::InProgress,
+            "done" => StatusCategory::Done,
+            _ => StatusCategory::Unknown,
+        }
+    }
+}
+
+/// One way out of an issue's current status, as Jira offers it.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JiraTransition {
+    #[serde(deserialize_with = "deserialize_jira_id")]
+    pub id: String,
+    /// The transition's own name ("Resolve Issue"), which may differ from where it leads.
+    pub name: String,
+    /// The status the issue lands in.
+    pub to: JiraStatus,
+    /// Fields on the transition's screen, keyed by field id (`resolution`).
+    #[serde(default)]
+    pub fields: HashMap<String, JiraTransitionField>,
+}
+
+/// A field on a transition's screen.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JiraTransitionField {
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default, rename = "allowedValues")]
+    pub allowed_values: Vec<JiraNamedValue>,
+}
+
+/// An option of a field with a fixed list, such as a resolution.
+#[derive(Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JiraNamedValue {
+    #[serde(default, deserialize_with = "deserialize_jira_id")]
+    pub id: String,
+    #[serde(default)]
+    pub name: String,
+}
+
+/// Where an issue stands right now.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IssueState {
+    pub status: JiraStatus,
+    /// The resolution name when the issue is resolved ("Done", "Won't Fix").
+    pub resolution: Option<String>,
+}
+
+/// Whether a request may prompt for a password to sign in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionMode {
+    /// A command on a terminal: a lost session may be renewed by asking.
+    Interactive,
+    /// The watcher or a toast button: only a cached session or a stored
+    /// password, never a prompt nobody would see.
+    Unattended,
 }
 
 /// Accepts Jira ids as JSON string or number (`"3"` / `3`).
@@ -221,8 +330,13 @@ impl Jira {
     /// let jira = Jira::new(&config);
     /// ```
     pub fn new(config: &JiraConfig) -> Self {
+        let client = Client::builder()
+            .timeout(REQUEST_TIMEOUT)
+            .connect_timeout(Duration::from_secs(10))
+            .build()
+            .unwrap_or_else(|_| Client::new());
         Self {
-            client: Client::new(),
+            client,
             config: config.clone(),
             credentials: None,
             retries: 0,
@@ -481,6 +595,111 @@ impl Jira {
         }
     }
 
+    /// A session for `mode`, or an error naming how to get one.
+    async fn session(&mut self, mode: SessionMode) -> Result<String> {
+        match mode {
+            SessionMode::Interactive => self.get_session_id().await,
+            SessionMode::Unattended => self
+                .session_id_noninteractive()
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("not signed in to Jira; run `kasl inbox sync` on a terminal to sign in")),
+        }
+    }
+
+    /// Sends one request with the session cookie, renewing a session Jira no longer honours.
+    ///
+    /// A session Jira has dropped answers with 401, or - on Server and Data
+    /// Center - as the anonymous user (see [`session_is_anonymous`]). Either
+    /// way the cached cookie is thrown away and the request goes again with a
+    /// fresh login, a bounded number of times. Everything else is the caller's
+    /// to read, including errors: what a 404 means depends on the question.
+    async fn send(&mut self, mode: SessionMode, build: impl Fn(&Client) -> reqwest::RequestBuilder) -> Result<reqwest::Response> {
+        let mut retries = 0;
+        loop {
+            let session_id = self.session(mode).await?;
+            let res = build(&self.client).header(COOKIE, HeaderValue::from_str(&session_id)?).send().await?;
+            let rejected = res.status() == StatusCode::UNAUTHORIZED || session_is_anonymous(res.headers());
+            if !rejected {
+                return Ok(res);
+            }
+            if retries >= MAX_RETRY_COUNT {
+                anyhow::bail!("Jira rejected the session {MAX_RETRY_COUNT} times; run `kasl inbox sync` to sign in again");
+            }
+            let _ = self.delete_session_id();
+            retries += 1;
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    }
+
+    fn issue_url(&self, key: &str, tail: &str) -> String {
+        format!("{}/{}/{}{}", self.config.api_url.trim_end_matches('/'), ISSUE_URL, key, tail)
+    }
+
+    /// Where `key` stands: its status with category, and its resolution if any.
+    ///
+    /// `None` when Jira answers 404 - the issue was deleted, moved out of
+    /// reach, or is not visible to this account. All three mean the same to
+    /// kasl: there is nothing there to act on.
+    pub async fn issue_state(&mut self, key: &str, mode: SessionMode) -> Result<Option<IssueState>> {
+        let url = self.issue_url(key, "");
+        let res = self.send(mode, |c| c.get(&url).query(&[("fields", "status,resolution")])).await?;
+        if res.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let res = ok_or_jira_error(res, &format!("reading {key}")).await?;
+
+        #[derive(Deserialize)]
+        struct Body {
+            fields: Fields,
+        }
+        #[derive(Deserialize)]
+        struct Fields {
+            status: JiraStatus,
+            #[serde(default)]
+            resolution: Option<JiraNamedValue>,
+        }
+        let body: Body = res.json().await?;
+        Ok(Some(IssueState {
+            status: body.fields.status,
+            resolution: body.fields.resolution.map(|r| r.name),
+        }))
+    }
+
+    /// The transitions Jira offers out of the issue's current status, with their screens' fields.
+    pub async fn transitions(&mut self, key: &str, mode: SessionMode) -> Result<Vec<JiraTransition>> {
+        let url = self.issue_url(key, "/transitions");
+        let res = self.send(mode, |c| c.get(&url).query(&[("expand", "transitions.fields")])).await?;
+        let res = ok_or_jira_error(res, &format!("reading the transitions of {key}")).await?;
+
+        #[derive(Deserialize)]
+        struct Body {
+            #[serde(default)]
+            transitions: Vec<JiraTransition>,
+        }
+        Ok(res.json::<Body>().await?.transitions)
+    }
+
+    /// Performs transition `id` on `key`, with a resolution when its screen asks for one.
+    pub async fn transition(&mut self, key: &str, id: &str, resolution_id: Option<&str>, mode: SessionMode) -> Result<()> {
+        let url = self.issue_url(key, "/transitions");
+        let mut body = serde_json::json!({ "transition": { "id": id } });
+        if let Some(resolution) = resolution_id {
+            body["fields"] = serde_json::json!({ "resolution": { "id": resolution } });
+        }
+        let res = self.send(mode, |c| c.post(&url).json(&body)).await?;
+        ok_or_jira_error(res, &format!("moving {key}")).await?;
+        Ok(())
+    }
+
+    /// Adds a comment to `key`.
+    pub async fn add_comment(&mut self, key: &str, text: &str, mode: SessionMode) -> Result<()> {
+        let url = self.issue_url(key, "/comment");
+        let body = serde_json::json!({ "body": text });
+        let res = self.send(mode, |c| c.post(&url).json(&body)).await?;
+        ok_or_jira_error(res, &format!("commenting on {key}")).await?;
+        Ok(())
+    }
+
     /// Builds the issue-navigator URL listing the user's open issues.
     ///
     /// Summary toasts point here: they speak for many issues at once, so no
@@ -559,6 +778,46 @@ fn session_is_anonymous(headers: &HeaderMap) -> bool {
     header("x-ausername").eq_ignore_ascii_case("anonymous") || reason.contains("AUTHENTICATED_FAILED") || reason.contains("AUTHENTICATION_DENIED")
 }
 
+/// Passes a successful response through, or turns Jira's refusal into words.
+///
+/// Jira explains a refused write in `errorMessages` and per-field `errors` -
+/// "Resolution is required", "You do not have permission to transition this
+/// issue". Those sentences are the useful part; the status code alone tells
+/// the person nothing they can act on.
+async fn ok_or_jira_error(res: reqwest::Response, what: &str) -> Result<reqwest::Response> {
+    let status = res.status();
+    if status.is_success() {
+        return Ok(res);
+    }
+    let body = res.text().await.unwrap_or_default();
+    anyhow::bail!("Jira refused {what} (HTTP {}): {}", status.as_u16(), jira_error_text(&body))
+}
+
+/// The human part of a Jira error body, or the body itself when it has none.
+pub fn jira_error_text(body: &str) -> String {
+    #[derive(Deserialize, Default)]
+    struct ErrorBody {
+        #[serde(default, rename = "errorMessages")]
+        messages: Vec<String>,
+        #[serde(default)]
+        errors: HashMap<String, String>,
+    }
+    let parsed: ErrorBody = serde_json::from_str(body).unwrap_or_default();
+    let mut parts = parsed.messages;
+    let mut fields: Vec<(String, String)> = parsed.errors.into_iter().collect();
+    fields.sort();
+    parts.extend(fields.into_iter().map(|(field, message)| format!("{field}: {message}")));
+    if parts.is_empty() {
+        let trimmed = body.trim();
+        return if trimmed.is_empty() {
+            "no explanation given".to_string()
+        } else {
+            trimmed.chars().take(300).collect()
+        };
+    }
+    parts.join("; ")
+}
+
 /// Keeps a paged search only if it holds every issue Jira counted.
 ///
 /// Pages are cut by offset, so an issue created or resolved while they are
@@ -604,6 +863,29 @@ mod tests {
         assert_eq!(Jira::extract_number(&json!({"value": 7})), Some(7.0));
         assert_eq!(Jira::extract_number(&json!({"amount": "3.5"})), Some(3.5));
         assert_eq!(Jira::extract_number(&json!(null)), None);
+    }
+
+    #[test]
+    fn a_status_is_placed_by_its_category_key_not_its_name() {
+        let status: JiraStatus = serde_json::from_value(json!({
+            "id": 3, "name": "В работе", "statusCategory": {"id": 4, "key": "indeterminate", "name": "В работе"}
+        }))
+        .unwrap();
+        assert_eq!(status.category(), StatusCategory::InProgress);
+
+        let bare: JiraStatus = serde_json::from_value(json!({"id": "1", "name": "Open"})).unwrap();
+        assert_eq!(bare.category(), StatusCategory::Unknown, "no category sent is unknown, not to-do");
+    }
+
+    #[test]
+    fn a_jira_refusal_reads_as_its_own_sentences() {
+        let body = r#"{"errorMessages":["You do not have permission to transition this issue."],"errors":{"resolution":"Resolution is required."}}"#;
+        assert_eq!(
+            jira_error_text(body),
+            "You do not have permission to transition this issue.; resolution: Resolution is required."
+        );
+        assert_eq!(jira_error_text("<html>Bad gateway</html>"), "<html>Bad gateway</html>");
+        assert_eq!(jira_error_text(""), "no explanation given");
     }
 
     #[test]

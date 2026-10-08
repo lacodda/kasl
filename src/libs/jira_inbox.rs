@@ -11,8 +11,8 @@
 //! [`crate::libs::toast_action`]; what it then does is
 //! [`crate::libs::toast_apply`].
 
-use crate::api::jira::Jira;
-use crate::db::jira_inbox::{ChangedIssue, JiraInbox, JiraInboxItem, JiraInboxUpsert, UpsertBatchResult};
+use crate::api::jira::{Jira, SessionMode};
+use crate::db::jira_inbox::{ChangedIssue, JiraInbox, JiraInboxItem, JiraInboxUpsert, LeftReason, UpsertBatchResult};
 use crate::db::jira_statuses::JiraStatuses;
 use crate::libs::config::{Config, JiraInboxConfig};
 use crate::libs::messages::Message;
@@ -109,6 +109,8 @@ enum Pending {
     New(JiraInboxItem),
     Changed(JiraInboxItem, String),
     Gone(JiraInboxItem),
+    /// A taken issue Jira resolved while its task is still open.
+    Resolved(JiraInboxItem),
 }
 
 /// The line a summary toast opens with: what arrived, by kind.
@@ -118,6 +120,7 @@ fn summary_line(pending: &[Pending]) -> String {
         (count(|p| matches!(p, Pending::New(_))), "new"),
         (count(|p| matches!(p, Pending::Changed(..))), "changed"),
         (count(|p| matches!(p, Pending::Gone(_))), "left the inbox"),
+        (count(|p| matches!(p, Pending::Resolved(_))), "resolved with your task open"),
     ];
     let said: Vec<String> = parts.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
     format!("Issues: {}", said.join(", "))
@@ -133,9 +136,68 @@ pub struct SyncOutcome {
     pub changed: Vec<ChangedIssue>,
     /// Issues that stopped appearing in the poll this pass.
     pub gone_keys: Vec<String>,
+    /// Taken issues Jira said were resolved this pass, whose tasks are still open.
+    ///
+    /// The ones to offer marking done. Learnt once per departure, so a sync
+    /// that reports one here will not report it again.
+    pub resolved: Vec<ResolvedIssue>,
     pub notified: usize,
     /// True when sync was skipped (no jira config / disabled / no credentials).
     pub skipped: bool,
+}
+
+/// A taken issue Jira resolved, with the task that is still open.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedIssue {
+    pub issue_key: String,
+    pub summary: String,
+    /// The resolution Jira gave ("Done", "Won't Fix").
+    pub resolution: Option<String>,
+}
+
+/// How many departed taken issues one poll asks Jira about.
+///
+/// The first poll after an upgrade finds every taken issue that ever left
+/// unexplained; one request each would hold that poll for minutes. The rest
+/// are asked about on the polls that follow.
+const DEPARTURES_PER_POLL: usize = 20;
+
+/// Asks Jira why each taken issue that left the inbox left, and keeps the answer.
+///
+/// Returns the ones resolved while their task is still open. An answer that
+/// does not come - VPN down, Jira busy - leaves the row unexplained, and the
+/// next poll asks again; a sync is not failed for it, because the issues that
+/// did arrive are already reconciled and that is the part that matters most.
+async fn explain_departures(jira: &mut Jira, mode: SessionMode) -> Result<Vec<ResolvedIssue>> {
+    let db = JiraInbox::new()?;
+    let mut resolved = Vec::new();
+    for key in db.unexplained_departures(DEPARTURES_PER_POLL)? {
+        let state = match jira.issue_state(&key, mode).await {
+            Ok(state) => state,
+            Err(e) => {
+                warn!("Jira inbox: could not learn why {} left: {}", key, e);
+                continue;
+            }
+        };
+        match state.and_then(|s| s.resolution) {
+            Some(resolution) => {
+                db.set_left(&key, LeftReason::Resolved, Some(&resolution))?;
+                if toast_apply::task_open(&key)?
+                    && let Some(item) = db.get_by_key(&key)?
+                {
+                    resolved.push(ResolvedIssue {
+                        issue_key: key.clone(),
+                        summary: item.summary,
+                        resolution: Some(resolution),
+                    });
+                }
+            }
+            None => {
+                db.set_left(&key, LeftReason::Moved, None)?;
+            }
+        }
+    }
+    Ok(resolved)
 }
 
 /// Runs one interactive sync (may prompt for Jira password).
@@ -158,7 +220,23 @@ pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
 
     let mut jira = Jira::new(&jira_config);
     let issues = jira.get_assigned_open_issues(&inbox_cfg.extra_field_ids()).await?;
-    apply_issues(&jira, &issues, &inbox_cfg, allow_toast, &mut ToastBudget::new()).await
+    // The caller is a terminal: resolved issues are asked about there, not toasted.
+    let poll = Poll {
+        mode: SessionMode::Interactive,
+        notify: allow_toast,
+        offer_by_toast: false,
+    };
+    apply_issues(&mut jira, &issues, &inbox_cfg, poll, &mut ToastBudget::new()).await
+}
+
+/// Who is polling, and so where its news goes.
+#[derive(Debug, Clone, Copy)]
+struct Poll {
+    mode: SessionMode,
+    /// Whether toasts are shown at all.
+    notify: bool,
+    /// Whether a resolved issue's offer goes on a toast, or back to the caller.
+    offer_by_toast: bool,
 }
 
 /// Runs one non-interactive sync for the background watcher.
@@ -190,16 +268,22 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig, budget: &mut Toast
         });
     };
 
-    apply_issues(&jira, &issues, inbox_cfg, inbox_cfg.notify, budget).await
+    let poll = Poll {
+        mode: SessionMode::Unattended,
+        notify: inbox_cfg.notify,
+        offer_by_toast: true,
+    };
+    apply_issues(&mut jira, &issues, inbox_cfg, poll, budget).await
 }
 
 async fn apply_issues(
-    jira: &Jira,
+    jira: &mut Jira,
     issues: &[crate::api::jira::JiraIssue],
     inbox_cfg: &JiraInboxConfig,
-    notify: bool,
+    poll: Poll,
     budget: &mut ToastBudget,
 ) -> Result<SyncOutcome> {
+    let notify = poll.notify;
     let statuses = JiraStatuses::new()?;
     let sort_field = inbox_cfg.sort_by_field.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
@@ -239,6 +323,16 @@ async fn apply_issues(
     let present_keys: Vec<String> = upserts.iter().map(|u| u.issue_key.clone()).collect();
     let gone_keys = db.mark_gone(&present_keys)?;
 
+    // A taken issue that left is either finished or no longer yours, and only
+    // Jira knows which. The answer decides whether its task is offered as done.
+    let resolved = match explain_departures(jira, poll.mode).await {
+        Ok(resolved) => resolved,
+        Err(e) => {
+            warn!("Jira inbox: could not explain departures: {}", e);
+            Vec::new()
+        }
+    };
+
     // Every toast this poll would show is gathered first and shown under
     // one decision, so the budget sees the poll as a whole.
     let mut pending = Vec::new();
@@ -259,9 +353,21 @@ async fn apply_issues(
         }
     }
     if notify && inbox_cfg.notify_gone {
-        for key in &gone_keys {
+        // A resolved issue with an open task gets its own toast below; a
+        // second one saying it left would be the same news twice.
+        let offered: Vec<&str> = resolved.iter().map(|r| r.issue_key.as_str()).collect();
+        for key in gone_keys.iter().filter(|k| !(poll.offer_by_toast && offered.contains(&k.as_str()))) {
             if let Ok(Some(item)) = db.get_by_key(key) {
                 pending.push(Pending::Gone(item));
+            }
+        }
+    }
+    // Not gated by `notify_gone`: this is not news that an issue left, it is a
+    // question about the person's own task.
+    if notify && poll.offer_by_toast {
+        for issue in &resolved {
+            if let Ok(Some(item)) = db.get_by_key(&issue.issue_key) {
+                pending.push(Pending::Resolved(item));
             }
         }
     }
@@ -274,6 +380,7 @@ async fn apply_issues(
                     Pending::New(item) => show_toast(item),
                     Pending::Changed(item, change) => show_change_toast(item, change),
                     Pending::Gone(item) => show_gone_toast(item),
+                    Pending::Resolved(item) => show_resolved_toast(item),
                 };
                 if shown {
                     notified += 1;
@@ -294,6 +401,7 @@ async fn apply_issues(
         updated,
         changed,
         gone_keys,
+        resolved,
         notified,
         skipped: false,
     })
@@ -379,6 +487,16 @@ pub fn show_summary_toast(jira: &Jira, what: &str) -> bool {
 pub fn show_gone_toast(item: &JiraInboxItem) -> bool {
     let body = format!("Left the inbox — {}", item.summary);
     show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[])
+}
+
+/// Shows a toast for a taken issue Jira resolved while its task is open.
+///
+/// One button, **Mark done**: the issue's own decisions are behind it - it is
+/// resolved - and the only question left is the person's task.
+pub fn show_resolved_toast(item: &JiraInboxItem) -> bool {
+    let resolution = item.resolution.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
+    let body = format!("Resolved in Jira{resolution} - your task is still open. {}", item.summary);
+    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[ToastAction::Done])
 }
 
 /// A toast about one live issue: the body opens it, the buttons decide it.
@@ -563,7 +681,7 @@ pub fn open_url(url: &str) -> Result<()> {
 /// One failing request does not stop the rest. A click is a user action that
 /// already happened; refusing to carry out the next one because the previous
 /// key was missing would lose work the user did.
-pub fn drain_toast_actions() -> Result<usize> {
+pub async fn drain_toast_actions() -> Result<usize> {
     let requests = Mailbox::open()?.collect()?;
     if requests.is_empty() {
         return Ok(0);
@@ -576,7 +694,7 @@ pub fn drain_toast_actions() -> Result<usize> {
         // the issue it is about, and a dismiss or a take may be the last
         // moment its URL is easy to reach.
         let url = db.get_by_key(&request.issue_key).ok().flatten().map(|item| item.url).unwrap_or_default();
-        match toast_apply::apply(request) {
+        match toast_apply::apply(request).await {
             Ok(outcome) => {
                 debug!("Toast action {} {}: {:?}", request.action.as_str(), request.issue_key, outcome);
                 if outcome.settled() {
@@ -618,7 +736,7 @@ const MAILBOX_INTERVAL_SECS: u64 = 2;
 /// the network.
 pub async fn run_mailbox_watcher() {
     loop {
-        match drain_toast_actions() {
+        match drain_toast_actions().await {
             Ok(0) => {}
             Ok(count) => debug!("Carried out {} toast action(s)", count),
             Err(e) => warn!("Jira inbox: failed to drain toast actions: {}", e),

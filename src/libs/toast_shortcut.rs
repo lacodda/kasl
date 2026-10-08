@@ -77,7 +77,7 @@ pub fn ensure(action: ToastAction, issue_key: &str) -> Result<String> {
 /// harmless, and the next `ensure` overwrites it.
 pub fn forget(issue_key: &str) {
     let Ok(dir) = shortcut_dir() else { return };
-    for action in ToastAction::ALL {
+    for action in ToastAction::EVERY {
         let path = dir.join(format!("{}-{}.lnk", action.as_str(), issue_key));
         let _ = std::fs::remove_file(path);
     }

@@ -25,6 +25,32 @@ mod tests {
         }
     }
 
+    /// Tasks made without a chain - taken from the inbox, imported by `task
+    /// find` - used to share chain 0, so the incomplete query saw them as one
+    /// task, and one finished import hid every unfinished taken issue.
+    #[test_context(TaskTestContext)]
+    #[serial]
+    #[test]
+    fn tasks_without_a_chain_each_start_their_own(_ctx: &mut TaskTestContext) {
+        let mut tasks = Tasks::new().unwrap();
+        tasks.insert(&Task::new("KA-1 First issue", "", Some(0)).from_jira("KA-1")).unwrap();
+        tasks.insert(&Task::new("KA-2 Second issue", "", Some(30)).from_jira("KA-2")).unwrap();
+        tasks.insert(&Task::new("Imported commit", "", Some(100))).unwrap();
+
+        for task in tasks.fetch(TaskFilter::All).unwrap() {
+            assert_eq!(task.task_id, task.id, "{} must be its own chain", task.name);
+        }
+
+        // Yesterday's work is what `task find` offers today.
+        tasks
+            .conn
+            .execute("UPDATE tasks SET timestamp = datetime('now', 'localtime', '-1 day')", [])
+            .unwrap();
+        let mut open: Vec<String> = tasks.fetch(TaskFilter::Incomplete).unwrap().into_iter().map(|t| t.name).collect();
+        open.sort();
+        assert_eq!(open, ["KA-1 First issue", "KA-2 Second issue"], "each unfinished task is offered on its own");
+    }
+
     #[test_context(TaskTestContext)]
     #[serial]
     #[test]

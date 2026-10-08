@@ -46,10 +46,14 @@ pub const SHORTCUT_DIR: &str = "toast-buttons";
 
 /// The decisions a toast button can carry.
 ///
-/// Deliberately the same three the triage picker offers, and no more. A toast
-/// is read in a glance between two other things: a fourth button would make
-/// it a menu, and a menu asks to be studied. Everything else stays in
-/// `kasl inbox triage`, where there is room to think.
+/// A toast about an issue in the inbox carries the same three the triage
+/// picker offers, and no more ([`ToastAction::ALL`]). A toast is read in a
+/// glance between two other things: a fourth button would make it a menu, and
+/// a menu asks to be studied. Everything else stays in `kasl inbox triage`,
+/// where there is room to think.
+///
+/// [`ToastAction::Done`] belongs to a different toast - the one saying a taken
+/// issue was resolved in Jira - and is the only button that toast has.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToastAction {
     /// Import the issue into local tasks.
@@ -58,6 +62,8 @@ pub enum ToastAction {
     Snooze,
     /// Hide the issue from the list.
     Dismiss,
+    /// Mark the task taken from a resolved issue done.
+    Done,
 }
 
 impl ToastAction {
@@ -67,6 +73,7 @@ impl ToastAction {
             ToastAction::Take => "take",
             ToastAction::Snooze => "snooze",
             ToastAction::Dismiss => "dismiss",
+            ToastAction::Done => "done",
         }
     }
 
@@ -76,6 +83,7 @@ impl ToastAction {
             ToastAction::Take => "Take",
             ToastAction::Snooze => "Snooze",
             ToastAction::Dismiss => "Dismiss",
+            ToastAction::Done => "Mark done",
         }
     }
 
@@ -85,15 +93,19 @@ impl ToastAction {
             "take" => Some(ToastAction::Take),
             "snooze" => Some(ToastAction::Snooze),
             "dismiss" => Some(ToastAction::Dismiss),
+            "done" => Some(ToastAction::Done),
             _ => None,
         }
     }
 
-    /// The three, in the order they appear on a toast.
+    /// The three an inbox issue's toast carries, in the order they appear.
     ///
     /// `Take` leads because it is the one that moves work forward; `Dismiss`
     /// is last because it is the only one that cannot be undone by waiting.
     pub const ALL: [ToastAction; 3] = [ToastAction::Take, ToastAction::Snooze, ToastAction::Dismiss];
+
+    /// Every action any toast can carry, for clearing up after an issue.
+    pub const EVERY: [ToastAction; 4] = [ToastAction::Take, ToastAction::Snooze, ToastAction::Dismiss, ToastAction::Done];
 }
 
 /// One click, on its way to the daemon.

@@ -60,7 +60,7 @@ const UPDATE_TASK: &str = "UPDATE tasks SET name = ?, comment = ?, completeness 
 pub struct Tasks {
     pub conn: Connection,
 
-    /// Id of the most recently inserted task, for `update_id`/`get` chaining.
+    /// Id of the most recently inserted task, for `get` chaining.
     pub id: Option<i32>,
 }
 
@@ -90,13 +90,16 @@ impl Tasks {
     ///
     /// let mut tasks = Tasks::new()?;
     /// let task = Task::new("Code review", "Review PR #123", Some(50));
-    /// tasks.insert(&task)?
-    ///      .update_id()?; // Method chaining
+    /// let saved = tasks.insert(&task)?.get()?; // Method chaining
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// A task that continues no chain starts its own: `task_id` becomes the
+    /// new row's id. Leaving it at the column default of 0 made every such
+    /// task one task to the queries that group by chain.
     pub fn insert(&mut self, task: &Task) -> Result<&mut Self> {
-        self.id = Some(self.conn.query_row(
+        let id: i32 = self.conn.query_row(
             INSERT_TASK,
             params![
                 task.task_id,
@@ -107,28 +110,12 @@ impl Tasks {
                 task.jira_key
             ],
             |row| row.get(0),
-        )?);
+        )?;
+        if task.task_id.is_none_or(|chain| chain == 0) {
+            self.conn.execute(UPDATE_TASK_ID, params![id, id])?;
+        }
+        self.id = Some(id);
 
-        Ok(self)
-    }
-
-    /// Points the just-inserted task's `task_id` at its own id - the
-    /// convention for a standalone task that groups its own history.
-    ///
-    /// ```rust,no_run
-    /// # use kasl::db::tasks::Tasks;
-    /// use kasl::libs::task::Task;
-    ///
-    /// # fn main() -> anyhow::Result<()> {
-    /// let mut tasks = Tasks::new()?;
-    /// let subtask = Task::new("Subtask", "Part of larger task", Some(0));
-    /// tasks.insert(&subtask)?
-    ///      .update_id()?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn update_id(&mut self) -> Result<&mut Self> {
-        self.conn.execute(UPDATE_TASK_ID, params![self.id, self.id])?;
         Ok(self)
     }
 

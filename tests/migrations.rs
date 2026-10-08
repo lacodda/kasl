@@ -77,4 +77,53 @@ mod tests {
         // Version should not change
         assert_eq!(version1, version2);
     }
+
+    /// Migration 17 gives every task left on chain 0 a chain of its own.
+    ///
+    /// Before it, every task not made by `task add` sat on chain 0, and the
+    /// incomplete-task query - which groups by chain - saw them as one task.
+    #[test_context(MigrationTestContext)]
+    #[serial]
+    #[test]
+    fn tasks_on_chain_zero_get_chains_of_their_own(_ctx: &mut MigrationTestContext) {
+        let mut conn = Db::new_without_migrations().unwrap();
+        let manager = MigrationManager::new();
+        manager.run_migrations(&mut conn).unwrap();
+
+        // Back to the schema as version 16 left it, with two old-style rows.
+        manager.rollback_to(&mut conn, 16).unwrap();
+        conn.execute("ALTER TABLE jira_inbox DROP COLUMN left_reason", []).unwrap();
+        conn.execute("ALTER TABLE jira_inbox DROP COLUMN resolution", []).unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, task_id, name, comment, completeness) VALUES (7, 0, 'KA-1 taken', '', 0), (9, 0, 'imported', '', 100), (12, 7, 'KA-1 taken', '', 50)",
+            [],
+        )
+        .unwrap();
+
+        manager.run_migrations(&mut conn).unwrap();
+        let chains: Vec<(i32, i32)> = conn
+            .prepare("SELECT id, task_id FROM tasks ORDER BY id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            chains,
+            vec![(7, 7), (9, 9), (12, 7)],
+            "chain 0 rows become their own chain; a real chain is kept"
+        );
+
+        // And the departure reason only takes the two answers there are.
+        conn.execute(
+            "INSERT INTO jira_inbox (issue_key, issue_id, summary, priority_rank, url, first_seen, last_seen, notified, pinned, dismissed) VALUES ('KA-1', '1', 's', 3, 'u', datetime('now'), datetime('now'), 0, 0, 0)",
+            [],
+        )
+        .unwrap();
+        assert!(
+            conn.execute("UPDATE jira_inbox SET left_reason = 'maybe' WHERE issue_key = 'KA-1'", [])
+                .is_err(),
+            "a third reason must be unwritable"
+        );
+    }
 }

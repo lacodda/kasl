@@ -1,19 +1,23 @@
-//! Jira inbox command: sync, list, pin, dismiss, open, and import issues.
+//! Jira inbox command: sync, list, pin, dismiss, open, and import issues -
+//! and the two moves kasl makes in Jira itself, start and close.
 //!
 //! Manages the local `jira_inbox` table populated from assigned open Jira issues.
 
 use crate::db::jira_inbox::{JiraInbox, JiraInboxItem};
 use crate::libs::config::Config;
 use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_named};
-use crate::libs::jira_inbox as inbox_lib;
+use crate::libs::jira_bridge::{self, Goal, MoveOptions};
+use crate::libs::jira_inbox::{self as inbox_lib, ResolvedIssue};
 use crate::libs::messages::Message;
 use crate::libs::pick::{self, TriageAction, TriageAnswer};
+use crate::libs::prompt::is_interactive;
 use crate::libs::toast_apply::{self, Applied};
 use crate::libs::view::View;
-use crate::{msg_error, msg_info, msg_print, msg_success};
+use crate::{msg_error, msg_info, msg_print, msg_success, msg_warning};
 use anyhow::{Result, bail};
 use chrono::Local;
 use clap::{Args, Subcommand, ValueEnum};
+use dialoguer::{Input, MultiSelect, theme::ColorfulTheme};
 
 /// Command-line arguments for the inbox command.
 #[derive(Debug, Args)]
@@ -283,6 +287,59 @@ enum InboxCommand {
         #[command(flatten)]
         filter: FilterArgs,
     },
+
+    /// Move an issue into progress in Jira
+    #[command(about = "Start an issue in Jira")]
+    Start {
+        /// Issue key, e.g. PROJ-123; omit to pick from the inbox
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+
+        /// Target status or transition name, when Jira offers several ways
+        #[arg(long, value_name = "NAME")]
+        to: Option<String>,
+
+        #[command(flatten)]
+        filter: FilterArgs,
+    },
+
+    /// Resolve an issue in Jira, optionally leaving a comment first
+    #[command(about = "Close an issue in Jira")]
+    Close {
+        /// Issue key, e.g. PROJ-123; omit to pick from the inbox
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+
+        /// Comment to add before closing
+        #[arg(long, short = 'm', value_name = "TEXT")]
+        comment: Option<String>,
+
+        /// Target status or transition name, when Jira offers several ways
+        #[arg(long, value_name = "NAME")]
+        to: Option<String>,
+
+        /// Resolution, when the close asks for one (Done, Fixed, Won't Fix)
+        #[arg(long, value_name = "NAME")]
+        resolution: Option<String>,
+
+        #[command(flatten)]
+        filter: FilterArgs,
+    },
+
+    /// Add a comment to an issue in Jira
+    #[command(about = "Comment on an issue in Jira")]
+    Comment {
+        /// Issue key, e.g. PROJ-123; omit to pick from the inbox
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+
+        /// The comment; omit to type it on a terminal
+        #[arg(value_name = "TEXT")]
+        text: Option<String>,
+
+        #[command(flatten)]
+        filter: FilterArgs,
+    },
 }
 
 /// Entry point for `kasl inbox`.
@@ -298,6 +355,7 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
                     changed: outcome.changed.len(),
                     gone: outcome.gone_keys.len(),
                 });
+                offer_resolved(&outcome.resolved)?;
             }
             Ok(())
         }
@@ -306,7 +364,7 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
         Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
         Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
-        Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &filter.or(top)),
+        Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &filter.or(top)).await,
         Some(InboxCommand::Show { key, why, filter }) => {
             let key = resolve_key(key, "Show which issue?", false, &filter.or(top))?;
             show_issue(&key, why)
@@ -316,7 +374,25 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
             snooze(&key, duration.as_deref())
         }
         Some(InboxCommand::Unsnooze { key }) => unsnooze(key),
-        Some(InboxCommand::Take { key, filter }) => take_issue(&resolve_key(key, "Take which issue?", false, &filter.or(top))?),
+        Some(InboxCommand::Take { key, filter }) => take_issue(&resolve_key(key, "Take which issue?", false, &filter.or(top))?).await,
+        Some(InboxCommand::Start { key, to, filter }) => {
+            let key = resolve_key(key, "Start which issue?", false, &filter.or(top))?;
+            start_issue(&key, to).await
+        }
+        Some(InboxCommand::Close {
+            key,
+            comment,
+            to,
+            resolution,
+            filter,
+        }) => {
+            let key = resolve_key(key, "Close which issue?", false, &filter.or(top))?;
+            close_issue(&key, comment, to, resolution).await
+        }
+        Some(InboxCommand::Comment { key, text, filter }) => {
+            let key = resolve_key(key, "Comment on which issue?", false, &filter.or(top))?;
+            comment_issue(&key, text).await
+        }
         // Bare `kasl inbox` shows the list, as it always has.
         None => list_inbox(args.limit, args.all, args.snoozed, &top),
     }
@@ -443,7 +519,7 @@ fn open_issue(key: &str) -> Result<()> {
 /// is a snapshot taken once: actions are by key, so a row going stale mid-run
 /// changes nothing, and re-reading between every question would make the order
 /// shift under the user's hands.
-fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
+async fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
     // Parsed before the first question rather than at the first snooze: being
     // told the duration is unreadable after deciding twenty issues would be
     // the worst possible moment to find out.
@@ -483,7 +559,7 @@ fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
 
         match action {
             TriageAction::Take => {
-                take_issue(&item.issue_key)?;
+                take_issue(&item.issue_key).await?;
                 done.taken += 1;
             }
             TriageAction::Snooze => {
@@ -607,11 +683,108 @@ fn unsnooze(key: Option<String>) -> Result<()> {
 /// two: the key survived only inside the task's name, and the inbox forgot the
 /// issue had ever been picked up. Now the task carries `jira_key`, and the
 /// issue stays in the list wearing a `taken` badge.
-fn take_issue(key: &str) -> Result<()> {
-    match toast_apply::take(key)? {
-        Applied::Taken => msg_success!(Message::JiraInboxTaken(key.to_string())),
+///
+/// With `start_on_take` the issue is also started in Jira; the take is said
+/// first, because it happened whatever Jira answers next.
+async fn take_issue(key: &str) -> Result<()> {
+    match toast_apply::take(key, &MoveOptions::from_cli(None, None)).await? {
+        Applied::Taken { started } => {
+            msg_success!(Message::JiraInboxTaken(key.to_string()));
+            match started {
+                Some(Ok(moved)) => jira_bridge::report_move(key, Goal::Start, &moved),
+                Some(Err(why)) => msg_warning!(Message::JiraWriteFailed(key.to_string(), why)),
+                None => {}
+            }
+        }
         Applied::AlreadyTaken(name) => msg_info!(Message::JiraInboxAlreadyTaken(key.to_string(), name)),
         _ => msg_error!(Message::JiraInboxNotFound(key.to_string())),
+    }
+    Ok(())
+}
+
+/// Moves an issue into progress in Jira, by hand.
+///
+/// The same move `start_on_take` makes, for when it is off, or when the move
+/// at take time could not happen. A move that does not arrive fails the
+/// command: a script that asked for the issue to be started must be able to
+/// tell that it was not.
+async fn start_issue(key: &str, to: Option<String>) -> Result<()> {
+    let mut jira = jira_bridge::client()?;
+    let moved = jira_bridge::move_issue(&mut jira, key, Goal::Start, &MoveOptions::from_cli(to, None)).await?;
+    finish_move(key, Goal::Start, moved)
+}
+
+/// Resolves an issue in Jira, after the comment when one is given.
+async fn close_issue(key: &str, comment: Option<String>, to: Option<String>, resolution: Option<String>) -> Result<()> {
+    let mut jira = jira_bridge::client()?;
+    let moved = jira_bridge::close_issue(&mut jira, key, comment.as_deref(), &MoveOptions::from_cli(to, resolution)).await?;
+    finish_move(key, Goal::Close, moved)
+}
+
+/// Reports a move, and fails the command when the issue did not get there.
+fn finish_move(key: &str, goal: Goal, moved: jira_bridge::Moved) -> Result<()> {
+    if moved.arrived() {
+        jira_bridge::report_move(key, goal, &moved);
+        Ok(())
+    } else {
+        bail!("{}", moved.sentence(key, goal))
+    }
+}
+
+/// Adds a comment to an issue in Jira.
+///
+/// The text is asked for on a terminal when it is not given; an empty comment
+/// is refused rather than sent, since Jira would refuse it anyway, less
+/// clearly.
+async fn comment_issue(key: &str, text: Option<String>) -> Result<()> {
+    let text = match text {
+        Some(text) => text,
+        None if is_interactive() => Input::with_theme(&ColorfulTheme::default())
+            .with_prompt(Message::PromptJiraComment.to_string())
+            .interact_text()?,
+        None => bail!("comment text is required; pass TEXT outside an interactive terminal"),
+    };
+    let text = text.trim();
+    if text.is_empty() {
+        bail!("an empty comment is not a comment; nothing was sent");
+    }
+    let mut jira = jira_bridge::client()?;
+    jira.add_comment(key, text, crate::api::jira::SessionMode::Interactive).await?;
+    msg_success!(Message::JiraCommented(key.to_string()));
+    Ok(())
+}
+
+/// Offers to mark done the tasks whose issues this sync found resolved.
+///
+/// One question for all of them, every one ticked: the usual answer after a
+/// resolution is "yes, I am done", and a run of separate prompts after a long
+/// absence would be a quiz. Off a terminal the news is said instead, with the
+/// command that offers the same choice later.
+fn offer_resolved(resolved: &[ResolvedIssue]) -> Result<()> {
+    if resolved.is_empty() {
+        return Ok(());
+    }
+    let in_parens = |issue: &ResolvedIssue| issue.resolution.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
+    if !is_interactive() {
+        for issue in resolved {
+            msg_info!(Message::JiraResolvedTaskOpen(issue.issue_key.clone(), in_parens(issue)));
+        }
+        return Ok(());
+    }
+
+    let labels: Vec<String> = resolved
+        .iter()
+        .map(|issue| format!("{} {}{}", issue.issue_key, issue.summary, in_parens(issue)))
+        .collect();
+    let ticked = vec![true; labels.len()];
+    let chosen = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(Message::PromptMarkResolvedDone.to_string())
+        .items(&labels)
+        .defaults(&ticked)
+        .interact()?;
+    for index in chosen {
+        let key = &resolved[index].issue_key;
+        msg_success!(Message::ToastActionApplied(toast_apply::complete(key)?.summary(key)));
     }
     Ok(())
 }

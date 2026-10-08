@@ -23,7 +23,7 @@ use tracing::{debug, warn};
 /// Arguments of the courier: which decision, on which issue.
 #[derive(Debug, Args)]
 pub struct ToastActionArgs {
-    /// take, snooze or dismiss
+    /// take, snooze, dismiss or done
     #[arg(value_name = "ACTION")]
     action: String,
 
@@ -33,7 +33,7 @@ pub struct ToastActionArgs {
 }
 
 /// Posts one toast decision, or performs it when no daemon is listening.
-pub fn cmd(args: ToastActionArgs) -> Result<()> {
+pub async fn cmd(args: ToastActionArgs) -> Result<()> {
     let Some(action) = ToastAction::parse(&args.action) else {
         return Err(msg_error_anyhow!(Message::ToastActionUnknown(args.action.clone())));
     };
@@ -44,7 +44,7 @@ pub fn cmd(args: ToastActionArgs) -> Result<()> {
     // still has a toast on screen.
     if !daemon::is_running() {
         warn!("No watcher is running; performing {} {} here instead", args.action, args.key);
-        return crate::libs::toast_apply::apply(&request).map(|_| ());
+        return crate::libs::toast_apply::apply(&request).await.map(|_| ());
     }
 
     Mailbox::open()?.post(&request)?;

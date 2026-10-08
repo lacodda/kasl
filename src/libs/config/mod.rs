@@ -266,6 +266,15 @@ pub struct JiraInboxConfig {
     /// two behaviours wearing one word.
     #[serde(default = "default_toast_snooze_for")]
     pub toast_snooze_for: String,
+
+    /// Whether taking an issue also starts it in Jira.
+    ///
+    /// Moves the issue into the in-progress category of its workflow on every
+    /// take - from the command line, from triage and from a toast button. Off
+    /// by default: it writes to a tracker the whole team reads, and in some
+    /// teams "In Progress" means more than "on my list".
+    #[serde(default)]
+    pub start_on_take: bool,
 }
 
 /// A user-configured Jira custom field for inbox sync / display.
@@ -300,6 +309,7 @@ impl Default for JiraInboxConfig {
             custom_fields: Vec::new(),
             sort_by_field: None,
             toast_snooze_for: default_toast_snooze_for(),
+            start_on_take: false,
         }
     }
 }

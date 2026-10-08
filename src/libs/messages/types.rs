@@ -507,6 +507,21 @@ pub enum Message {
     /// A toast button could not be carried out: key, then why.
     ToastActionFailed(String, String),
 
+    /// What a move in Jira came to, already worded.
+    JiraMoved(String),
+    /// A comment landed on the issue.
+    JiraCommented(String),
+    /// The local change stands, but Jira was not updated: key, then why.
+    JiraWriteFailed(String, String),
+    /// A taken issue was resolved in Jira while its task is open: key, then
+    /// the resolution in parentheses or nothing.
+    JiraResolvedTaskOpen(String, String),
+    /// The question after a linked task reaches 100%.
+    PromptJiraAfterDone(String),
+    PromptJiraCloseComment,
+    PromptJiraComment,
+    PromptMarkResolvedDone,
+
     PromptJiraInboxEnabled,
     PromptJiraInboxPollInterval,
     PromptJiraInboxNotify,

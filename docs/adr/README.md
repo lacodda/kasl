@@ -8,3 +8,4 @@ Technical decisions that shape kasl, in the order they were made. Format: Contex
 | [0002](0002-sqlite-schema.md) | SQLite with versioned migrations | accepted |
 | [0003](0003-activity-daemon.md) | Activity monitoring as a self-spawning daemon | accepted |
 | [0004](0004-the-pulse.md) | The pulse: one sender, consent per connection, one row | accepted |
+| [0005](0005-jira-moves-by-category.md) | Jira moves by status category, and says why an issue left | accepted |

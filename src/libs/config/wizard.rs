@@ -346,6 +346,7 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
         notify_changes: default.notify_changes,
         notify_gone: default.notify_gone,
         toast_snooze_for: default.toast_snooze_for.clone(),
+        start_on_take: default.start_on_take,
         custom_fields,
         sort_by_field,
     })

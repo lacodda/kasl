@@ -422,6 +422,33 @@ impl MigrationManager {
             )?;
             Ok(())
         });
+
+        // Version 17: why a taken issue left the inbox, and every task its own chain.
+        //
+        // An issue leaves the inbox when it is resolved or when it stops being
+        // yours, and the two ask for opposite things: a resolved issue is a
+        // task to mark done, a reassigned one is not. The poll cannot tell them
+        // apart - both are simply absent - so kasl asks Jira about each taken
+        // issue that left, and keeps the answer. NULL means not asked yet, which
+        // is what makes a question that failed get asked again on the next poll.
+        // The CHECK keeps a third, unreadable answer out.
+        //
+        // `task_id = 0` was the default for every task not created through
+        // `kasl task add`: issues taken from the inbox, imports from `task find`.
+        // The incomplete-task query groups by `task_id`, so all of them were one
+        // task to it, and a single finished import hid every unfinished taken
+        // issue from `task find`. A task with no history of its own is its own
+        // chain; `Tasks::insert` now says so for new rows, and this says it for
+        // the old ones.
+        self.add_migration(17, "close_the_loop_with_jira", |tx| {
+            tx.execute(
+                "ALTER TABLE jira_inbox ADD COLUMN left_reason TEXT CHECK (left_reason IN ('resolved', 'moved'))",
+                [],
+            )?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN resolution TEXT", [])?;
+            tx.execute("UPDATE tasks SET task_id = id WHERE task_id = 0", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

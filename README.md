@@ -110,6 +110,10 @@ Monthly work productivity: 95.4%
   Snooze and Dismiss, so most of the backlog is triaged without opening a
   terminal. Windows and Linux; on macOS the notification API cannot report a
   click, so the buttons are left out rather than drawn dead.
+- **Jira kept in step.** Taking an issue can start it in Jira, finishing its
+  task offers to close or comment on it, and an issue Jira resolves offers to
+  finish the task. Moves go by Jira's status category, not by name, so a
+  translated or custom workflow needs no setup.
 - **Honest numbers.** kasl records absences rather than inventing them, and
   says so when a day falls below your reporting threshold.
 - **Reports where they need to go.** One command files the day or the month to

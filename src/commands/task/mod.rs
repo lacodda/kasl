@@ -30,6 +30,7 @@ use crate::{
     db::tasks::Tasks,
     db::templates::Templates,
     libs::{
+        jira_bridge,
         messages::Message,
         pick,
         prompt::{ensure_interactive, is_interactive},
@@ -304,7 +305,7 @@ async fn handle_task_creation(task_args: AddArgs) -> Result<()> {
 
     // Create and insert the task
     let task = Task::new(&name, &comment, Some(completeness));
-    let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
+    let new_task = Tasks::new()?.insert(&task)?.get()?;
     View::tasks(&new_task)?;
 
     // Handle tag assignment if provided
@@ -471,10 +472,14 @@ async fn handle_edit_by_id(id: i32) -> Result<()> {
         .interact()?;
 
     if confirmed {
+        let finished = finished_jira_key(&task, &edited_task);
         let mut task_to_update = task;
         task_to_update.update_from(&edited_task);
         tasks_db.update(&task_to_update)?;
         msg_success!(Message::TaskUpdated);
+        if let Some(key) = finished {
+            jira_bridge::offer_after_done(&key).await;
+        }
     } else {
         msg_info!(Message::OperationCancelled);
     }
@@ -522,6 +527,9 @@ async fn handle_edit_interactive() -> Result<()> {
             task_to_update.update_from(&edited_task);
             tasks_db.update(&task_to_update)?;
             msg_success!(Message::TaskUpdatedWithName(task.name.clone()));
+            if let Some(key) = finished_jira_key(task, &edited_task) {
+                jira_bridge::offer_after_done(&key).await;
+            }
         } else {
             msg_info!(Message::TaskSkippedNoChanges(task.name.clone()));
         }
@@ -529,6 +537,15 @@ async fn handle_edit_interactive() -> Result<()> {
 
     msg_success!(Message::TaskEditingCompleted);
     Ok(())
+}
+
+/// The Jira issue to ask about when an edit has just finished a task taken from it.
+///
+/// Only the crossing counts - below 100 before, 100 after. A task already done
+/// that is edited again was offered the question when it was finished.
+pub(crate) fn finished_jira_key(before: &Task, after: &Task) -> Option<String> {
+    let crossed = before.completeness != Some(100) && after.completeness == Some(100);
+    if crossed { before.jira_key.clone() } else { None }
 }
 
 /// Interactive task editing helper function.
@@ -630,7 +647,7 @@ async fn handle_create_from_template(template_name: String, args: AddArgs) -> Re
 
     // Create and display the new task
     let task = Task::new(&name, &comment, Some(completeness));
-    let new_task = Tasks::new()?.insert(&task)?.update_id()?.get()?;
+    let new_task = Tasks::new()?.insert(&task)?.get()?;
     View::tasks(&new_task)?;
 
     // Tags are the task's own, not the template's: templates carry no tags.
@@ -690,6 +707,29 @@ mod tests {
         let pasted = "PROJ-42\nFix login redirect for OAuth callback\r\n";
         assert_eq!(collapse_whitespace(pasted), "PROJ-42 Fix login redirect for OAuth callback");
         assert_eq!(collapse_whitespace("  spaced   out  "), "spaced out");
+    }
+
+    #[test]
+    fn only_finishing_a_task_from_jira_asks_about_its_issue() {
+        let mut before = Task::new("KA-1 Fix login", "", Some(60)).from_jira("KA-1");
+        let mut after = before.clone();
+        after.completeness = Some(100);
+        assert_eq!(finished_jira_key(&before, &after).as_deref(), Some("KA-1"));
+
+        // Already done, edited again: the question was asked when it was finished.
+        before.completeness = Some(100);
+        assert_eq!(finished_jira_key(&before, &after), None);
+
+        // Progress short of done is not the moment.
+        before.completeness = Some(20);
+        after.completeness = Some(90);
+        assert_eq!(finished_jira_key(&before, &after), None);
+
+        // A task of its own has no issue to ask about.
+        let plain = Task::new("Write notes", "", Some(10));
+        let mut plain_done = plain.clone();
+        plain_done.completeness = Some(100);
+        assert_eq!(finished_jira_key(&plain, &plain_done), None);
     }
 
     #[test]

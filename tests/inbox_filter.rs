@@ -35,6 +35,8 @@ fn item(key: &str) -> JiraInboxItem {
         taken_at: None,
         snoozed_until: None,
         woke_at: None,
+        left_reason: None,
+        resolution: None,
     }
 }
 

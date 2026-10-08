@@ -133,3 +133,92 @@ fn a_bad_window_or_an_unknown_priority_is_an_error() {
         "{out}"
     );
 }
+
+#[test]
+#[serial]
+fn writing_to_jira_without_jira_says_what_is_missing() {
+    let dir = sandbox();
+    seed_inbox();
+
+    for args in [
+        &["inbox", "close", "KA-1"][..],
+        &["inbox", "start", "KA-1"],
+        &["inbox", "comment", "KA-1", "done"],
+    ] {
+        let (ok, out) = kasl(dir.path(), args);
+        assert!(!ok, "{args:?} cannot succeed without Jira:\n{out}");
+        assert!(out.contains("Jira is not configured"), "{args:?} must say why:\n{out}");
+    }
+}
+
+#[test]
+#[serial]
+fn a_comment_needs_its_text_outside_a_terminal() {
+    let dir = sandbox();
+    seed_inbox();
+
+    let (ok, out) = kasl(dir.path(), &["inbox", "comment", "KA-1"]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("comment text is required"), "{out}");
+}
+
+/// The whole loop from the far side: Jira resolves a taken issue, and a sync
+/// run from a script says so and names where the task can be finished.
+#[tokio::test(flavor = "multi_thread")]
+#[serial]
+async fn a_sync_off_a_terminal_reports_a_resolved_issue_with_an_open_task() {
+    use kasl::api::Session;
+    use kasl::api::jira::{Jira, JiraConfig};
+    use kasl::libs::config::{Config, JiraInboxConfig};
+    use kasl::libs::jira_bridge::MoveOptions;
+    use serde_json::json;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    let dir = sandbox();
+    let server = MockServer::start().await;
+    Config {
+        jira: Some(JiraConfig {
+            login: "agent".to_string(),
+            api_url: server.uri(),
+            completed_statuses: Vec::new(),
+        }),
+        jira_inbox: Some(JiraInboxConfig {
+            notify: false,
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+    .save()
+    .unwrap();
+    let session = kasl::libs::data_storage::DataStorage::new().get_path(".jira_session_id").unwrap();
+    Jira::write_session_id(session.to_str().unwrap(), "JSESSIONID=cafe").unwrap();
+
+    seed_inbox();
+    kasl::libs::toast_apply::take("KA-1", &MoveOptions::unattended()).await.unwrap();
+
+    Mock::given(method("GET"))
+        .and(path("/rest/api/2/search"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"startAt": 0, "maxResults": 100, "total": 0, "issues": []})))
+        .mount(&server)
+        .await;
+    Mock::given(method("GET"))
+        .and(path("/rest/api/2/issue/KA-1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "key": "KA-1",
+            "fields": {"status": {"id": "5", "name": "Done", "statusCategory": {"key": "done"}}, "resolution": {"id": "1", "name": "Done"}}
+        })))
+        .mount(&server)
+        .await;
+
+    let (ok, out) = kasl(dir.path(), &["inbox", "sync"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("KA-1 was resolved in Jira (Done); its task is still open") && out.contains("kasl task find"),
+        "the sync must say what Jira did and where to finish the task:\n{out}"
+    );
+
+    let (ok, out) = kasl(dir.path(), &["inbox", "list", "--all"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("resolved"), "the list shows why KA-1 left:\n{out}");
+}

@@ -244,10 +244,15 @@ pub fn explain(item: &JiraInboxItem, score_label: Option<&str>, now: NaiveDateTi
     }
 
     if let Some(gone) = item.gone_at {
+        let because = match item.left_reason {
+            Some(crate::db::jira_inbox::LeftReason::Resolved) => "Jira resolved it, so it left the poll; only `--all` shows it",
+            Some(crate::db::jira_inbox::LeftReason::Moved) => "left the poll unresolved - reassigned or out of reach; only `--all` shows it",
+            None => "stopped appearing in the Jira poll - closed or reassigned; only `--all` shows it",
+        };
         out.push(Reason {
             what: "gone",
             value: gone.format("%b %-d").to_string(),
-            because: "stopped appearing in the Jira poll - closed or reassigned; only `--all` shows it".to_string(),
+            because: because.to_string(),
         });
     }
 
