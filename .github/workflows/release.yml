@@ -37,10 +37,13 @@ jobs:
         run: cargo build --release --target ${{ matrix.target }}
       # All platforms ship tar.gz: kasl update and the npm wrapper of already
       # released versions expect that extension, so it must never change.
-      # One binary ships. Until v1.8.1 the archive carried `ka` as a second,
-      # byte-identical executable - 15 MB downloaded twice to give one program
-      # a second name. The installers create `ka` as a link to `kasl` instead,
-      # so there is nothing to pack and nothing that can fall behind.
+      # One binary ships.
+      # historical versions
+      # Until v1.8.1 the archive carried `ka` as a second, byte-identical
+      # executable - 15 MB downloaded twice to give one program a second name.
+      # /historical versions
+      # The installers create `ka` as a link to `kasl` instead, so there is
+      # nothing to pack and nothing that can fall behind.
       - name: Package (Windows)
         if: runner.os == 'Windows'
         shell: bash

@@ -9,15 +9,17 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to publish (e.g. v1.1.0)
+        description: Tag to publish (e.g. vX.Y.Z)
         required: true
 
 permissions: {}
 
 jobs:
   crates-io:
+    # historical versions
     # Windows runner: the crate is only build-verified on Windows until 1.0.0
     # (rdev needs X11 dev libs on Linux, untested there yet).
+    # /historical versions
     runs-on: windows-latest
     permissions:
       id-token: write
