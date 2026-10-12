@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.16.0] - 2026-10-12
+
+### Features
+- Add rules that pin, hide and tag issues
+
 ## [1.15.0] - 2026-10-08
 
 ### CI
