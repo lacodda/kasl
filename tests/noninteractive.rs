@@ -40,6 +40,8 @@ mod tests {
                 sort_value: Some(5.0),
                 url: "https://jira.example.com/browse/PROJ-1".to_string(),
                 raw_updated: None,
+                issue_type: None,
+                project: None,
             }])
             .unwrap();
     }

@@ -5,7 +5,7 @@
 //! `cargo test --test inbox_show_probe -- --ignored --nocapture`.
 
 use chrono::{Duration, Local};
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::jira_inbox::{Include, JiraInbox, JiraInboxUpsert};
 use kasl::libs::inbox_filter::explain;
 use kasl::libs::view::View;
 use serial_test::serial;
@@ -34,12 +34,22 @@ fn print_show_and_why() {
         sort_value: Some(8.0),
         url: "https://jira.example.com/browse/PROJ-4471".to_string(),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }])
     .unwrap();
     db.set_pinned("PROJ-4471", true).unwrap();
     db.set_snoozed("PROJ-4471", Some(Local::now().naive_local() + Duration::days(2))).unwrap();
 
-    let item = db.list_active_at(false, true).unwrap().into_iter().next().unwrap();
+    let item = db
+        .list(Include {
+            snoozed: true,
+            ..Include::default()
+        })
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
     View::jira_inbox_issue(&item).unwrap();
     View::jira_inbox_why(&explain(&item, Some("Scoring"), Local::now().naive_local())).unwrap();
 }

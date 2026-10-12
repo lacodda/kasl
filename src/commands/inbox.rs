@@ -1,11 +1,13 @@
 //! Jira inbox command: sync, list, pin, dismiss, open, and import issues -
-//! and the two moves kasl makes in Jira itself, start and close.
+//! the two moves kasl makes in Jira itself, start and close - and the rules
+//! that pin, hide and tag issues without being asked each time.
 //!
 //! Manages the local `jira_inbox` table populated from assigned open Jira issues.
 
-use crate::db::jira_inbox::{JiraInbox, JiraInboxItem};
+use crate::db::jira_inbox::{Include, JiraInbox, JiraInboxItem};
 use crate::libs::config::Config;
-use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_named};
+use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_in};
+use crate::libs::inbox_rules::{self, RuleBook};
 use crate::libs::jira_bridge::{self, Goal, MoveOptions};
 use crate::libs::jira_inbox::{self as inbox_lib, ResolvedIssue};
 use crate::libs::messages::Message;
@@ -39,6 +41,10 @@ pub struct InboxArgs {
     #[arg(long)]
     snoozed: bool,
 
+    /// Include dismissed issues, and who dismissed them
+    #[arg(long)]
+    dismissed: bool,
+
     #[command(flatten)]
     filter: FilterArgs,
 }
@@ -69,9 +75,17 @@ pub struct FilterArgs {
     #[arg(long, value_name = "NAME[+]")]
     priority: Option<String>,
 
-    /// Only issues in this status (name as Jira shows it)
+    /// Only issues in this status (name as Jira shows it); repeat for any of several
     #[arg(long, value_name = "NAME")]
-    status: Option<String>,
+    status: Vec<String>,
+
+    /// Only issues of this type (Bug, Story - as Jira names them); repeat for any of several
+    #[arg(long = "type", value_name = "NAME")]
+    issue_type: Vec<String>,
+
+    /// Only issues of this project (the prefix of the key); repeat for any of several
+    #[arg(long, value_name = "KEY")]
+    project: Vec<String>,
 
     /// Order of the list; pinned issues lead whatever the order
     #[arg(long, value_enum, value_name = "KEY")]
@@ -110,13 +124,15 @@ impl FilterArgs {
             changed: self.changed.or(fallback.changed),
             min_score: self.min_score.or(fallback.min_score),
             priority: self.priority.or(fallback.priority),
-            status: self.status.or(fallback.status),
+            status: either(self.status, fallback.status),
+            issue_type: either(self.issue_type, fallback.issue_type),
+            project: either(self.project, fallback.project),
             sort: self.sort.or(fallback.sort),
         }
     }
 
-    /// Resolves the words into a filter, against the issues at hand.
-    fn to_filter(&self, items: &[JiraInboxItem]) -> Result<InboxFilter> {
+    /// Resolves the words into a filter, against the priorities the inbox knows.
+    fn to_filter(&self, priorities: &[(String, i32)]) -> Result<InboxFilter> {
         let since = match (&self.since, self.new) {
             (Some(window), _) => Some(parse_window(window)?),
             (None, true) => Some(chrono::Duration::hours(crate::db::jira_inbox::FRESH_BADGE_HOURS)),
@@ -126,8 +142,10 @@ impl FilterArgs {
             since,
             changed: self.changed.as_deref().map(parse_window).transpose()?,
             min_score: self.min_score,
-            priority: self.priority.as_deref().map(|name| priority_cut_named(items, name)).transpose()?,
+            priority: self.priority.as_deref().map(|name| priority_cut_in(priorities, name)).transpose()?,
             status: self.status.clone(),
+            types: self.issue_type.clone(),
+            projects: self.project.clone(),
         })
     }
 
@@ -148,14 +166,21 @@ impl FilterArgs {
         if let Some(priority) = &self.priority {
             parts.push(format!("priority {priority}"));
         }
-        if let Some(status) = &self.status {
-            parts.push(format!("status {status}"));
+        for (what, names) in [("status", &self.status), ("type", &self.issue_type), ("project", &self.project)] {
+            if !names.is_empty() {
+                parts.push(format!("{what} {}", names.join(" or ")));
+            }
         }
         if let Some(sort) = self.sort {
             parts.push(format!("by {}", sort.to_possible_value().map(|v| v.get_name().to_string()).unwrap_or_default()));
         }
         parts
     }
+}
+
+/// A repeated flag on the subcommand wins whole; otherwise the top level's.
+fn either(own: Vec<String>, fallback: Vec<String>) -> Vec<String> {
+    if own.is_empty() { fallback } else { own }
 }
 
 /// Available inbox operations.
@@ -179,6 +204,10 @@ enum InboxCommand {
         /// Include issues that are still asleep, with the date they are due back
         #[arg(long)]
         snoozed: bool,
+
+        /// Include dismissed issues, and who dismissed them
+        #[arg(long)]
+        dismissed: bool,
 
         #[command(flatten)]
         filter: FilterArgs,
@@ -215,6 +244,22 @@ enum InboxCommand {
 
         #[command(flatten)]
         filter: FilterArgs,
+    },
+
+    /// Bring a dismissed issue back into the list
+    #[command(about = "Undismiss an inbox issue")]
+    Undismiss {
+        /// Issue key, e.g. PROJ-123; omit to pick from the dismissed ones
+        #[arg(value_name = "KEY")]
+        key: Option<String>,
+    },
+
+    /// Show the inbox rules and what each matches now
+    #[command(about = "Show and apply inbox rules")]
+    Rules {
+        /// Apply the rules to the issues already in the inbox
+        #[arg(long)]
+        apply: bool,
     },
 
     /// Open an issue in the browser
@@ -355,14 +400,30 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
                     changed: outcome.changed.len(),
                     gone: outcome.gone_keys.len(),
                 });
+                report_rules(&outcome.ruled, &outcome.rule_problems);
                 offer_resolved(&outcome.resolved)?;
             }
             Ok(())
         }
-        Some(InboxCommand::List { limit, all, snoozed, filter }) => list_inbox(limit.or(args.limit), all || args.all, snoozed || args.snoozed, &filter.or(top)),
+        Some(InboxCommand::List {
+            limit,
+            all,
+            snoozed,
+            dismissed,
+            filter,
+        }) => {
+            let include = Include {
+                gone: all || args.all,
+                snoozed: snoozed || args.snoozed,
+                dismissed: dismissed || args.dismissed,
+            };
+            list_inbox(limit.or(args.limit), include, &filter.or(top))
+        }
         Some(InboxCommand::Pin { key, filter }) => set_pinned(&resolve_key(key, "Pin which issue?", false, &filter.or(top))?, true),
         Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
         Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
+        Some(InboxCommand::Undismiss { key }) => undismiss(key),
+        Some(InboxCommand::Rules { apply }) => rules(apply),
         Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &filter.or(top)).await,
         Some(InboxCommand::Show { key, why, filter }) => {
@@ -394,16 +455,24 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
             comment_issue(&key, text).await
         }
         // Bare `kasl inbox` shows the list, as it always has.
-        None => list_inbox(args.limit, args.all, args.snoozed, &top),
+        None => {
+            let include = Include {
+                gone: args.all,
+                snoozed: args.snoozed,
+                dismissed: args.dismissed,
+            };
+            list_inbox(args.limit, include, &top)
+        }
     }
 }
 
 /// The active issues, cut and ordered as asked. Returns the slice and the
 /// size of the whole, so a cut list never reads as the whole inbox.
-fn sliced(include_gone: bool, include_snoozed: bool, args: &FilterArgs) -> Result<(Vec<JiraInboxItem>, usize)> {
-    let items = JiraInbox::new()?.list_active_at(include_gone, include_snoozed)?;
+fn sliced(include: Include, args: &FilterArgs) -> Result<(Vec<JiraInboxItem>, usize)> {
+    let db = JiraInbox::new()?;
+    let items = db.list(include)?;
     let total = items.len();
-    let filter = args.to_filter(&items)?;
+    let filter = args.to_filter(&db.priorities()?)?;
     let mut items = filter.apply(items, Local::now().naive_local());
     if let Some(sort) = args.sort {
         inbox_filter::sort(&mut items, sort.into());
@@ -419,7 +488,7 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
     if let Some(key) = key {
         return Ok(key);
     }
-    let (items, total) = sliced(false, false, filter)?;
+    let (items, total) = sliced(Include::default(), filter)?;
     if items.is_empty() && total > 0 {
         bail!("no issue matches the filter ({}) - {total} in the inbox", filter.describe().join(", "));
     }
@@ -433,12 +502,13 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
     pick::inbox_issue(&items, prompt)
 }
 
-fn list_inbox(limit: Option<usize>, include_gone: bool, include_snoozed: bool, filter: &FilterArgs) -> Result<()> {
-    let (mut items, total) = sliced(include_gone, include_snoozed, filter)?;
+fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs) -> Result<()> {
+    warn_skipped_rules();
+    let (mut items, total) = sliced(include, filter)?;
     if total == 0 {
         // "Empty" over an inbox that is only asleep would read as nothing to
         // do, when in fact everything in it is coming back.
-        let asleep = if include_snoozed { 0 } else { JiraInbox::new()?.count_snoozed()? };
+        let asleep = if include.snoozed { 0 } else { JiraInbox::new()?.count_snoozed()? };
         if asleep > 0 {
             msg_info!(Message::JiraInboxAllSnoozed(asleep));
         } else {
@@ -525,7 +595,7 @@ async fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
     // the worst possible moment to find out.
     inbox_filter::parse_window(snooze_for)?;
 
-    let (items, total) = sliced(false, false, filter)?;
+    let (items, total) = sliced(Include::default(), filter)?;
     if total == 0 {
         msg_info!(Message::JiraInboxEmpty);
         return Ok(());
@@ -619,7 +689,8 @@ fn show_issue(key: &str, why: bool) -> Result<()> {
             .ok()
             .and_then(|c| c.jira_inbox)
             .and_then(|cfg| cfg.sort_by_field.and_then(|id| score_field_label(&cfg.custom_fields, &id)));
-        let reasons = inbox_filter::explain(&item, label.as_deref(), Local::now().naive_local());
+        let mut reasons = inbox_filter::explain(&item, label.as_deref(), Local::now().naive_local());
+        reasons.extend(inbox_rules::explain(&RuleBook::from_config(&db)?, &item));
         View::jira_inbox_why(&reasons)?;
     }
     Ok(())
@@ -658,7 +729,10 @@ fn unsnooze(key: Option<String>) -> Result<()> {
         None => {
             let now = Local::now().naive_local();
             let asleep: Vec<JiraInboxItem> = db
-                .list_active_at(false, true)?
+                .list(Include {
+                    snoozed: true,
+                    ..Include::default()
+                })?
                 .into_iter()
                 .filter(|i| i.snoozed_until.is_some_and(|until| until > now))
                 .collect();
@@ -688,8 +762,11 @@ fn unsnooze(key: Option<String>) -> Result<()> {
 /// first, because it happened whatever Jira answers next.
 async fn take_issue(key: &str) -> Result<()> {
     match toast_apply::take(key, &MoveOptions::from_cli(None, None)).await? {
-        Applied::Taken { started } => {
+        Applied::Taken { started, tags } => {
             msg_success!(Message::JiraInboxTaken(key.to_string()));
+            if !tags.is_empty() {
+                msg_info!(Message::TagsAddedToTask(tags.join(", ")));
+            }
             match started {
                 Some(Ok(moved)) => jira_bridge::report_move(key, Goal::Start, &moved),
                 Some(Err(why)) => msg_warning!(Message::JiraWriteFailed(key.to_string(), why)),
@@ -700,6 +777,107 @@ async fn take_issue(key: &str) -> Result<()> {
         _ => msg_error!(Message::JiraInboxNotFound(key.to_string())),
     }
     Ok(())
+}
+
+/// Brings a dismissed issue back into the list.
+///
+/// The way back from a dismissal, by hand or by a rule. A rule that hid the
+/// wrong issues is fixed in the config, and the issues it hid come back here -
+/// without this, a mistaken rule would be a one-way door.
+fn undismiss(key: Option<String>) -> Result<()> {
+    let db = JiraInbox::new()?;
+    let key = match key {
+        Some(key) => key,
+        None => {
+            let hidden: Vec<JiraInboxItem> = db
+                .list(Include {
+                    snoozed: true,
+                    dismissed: true,
+                    ..Include::default()
+                })?
+                .into_iter()
+                .filter(|i| i.dismissed)
+                .collect();
+            if hidden.is_empty() {
+                bail!("no issues are dismissed - `kasl inbox dismiss KEY` dismisses one");
+            }
+            pick::inbox_issue(&hidden, "Bring back which issue?")?
+        }
+    };
+
+    if !db.set_dismissed(&key, false)? {
+        msg_error!(Message::JiraInboxNotFound(key));
+        return Ok(());
+    }
+    msg_success!(Message::JiraInboxUndismissed(key));
+    Ok(())
+}
+
+/// Shows the inbox rules and what each matches now, applying them when asked.
+///
+/// Without `--apply` this is a dry run: what each rule would act on is shown
+/// before it acts on anything, which is how a dismiss rule is checked before
+/// it hides real work.
+fn rules(apply: bool) -> Result<()> {
+    let db = JiraInbox::new()?;
+    let Some(config) = Config::read()?.jira_inbox.filter(|inbox| !inbox.rules.is_empty()) else {
+        msg_info!(Message::InboxRulesNone);
+        return Ok(());
+    };
+    let book = RuleBook::of_inbox(&config, &db)?;
+    for problem in &book.problems {
+        msg_warning!(Message::InboxRuleSkipped(problem.number, problem.reason.clone()));
+    }
+    if book.is_empty() {
+        return Ok(());
+    }
+
+    if apply {
+        let ruled = inbox_rules::apply_now(&db, &book)?;
+        for one in &ruled {
+            msg_info!(Message::InboxRuleActed(inbox_rules::sentence(one)));
+        }
+        msg_success!(Message::InboxRulesApplied(ruled.len()));
+    }
+
+    let items = db.list(Include {
+        snoozed: true,
+        dismissed: true,
+        ..Include::default()
+    })?;
+    let rows: Vec<inbox_rules::RuleStanding> = book.rules.iter().map(|rule| inbox_rules::standing(rule, &items)).collect();
+    View::inbox_rules(&rows)?;
+    let waiting: usize = rows.iter().map(|row| row.waiting).sum();
+    if waiting > 0 && !apply {
+        msg_info!(Message::InboxRulesNotApplied(waiting));
+    }
+    Ok(())
+}
+
+/// Says what the rules did during a sync, and which ones were skipped.
+fn report_rules(ruled: &[inbox_rules::Ruled], problems: &[inbox_rules::RuleProblem]) {
+    for problem in problems {
+        msg_warning!(Message::InboxRuleSkipped(problem.number, problem.reason.clone()));
+    }
+    for one in ruled {
+        msg_info!(Message::InboxRuleActed(inbox_rules::sentence(one)));
+    }
+}
+
+/// One line over the list when a rule is being skipped.
+///
+/// The watcher has no terminal to say it on, and a rule that silently does
+/// nothing looks exactly like a rule with nothing to match; the list is where
+/// the person looks every day.
+fn warn_skipped_rules() {
+    let skipped = Config::read()
+        .ok()
+        .and_then(|c| c.jira_inbox)
+        .map(|inbox| RuleBook::compile(&inbox.rules, &[]).problems.len())
+        .unwrap_or(0);
+    if skipped > 0 {
+        msg_warning!(Message::InboxRulesSkipped(skipped));
+    }
 }
 
 /// Moves an issue into progress in Jira, by hand.

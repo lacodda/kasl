@@ -575,6 +575,7 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::JiraInboxPinned(key) => format!("Pinned {}.", key),
             Message::JiraInboxUnpinned(key) => format!("Unpinned {}.", key),
             Message::JiraInboxDismissed(key) => format!("Dismissed {}.", key),
+            Message::JiraInboxUndismissed(key) => format!("{} is back in the inbox.", key),
             Message::JiraInboxSnoozed(key, until) => format!("Snoozed {} until {}.", key, until),
             Message::JiraInboxUnsnoozed(key) => format!("Woke {}.", key),
             Message::JiraInboxAllSnoozed(count) => {
@@ -645,6 +646,16 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
                 format!("{} in the inbox{}", total, detail)
             }
             Message::JiraInboxOpenFailed(err) => format!("Failed to open browser: {}", err),
+            Message::InboxRulesSkipped(count) => format!("{} inbox rule(s) skipped as unreadable - `kasl inbox rules` says why.", count),
+            Message::InboxRuleSkipped(number, why) => format!("Inbox rule {} is skipped: {}.", number, why),
+            Message::InboxRuleActed(what) => format!("{}.", what),
+            Message::InboxRulesNone => "No inbox rules yet. They go under `jira_inbox.rules` in the config; the Jira inbox guide shows how.".to_string(),
+            Message::InboxRulesApplied(0) => "The rules have nothing to change.".to_string(),
+            Message::InboxRulesApplied(count) => format!("The rules changed {} issue(s).", count),
+            Message::InboxRulesNotApplied(count) => format!(
+                "{} issue(s) match a rule that has not acted on them: rules act when an issue arrives or changes. `kasl inbox rules --apply` acts on them now.",
+                count
+            ),
             Message::PromptJiraInboxEnabled => "Enable Jira inbox polling?".to_string(),
             Message::PromptJiraInboxPollInterval => "Jira inbox poll interval (seconds)".to_string(),
             Message::PromptJiraInboxNotify => "Show toast notifications for new issues?".to_string(),

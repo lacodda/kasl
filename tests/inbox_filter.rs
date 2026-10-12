@@ -6,7 +6,7 @@
 
 use chrono::{Duration, Local, NaiveDateTime};
 use kasl::db::jira_inbox::JiraInboxItem;
-use kasl::libs::inbox_filter::{InboxFilter, InboxSort, PriorityCut, explain, parse_window, priority_cut_named, sort};
+use kasl::libs::inbox_filter::{InboxFilter, InboxSort, PriorityCut, explain, parse_window, priority_cut_in, sort};
 
 fn now() -> NaiveDateTime {
     Local::now().naive_local()
@@ -37,6 +37,9 @@ fn item(key: &str) -> JiraInboxItem {
         woke_at: None,
         left_reason: None,
         resolution: None,
+        issue_type: None,
+        project: None,
+        ruled_by: None,
     }
 }
 
@@ -119,14 +122,18 @@ fn priority_names_come_from_the_inbox_and_plus_widens_upwards() {
     bare.priority = None;
     bare.priority_rank = 999;
     let items = vec![highest, high, medium, bare];
+    let known: Vec<(String, i32)> = items
+        .iter()
+        .filter_map(|item| item.priority.clone().map(|name| (name, item.priority_rank)))
+        .collect();
 
     assert_eq!(
-        priority_cut_named(&items, "high").unwrap(),
+        priority_cut_in(&known, "high").unwrap(),
         PriorityCut::Exactly(2),
         "names match without regard to case"
     );
-    assert_eq!(priority_cut_named(&items, "High+").unwrap(), PriorityCut::AtLeast(2));
-    let err = priority_cut_named(&items, "Urgent").unwrap_err().to_string();
+    assert_eq!(priority_cut_in(&known, "High+").unwrap(), PriorityCut::AtLeast(2));
+    let err = priority_cut_in(&known, "Urgent").unwrap_err().to_string();
     assert!(err.contains("High") && err.contains("Medium"), "the error names the known priorities: {err}");
 
     let exact = InboxFilter {
@@ -148,12 +155,12 @@ fn status_matches_the_name_or_the_id_without_regard_to_case() {
     progress.status_id = Some("3".to_string());
     progress.status_name = "In Progress".to_string();
     let by_name = InboxFilter {
-        status: Some("in progress".to_string()),
+        status: vec!["in progress".to_string()],
         ..Default::default()
     };
     assert_eq!(keys(&by_name.apply(vec![open.clone(), progress.clone()], now())), vec!["KA-progress"]);
     let by_id = InboxFilter {
-        status: Some("10".to_string()),
+        status: vec!["10".to_string()],
         ..Default::default()
     };
     assert_eq!(keys(&by_id.apply(vec![open, progress], now())), vec!["KA-open"]);

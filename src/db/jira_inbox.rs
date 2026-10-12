@@ -58,6 +58,45 @@ pub struct JiraInboxItem {
     pub left_reason: Option<LeftReason>,
     /// The resolution Jira gave, when the issue left resolved ("Done", "Won't Fix").
     pub resolution: Option<String>,
+    /// The issue type in the source's own words (Bug, Story, «Ошибка»).
+    ///
+    /// Empty for a row the poll has not refreshed since the upgrade that
+    /// added it.
+    pub issue_type: Option<String>,
+    /// The project the issue belongs to: in Jira, the prefix of its key.
+    pub project: Option<String>,
+    /// The rule behind the row's pin or dismissal; `None` when a hand set it, or nothing did.
+    pub ruled_by: Option<String>,
+}
+
+/// Which rows a listing includes besides the ones asking for attention now.
+///
+/// Every flag widens; none narrows. The default is the inbox as `kasl inbox`
+/// shows it: present, awake, not dismissed.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct Include {
+    /// Issues that left the poll (`--all`).
+    pub gone: bool,
+    /// Issues still asleep (`--snoozed`).
+    pub snoozed: bool,
+    /// Issues dismissed by hand or by a rule (`--dismissed`).
+    pub dismissed: bool,
+}
+
+impl Include {
+    /// Every row the table holds.
+    pub const EVERYTHING: Include = Include {
+        gone: true,
+        snoozed: true,
+        dismissed: true,
+    };
+}
+
+/// What a rule does to a row on its own authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuledMark {
+    Pin,
+    Dismiss,
 }
 
 /// Why an issue left the inbox.
@@ -125,6 +164,14 @@ impl JiraInboxItem {
             }
             return Some("gone".to_string());
         }
+        // Only `--dismissed` shows these, and who hid it is what is worth
+        // seeing: a rule that hides the wrong issues is found here.
+        if self.dismissed {
+            return Some(match &self.ruled_by {
+                Some(rule) => format!("ruled out: {rule}"),
+                None => "dismissed".to_string(),
+            });
+        }
         // Only `--snoozed` shows a sleeping issue at all, and when it does,
         // when it is due is the only thing worth saying about it.
         if let Some(until) = self.snoozed_until
@@ -168,6 +215,8 @@ pub struct JiraInboxUpsert {
     pub sort_value: Option<f64>,
     pub url: String,
     pub raw_updated: Option<String>,
+    pub issue_type: Option<String>,
+    pub project: Option<String>,
 }
 
 /// An existing issue whose tracked fields changed during a sync.
@@ -216,6 +265,13 @@ impl JiraInbox {
         let mut result = UpsertBatchResult::default();
 
         for item in items {
+            if let Some(name) = &item.priority {
+                self.db.conn.execute(
+                    "INSERT INTO jira_priorities (name, rank) VALUES (?1, ?2)
+                     ON CONFLICT(name) DO UPDATE SET rank = excluded.rank",
+                    params![name, item.priority_rank],
+                )?;
+            }
             let existing: Option<ExistingRow> = self
                 .db
                 .conn
@@ -248,10 +304,12 @@ impl JiraInbox {
                         url = ?7,
                         last_seen = ?8,
                         raw_updated = ?9,
+                        issue_type = ?10,
+                        project = ?11,
                         gone_at = NULL,
                         left_reason = NULL,
                         resolution = NULL
-                     WHERE issue_key = ?10",
+                     WHERE issue_key = ?12",
                     params![
                         item.issue_id,
                         item.summary,
@@ -262,6 +320,8 @@ impl JiraInbox {
                         item.url,
                         now,
                         item.raw_updated,
+                        item.issue_type,
+                        item.project,
                         item.issue_key,
                     ],
                 )?;
@@ -283,8 +343,9 @@ impl JiraInbox {
                 self.db.conn.execute(
                     "INSERT INTO jira_inbox (
                         issue_key, issue_id, summary, status_id, priority, priority_rank,
-                        sort_value, url, first_seen, last_seen, notified, pinned, dismissed, raw_updated
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, 0, ?11)",
+                        sort_value, url, first_seen, last_seen, notified, pinned, dismissed, raw_updated,
+                        issue_type, project
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, 0, ?11, ?12, ?13)",
                     params![
                         item.issue_key,
                         item.issue_id,
@@ -297,6 +358,8 @@ impl JiraInbox {
                         now,
                         now,
                         item.raw_updated,
+                        item.issue_type,
+                        item.project,
                     ],
                 )?;
                 result.new_keys.push(item.issue_key.clone());
@@ -381,35 +444,41 @@ impl JiraInbox {
     /// Gone issues are hidden unless `include_gone` is set (`--all`), in which
     /// case they sort below the present ones. Sleeping issues are hidden the
     /// same way: a snooze that still showed the issue would be a no-op.
+    pub fn list_active(&self, include_gone: bool) -> Result<Vec<JiraInboxItem>> {
+        self.list(Include {
+            gone: include_gone,
+            ..Include::default()
+        })
+    }
+
+    /// The inbox in its own order, widened by `include`.
+    ///
+    /// `--snoozed` is what makes a snooze trustworthy - there is a way to see
+    /// what is in it - and `--dismissed` is the same for dismissal, which a
+    /// rule can now do without anyone pressing a key.
     ///
     /// The clock is SQLite's own local time rather than a bound parameter, so
     /// "due" means the same thing here as in [`Self::wake_due`] - two readings
     /// of the same moment could otherwise disagree about one row.
-    pub fn list_active(&self, include_gone: bool) -> Result<Vec<JiraInboxItem>> {
-        self.list_active_at(include_gone, false)
-    }
-
-    /// Active items, optionally including the ones still asleep.
-    ///
-    /// `include_snoozed` is what `inbox list --snoozed` asks for: a snooze is
-    /// only trustworthy if there is a way to see what is in it.
-    pub fn list_active_at(&self, include_gone: bool, include_snoozed: bool) -> Result<Vec<JiraInboxItem>> {
-        let gone_filter = if include_gone { "" } else { " AND i.gone_at IS NULL" };
-        let snooze_filter = if include_snoozed {
-            ""
+    pub fn list(&self, include: Include) -> Result<Vec<JiraInboxItem>> {
+        let mut filters = Vec::new();
+        if !include.dismissed {
+            filters.push("i.dismissed = 0");
+        }
+        if !include.gone {
+            filters.push("i.gone_at IS NULL");
+        }
+        if !include.snoozed {
+            filters.push("(i.snoozed_until IS NULL OR i.snoozed_until <= datetime(CURRENT_TIMESTAMP, 'localtime'))");
+        }
+        let filter = if filters.is_empty() {
+            String::new()
         } else {
-            " AND (i.snoozed_until IS NULL OR i.snoozed_until <= datetime(CURRENT_TIMESTAMP, 'localtime'))"
+            format!(" WHERE {}", filters.join(" AND "))
         };
         let query = format!(
-            "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
-                    i.priority, i.priority_rank, i.sort_value, i.url,
-                    i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                    i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
-                    i.left_reason, i.resolution
-             FROM jira_inbox i
-             LEFT JOIN jira_statuses s ON s.id = i.status_id
-             WHERE i.dismissed = 0{gone_filter}{snooze_filter}
-             ORDER BY i.gone_at IS NOT NULL, i.pinned DESC, i.sort_value IS NULL, i.sort_value DESC,
+            "{SELECT_ITEM}{filter}
+             ORDER BY i.gone_at IS NOT NULL, i.dismissed, i.pinned DESC, i.sort_value IS NULL, i.sort_value DESC,
                       i.priority_rank ASC, i.last_seen DESC"
         );
         let mut stmt = self.db.conn.prepare(&query)?;
@@ -421,35 +490,51 @@ impl JiraInbox {
     pub fn get_by_key(&self, key: &str) -> Result<Option<JiraInboxItem>> {
         self.db
             .conn
-            .query_row(
-                "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
-                        i.priority, i.priority_rank, i.sort_value, i.url,
-                        i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
-                        i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
-                        i.left_reason, i.resolution
-                 FROM jira_inbox i
-                 LEFT JOIN jira_statuses s ON s.id = i.status_id
-                 WHERE i.issue_key = ?1",
-                params![key],
-                map_row,
-            )
+            .query_row(&format!("{SELECT_ITEM} WHERE i.issue_key = ?1"), params![key], map_row)
             .optional()
             .map_err(Into::into)
     }
 
+    /// Every priority the inbox has ever seen, with its rank.
+    ///
+    /// Priority names belong to the Jira instance, so "High+" - in a rule or
+    /// on the command line - is read against these rather than a table of
+    /// English defaults. A name learnt once stays known: the vocabulary must
+    /// not shrink because the last High issue was lowered.
+    pub fn priorities(&self) -> Result<Vec<(String, i32)>> {
+        let mut stmt = self.db.conn.prepare("SELECT name, rank FROM jira_priorities ORDER BY rank, name")?;
+        let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
+    }
+
+    /// Pins or unpins by hand, which takes the decision back from any rule.
     pub fn set_pinned(&self, key: &str, pinned: bool) -> Result<bool> {
-        let n = self
-            .db
-            .conn
-            .execute("UPDATE jira_inbox SET pinned = ?1 WHERE issue_key = ?2", params![pinned as i32, key])?;
+        let n = self.db.conn.execute(
+            "UPDATE jira_inbox SET pinned = ?1, ruled_by = NULL WHERE issue_key = ?2",
+            params![pinned as i32, key],
+        )?;
         Ok(n > 0)
     }
 
+    /// Dismisses or restores by hand, which takes the decision back from any rule.
     pub fn set_dismissed(&self, key: &str, dismissed: bool) -> Result<bool> {
-        let n = self
-            .db
-            .conn
-            .execute("UPDATE jira_inbox SET dismissed = ?1 WHERE issue_key = ?2", params![dismissed as i32, key])?;
+        let n = self.db.conn.execute(
+            "UPDATE jira_inbox SET dismissed = ?1, ruled_by = NULL WHERE issue_key = ?2",
+            params![dismissed as i32, key],
+        )?;
+        Ok(n > 0)
+    }
+
+    /// Pins or dismisses on a rule's authority, naming the rule.
+    pub fn set_ruled(&self, key: &str, mark: RuledMark, rule: &str) -> Result<bool> {
+        let column = match mark {
+            RuledMark::Pin => "pinned",
+            RuledMark::Dismiss => "dismissed",
+        };
+        let n = self.db.conn.execute(
+            &format!("UPDATE jira_inbox SET {column} = 1, ruled_by = ?1 WHERE issue_key = ?2"),
+            params![rule, key],
+        )?;
         Ok(n > 0)
     }
 
@@ -643,6 +728,15 @@ fn fmt_score(v: f64) -> String {
     if v.fract() == 0.0 { format!("{}", v as i64) } else { format!("{v}") }
 }
 
+/// The columns [`map_row`] reads, in its order, with the status name joined in.
+const SELECT_ITEM: &str = "SELECT i.issue_key, i.issue_id, i.summary, i.status_id, COALESCE(s.name, ''),
+        i.priority, i.priority_rank, i.sort_value, i.url,
+        i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
+        i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
+        i.left_reason, i.resolution, i.issue_type, i.project, i.ruled_by
+     FROM jira_inbox i
+     LEFT JOIN jira_statuses s ON s.id = i.status_id";
+
 fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
     Ok(JiraInboxItem {
         issue_key: row.get(0)?,
@@ -668,5 +762,8 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
         woke_at: row.get(20)?,
         left_reason: row.get::<_, Option<String>>(21)?.as_deref().and_then(LeftReason::parse),
         resolution: row.get(22)?,
+        issue_type: row.get(23)?,
+        project: row.get(24)?,
+        ruled_by: row.get(25)?,
     })
 }

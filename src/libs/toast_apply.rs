@@ -12,6 +12,7 @@
 use crate::db::jira_inbox::JiraInbox;
 use crate::db::tasks::Tasks;
 use crate::libs::inbox_filter;
+use crate::libs::inbox_rules;
 use crate::libs::jira_bridge::{self, Goal, MoveOptions, Moved};
 use crate::libs::task::{Task, TaskFilter};
 use crate::libs::toast_action::{ToastAction, ToastRequest};
@@ -25,8 +26,12 @@ pub enum Applied {
     ///
     /// `started` is what happened in Jira when `start_on_take` asked for the
     /// issue to be started there too: the move, or why it did not happen.
-    /// `None` when nobody asked.
-    Taken { started: Option<Result<Moved, String>> },
+    /// `None` when nobody asked. `tags` are the ones the inbox rules gave the
+    /// new task.
+    Taken {
+        started: Option<Result<Moved, String>>,
+        tags: Vec<String>,
+    },
     /// The issue was already a task; the name it carries.
     AlreadyTaken(String),
     /// The issue is asleep until this moment.
@@ -48,9 +53,18 @@ impl Applied {
     /// One line for a toast: what happened, from the user's side.
     pub fn summary(&self, key: &str) -> String {
         match self {
-            Applied::Taken { started: None } => format!("{key} is now a task"),
-            Applied::Taken { started: Some(Ok(moved)) } => format!("{key} is now a task; {}", moved.sentence(key, Goal::Start)),
-            Applied::Taken { started: Some(Err(why)) } => format!("{key} is now a task; {why}"),
+            Applied::Taken { started, tags } => {
+                let tagged = if tags.is_empty() {
+                    String::new()
+                } else {
+                    format!(" tagged {}", tags.join(", "))
+                };
+                match started {
+                    None => format!("{key} is now a task{tagged}"),
+                    Some(Ok(moved)) => format!("{key} is now a task{tagged}; {}", moved.sentence(key, Goal::Start)),
+                    Some(Err(why)) => format!("{key} is now a task{tagged}; {why}"),
+                }
+            }
             Applied::AlreadyTaken(name) => format!("{key} was already taken as '{name}'"),
             Applied::Snoozed(until) => format!("{key} sleeps until {}", until.format("%b %-d %H:%M")),
             Applied::Dismissed => format!("{key} dismissed"),
@@ -132,8 +146,11 @@ fn start_on_take() -> bool {
 /// start it again - the first take's answer said how to.
 pub async fn take(key: &str, options: &MoveOptions) -> Result<Applied> {
     let applied = take_locally(key)?;
-    if !matches!(applied, Applied::Taken { .. }) || !start_on_take() {
+    let Applied::Taken { tags, .. } = applied else {
         return Ok(applied);
+    };
+    if !start_on_take() {
+        return Ok(Applied::Taken { started: None, tags });
     }
     let started = match jira_bridge::client() {
         Ok(mut jira) => jira_bridge::move_issue(&mut jira, key, Goal::Start, options)
@@ -141,10 +158,13 @@ pub async fn take(key: &str, options: &MoveOptions) -> Result<Applied> {
             .map_err(|e| format!("Jira did not start it: {e}; `kasl inbox start {key}` tries again")),
         Err(e) => Err(format!("Jira did not start it: {e}")),
     };
-    Ok(Applied::Taken { started: Some(started) })
+    Ok(Applied::Taken { started: Some(started), tags })
 }
 
-/// The local half of a take: the task, and the mark on the issue.
+/// The local half of a take: the task, its tags, and the mark on the issue.
+///
+/// The tags come from the inbox rules that match the issue as it is now, so a
+/// project rule tags the task whichever way it was taken.
 fn take_locally(key: &str) -> Result<Applied> {
     let db = JiraInbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
@@ -164,7 +184,13 @@ fn take_locally(key: &str) -> Result<Applied> {
     let task = Task::new(&name, "", Some(0)).from_jira(key);
     tasks.insert(&task)?;
     let _ = db.set_taken(key, true)?;
-    Ok(Applied::Taken { started: None })
+    let wanted = inbox_rules::tags_for(&item);
+    let tags = if wanted.is_empty() {
+        Vec::new()
+    } else {
+        inbox_rules::tag_task(key, &wanted)?
+    };
+    Ok(Applied::Taken { started: None, tags })
 }
 
 /// Marks the task taken from `key` done.

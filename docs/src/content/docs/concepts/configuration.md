@@ -307,6 +307,12 @@ the `jira` block; the inbox stays off when this one is absent.
 - **Default**: unset
 - **Description**: Field id used to rank the inbox, descending - typically the scoring custom field
 
+### `rules`
+- **Type**: `{ "name"?: String, "when": {...}, "then": {...} }[]`
+- **Default**: `[]`
+- **Description**: What the inbox does by itself. `when` takes `priority` (`"High+"`), `min_score`, `status`, `type` and `project` - a name or a list of names; `then` takes `pin`, `urgent`, `dismiss` and `tag`. Pin, urgent and dismiss act when an issue arrives matching or a change makes it match; tags act when the issue is taken. A rule that cannot be read - a misspelt key, no action, dismiss with pin - is skipped and named by `kasl inbox rules`, and never makes the rest of the config unreadable. See [Rules](/reference/inbox/#rules)
+- **Example**: `{ "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } }`
+
 **Example:**
 ```json
 {
@@ -319,7 +325,12 @@ the `jira` block; the inbox stays off when this one is absent.
     "toast_snooze_for": "1d",
     "start_on_take": false,
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
-    "sort_by_field": "customfield_12345"
+    "sort_by_field": "customfield_12345",
+    "rules": [
+      { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
+      { "when": { "type": "Epic" }, "then": { "dismiss": true } },
+      { "when": { "project": "PAY" }, "then": { "tag": "payments" } }
+    ]
   }
 }
 ```

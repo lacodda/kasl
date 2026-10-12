@@ -74,6 +74,8 @@ fn seed(key: &str) -> JiraInboxUpsert {
         sort_value: Some(5.0),
         url: format!("https://jira.example.com/browse/{key}"),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }
 }
 

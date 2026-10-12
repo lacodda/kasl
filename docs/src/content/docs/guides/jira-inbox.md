@@ -147,13 +147,73 @@ When you wonder why an issue sits where it does, `kasl inbox show PROJ-412
 --why` says what its place is made of - which Jira field the score came from,
 what the priority rank is, and what pinning, sleeping or taking did to it.
 
+## Letting the inbox sort itself
+
+Triage asks the same questions every morning, and some of them have the same
+answer every morning: anything High or above goes on top, Epics are someone
+else's, work from the payments project is payments work. Write those answers
+down once as rules, in the `jira_inbox` section of the config:
+
+```json
+{
+  "jira_inbox": {
+    "rules": [
+      { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
+      { "when": { "type": "Epic" }, "then": { "dismiss": true } },
+      { "when": { "project": "PAY" }, "then": { "tag": "payments" } }
+    ]
+  }
+}
+```
+
+`when` is written in the same words as the list's filters, so before saving a
+rule you can see what it will catch: `kasl inbox --priority High+`,
+`kasl inbox --type Epic`. Then ask the inbox itself:
+
+```bash
+kasl inbox rules
+```
+
+It lists every rule with what it matches now - a dry run that changes nothing.
+A rule acts on issues as they arrive or change, so the ones already in the
+inbox are left alone until you say so:
+
+```bash
+kasl inbox rules --apply
+```
+
+From then on the watcher does it. An issue raised to High is pinned on the
+poll that sees it, and its toast is the urgent one, which stays on screen until
+you act on it - even if you had snoozed the issue. An Epic assigned to you never
+reaches the list. Taking a PAY issue tags its task `payments`, which is what
+`kasl task list --tag payments` and the reports will find.
+
+Rules do not argue with you. Unpin an issue a rule pinned, and it stays
+unpinned until it drops below High and comes back - that is news, and the rule
+acts again. A rule never hides an issue you have taken, and never touches one
+you dismissed yourself.
+
+If a rule hides the wrong things, correct it, then look at what it hid and
+bring back what you want:
+
+```bash
+kasl inbox list --dismissed
+kasl inbox undismiss PROJ-418
+```
+
+A misspelt rule is skipped rather than guessed at - a `prority` taken as "no
+condition" would match every issue - and `kasl inbox` says in one line that a
+rule is being skipped. The full vocabulary is in the
+[reference](/reference/inbox/#rules).
+
 ## Sort order
 
 `kasl inbox` doesn't list issues in the order Jira returned them. Pinned
 issues always come first. Within a group, if you've configured a ranking
 field (see below) the one with the highest value goes on top; then issues are
 ordered by Jira priority; then by how recently the issue was seen. Gone issues
-- visible only with `--all` - always sort last, regardless of pin or priority.
+- visible only with `--all` - always sort last, regardless of pin or priority,
+and dismissed issues - visible only with `--dismissed` - just above them.
 
 ## Ranking by a custom field
 
@@ -225,10 +285,11 @@ A third toast, off by default (`notify_gone: false`), fires when an issue
 leaves the inbox. Most people don't want to be interrupted for that; turn it
 on if you do want to know the moment something closes out from under you.
 
-Whatever the kind, more than five toasts in one poll become one: "12 new
+Whatever the kind, more than five toasts within an hour become one: "12 new
 issues - see `kasl inbox`", clicking through to your open-issues list in
 Jira. A first sync of a long backlog or a mass re-scoring is one event, and
-gets one toast.
+gets one toast. Urgent toasts from [rules](#letting-the-inbox-sort-itself) are
+counted apart, so a busy afternoon of ordinary ones never uses up their room.
 
 ## A morning with the inbox
 

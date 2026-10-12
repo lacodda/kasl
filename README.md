@@ -105,7 +105,8 @@ Monthly work productivity: 95.4%
 - **Tasks you do not have to remember.** Today's GitLab commits and resolved
   Jira issues arrive as candidates, deduplicated against what you already
   logged; `kasl inbox triage` walks a slice of the backlog issue by issue, and
-  snoozing puts one down until a date and brings it back by itself.
+  snoozing puts one down until a date and brings it back by itself. Rules
+  settle the rest once: pin what is High, hide Epics, tag work by project.
 - **A toast you can answer.** A notification about a Jira issue carries Take,
   Snooze and Dismiss, so most of the backlog is triaged without opening a
   terminal. Windows and Linux; on macOS the notification API cannot report a

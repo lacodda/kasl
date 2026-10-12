@@ -5,7 +5,7 @@
 //! score) are detected and described.
 
 use chrono::{Duration, Local};
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxItem, JiraInboxUpsert};
+use kasl::db::jira_inbox::{Include, JiraInbox, JiraInboxItem, JiraInboxUpsert};
 use kasl::db::tasks::Tasks;
 use kasl::libs::task::{Task, TaskFilter};
 use serial_test::serial;
@@ -43,6 +43,8 @@ fn upsert(key: &str) -> JiraInboxUpsert {
         sort_value: Some(5.0),
         url: format!("https://jira.example.com/browse/{key}"),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }
 }
 
@@ -200,6 +202,9 @@ fn test_badge_precedence_and_freshness() {
         woke_at: None,
         left_reason: None,
         resolution: None,
+        issue_type: None,
+        project: None,
+        ruled_by: None,
     };
 
     // Old, unchanged issue: no badge.
@@ -330,7 +335,12 @@ fn a_snoozed_issue_leaves_the_list_and_comes_back_by_itself(_ctx: &mut InboxTest
     assert_eq!(awake, vec!["KA-31".to_string()], "a sleeping issue must leave the list");
 
     // It is asleep, not gone: `--snoozed` still finds it, wearing its due date.
-    let with_asleep = db.list_active_at(false, true).unwrap();
+    let with_asleep = db
+        .list(Include {
+            snoozed: true,
+            ..Include::default()
+        })
+        .unwrap();
     assert_eq!(with_asleep.len(), 2, "--snoozed shows what is sleeping");
     let sleeper = with_asleep.iter().find(|i| i.issue_key == "KA-30").unwrap();
     assert!(sleeper.snoozed_until.is_some());

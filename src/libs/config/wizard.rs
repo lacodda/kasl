@@ -347,6 +347,9 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
         notify_gone: default.notify_gone,
         toast_snooze_for: default.toast_snooze_for.clone(),
         start_on_take: default.start_on_take,
+        // Rules are written in the file, never asked about here; walking the
+        // wizard must not cost the user the rules they wrote.
+        rules: default.rules,
         custom_fields,
         sort_by_field,
     })

@@ -6,6 +6,8 @@ The `inbox` command manages a local inbox of open Jira issues assigned to you. T
 
 Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
+Decisions that are the same every time - anything High or above goes on top, Epics are never yours, work from one project carries one tag - are written once as [rules](#rules), and the inbox applies them by itself.
+
 The inbox also writes to Jira, in two places and no more: `start` moves an issue into progress, `close` resolves it, and `comment` leaves a note. Those are the two moments a local task and its issue meet - taking the issue and finishing the work - and [Closing the loop](#closing-the-loop) is how they connect.
 
 ## Usage
@@ -21,6 +23,7 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 - `-n, --limit <N>`: Show only the top N issues after filtering and sorting
 - `--all`: Include issues gone from Jira (closed or reassigned); they sort below the present ones
 - `--snoozed`: Include issues that are still asleep, each showing the date it is due back
+- `--dismissed`: Include dismissed issues, each saying whether you or a rule dismissed it
 
 ### Filters
 
@@ -31,8 +34,12 @@ An inbox of two hundred open issues is a pile, not a list. These cuts turn it in
 - `--changed <WINDOW>`: Only issues that visibly changed (status, priority, score) within the window; issues that never changed are out
 - `--min-score <N>`: Only issues whose ranking field (e.g. Scoring) is at least N; issues without a score are out
 - `--priority <NAME[+]>`: Only issues of that priority, named as your Jira names it; add `+` for that priority and everything more urgent (`High+`). An unknown name lists the ones the inbox knows
-- `--status <NAME>`: Only issues in that status, by name or id, regardless of case
+- `--status <NAME>`: Only issues in that status, by name or id, regardless of case; repeat it for any of several
+- `--type <NAME>`: Only issues of that type, as your Jira names it (`Bug`, `Story`, `Epic`), regardless of case; repeat it for any of several
+- `--project <KEY>`: Only issues of that project - the prefix of the key; repeat it for any of several
 - `--sort <score|priority|new|changed>`: Order of the list; `score` is the inbox's own order (ranking field, then priority). Pinned issues lead and gone issues trail whatever the order
+
+Priority names are read against every priority the inbox has ever seen, not only the ones on the list right now. The same words are what a [rule](#rules)'s `when` is written in, so a rule pins exactly what the same cuts would list.
 
 A cut list says so in its header - `Jira inbox: 12 of 200 issues (since 7d, score ≥ 5):` - so a filtered view never reads as the whole inbox. When nothing matches, the message names the cuts and the size of the whole.
 
@@ -60,9 +67,10 @@ kasl inbox list [OPTIONS]
 - `-n, --limit <N>`: Show only the top N issues
 - `--all`: Include issues gone from Jira
 - `--snoozed`: Include issues that are still asleep
-- The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--sort`
+- `--dismissed`: Include dismissed issues
+- The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--type`, `--project`, `--sort`
 
-The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything - and for an issue you took, it reads `resolved` once Jira has said that is why it left.
+The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything - and for an issue you took, it reads `resolved` once Jira has said that is why it left. Under `--dismissed`, a dismissed issue reads `dismissed`, or `ruled out: NAME` when a [rule](#rules) hid it.
 
 ### `triage` - Triage the inbox issue by issue
 
@@ -105,7 +113,7 @@ kasl inbox show [KEY] [--why] [FILTERS]
 **Options:**
 - `--why`: Explain where the ranking comes from and what each mark means
 
-One issue in full: the whole summary, the URL, and the dates a six-column table row has no room for.
+One issue in full: the whole summary, its type and project, the URL, and the dates a six-column table row has no room for.
 
 `--why` answers the question a list sorted by an invisible field invites - why is this issue *here*:
 
@@ -120,6 +128,8 @@ One issue in full: the whole summary, the URL, and the dates a six-column table 
 | pinned   | yes          | pinned issues lead the list whatever the order     |
 +----------+--------------+---------------------------------------------------+
 ```
+
+A pin says who made it - `pinned by hand`, or `pinned by the rule 'on fire'` - and every [rule](#rules) the issue matches now gets a line of its own saying what that rule does.
 
 Note what this is not: a score broken into points. kasl does not compute importance. The score is a number read straight out of the Jira field you named in [configuration](#configuration), and the priority rank is Jira's own priority id - so `--why` names where each part came from rather than inventing a local formula that would disagree with Jira about which issue matters.
 
@@ -152,8 +162,29 @@ kasl inbox dismiss [KEY] [FILTERS]
 **Arguments:**
 - `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the inbox; the [filters](#filters) narrow what the picker offers.
 
-Hides an issue from the list, for good. Dismissal is the answer to "this is
-not mine"; for "not now", see [`snooze`](#snooze---snooze-an-inbox-issue).
+Hides an issue from the list until you bring it back with
+[`undismiss`](#undismiss---undismiss-an-inbox-issue). Dismissal is the answer to
+"this is not mine"; for "not now", see [`snooze`](#snooze---snooze-an-inbox-issue).
+
+### `undismiss` - Undismiss an inbox issue
+
+```bash
+kasl inbox undismiss [KEY]
+```
+
+**Arguments:**
+- `KEY`: Issue key, e.g. `PROJ-123`. Omit it on a terminal to pick from the dismissed issues.
+
+Brings a dismissed issue back into the list, whoever dismissed it. This is the
+way back from a [rule](#rules) that hid the wrong issues: correct the rule in
+the config, then bring back what it hid - `kasl inbox list --dismissed` shows
+each one with the rule that hid it. Bringing an issue back by hand takes the
+decision from the rule, which will not hide it again unless the issue leaves
+the rule and comes back into it.
+
+```
+[✓] PROJ-123 is back in the inbox.
+```
 
 ### `snooze` - Snooze an inbox issue
 
@@ -214,6 +245,10 @@ Creates a task named `KEY summary` and records that the issue is in hand: the
 task stores the issue key, and the issue stays in the inbox wearing a `taken`
 badge. Dismissing is still a separate act - `take` means "I started this", not
 "this is not mine".
+
+Tags come with the take when a [rule](#rules) says so - `"when": {"project":
+"PAY"}, "then": {"tag": "payments"}` tags every task taken from PAY, from the
+command line, from triage and from a toast button alike.
 
 Taking the same issue twice does not create a second task; the command says
 which task it already became. The stored key survives renaming the task, so the
@@ -343,6 +378,84 @@ one, otherwise a row for today that continues the task - the same thing
 today. An answer Jira did not give (VPN down) is asked for again on the next
 poll.
 
+## Rules
+
+Rules are written in the config, under `jira_inbox.rules`. Each has a `when` and a `then`, and may have a `name`:
+
+```json
+{
+  "jira_inbox": {
+    "rules": [
+      { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
+      { "when": { "min_score": 8 }, "then": { "pin": true } },
+      { "when": { "type": ["Epic", "Sub-task"] }, "then": { "dismiss": true } },
+      { "when": { "project": "PAY" }, "then": { "tag": "payments" } }
+    ]
+  }
+}
+```
+
+**`when`** uses the words of the [filters](#filters): `priority` (a name as your Jira writes it, `+` for that priority and everything more urgent), `min_score`, `status`, `type` and `project`. Every condition given must hold; a list means any of its names; names match whatever the case. A priority nobody has had yet is not an error: the rule waits until the inbox has seen that name, and `kasl inbox rules` says it is waiting.
+
+**`then`** is one or more of:
+
+- `pin` - pin the issue, as `kasl inbox pin` does
+- `urgent` - announce it with a toast that stays until you act on it: a reminder toast on Windows, a critical notification on Linux; macOS has only the ordinary toast. It takes the place of the issue's new or changed toast rather than adding a second one, counts in an hourly [budget](#background-polling) of its own so a busy afternoon cannot crowd it out, and wakes the issue if it was snoozed. `notify: false` silences it; `notify_changes: false` does not
+- `dismiss` - hide the issue, as `kasl inbox dismiss` does
+- `tag` - one tag or a list, put on the task when the issue is [taken](#take---start-working-on-an-issue)
+
+Without a `name`, a rule is called by its conditions - `priority High+` - in messages, toasts and `show --why`.
+
+**When a rule acts.** Pin, urgent and dismiss act when an issue arrives already matching, or when a change makes it match: an issue raised to High is pinned on that poll. They do not act again while it keeps matching, so unpinning an issue a rule pinned sticks. If it drops below High and is raised again, that is news, and the rule acts again. Tags act at the take. Issues already in the inbox when you write a rule are left alone until you apply the rules to them with [`kasl inbox rules --apply`](#rules---show-and-apply-inbox-rules).
+
+**When rules disagree.** Every matching rule acts. Dismissal wins over pin and urgent - an issue a rule hides is not also pinned and announced. A rule never hides an issue you have taken, and never touches one that is already dismissed: those are your decisions.
+
+**A rule that cannot be read is skipped, never guessed at.** A misspelt key (`prority`) is refused rather than ignored, because ignored it would leave a rule without conditions, which matches every issue. So is a rule that does nothing, one that both dismisses and pins, and a dismiss with no conditions at all. The rest of the config and the other rules carry on: a typo in a rule never stops the watcher recording your day. `kasl inbox` warns in one line, and `kasl inbox rules` says which rule and why:
+
+```
+[!] Inbox rule 4 is skipped: unknown field `prority`, expected one of `priority`, `min_score`, `status`, `type`, `project`.
+```
+
+What a rule pinned or dismissed carries its name: `show --why` says `pinned by the rule 'on fire'`, and `list --dismissed` shows what each rule hid. Pinning, unpinning, dismissing or bringing back by hand takes the decision back from the rule.
+
+### `rules` - Show and apply inbox rules
+
+```bash
+kasl inbox rules [--apply]
+```
+
+**Options:**
+- `--apply`: Apply the rules to the issues already in the inbox, as if each had just arrived
+
+Lists the rules with what each matches in the inbox now and what its pin or dismissal has not reached yet. Without `--apply` this is a dry run - the way to check a dismiss rule before it hides anything:
+
+```
++---+---------+-----------------------+-------------------+------------------------------+
+| # | NAME    | WHEN                  | THEN              | NOW                          |
++---+---------+-----------------------+-------------------+------------------------------+
+| 1 | on fire | priority High+        | pin, urgent toast | 1 match, 1 not yet pinned    |
+| 2 | —       | type Epic or Sub-task | dismiss           | 1 match, 1 not yet dismissed |
+| 3 | —       | project PAY           | tag payments      | 1 match, 1 taken             |
++---+---------+-----------------------+-------------------+------------------------------+
+[i] 2 issue(s) match a rule that has not acted on them: rules act when an issue arrives or changes. `kasl inbox rules --apply` acts on them now.
+```
+
+`--apply` pins and dismisses what the rules say, and tags the tasks of issues already taken. It shows no toasts - none of it is news - and running it twice changes nothing the second time:
+
+```
+[i] PROJ-412: pinned by 'on fire'.
+[i] PROJ-418: dismissed by 'type Epic or Sub-task'.
+[i] PAY-77: its task tagged payments.
+[✓] The rules changed 3 issue(s).
++---+---------+-----------------------+-------------------+----------------------+
+| # | NAME    | WHEN                  | THEN              | NOW                  |
++---+---------+-----------------------+-------------------+----------------------+
+| 1 | on fire | priority High+        | pin, urgent toast | 1 match, 1 pinned    |
+| 2 | —       | type Epic or Sub-task | dismiss           | 1 match, 1 dismissed |
+| 3 | —       | project PAY           | tag payments      | 1 match, 1 taken     |
++---+---------+-----------------------+-------------------+----------------------+
+```
+
 ## Toast buttons
 
 A toast about one issue carries the three decisions worth making about it, so the pile can be triaged without opening a terminal:
@@ -385,6 +498,17 @@ A poll that fails - VPN down, Jira unreachable, a session that could not be rene
 
 Toasts are budgeted over time, not per poll. Within any hour at most five single toasts show; past that, one summary toast says how many issues were new, changed or left and opens your open-issues list in Jira, and the rest of the hour stays quiet. A trickle of three changes every five minutes is held to the same bound as two hundred at once.
 
+Urgent toasts - the ones a [rule](#rules) asks for - are budgeted the same way in a lane of their own: an afternoon of ordinary changes does not spend the room an escalation needs, and fifty issues turning urgent at once still collapse into one summary.
+
+Each poll also runs the [rules](#rules) over what it brought. Pins and dismissals by rule happen with or without toasts; `kasl inbox sync` says what each rule did:
+
+```
+[✓] Jira inbox synced: 6 fetched, 2 new, 1 changed, 0 gone.
+[i] PROJ-420: pinned by 'on fire'; urgent by 'on fire'.
+[i] PROJ-431: pinned by 'on fire'; urgent by 'on fire'.
+[i] PROJ-433: dismissed by 'type Epic or Sub-task'.
+```
+
 ## Configuration
 
 Polling is enabled by adding the `jira_inbox` section to the config; the `jira` section must be configured as well.
@@ -400,7 +524,11 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
     "toast_snooze_for": "1d",
     "start_on_take": false,
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
-    "sort_by_field": "customfield_12345"
+    "sort_by_field": "customfield_12345",
+    "rules": [
+      { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
+      { "when": { "type": "Epic" }, "then": { "dismiss": true } }
+    ]
   }
 }
 ```
@@ -414,6 +542,7 @@ Polling is enabled by adding the `jira_inbox` section to the config; the `jira` 
 - `start_on_take`: Every take - command, triage, toast button - also starts the issue in Jira (default `false`). Off by default because it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list"
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field
 - `sort_by_field`: Field id used to rank the list in descending order
+- `rules`: What the inbox does by itself - see [Rules](#rules) (default: none)
 
 ## Examples
 
@@ -452,6 +581,17 @@ kasl inbox --snoozed
 
 # Why is this issue at the top?
 kasl inbox show PROJ-123 --why
+
+# Only bugs from two projects
+kasl inbox --type Bug --project PAY --project OPS
+
+# Check the rules, then apply them to the issues already here
+kasl inbox rules
+kasl inbox rules --apply
+
+# See what was dismissed - by you or by a rule - and bring one back
+kasl inbox list --dismissed
+kasl inbox undismiss PROJ-456
 
 # Work with a specific issue
 kasl inbox pin PROJ-123

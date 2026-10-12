@@ -426,6 +426,11 @@ impl View {
         );
         add("priority", item.priority.clone().unwrap_or_else(|| "—".to_string()));
         add("score", item.sort_value.map(|v| format!("{v}")).unwrap_or_else(|| "—".to_string()));
+        add("type", item.issue_type.clone().unwrap_or_else(|| "—".to_string()));
+        add("project", item.project.clone().unwrap_or_else(|| "—".to_string()));
+        if let Some(rule) = &item.ruled_by {
+            add(if item.dismissed { "dismissed by" } else { "pinned by" }, format!("rule '{rule}'"));
+        }
         if let Some(badge) = item.badge(now) {
             add("badge", badge);
         }
@@ -451,6 +456,38 @@ impl View {
         }
         add("url", item.url.clone());
 
+        table.printstd();
+        Ok(())
+    }
+
+    /// The inbox rules, each with what it matches now.
+    pub fn inbox_rules(rows: &[crate::libs::inbox_rules::RuleStanding]) -> Result<()> {
+        let names: Vec<String> = rows.iter().map(|r| r.name.clone().unwrap_or_else(|| "—".to_string())).collect();
+        let number_width = rows.iter().map(|r| r.number.to_string().width()).max().unwrap_or(1).max("#".width());
+        let name_width = names.iter().map(|n| n.width()).max().unwrap_or(1).max("NAME".width()).min(20);
+        let when_width = rows.iter().map(|r| r.when.width()).max().unwrap_or(1).max("WHEN".width()).min(32);
+        let then_width = rows.iter().map(|r| r.then.width()).max().unwrap_or(1).max("THEN".width()).min(24);
+
+        // #, NAME, WHEN, THEN, NOW
+        let frame_overhead = 3 * 5 + 1;
+        let now_width = terminal_cols()
+            .saturating_sub(frame_overhead + number_width + name_width + when_width + then_width)
+            .max(20);
+
+        let mut table = Table::new();
+        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
+        table.set_titles(row!["#", "NAME", "WHEN", "THEN", "NOW"]);
+        for (row, name) in rows.iter().zip(&names) {
+            // Wrapped, not truncated: the conditions are what the rule is,
+            // and a cut-off one reads as a different rule.
+            table.add_row(row![
+                row.number,
+                truncate_to_width(name, name_width),
+                wrap_to_width(&row.when, when_width),
+                wrap_to_width(&row.then, then_width),
+                wrap_to_width(&row.now, now_width),
+            ]);
+        }
         table.printstd();
         Ok(())
     }

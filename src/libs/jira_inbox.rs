@@ -10,18 +10,23 @@
 //! terminal. How a button press gets back to the daemon is
 //! [`crate::libs::toast_action`]; what it then does is
 //! [`crate::libs::toast_apply`].
+//!
+//! Each poll also runs the inbox rules ([`crate::libs::inbox_rules`]) over
+//! the issues it brought: a rule may pin an issue, hide it, or turn its toast
+//! into an urgent one that stays on screen.
 
 use crate::api::jira::{Jira, SessionMode};
-use crate::db::jira_inbox::{ChangedIssue, JiraInbox, JiraInboxItem, JiraInboxUpsert, LeftReason, UpsertBatchResult};
+use crate::db::jira_inbox::{ChangedIssue, Include, JiraInbox, JiraInboxItem, JiraInboxUpsert, LeftReason, UpsertBatchResult};
 use crate::db::jira_statuses::JiraStatuses;
 use crate::libs::config::{Config, JiraInboxConfig};
+use crate::libs::inbox_rules::{self, RuleBook, RuleProblem, Ruled};
 use crate::libs::messages::Message;
 use crate::libs::toast_action::{Mailbox, ToastAction};
 use crate::libs::toast_apply;
 use crate::{msg_info, msg_warning};
 use anyhow::Result;
 use chrono::{Duration, Local, NaiveDateTime};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::process::Command;
 use tracing::{debug, warn};
 
@@ -65,13 +70,18 @@ pub enum ToastPlan {
 /// total what is bounded: at most [`TOAST_STORM_THRESHOLD`] single toasts,
 /// then one summary, then quiet until the hour has room again.
 ///
+/// Urgent toasts - the ones a rule asks for - count in a lane of their own,
+/// with the same bound: an afternoon of ordinary changes must not have spent
+/// the room an escalation needs, and an escalation of fifty issues at once is
+/// still a storm.
+///
 /// Held in memory by the poller. A restart forgets the count, which costs at
 /// most one more budget's worth, and keeps the budget from outliving the
 /// process that spends it.
 #[derive(Debug, Default)]
 pub struct ToastBudget {
-    shown: VecDeque<NaiveDateTime>,
-    summary_at: Option<NaiveDateTime>,
+    ordinary: Lane,
+    urgent: Lane,
 }
 
 impl ToastBudget {
@@ -79,8 +89,26 @@ impl ToastBudget {
         Self::default()
     }
 
-    /// Decides how `count` toasts from one poll at `now` are shown, and spends the budget.
+    /// Decides how `count` ordinary toasts from one poll at `now` are shown, and spends the budget.
     pub fn admit(&mut self, now: NaiveDateTime, count: usize) -> ToastPlan {
+        self.ordinary.admit(now, count)
+    }
+
+    /// The same decision for urgent toasts, from their own lane.
+    pub fn admit_urgent(&mut self, now: NaiveDateTime, count: usize) -> ToastPlan {
+        self.urgent.admit(now, count)
+    }
+}
+
+/// One kind of toast's spending over the last hour.
+#[derive(Debug, Default)]
+struct Lane {
+    shown: VecDeque<NaiveDateTime>,
+    summary_at: Option<NaiveDateTime>,
+}
+
+impl Lane {
+    fn admit(&mut self, now: NaiveDateTime, count: usize) -> ToastPlan {
         let since = now - Duration::minutes(TOAST_WINDOW_MINUTES);
         while self.shown.front().is_some_and(|t| *t <= since) {
             self.shown.pop_front();
@@ -111,6 +139,47 @@ enum Pending {
     Gone(JiraInboxItem),
     /// A taken issue Jira resolved while its task is still open.
     Resolved(JiraInboxItem),
+    /// An issue a rule calls urgent, with the rule's name.
+    Urgent(JiraInboxItem, String),
+}
+
+/// What a poll has to say about one issue that is still in the inbox.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Notice {
+    /// It arrived.
+    New,
+    /// A person moved it: the change in words.
+    Changed(String),
+    /// A rule calls it urgent: the rule's name.
+    Urgent(String),
+}
+
+/// Which toast each issue of a poll gets: one at most.
+///
+/// `fresh` are new issues not yet announced, `changed` the notable changes
+/// worth a toast, `urgent` the issues a rule has just called urgent. An urgent
+/// issue gets the urgent toast in place of its new or changed one - two toasts
+/// about one issue in the same breath would be one too many, and the urgent
+/// one says more. Urgent is not held back by `notify_changes`: the rule is an
+/// explicit ask for this toast.
+pub fn notices(fresh: &[String], changed: &[(String, String)], urgent: &[(String, String)]) -> Vec<(String, Notice)> {
+    let urgent_by = |key: &str| urgent.iter().find(|(k, _)| k == key).map(|(_, rule)| rule.clone());
+    let mut out: Vec<(String, Notice)> = Vec::new();
+    for key in fresh {
+        let notice = urgent_by(key).map(Notice::Urgent).unwrap_or(Notice::New);
+        out.push((key.clone(), notice));
+    }
+    for (key, change) in changed {
+        if !fresh.contains(key) && urgent_by(key).is_none() {
+            out.push((key.clone(), Notice::Changed(change.clone())));
+        }
+    }
+    for (key, rule) in urgent {
+        if !fresh.contains(key) {
+            out.push((key.clone(), Notice::Urgent(rule.clone())));
+        }
+    }
+    out
 }
 
 /// The line a summary toast opens with: what arrived, by kind.
@@ -121,6 +190,7 @@ fn summary_line(pending: &[Pending]) -> String {
         (count(|p| matches!(p, Pending::Changed(..))), "changed"),
         (count(|p| matches!(p, Pending::Gone(_))), "left the inbox"),
         (count(|p| matches!(p, Pending::Resolved(_))), "resolved with your task open"),
+        (count(|p| matches!(p, Pending::Urgent(..))), "urgent"),
     ];
     let said: Vec<String> = parts.iter().filter(|(n, _)| *n > 0).map(|(n, what)| format!("{n} {what}")).collect();
     format!("Issues: {}", said.join(", "))
@@ -141,6 +211,10 @@ pub struct SyncOutcome {
     /// The ones to offer marking done. Learnt once per departure, so a sync
     /// that reports one here will not report it again.
     pub resolved: Vec<ResolvedIssue>,
+    /// What the inbox rules did this pass.
+    pub ruled: Vec<Ruled>,
+    /// Rules that could not be read, and were skipped.
+    pub rule_problems: Vec<RuleProblem>,
     pub notified: usize,
     /// True when sync was skipped (no jira config / disabled / no credentials).
     pub skipped: bool,
@@ -312,16 +386,40 @@ async fn apply_issues(
             sort_value,
             url: jira.issue_browse_url(&issue.key),
             raw_updated: issue.fields.updated.clone(),
+            issue_type: issue.fields.issuetype.as_ref().map(|t| t.name.clone()),
+            // Jira's own answer, falling back to the key's prefix, which is
+            // what a Jira key is.
+            project: issue
+                .fields
+                .project
+                .as_ref()
+                .map(|p| p.key.clone())
+                .or_else(|| issue.key.split_once('-').map(|(project, _)| project.to_string())),
         });
     }
 
     let db = JiraInbox::new()?;
+    // Rules act on what an issue has just come to be, so what it was is
+    // read before the poll overwrites it.
+    let before: HashMap<String, JiraInboxItem> = if inbox_cfg.rules.is_empty() {
+        HashMap::new()
+    } else {
+        db.list(Include::EVERYTHING)?.into_iter().map(|item| (item.issue_key.clone(), item)).collect()
+    };
     let UpsertBatchResult { new_keys, updated, changed } = db.upsert_batch(&upserts)?;
 
     // Reconcile: issues missing from this poll are gone (closed, reassigned),
     // not frozen in the list forever.
     let present_keys: Vec<String> = upserts.iter().map(|u| u.issue_key.clone()).collect();
     let gone_keys = db.mark_gone(&present_keys)?;
+
+    // Compiled after the upsert, so a priority name first seen in this very
+    // poll is already known to a rule that names it.
+    let book = RuleBook::of_inbox(inbox_cfg, &db)?;
+    for problem in &book.problems {
+        debug!("Jira inbox: rule {} is skipped: {}", problem.number, problem.reason);
+    }
+    let ruled = inbox_rules::apply_entering(&db, &book, &before, &present_keys)?;
 
     // A taken issue that left is either finished or no longer yours, and only
     // Jira knows which. The answer decides whether its task is offered as done.
@@ -334,23 +432,39 @@ async fn apply_issues(
     };
 
     // Every toast this poll would show is gathered first and shown under
-    // one decision, so the budget sees the poll as a whole.
+    // one decision per lane, so the budget sees the poll as a whole.
     let mut pending = Vec::new();
-    if notify && !new_keys.is_empty() {
+    if notify {
+        // A new issue a rule dismissed is not listed here at all: hiding it
+        // was the rule's whole point.
         let to_notify = db.list_unnotified_new(&new_keys)?;
-        let keys: Vec<String> = to_notify.iter().map(|i| i.issue_key.clone()).collect();
-        pending.extend(to_notify.into_iter().map(Pending::New));
+        let fresh: Vec<String> = to_notify.iter().map(|i| i.issue_key.clone()).collect();
+        let moved: Vec<(String, String)> = if inbox_cfg.notify_changes {
+            changed
+                .iter()
+                .filter(|c| c.notable && !c.dismissed)
+                .map(|c| (c.issue_key.clone(), c.change.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let urgent: Vec<(String, String)> = ruled.iter().filter_map(|r| r.urgent.clone().map(|rule| (r.issue_key.clone(), rule))).collect();
+        for (key, notice) in notices(&fresh, &moved, &urgent) {
+            // Read again: a rule may have dismissed the issue in this very poll.
+            if let Ok(Some(item)) = db.get_by_key(&key)
+                && !item.dismissed
+            {
+                pending.push(match notice {
+                    Notice::New => Pending::New(item),
+                    Notice::Changed(change) => Pending::Changed(item, change),
+                    Notice::Urgent(rule) => Pending::Urgent(item, rule),
+                });
+            }
+        }
         // Notified means announced or deliberately not: a new issue held back
         // by the budget is in the list with its NEW badge, and toasting it an
         // hour later would be old news.
-        db.mark_notified(&keys)?;
-    }
-    if notify && inbox_cfg.notify_changes {
-        for change in changed.iter().filter(|c| c.notable && !c.dismissed) {
-            if let Ok(Some(item)) = db.get_by_key(&change.issue_key) {
-                pending.push(Pending::Changed(item, change.change.clone()));
-            }
-        }
+        db.mark_notified(&fresh)?;
     }
     if notify && inbox_cfg.notify_gone {
         // A resolved issue with an open task gets its own toast below; a
@@ -372,28 +486,11 @@ async fn apply_issues(
         }
     }
 
+    let (urgent_pending, ordinary): (Vec<Pending>, Vec<Pending>) = pending.into_iter().partition(|p| matches!(p, Pending::Urgent(..)));
+    let now = Local::now().naive_local();
     let mut notified = 0;
-    match budget.admit(Local::now().naive_local(), pending.len()) {
-        ToastPlan::Each => {
-            for toast in &pending {
-                let shown = match toast {
-                    Pending::New(item) => show_toast(item),
-                    Pending::Changed(item, change) => show_change_toast(item, change),
-                    Pending::Gone(item) => show_gone_toast(item),
-                    Pending::Resolved(item) => show_resolved_toast(item),
-                };
-                if shown {
-                    notified += 1;
-                }
-            }
-        }
-        ToastPlan::Summary => {
-            if show_summary_toast(jira, &summary_line(&pending)) {
-                notified += 1;
-            }
-        }
-        ToastPlan::Quiet => debug!("Jira inbox: held back {} toast(s); the hour's budget is spent", pending.len()),
-    }
+    notified += show_pending(jira, &urgent_pending, budget.admit_urgent(now, urgent_pending.len()));
+    notified += show_pending(jira, &ordinary, budget.admit(now, ordinary.len()));
 
     Ok(SyncOutcome {
         fetched: issues.len(),
@@ -402,9 +499,32 @@ async fn apply_issues(
         changed,
         gone_keys,
         resolved,
+        ruled,
+        rule_problems: book.problems,
         notified,
         skipped: false,
     })
+}
+
+/// Shows one lane's toasts as its budget decided; returns how many appeared.
+fn show_pending(jira: &Jira, pending: &[Pending], plan: ToastPlan) -> usize {
+    match plan {
+        ToastPlan::Each => pending
+            .iter()
+            .filter(|toast| match toast {
+                Pending::New(item) => show_toast(item),
+                Pending::Changed(item, change) => show_change_toast(item, change),
+                Pending::Gone(item) => show_gone_toast(item),
+                Pending::Resolved(item) => show_resolved_toast(item),
+                Pending::Urgent(item, rule) => show_urgent_toast(item, rule),
+            })
+            .count(),
+        ToastPlan::Summary => usize::from(show_summary_toast(jira, &summary_line(pending))),
+        ToastPlan::Quiet => {
+            debug!("Jira inbox: held back {} toast(s); the hour's budget is spent", pending.len());
+            0
+        }
+    }
 }
 
 /// Returns every issue whose snooze has run out, toasting each one.
@@ -466,6 +586,24 @@ pub fn show_toast(item: &JiraInboxItem) -> bool {
     show_issue_toast(item, &toast_body(item))
 }
 
+/// Shows a toast that stays: an issue a rule calls urgent.
+///
+/// The same three buttons as any issue toast, and the rule named in the body,
+/// so the person can tell an escalation from a slow afternoon - and knows
+/// which rule to change if it keeps being wrong. On Windows the toast stays
+/// on screen until acted on; on Linux it is sent as critical.
+pub fn show_urgent_toast(item: &JiraInboxItem, rule: &str) -> bool {
+    let body = format!("Urgent by the rule '{rule}' - {}", toast_body(item));
+    show_toast_as(
+        &format!("Jira {} - urgent", item.issue_key),
+        &body,
+        &item.url,
+        &item.issue_key,
+        &ToastAction::ALL,
+        Urgency::Urgent,
+    )
+}
+
 /// Shows a toast for a visible change on an existing inbox item.
 pub fn show_change_toast(item: &JiraInboxItem, change: &str) -> bool {
     let body = format!("{change} — {}", item.summary);
@@ -504,15 +642,28 @@ fn show_issue_toast(item: &JiraInboxItem, body: &str) -> bool {
     show_raw_toast(&format!("Jira {}", item.issue_key), body, &item.url, &item.issue_key, &ToastAction::ALL)
 }
 
+/// How insistent a toast is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Urgency {
+    /// Shows, then slides into the notification centre.
+    Normal,
+    /// Stays until acted on, where the platform allows it.
+    Urgent,
+}
+
 /// Platform dispatch for a toast with a click-to-open URL and buttons.
 fn show_raw_toast(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction]) -> bool {
+    show_toast_as(title, body, url, key, actions, Urgency::Normal)
+}
+
+fn show_toast_as(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction], urgency: Urgency) -> bool {
     #[cfg(windows)]
     {
-        show_toast_windows(title, body, url, key, actions)
+        show_toast_windows(title, body, url, key, actions, urgency)
     }
     #[cfg(not(windows))]
     {
-        show_toast_other(title, body, url, key, actions)
+        show_toast_other(title, body, url, key, actions, urgency)
     }
 }
 
@@ -565,10 +716,16 @@ fn windows_buttons(key: &str, actions: &[ToastAction]) -> Vec<win_toast_notify::
 }
 
 #[cfg(windows)]
-fn show_toast_windows(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction]) -> bool {
+fn show_toast_windows(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction], urgency: Urgency) -> bool {
     let mut toast = win_toast_notify::WinToastNotify::new().set_title(title).set_messages(vec![body]).set_open(url);
     if let Some(logo) = toast_logo_path() {
         toast = toast.set_logo(&logo.to_string_lossy(), win_toast_notify::CropCircle::False);
+    }
+    // The reminder scenario keeps the toast on screen until it is acted on.
+    // Not the "urgent" scenario: that one is Windows 11 only and needs a
+    // per-app permission an unpackaged program does not get.
+    if urgency == Urgency::Urgent {
+        toast = toast.set_scenario(win_toast_notify::Scenario::Reminder);
     }
     if !actions.is_empty() {
         let buttons = windows_buttons(key, actions);
@@ -596,12 +753,16 @@ fn show_toast_windows(title: &str, body: &str, url: &str, key: &str, actions: &[
 /// The wait runs on its own thread because `wait_for_action` blocks until the
 /// notification is closed, and the poller must not stop for it.
 #[cfg(all(not(windows), not(target_os = "macos")))]
-fn show_toast_other(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction]) -> bool {
+fn show_toast_other(title: &str, body: &str, url: &str, key: &str, actions: &[ToastAction], urgency: Urgency) -> bool {
     let url = url.to_string();
     let owned_key = key.to_string();
 
     let mut notification = notify_rust::Notification::new();
     notification.summary(title).body(body).action("default", "Open");
+    // Critical notifications stay until dismissed on XDG desktops.
+    if urgency == Urgency::Urgent {
+        notification.urgency(notify_rust::Urgency::Critical);
+    }
     for action in actions {
         notification.action(action.as_str(), action.label());
     }
@@ -641,7 +802,7 @@ fn show_toast_other(title: &str, body: &str, url: &str, key: &str, actions: &[To
 /// CLI (`kasl inbox triage`). The buttons are not rendered rather than
 /// rendered dead: a button that does nothing is worse than no button.
 #[cfg(target_os = "macos")]
-fn show_toast_other(title: &str, body: &str, _url: &str, key: &str, _actions: &[ToastAction]) -> bool {
+fn show_toast_other(title: &str, body: &str, _url: &str, key: &str, _actions: &[ToastAction], _urgency: Urgency) -> bool {
     match notify_rust::Notification::new().summary(title).body(body).show() {
         Ok(_) => {
             debug!("Showed toast for {}", key);

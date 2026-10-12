@@ -275,6 +275,17 @@ pub struct JiraInboxConfig {
     /// teams "In Progress" means more than "on my list".
     #[serde(default)]
     pub start_on_take: bool,
+
+    /// What the inbox does by itself: when an issue matches a rule's `when`,
+    /// its `then` pins it, toasts it as urgent, dismisses it, or tags the task
+    /// taken from it. See [`crate::libs::inbox_rules`].
+    ///
+    /// Kept as written and read one rule at a time: a rule that does not
+    /// parse is skipped and named, rather than making the whole file
+    /// unreadable. The watcher reads this file for activity tracking too, and
+    /// a typo in an inbox rule must not stop the workday being recorded.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rules: Vec<serde_json::Value>,
 }
 
 /// A user-configured Jira custom field for inbox sync / display.
@@ -310,6 +321,7 @@ impl Default for JiraInboxConfig {
             sort_by_field: None,
             toast_snooze_for: default_toast_snooze_for(),
             start_on_take: false,
+            rules: Vec::new(),
         }
     }
 }

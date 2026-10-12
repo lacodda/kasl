@@ -116,6 +116,8 @@ fn seed(key: &str) -> JiraInboxUpsert {
         sort_value: None,
         url: format!("https://jira.example.com/browse/{key}"),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }
 }
 
@@ -338,7 +340,8 @@ async fn a_take_starts_the_issue_when_asked_to() {
     assert_eq!(
         outcome,
         Applied::Taken {
-            started: Some(Ok(Moved::Moved { to: "In Progress".to_string() }))
+            started: Some(Ok(Moved::Moved { to: "In Progress".to_string() })),
+            tags: vec![]
         }
     );
     assert!(outcome.summary("KA-8").contains("In Progress"), "the answer says where the issue went");
@@ -364,7 +367,7 @@ async fn a_take_stands_when_jira_does_not_answer() {
         .await;
 
     let outcome = toast_apply::take("KA-9", &MoveOptions::unattended()).await.unwrap();
-    let Applied::Taken { started: Some(Err(why)) } = &outcome else {
+    let Applied::Taken { started: Some(Err(why)), .. } = &outcome else {
         panic!("a Jira that does not answer is reported, not swallowed: {outcome:?}");
     };
     assert!(why.contains("kasl inbox start KA-9"), "the answer names the retry: {why}");
@@ -383,7 +386,7 @@ async fn a_take_does_not_touch_jira_unless_asked() {
     JiraInbox::new().unwrap().upsert_batch(&[seed("KA-10")]).unwrap();
 
     let outcome = toast_apply::take("KA-10", &MoveOptions::unattended()).await.unwrap();
-    assert_eq!(outcome, Applied::Taken { started: None });
+    assert_eq!(outcome, Applied::Taken { started: None, tags: vec![] });
     assert!(
         server.received_requests().await.unwrap_or_default().is_empty(),
         "start_on_take is off: Jira must hear nothing"

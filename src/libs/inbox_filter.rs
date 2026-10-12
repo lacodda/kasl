@@ -5,6 +5,10 @@
 //! arrived this week, what scores above five, what is High or worse. The cuts
 //! live here as plain functions over already-loaded items: the table is small
 //! enough that SQL buys nothing, and a function is what the tests can hold.
+//!
+//! The same cut is what an inbox rule's `when` compiles to
+//! ([`crate::libs::inbox_rules`]), so "the issues `--priority High+` lists"
+//! and "the issues a `priority: High+` rule pins" cannot come apart.
 
 use crate::db::jira_inbox::JiraInboxItem;
 use anyhow::{Result, bail};
@@ -61,8 +65,12 @@ pub struct InboxFilter {
     pub min_score: Option<f64>,
     /// Priority, exact or "and above".
     pub priority: Option<PriorityCut>,
-    /// Status name, matched without regard to case.
-    pub status: Option<String>,
+    /// Status names or ids, any of them; matched without regard to case.
+    pub status: Vec<String>,
+    /// Issue types, any of them; matched without regard to case.
+    pub types: Vec<String>,
+    /// Projects, any of them; matched without regard to case.
+    pub projects: Vec<String>,
 }
 
 impl InboxFilter {
@@ -94,10 +102,18 @@ impl InboxFilter {
         {
             return false;
         }
-        if let Some(status) = &self.status
-            && !item.status_name.eq_ignore_ascii_case(status)
-            && !item.status_id.as_deref().is_some_and(|id| id.eq_ignore_ascii_case(status))
+        if !self.status.is_empty()
+            && !self
+                .status
+                .iter()
+                .any(|status| same_word(&item.status_name, status) || item.status_id.as_deref().is_some_and(|id| same_word(id, status)))
         {
+            return false;
+        }
+        if !one_of(item.issue_type.as_deref(), &self.types) {
+            return false;
+        }
+        if !one_of(item.project.as_deref(), &self.projects) {
             return false;
         }
         true
@@ -109,35 +125,46 @@ impl InboxFilter {
     }
 }
 
-/// The cut behind a priority name, as the inbox has seen it.
+/// The cut behind a priority name, against priorities known by name and rank.
 ///
 /// Priority names belong to the Jira instance (a Russian Jira says
-/// «Высокий», not "High"), so they are looked up in the issues at hand rather
+/// «Высокий», not "High"), so they are looked up among the priorities the
+/// inbox has seen ([`crate::db::jira_inbox::JiraInbox::priorities`]) rather
 /// than in a table of English defaults. A trailing `+` widens the cut to
 /// that priority and everything more urgent.
-pub fn priority_cut_named(items: &[JiraInboxItem], wanted: &str) -> Result<PriorityCut> {
+pub fn priority_cut_in(known: &[(String, i32)], wanted: &str) -> Result<PriorityCut> {
     let (name, and_above) = match wanted.strip_suffix('+') {
         Some(name) => (name.trim(), true),
         None => (wanted.trim(), false),
     };
-    let rank = items
-        .iter()
-        .filter(|item| item.priority.as_deref().is_some_and(|p| p.eq_ignore_ascii_case(name)))
-        .map(|item| item.priority_rank)
-        .min();
+    let rank = known.iter().filter(|(known, _)| same_word(known, name)).map(|(_, rank)| *rank).min();
     let Some(rank) = rank else {
-        let mut known: Vec<&str> = items.iter().filter_map(|item| item.priority.as_deref()).collect();
-        known.sort_unstable();
-        known.dedup();
-        if known.is_empty() {
+        let mut names: Vec<&str> = known.iter().map(|(name, _)| name.as_str()).collect();
+        names.sort_unstable();
+        names.dedup();
+        if names.is_empty() {
             bail!("no priority named '{name}' in the inbox, and no issue carries a priority yet");
         }
-        bail!("no priority named '{name}' in the inbox; known: {}", known.join(", "));
+        bail!("no priority named '{name}' in the inbox; known: {}", names.join(", "));
     };
     Ok(if and_above { PriorityCut::AtLeast(rank) } else { PriorityCut::Exactly(rank) })
 }
 
-/// What the list is ordered by. Pinned issues lead and gone issues trail whatever the key.
+/// Whether two names are the same word, whatever the case.
+///
+/// Full Unicode lowercasing, not ASCII: the names are the instance's own, and
+/// a Russian Jira's type typed in lower case is still the same type.
+fn same_word(a: &str, b: &str) -> bool {
+    a.trim().to_lowercase() == b.trim().to_lowercase()
+}
+
+/// Whether a field passes an any-of cut: an empty cut passes everything, and
+/// an empty field passes no cut.
+fn one_of(value: Option<&str>, wanted: &[String]) -> bool {
+    wanted.is_empty() || value.is_some_and(|value| wanted.iter().any(|w| same_word(value, w)))
+}
+
+/// What the list is ordered by. Pinned issues lead, and gone then dismissed issues trail, whatever the key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum InboxSort {
     /// Ranking field descending, then priority - the inbox's own order.
@@ -154,7 +181,12 @@ pub enum InboxSort {
 /// Reorders in place. Stable, so equal keys keep the inbox's own order.
 pub fn sort(items: &mut [JiraInboxItem], by: InboxSort) {
     items.sort_by(|a, b| {
-        let frame = a.gone_at.is_some().cmp(&b.gone_at.is_some()).then_with(|| b.pinned.cmp(&a.pinned));
+        let frame = a
+            .gone_at
+            .is_some()
+            .cmp(&b.gone_at.is_some())
+            .then_with(|| a.dismissed.cmp(&b.dismissed))
+            .then_with(|| b.pinned.cmp(&a.pinned));
         frame.then_with(|| match by {
             InboxSort::Score => std::cmp::Ordering::Equal,
             InboxSort::Priority => a.priority_rank.cmp(&b.priority_rank),
@@ -217,11 +249,25 @@ pub fn explain(item: &JiraInboxItem, score_label: Option<&str>, now: NaiveDateTi
         },
     });
 
-    if item.pinned {
+    if item.pinned && !item.dismissed {
         out.push(Reason {
             what: "pinned",
             value: "yes".to_string(),
-            because: "pinned issues lead the list whatever the order".to_string(),
+            because: match &item.ruled_by {
+                Some(rule) => format!("pinned by the rule '{rule}'; pinned issues lead the list whatever the order, and `kasl inbox unpin` takes it back"),
+                None => "pinned by hand; pinned issues lead the list whatever the order".to_string(),
+            },
+        });
+    }
+
+    if item.dismissed {
+        out.push(Reason {
+            what: "dismissed",
+            value: "yes".to_string(),
+            because: match &item.ruled_by {
+                Some(rule) => format!("hidden by the rule '{rule}'; only `--dismissed` lists it, and `kasl inbox undismiss` brings it back"),
+                None => "dismissed by hand; only `--dismissed` lists it, and `kasl inbox undismiss` brings it back".to_string(),
+            },
         });
     }
 

@@ -133,7 +133,10 @@ CREATE TABLE jira_inbox (
     snoozed_until TIMESTAMP,
     woke_at TIMESTAMP,
     left_reason TEXT CHECK (left_reason IN ('resolved', 'moved')),
-    resolution TEXT
+    resolution TEXT,
+    issue_type TEXT,
+    project TEXT,
+    ruled_by TEXT
 );
 ```
 
@@ -142,7 +145,8 @@ CREATE TABLE jira_inbox (
 - `gone_at` is stamped when an issue stops appearing in the Jira poll (closed or reassigned); it clears if the issue reappears. Rows with `gone_at` set are hidden from the default list and only shown with `kasl inbox --all`.
 - `last_change` / `changed_at` record the most recent visible change (status, priority, or score) so the list can badge it.
 - `taken_at` is stamped by `kasl inbox take`. Unlike `dismissed`, it keeps the row in the list: a taken issue is still part of the picture, it is just already in hand.
-- `pinned` and `dismissed` are set by `kasl inbox pin` / `kasl inbox dismiss`.
+- `pinned` and `dismissed` are set by `kasl inbox pin` / `kasl inbox dismiss`, or by an [inbox rule](/reference/inbox/#rules); `ruled_by` names the rule behind them and is cleared when a hand pins, unpins, dismisses or brings the issue back.
+- `issue_type` and `project` are what inbox rules and the `--type` / `--project` filters read, in the source's own words. `project` is Jira's project key; rows from before migration 18 start with the prefix of their key, and `issue_type` stays empty until the next poll fills it.
 - `snoozed_until` is when a snoozed issue is due back; `woke_at` marks the moment it came back, so the return is announced once.
 - `left_reason` says why a taken issue left the inbox, once Jira has answered: `resolved`, with the resolution's name in `resolution`, or `moved` (unresolved - reassigned, out of reach, deleted). NULL means not asked yet, which is how a question that failed gets asked again on the next poll. Both clear when the issue reappears.
 
@@ -154,6 +158,17 @@ CREATE TABLE jira_statuses (
     name TEXT NOT NULL
 );
 ```
+
+#### `jira_priorities`
+Every priority name the inbox has seen, with its rank - the vocabulary `--priority High+` and an inbox rule's `"priority": "High+"` are read against:
+```sql
+CREATE TABLE jira_priorities (
+    name TEXT PRIMARY KEY,
+    rank INTEGER NOT NULL
+);
+```
+
+Written on every poll and never pruned: a name learnt once stays known, so a rule does not fall asleep because the last High issue was lowered.
 
 #### `server_outbox`
 Days owed to kasl-server - a date, never a payload, so a day corrected while the network was down is the version that arrives:
@@ -243,6 +258,7 @@ Schema history, in order:
 15. `snooze_inbox_issues` - adds `snoozed_until` and `woke_at` to `jira_inbox`
 16. `add_server_pulse` - `server_pulse`
 17. `close_the_loop_with_jira` - adds `left_reason` and `resolution` to `jira_inbox`, and gives every task left on `task_id = 0` a chain of its own
+18. `inbox_rules` - adds `issue_type`, `project` (filled from the key's prefix) and `ruled_by` to `jira_inbox`, and `jira_priorities`, started from the priorities the rows carry
 
 Each migration runs inside a transaction; a failure rolls back that migration.
 
@@ -436,6 +452,6 @@ ORDER BY usage_count DESC;
 
 - [`pauses`](/reference/pauses/) - protected pauses and the `--keep`/`--reason` flags behind the `pauses` columns
 - [`task`](/reference/task/) - task commands, including `remove`
-- [`inbox`](/reference/inbox/) - the Jira inbox commands backed by `jira_inbox` and `jira_statuses`
+- [`inbox`](/reference/inbox/) - the Jira inbox commands backed by `jira_inbox`, `jira_statuses` and `jira_priorities`
 - [`export`](/reference/export/) - export formats and data types, including `export all`
 - [Configuration](/concepts/configuration/) - config keys referenced by pauses, reports, and Jira sync

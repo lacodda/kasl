@@ -470,6 +470,7 @@ pub enum Message {
     JiraInboxPinned(String),
     JiraInboxUnpinned(String),
     JiraInboxDismissed(String),
+    JiraInboxUndismissed(String),
     /// Key, and when it is due back.
     JiraInboxSnoozed(String, String),
     JiraInboxUnsnoozed(String),
@@ -499,6 +500,19 @@ pub enum Message {
         taken: i64,
     },
     JiraInboxOpenFailed(String),
+
+    /// How many inbox rules could not be read and are skipped.
+    InboxRulesSkipped(usize),
+    /// One skipped rule: its number in the config, then why.
+    InboxRuleSkipped(usize, String),
+    /// What the rules did to one issue, already worded.
+    InboxRuleActed(String),
+    /// The config holds no inbox rules.
+    InboxRulesNone,
+    /// `rules --apply` finished: how many issues it changed.
+    InboxRulesApplied(usize),
+    /// Issues a rule matches that its pin or dismissal has not reached.
+    InboxRulesNotApplied(usize),
 
     /// A courier was handed an action name that is not one of the three.
     ToastActionUnknown(String),

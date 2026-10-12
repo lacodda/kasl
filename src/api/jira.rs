@@ -103,6 +103,12 @@ pub struct JiraIssueFields {
     /// Last update timestamp from Jira (ISO-8601)
     #[serde(default)]
     pub updated: Option<String>,
+    /// Issue type (Bug, Story, Epic - or the instance's own words for them)
+    #[serde(default)]
+    pub issuetype: Option<JiraIssueType>,
+    /// The project the issue belongs to
+    #[serde(default)]
+    pub project: Option<JiraProject>,
     /// Custom and other fields keyed by Jira field id (e.g. `customfield_12345`).
     #[serde(flatten)]
     pub extra: HashMap<String, Value>,
@@ -228,6 +234,18 @@ where
         Some(Value::Number(n)) => n.to_string(),
         _ => String::new(),
     })
+}
+
+/// An issue type; only the name is kept, and it is the instance's own word.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JiraIssueType {
+    pub name: String,
+}
+
+/// The project an issue belongs to; the key is what issue keys start with.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct JiraProject {
+    pub key: String,
 }
 
 /// Jira issue priority.
@@ -841,7 +859,14 @@ fn check_complete(issues: Vec<JiraIssue>, total: u32) -> std::result::Result<Vec
 }
 
 fn build_search_fields(extra_field_ids: &[String]) -> String {
-    let mut fields = vec!["summary".to_string(), "status".to_string(), "priority".to_string(), "updated".to_string()];
+    let mut fields = vec![
+        "summary".to_string(),
+        "status".to_string(),
+        "priority".to_string(),
+        "updated".to_string(),
+        "issuetype".to_string(),
+        "project".to_string(),
+    ];
     for id in extra_field_ids {
         let trimmed = id.trim();
         if !trimmed.is_empty() && !fields.iter().any(|f| f == trimmed) {

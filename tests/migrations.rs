@@ -92,6 +92,7 @@ mod tests {
 
         // Back to the schema as version 16 left it, with two old-style rows.
         manager.rollback_to(&mut conn, 16).unwrap();
+        drop_inbox_rule_columns(&conn);
         conn.execute("ALTER TABLE jira_inbox DROP COLUMN left_reason", []).unwrap();
         conn.execute("ALTER TABLE jira_inbox DROP COLUMN resolution", []).unwrap();
         conn.execute(
@@ -125,5 +126,59 @@ mod tests {
                 .is_err(),
             "a third reason must be unwritable"
         );
+    }
+
+    /// Undoes migration 18 by hand, since `rollback_to` only forgets the record.
+    fn drop_inbox_rule_columns(conn: &rusqlite::Connection) {
+        for column in ["issue_type", "project", "ruled_by"] {
+            conn.execute(&format!("ALTER TABLE jira_inbox DROP COLUMN {column}"), []).unwrap();
+        }
+        conn.execute("DROP TABLE jira_priorities", []).unwrap();
+    }
+
+    /// Migration 18 gives existing rows the project their key names.
+    ///
+    /// A project rule must act on the inbox as it stands after the upgrade,
+    /// not only on issues the next poll happens to bring.
+    #[test_context(MigrationTestContext)]
+    #[serial]
+    #[test]
+    fn existing_issues_get_the_project_their_key_names(_ctx: &mut MigrationTestContext) {
+        let mut conn = Db::new_without_migrations().unwrap();
+        let manager = MigrationManager::new();
+        manager.run_migrations(&mut conn).unwrap();
+
+        manager.rollback_to(&mut conn, 17).unwrap();
+        drop_inbox_rule_columns(&conn);
+        conn.execute(
+            "INSERT INTO jira_inbox (issue_key, issue_id, summary, priority, priority_rank, url, first_seen, last_seen, notified, pinned, dismissed)
+             VALUES ('PAY-12', '1', 's', 'High', 2, 'u', datetime('now'), datetime('now'), 0, 0, 0),
+                    ('odd', '2', 's', NULL, 999, 'u', datetime('now'), datetime('now'), 0, 0, 0)",
+            [],
+        )
+        .unwrap();
+
+        manager.run_migrations(&mut conn).unwrap();
+        let rows: Vec<(String, Option<String>, Option<String>)> = conn
+            .prepare("SELECT issue_key, project, issue_type FROM jira_inbox ORDER BY issue_key")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            vec![("PAY-12".to_string(), Some("PAY".to_string()), None), ("odd".to_string(), None, None)],
+            "a key's prefix is its project; a key without one is left alone, and the type waits for Jira"
+        );
+
+        let priorities: Vec<(String, i32)> = conn
+            .prepare("SELECT name, rank FROM jira_priorities")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(priorities, vec![("High".to_string(), 2)], "the vocabulary starts with the names the rows carry");
     }
 }

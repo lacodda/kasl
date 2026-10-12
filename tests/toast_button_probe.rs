@@ -33,6 +33,8 @@ fn a_toast_button_reaches_the_mailbox() {
         sort_value: Some(7.0),
         url: "https://kasl.lacodda.com".to_string(),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }])
     .unwrap();
 

@@ -449,6 +449,50 @@ impl MigrationManager {
             tx.execute("UPDATE tasks SET task_id = id WHERE task_id = 0", [])?;
             Ok(())
         });
+
+        // Version 18: what inbox rules read, and which rule acted.
+        //
+        // A rule can say "dismiss every Epic" or "tag work from PAY", so the
+        // row has to carry the issue's type and project. Both are the source's
+        // own words, kept as text: a Russian Jira calls a bug «Ошибка», and a
+        // future GitLab source has projects that are paths, not keys.
+        //
+        // Existing rows get their project from the key's prefix, which is what
+        // a Jira key is; the next poll overwrites it with Jira's own answer.
+        // The type is left empty until then - there is nothing to guess it from.
+        //
+        // `ruled_by` names the rule behind the row's pin or dismissal, so
+        // "why is this pinned?" has an answer and an issue a rule hid can be
+        // found again. A pin or dismissal by hand clears it.
+        //
+        // `jira_priorities` is the vocabulary a rule's "High+" is read
+        // against: every priority name the inbox has seen, with its rank, and
+        // never pruned. Read off the rows of the moment instead, it shrank:
+        // the poll that lowered the last High issue made "High" unknown, and
+        // a `High+` rule fell asleep in the very poll that raised another
+        // issue to Highest. It starts with the names the rows carry now.
+        self.add_migration(18, "inbox_rules", |tx| {
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN issue_type TEXT", [])?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN project TEXT", [])?;
+            tx.execute("ALTER TABLE jira_inbox ADD COLUMN ruled_by TEXT", [])?;
+            tx.execute(
+                "UPDATE jira_inbox SET project = substr(issue_key, 1, instr(issue_key, '-') - 1) WHERE instr(issue_key, '-') > 1",
+                [],
+            )?;
+            tx.execute(
+                "CREATE TABLE IF NOT EXISTS jira_priorities (
+                    name TEXT PRIMARY KEY,
+                    rank INTEGER NOT NULL
+                )",
+                [],
+            )?;
+            tx.execute(
+                "INSERT OR IGNORE INTO jira_priorities (name, rank)
+                 SELECT priority, MIN(priority_rank) FROM jira_inbox WHERE priority IS NOT NULL GROUP BY priority",
+                [],
+            )?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

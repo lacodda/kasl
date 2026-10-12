@@ -47,6 +47,8 @@ fn seed(key: &str, priority: &str, rank: i32, score: f64) -> JiraInboxUpsert {
         sort_value: Some(score),
         url: format!("https://jira.example.com/browse/{key}"),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }
 }
 

@@ -5,7 +5,7 @@
 //! races a press, a key that is not a key.
 
 use chrono::Duration;
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::jira_inbox::{Include, JiraInbox, JiraInboxUpsert};
 use kasl::db::tasks::Tasks;
 use kasl::libs::task::TaskFilter;
 use kasl::libs::toast_action::{Mailbox, ToastAction, ToastRequest, validate_issue_key};
@@ -43,6 +43,8 @@ fn upsert(key: &str) -> JiraInboxUpsert {
         sort_value: None,
         url: format!("https://example.invalid/browse/{key}"),
         raw_updated: None,
+        issue_type: None,
+        project: None,
     }
 }
 
@@ -151,7 +153,7 @@ fn take_from_a_toast_makes_the_same_task_the_cli_would(_ctx: &mut ToastContext) 
     db.upsert_batch(&[upsert("KA-10")]).unwrap();
 
     let outcome = block(toast_apply::apply(&ToastRequest::new(ToastAction::Take, "KA-10"))).unwrap();
-    assert_eq!(outcome, Applied::Taken { started: None });
+    assert_eq!(outcome, Applied::Taken { started: None, tags: vec![] });
 
     let item = db.get_by_key("KA-10").unwrap().unwrap();
     assert!(item.taken_at.is_some(), "the issue must wear the taken mark, as `inbox take` leaves it");
@@ -185,7 +187,7 @@ fn snooze_from_a_toast_puts_the_issue_to_sleep(_ctx: &mut ToastContext) {
     let item = db.get_by_key("KA-11").unwrap().unwrap();
     assert!(item.snoozed_until.is_some(), "the row must record when it is due back");
     // A sleeping issue is out of the awake list, which is the whole point.
-    let awake = db.list_active_at(false, false).unwrap();
+    let awake = db.list(Include::default()).unwrap();
     assert!(!awake.iter().any(|i| i.issue_key == "KA-11"), "a snoozed issue must leave the awake list");
 }
 
@@ -200,7 +202,7 @@ fn dismiss_from_a_toast_hides_the_issue(_ctx: &mut ToastContext) {
         block(toast_apply::apply(&ToastRequest::new(ToastAction::Dismiss, "KA-12"))).unwrap(),
         Applied::Dismissed
     );
-    let awake = db.list_active_at(false, false).unwrap();
+    let awake = db.list(Include::default()).unwrap();
     assert!(!awake.iter().any(|i| i.issue_key == "KA-12"), "a dismissed issue must leave the list");
 }
 
@@ -249,9 +251,14 @@ fn every_outcome_says_what_happened_and_names_the_issue() {
     // A toast answering a press is the only feedback the user gets, so an
     // empty or key-less summary would leave them unsure it registered.
     let outcomes = [
-        Applied::Taken { started: None },
+        Applied::Taken { started: None, tags: vec![] },
         Applied::Taken {
             started: Some(Err("Jira did not start it: timed out".into())),
+            tags: vec![],
+        },
+        Applied::Taken {
+            started: None,
+            tags: vec!["payments".into()],
         },
         Applied::AlreadyTaken("KA-1 something".into()),
         Applied::Snoozed(chrono::Local::now().naive_local()),
