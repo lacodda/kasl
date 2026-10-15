@@ -130,6 +130,11 @@ Monthly work productivity: 95.4%
 - **Nothing that hangs.** Every prompt checks for a terminal first, so kasl
   under cron or under the daemon fails with the flag you needed instead of
   waiting for an answer nobody can give.
+- **Output a script can read.** `--json` on every command that prints data -
+  the day, the month, tasks, the inbox, the server connection - leaves one
+  document on stdout for a status bar or `jq`. `--plain` keeps the human output
+  for logs and `grep`: no colour, no emoji, tables as tab-separated lines.
+  `NO_COLOR` is honoured.
 - **A team server, when there is one.** `kasl server connect` points this
   machine at a self-hosted
   [kasl-server](https://github.com/lacodda/kasl-server); a day that cannot be

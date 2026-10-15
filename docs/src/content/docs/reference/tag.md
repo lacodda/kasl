@@ -37,20 +37,23 @@ Tags are also created implicitly: `kasl task add --tags "new-tag,urgent"` create
 ## `kasl tag list`
 
 ```bash
-kasl tag list
+kasl tag list [--json]
 ```
 
 Displays a table of all tags with their ID, name, and color.
 
+- `--json`: Print them as one JSON document - see [JSON output](#json-output).
+
 ## `kasl tag show`
 
 ```bash
-kasl tag show <TAG>
+kasl tag show <TAG> [--json]
 ```
 
 - `TAG`: tag name or ID. Required.
+- `--json`: Print the tag and its tasks as one JSON document - see [JSON output](#json-output).
 
-Shows the tag and every task currently assigned to it.
+Shows the tag and every task currently assigned to it. A tag that does not exist is an error (exit code 1), so a script can tell it from a tag that carries no tasks.
 
 ## `kasl tag edit`
 
@@ -133,6 +136,40 @@ $ kasl tag remove urgent -y
 ```
 
 `tag edit` prints `✅ Tag '{new-name}' updated successfully.` after its prompts; it has no other output to show statically since the prompts themselves depend on the terminal.
+
+## JSON output
+
+`kasl tag list --json` and `kasl tag show --json` print one document each
+(conventions: [kasl in scripts and CI](/guides/scripting/#json-for-programs)):
+
+```json
+{
+  "tags": [
+    { "id": 1, "name": "backend", "color": "blue" },
+    { "id": 2, "name": "db", "color": null }
+  ]
+}
+```
+
+```json
+{
+  "tag": { "id": 2, "name": "db", "color": null },
+  "tasks": [
+    {
+      "id": 3,
+      "chain_id": 3,
+      "created_at": "2026-08-08T10:05:41",
+      "name": "PROJ-419 Draft migration for protected pauses",
+      "comment": "backfill pending",
+      "completeness": 60,
+      "tags": ["backend", "db"],
+      "jira_key": null
+    }
+  ]
+}
+```
+
+A task has the shape [`task list --json`](/reference/task/#json-output) prints.
 
 ## Related commands
 

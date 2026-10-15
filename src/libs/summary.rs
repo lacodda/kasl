@@ -10,6 +10,7 @@
 //!         date: NaiveDate::from_ymd_opt(2025, 8, 11).unwrap(),
 //!         duration: Duration::hours(8),
 //!         productivity: 85.5,
+//!         rest_day: false,
 //!     },
 //! ];
 //!
@@ -34,6 +35,9 @@ pub struct DailySummary {
 
     /// Productivity percentage for the day, 0-100.
     pub productivity: f64,
+
+    /// A company rest day counted as a full day, rather than a recorded one.
+    pub rest_day: bool,
 }
 
 /// Builds the monthly figures by chaining transformations:
@@ -108,6 +112,7 @@ impl SummaryCalculator for Vec<DailySummary> {
                     date: rest_date,
                     duration,
                     productivity: 0.0, // Rest days have zero productivity
+                    rest_day: true,
                 });
             }
         }

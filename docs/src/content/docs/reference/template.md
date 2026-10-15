@@ -43,18 +43,23 @@ kasl template add --name daily-standup
 ## `kasl template list`
 
 ```bash
-kasl template list
+kasl template list [--json]
 ```
 
 Prints a table of every template: name, task name, comment, and completeness.
 
+- `--json`: Print them as one JSON document - see [JSON output](#json-output).
+
 ## `kasl template show`
 
 ```bash
-kasl template show [NAME]
+kasl template show [NAME] [--json]
 ```
 
 - `NAME`: Template to show. Omit it in a terminal to pick from a list.
+- `--json`: Print it as one JSON document - see [JSON output](#json-output).
+
+A name that matches no template is an error (exit code 1).
 
 ## `kasl template edit`
 
@@ -78,10 +83,11 @@ Removing a template does not affect tasks already created from it.
 ## `kasl template search`
 
 ```bash
-kasl template search <QUERY>
+kasl template search <QUERY> [--json]
 ```
 
 - `QUERY`: Text to match against template names and task names. Case-insensitive, partial matches included.
+- `--json`: Print the matches as one JSON document - see [JSON output](#json-output). No match is `{"templates": []}`, exit code 0.
 
 ## Using a template with `task add`
 
@@ -118,6 +124,25 @@ Task Templates:
 +---------------+---------------+-----------+--------------+
 | standup       | Daily standup | team sync | 0%           |
 +---------------+---------------+-----------+--------------+
+```
+
+## JSON output
+
+`list` and `search` print a list, `show` prints the one template
+(conventions: [kasl in scripts and CI](/guides/scripting/#json-for-programs)):
+
+```json
+{
+  "templates": [
+    { "name": "standup", "task_name": "Daily standup", "comment": "team sync", "completeness": 0 }
+  ]
+}
+```
+
+```json
+{
+  "template": { "name": "standup", "task_name": "Daily standup", "comment": "team sync", "completeness": 0 }
+}
 ```
 
 ## Related commands

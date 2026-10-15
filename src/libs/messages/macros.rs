@@ -1,9 +1,10 @@
 //! Print macros that route to the console or to `tracing`.
 //!
 //! Every macro checks [`is_debug_mode`] once per call: with `KASL_DEBUG` or
-//! `RUST_LOG` set, output goes through `tracing` (so the daemon's log captures
-//! it); otherwise it goes straight to stdout/stderr. Each macro takes an
-//! optional `true` second argument to pad the message with blank lines.
+//! `RUST_LOG` set, output goes through `tracing` (to stderr, beside the debug
+//! log); otherwise [`crate::libs::output::emit`] prints it with the mark and on
+//! the stream this run's style gives its kind. Each macro takes an optional
+//! `true` second argument to pad the message with blank lines.
 //!
 //! ```rust
 //! use kasl::{msg_info, msg_error, msg_success, msg_warning};
@@ -57,16 +58,16 @@ pub fn is_debug_mode() -> bool {
 macro_rules! msg_print {
     ($msg:expr) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::info!("{}", $msg);
+            tracing::info!("{}{}", $crate::libs::output::style().prefix($crate::libs::output::Kind::Print), $msg);
         } else {
-            println!("{}", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Print, &$msg, false);
         }
     };
     ($msg:expr, true) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::info!("\n{}\n", $msg);
+            tracing::info!("\n{}{}\n", $crate::libs::output::style().prefix($crate::libs::output::Kind::Print), $msg);
         } else {
-            println!("\n{}\n", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Print, &$msg, true);
         }
     };
 }
@@ -90,16 +91,16 @@ macro_rules! msg_print {
 macro_rules! msg_success {
     ($msg:expr) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::info!("✅ {}", $msg);
+            tracing::info!("{}{}", $crate::libs::output::style().prefix($crate::libs::output::Kind::Success), $msg);
         } else {
-            println!("✅ {}", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Success, &$msg, false);
         }
     };
     ($msg:expr, true) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::info!("\n✅ {}\n", $msg);
+            tracing::info!("\n{}{}\n", $crate::libs::output::style().prefix($crate::libs::output::Kind::Success), $msg);
         } else {
-            println!("\n✅ {}\n", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Success, &$msg, true);
         }
     };
 }
@@ -124,16 +125,16 @@ macro_rules! msg_success {
 macro_rules! msg_error {
     ($msg:expr) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::error!("❌ {}", $msg);
+            tracing::error!("{}{}", $crate::libs::output::style().prefix($crate::libs::output::Kind::Error), $msg);
         } else {
-            eprintln!("❌ {}", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Error, &$msg, false);
         }
     };
     ($msg:expr, true) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::error!("\n❌ {}\n", $msg);
+            tracing::error!("\n{}{}\n", $crate::libs::output::style().prefix($crate::libs::output::Kind::Error), $msg);
         } else {
-            eprintln!("\n❌ {}\n", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Error, &$msg, true);
         }
     };
 }
@@ -157,16 +158,16 @@ macro_rules! msg_error {
 macro_rules! msg_warning {
     ($msg:expr) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::warn!("⚠️ {}", $msg);
+            tracing::warn!("{}{}", $crate::libs::output::style().prefix($crate::libs::output::Kind::Warning), $msg);
         } else {
-            println!("⚠️ {}", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Warning, &$msg, false);
         }
     };
     ($msg:expr, true) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::warn!("\n⚠️ {}\n", $msg);
+            tracing::warn!("\n{}{}\n", $crate::libs::output::style().prefix($crate::libs::output::Kind::Warning), $msg);
         } else {
-            println!("\n⚠️ {}\n", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Warning, &$msg, true);
         }
     };
 }
@@ -190,16 +191,16 @@ macro_rules! msg_warning {
 macro_rules! msg_info {
     ($msg:expr) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::info!("ℹ️ {}", $msg);
+            tracing::info!("{}{}", $crate::libs::output::style().prefix($crate::libs::output::Kind::Info), $msg);
         } else {
-            println!("ℹ️ {}", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Info, &$msg, false);
         }
     };
     ($msg:expr, true) => {
         if $crate::libs::messages::macros::is_debug_mode() {
-            tracing::info!("\nℹ️ {}\n", $msg);
+            tracing::info!("\n{}{}\n", $crate::libs::output::style().prefix($crate::libs::output::Kind::Info), $msg);
         } else {
-            println!("\nℹ️ {}\n", $msg);
+            $crate::libs::output::emit($crate::libs::output::Kind::Info, &$msg, true);
         }
     };
 }
@@ -229,7 +230,11 @@ macro_rules! msg_debug {
     };
 }
 
-/// Builds an `anyhow::Error` from the message, ❌-prefixed.
+/// Builds an `anyhow::Error` from the message.
+///
+/// Unmarked: the mark belongs to where the error is printed, which knows
+/// whether it is `❌` for a person or `error:` for `--plain`
+/// ([`crate::libs::output::report_error`]).
 ///
 /// ```rust
 /// use anyhow::Result;
@@ -257,11 +262,11 @@ macro_rules! msg_debug {
 #[macro_export]
 macro_rules! msg_error_anyhow {
     ($msg:expr) => {
-        anyhow::anyhow!("❌ {}", $msg)
+        anyhow::anyhow!("{}", $msg)
     };
 }
 
-/// `return Err(...)` with the message, ❌-prefixed.
+/// `return Err(...)` with the message, unmarked like [`msg_error_anyhow!`].
 ///
 /// ```rust
 /// use anyhow::Result;
@@ -305,6 +310,6 @@ macro_rules! msg_error_anyhow {
 #[macro_export]
 macro_rules! msg_bail_anyhow {
     ($msg:expr) => {
-        anyhow::bail!("❌ {}", $msg)
+        anyhow::bail!("{}", $msg)
     };
 }

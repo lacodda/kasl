@@ -24,7 +24,7 @@
 use crate::libs::pause::Pause;
 use crate::{db::workdays::Workday, libs::productivity::Productivity};
 use anyhow::Result;
-use chrono::{Duration, NaiveDateTime};
+use chrono::{Duration, NaiveDate, NaiveDateTime};
 
 /// One uninterrupted stretch of work between pauses (or day bounds).
 #[derive(Debug, Clone)]
@@ -339,6 +339,104 @@ pub fn report_with_intervals(workday: &Workday, intervals: &[WorkInterval]) -> R
     let productivity = Productivity::new(workday)?.calculate_productivity();
 
     Ok((filtered_duration, productivity))
+}
+
+/// Everything `kasl report` says about one day, read once for every way of printing it.
+///
+/// The table and `--json` are two renderings of this, not two readings of the
+/// database, so they cannot disagree about a day.
+pub struct DayReport {
+    pub date: NaiveDate,
+    /// `None` for a day nothing was recorded on.
+    pub workday: Option<Workday>,
+    /// The intervals the report counts, short ones already left out.
+    pub intervals: Vec<WorkInterval>,
+    /// The sum of `intervals`.
+    pub work: Duration,
+    pub productivity: Option<f64>,
+    /// The configured minimum, when there is a day to hold to it.
+    pub threshold: Option<f64>,
+    /// Whether the day is below the minimum yet - see [`Productivity::is_below_threshold`].
+    pub below_threshold: bool,
+    /// The short intervals `intervals` leaves out.
+    pub dropped: Option<ShortIntervalsInfo>,
+    pub tasks: Vec<crate::libs::task::Task>,
+    pub inbox: crate::db::jira_inbox::InboxCounts,
+}
+
+impl DayReport {
+    /// Reads the day as `kasl report` shows it.
+    pub fn read(date: NaiveDate) -> Result<DayReport> {
+        use crate::db::{jira_inbox::JiraInbox, pauses::Pauses, tasks::Tasks, workdays::Workdays};
+        use crate::libs::{config::Config, task::TaskFilter};
+
+        let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
+        let inbox = JiraInbox::new()?.counts()?;
+        let Some(workday) = Workdays::new()?.fetch(date)? else {
+            return Ok(DayReport {
+                date,
+                workday: None,
+                intervals: Vec::new(),
+                work: Duration::zero(),
+                productivity: None,
+                threshold: None,
+                below_threshold: false,
+                dropped: None,
+                tasks,
+                inbox,
+            });
+        };
+
+        let monitor_config = Config::read()?.monitor.unwrap_or_default();
+        // Interruptions: detected pauses above the threshold plus any manual
+        // pauses the user recorded (protected records bypass the threshold).
+        let long_pauses = Pauses::new()?
+            .set_min_duration(monitor_config.min_pause_duration)
+            .get_workday_pauses(&workday)?;
+        let all_intervals = calculate_work_intervals(&workday, &long_pauses);
+        let (intervals, dropped) = filter_short_intervals(&all_intervals, monitor_config.min_work_interval);
+        let (work, productivity) = report_with_intervals(&workday, &intervals)?;
+        let gauge = Productivity::new(&workday)?;
+
+        Ok(DayReport {
+            date,
+            intervals,
+            work,
+            productivity: Some(productivity),
+            threshold: Some(gauge.config.min_productivity_threshold),
+            below_threshold: gauge.is_below_threshold(),
+            dropped,
+            tasks,
+            inbox,
+            workday: Some(workday),
+        })
+    }
+
+    /// The day as `--json` prints it.
+    pub fn to_json(&self) -> crate::libs::json::Day {
+        use crate::libs::json;
+        json::Day {
+            date: self.date,
+            workday: self.workday.as_ref().map(|workday| json::Workday {
+                start: workday.start,
+                end: workday.end,
+            }),
+            intervals: self.intervals.iter().map(json::Interval::from).collect(),
+            work_seconds: json::seconds(&self.work),
+            productivity: self.productivity.map(json::percent),
+            below_threshold: self.below_threshold,
+            dropped: self
+                .dropped
+                .as_ref()
+                .map(|dropped| json::Dropped {
+                    count: dropped.count,
+                    seconds: json::seconds(&dropped.total_duration),
+                })
+                .unwrap_or_default(),
+            tasks: self.tasks.iter().map(json::Task::from).collect(),
+            inbox: self.inbox.into(),
+        }
+    }
 }
 
 #[cfg(test)]

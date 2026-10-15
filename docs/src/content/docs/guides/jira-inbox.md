@@ -39,9 +39,17 @@ kasl inbox
 ```
 
 ```
-KEY        SUMMARY                          STATUS       PRIORITY  CHANGE
-PROJ-412   Fix export timeout on large...    To Do        High      NEW
+Jira inbox:
+
++---+--------+-------+----------+----------+--------+-------------------------------------+
+| ★ | CHANGE | SCORE | PRIORITY | KEY      | STATUS | SUMMARY                             |
++---+--------+-------+----------+----------+--------+-------------------------------------+
+|   | NEW    | 7     | High     | PROJ-412 | To Do  | Fix export timeout on large reports |
++---+--------+-------+----------+----------+--------+-------------------------------------+
 ```
+
+The `★` column marks pinned issues. A script reads the same list with
+`kasl inbox --json` - see [the reference](/reference/inbox/#json-output).
 
 **It changes.** If its status, priority, or ranking score moves before you've
 acted on it, the row keeps its key but the `CHANGE` column now shows what

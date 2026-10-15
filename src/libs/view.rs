@@ -36,14 +36,15 @@
 use super::task::Task;
 use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
-use crate::libs::formatter::{format_duration, terminal_cols, truncate_to_width, wrap_to_width};
+use crate::libs::formatter::{format_duration, terminal_cols};
 use crate::libs::messages::Message;
+use crate::libs::output;
 use crate::libs::pause::Pause;
 use crate::libs::report;
 use crate::msg_print;
 use anyhow::Result;
 use chrono::{Duration, NaiveDate, TimeDelta};
-use prettytable::{Cell, Row, Table, format, row};
+use prettytable::{Cell, Row, Table, row};
 use std::collections::HashMap;
 use unicode_width::UnicodeWidthStr;
 
@@ -115,7 +116,6 @@ impl View {
         let name_width = flexible.max(12);
 
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
 
         let mut titles = vec![Cell::new("#"), Cell::new("ID")];
         if show_task_id {
@@ -129,26 +129,26 @@ impl View {
         if show_tags {
             titles.push(Cell::new("TAGS"));
         }
-        table.set_titles(Row::new(titles));
+        let titles = Row::new(titles);
 
         for (index, task) in tasks.iter().enumerate() {
             let mut cells = vec![Cell::new(&(index + 1).to_string()), Cell::new(&task.id.unwrap_or(0).to_string())];
             if show_task_id {
                 cells.push(Cell::new(&task.task_id.unwrap_or(0).to_string()));
             }
-            cells.push(Cell::new(&truncate_to_width(&task.name, name_width)));
+            cells.push(Cell::new(&output::fit(&task.name, name_width)));
             if show_comment {
-                cells.push(Cell::new(&truncate_to_width(task.comment.trim(), comment_width)));
+                cells.push(Cell::new(&output::fit(task.comment.trim(), comment_width)));
             }
             cells.push(Cell::new(&format!("{}%", task.completeness.unwrap_or(100))));
             if show_tags {
                 let tags_str = task.tags.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ");
-                cells.push(Cell::new(&truncate_to_width(&tags_str, tags_width)));
+                cells.push(Cell::new(&output::fit(&tags_str, tags_width)));
             }
             table.add_row(Row::new(cells));
         }
 
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -159,8 +159,7 @@ impl View {
 
         // Create and populate the work intervals table
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["ID", "START", "END", "DURATION"]);
+        let titles = row!["ID", "START", "END", "DURATION"];
 
         // Add each work interval as a table row with formatted times
         for (index, interval) in intervals.iter().enumerate() {
@@ -178,7 +177,7 @@ impl View {
         table.add_row(row!["PRODUCTIVITY", "", "", format!("{:.1}%", productivity)]);
 
         // Render the intervals table to console
-        table.printstd();
+        output::print_table(titles, table);
 
         // Display associated tasks if any were completed during the day
         if !tasks.is_empty() {
@@ -210,8 +209,7 @@ impl View {
     pub fn sum((daily_durations, total_duration, average_duration): &(HashMap<NaiveDate, (String, String)>, String, String)) -> Result<()> {
         // Initialize table with appropriate formatting for summary data
         let mut table: Table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["DATE", "HOURS", "PRODUCTIVITY"]);
+        let titles = row!["DATE", "HOURS", "PRODUCTIVITY"];
 
         // Sort dates chronologically for logical display order
         let mut sorted_dates: Vec<&NaiveDate> = daily_durations.keys().collect();
@@ -234,15 +232,14 @@ impl View {
         table.add_row(row!["AVERAGE", average_duration, ""]);
 
         // Render the summary table to console
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
     /// Displays a table of pauses for a given day with total pause time.
     pub fn pauses(pauses: &[Pause], total_pause_time: Duration) -> Result<()> {
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["ID", "START", "END", "DURATION"]);
+        let titles = row!["ID", "START", "END", "DURATION"];
 
         for (i, b) in pauses.iter().enumerate() {
             table.add_row(row![
@@ -261,7 +258,7 @@ impl View {
             table.add_row(row!["TOTAL", "", "", format_duration(&total_pause_time)]);
         }
 
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -282,8 +279,7 @@ impl View {
     pub fn templates(templates: &[TaskTemplate]) -> Result<()> {
         // Initialize table with clean formatting for template data
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["TEMPLATE NAME", "TASK NAME", "COMMENT", "COMPLETENESS"]);
+        let titles = row!["TEMPLATE NAME", "TASK NAME", "COMMENT", "COMPLETENESS"];
 
         // Populate table with template information
         for template in templates {
@@ -296,7 +292,7 @@ impl View {
         }
 
         // Render the templates table to console
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -317,8 +313,7 @@ impl View {
     pub fn tags(tags: &[crate::db::tags::Tag]) -> Result<()> {
         // Initialize table with appropriate formatting for tag data
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["ID", "NAME", "COLOR"]);
+        let titles = row!["ID", "NAME", "COLOR"];
 
         // Populate table with tag information
         for tag in tags {
@@ -330,7 +325,7 @@ impl View {
         }
 
         // Render the tags table to console
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -378,8 +373,7 @@ impl View {
         let summary_width = terminal_cols().saturating_sub(frame_overhead + fixed).max(12);
 
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["", "CHANGE", "SCORE", "PRIORITY", "KEY", "STATUS", "SUMMARY"]);
+        let titles = row!["★", "CHANGE", "SCORE", "PRIORITY", "KEY", "STATUS", "SUMMARY"];
 
         for (item, badge) in items.iter().zip(&badges) {
             let pin = if item.pinned { "★" } else { "" };
@@ -391,16 +385,16 @@ impl View {
             };
             table.add_row(row![
                 pin,
-                truncate_to_width(badge, change_width),
+                output::fit(badge, change_width),
                 score,
                 item.priority.as_deref().unwrap_or("—"),
                 item.issue_key,
-                truncate_to_width(status_raw, status_width),
-                truncate_to_width(&item.summary, summary_width),
+                output::fit(status_raw, status_width),
+                output::fit(&item.summary, summary_width),
             ]);
         }
 
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -408,8 +402,7 @@ impl View {
     pub fn jira_inbox_issue(item: &crate::db::jira_inbox::JiraInboxItem) -> Result<()> {
         let now = chrono::Local::now().naive_local();
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["FIELD", "VALUE"]);
+        let titles = row!["FIELD", "VALUE"];
 
         let mut add = |field: &str, value: String| {
             table.add_row(row![field, value]);
@@ -456,7 +449,7 @@ impl View {
         }
         add("url", item.url.clone());
 
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -475,20 +468,19 @@ impl View {
             .max(20);
 
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["#", "NAME", "WHEN", "THEN", "NOW"]);
+        let titles = row!["#", "NAME", "WHEN", "THEN", "NOW"];
         for (row, name) in rows.iter().zip(&names) {
             // Wrapped, not truncated: the conditions are what the rule is,
             // and a cut-off one reads as a different rule.
             table.add_row(row![
                 row.number,
-                truncate_to_width(name, name_width),
-                wrap_to_width(&row.when, when_width),
-                wrap_to_width(&row.then, then_width),
-                wrap_to_width(&row.now, now_width),
+                output::fit(name, name_width),
+                output::wrap(&row.when, when_width),
+                output::wrap(&row.then, then_width),
+                output::wrap(&row.now, now_width),
             ]);
         }
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 
@@ -502,18 +494,17 @@ impl View {
         let why_width = terminal_cols().saturating_sub(frame_overhead + what_width + value_width).max(20);
 
         let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_LINESEP_WITH_TITLE);
-        table.set_titles(row!["WHAT", "VALUE", "WHY"]);
+        let titles = row!["WHAT", "VALUE", "WHY"];
         for reason in reasons {
             // Wrapped, not truncated: this column exists to be read, and a
             // cut-off explanation explains nothing.
             table.add_row(row![
                 reason.what,
-                truncate_to_width(&reason.value, value_width),
-                wrap_to_width(&reason.because, why_width),
+                output::fit(&reason.value, value_width),
+                output::wrap(&reason.because, why_width),
             ]);
         }
-        table.printstd();
+        output::print_table(titles, table);
         Ok(())
     }
 }

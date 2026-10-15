@@ -1641,6 +1641,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "console",
  "csv",
  "dialoguer",
  "dotenv",

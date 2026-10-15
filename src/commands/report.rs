@@ -8,7 +8,6 @@
 use crate::{
     api::si::{Si, daily_report_fields},
     db::{
-        jira_inbox::JiraInbox,
         pauses::Pauses,
         tasks::Tasks,
         workdays::{Workday, Workdays},
@@ -16,15 +15,17 @@ use crate::{
     libs::{
         config::Config,
         formatter::format_duration,
+        json,
         messages::Message,
+        output::{self, Format},
         productivity::Productivity,
-        report,
+        report::{self, DayReport},
         task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
     msg_error, msg_error_anyhow, msg_info, msg_print,
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use chrono::{DateTime, Duration, Local};
 use clap::Args;
 use serde_json::json;
@@ -57,7 +58,7 @@ pub struct ReportArgs {
     /// Generates and submits an aggregate monthly report containing
     /// summary statistics and total work hours. Typically used for
     /// organizational reporting requirements at month-end.
-    #[arg(long, help = "Submit monthly report")]
+    #[arg(long, help = "Submit monthly report", conflicts_with = "json")]
     month: bool,
 
     /// Print the payload before it is sent, and send nothing
@@ -78,6 +79,10 @@ pub struct ReportArgs {
         help = "Show the payload that --send would post, and post nothing"
     )]
     show: bool,
+
+    /// The day as JSON - or, with `--send --show`, the payload as JSON
+    #[command(flatten)]
+    format: Format,
 }
 
 /// Main entry point for the report command.
@@ -107,13 +112,20 @@ pub struct ReportArgs {
 /// ```
 pub async fn cmd(args: ReportArgs) -> Result<()> {
     let date = determine_report_date(args.last);
+    let json = args.format.json;
 
     if args.show {
-        show_daily_payload(date).await
+        show_daily_payload(date, json).await
     } else if args.month {
         handle_monthly_report(date).await
+    } else if args.send && json {
+        // Sending prints what happened to the request, not data; the payload
+        // it would post is what `--send --show --json` prints.
+        bail!("--json prints the day, or with --send --show the payload; sending itself has no JSON form")
+    } else if args.send {
+        send_daily_report(date).await
     } else {
-        handle_daily_report(args.send, date).await
+        display_daily_report(date, json)
     }
 }
 
@@ -124,19 +136,6 @@ pub async fn cmd(args: ReportArgs) -> Result<()> {
 /// to accommodate different organizational workflows.
 fn determine_report_date(is_last_day: bool) -> DateTime<Local> {
     if is_last_day { Local::now() - Duration::days(1) } else { Local::now() }
-}
-
-/// Handles the logic for daily reports.
-///
-/// Routes to either display or submission mode based on user preferences.
-/// This separation allows for different handling of local viewing versus
-/// API integration scenarios.
-async fn handle_daily_report(should_send: bool, date: DateTime<Local>) -> Result<()> {
-    if should_send {
-        send_daily_report(date).await
-    } else {
-        display_daily_report(date).await
-    }
 }
 
 /// Handles the submission of monthly summary reports.
@@ -174,38 +173,21 @@ async fn handle_monthly_report(date: DateTime<Local>) -> Result<()> {
 ///
 /// This provides insight into work efficiency while accounting for
 /// legitimate breaks and focusing on actual productive activity.
-async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
-    let naive_date = date.date_naive();
-    let workday = match Workdays::new()?.fetch(naive_date)? {
-        Some(wd) => wd,
-        None => {
-            msg_print!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()), true);
-            return Ok(());
-        }
+fn display_daily_report(date: DateTime<Local>, json: bool) -> Result<()> {
+    let day = DayReport::read(date.date_naive())?;
+    if json {
+        return output::print_json(&day.to_json());
+    }
+
+    let Some(workday) = &day.workday else {
+        msg_print!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()), true);
+        return Ok(());
     };
 
-    let tasks = Tasks::new()?.fetch(TaskFilter::Date(naive_date))?;
-    let config = Config::read()?;
-    let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
+    View::report(workday, &day.intervals, &day.work, &day.productivity.unwrap_or_default(), &day.tasks)?;
 
-    // Load interruptions: detected pauses above the threshold plus any manual
-    // pauses the user recorded (protected records bypass the threshold).
-    let long_pauses = Pauses::new()?
-        .set_min_duration(monitor_config.min_pause_duration)
-        .get_workday_pauses(&workday)?;
-
-    // Calculate work intervals and apply filtering
-    let intervals = report::calculate_work_intervals(&workday, &long_pauses);
-    let (filtered_intervals, filtered_info) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
-
-    // Use the report module to process the data
-    let (filtered_duration, productivity) = report::report_with_intervals(&workday, &intervals)?;
-
-    // Display the formatted report with filtered intervals
-    View::report(&workday, &filtered_intervals, &filtered_duration, &productivity, &tasks)?;
-
-    // Display information about filtered short intervals
-    if let Some(info) = filtered_info {
+    // Information about filtered short intervals
+    if let Some(info) = &day.dropped {
         msg_info!(format!(
             "Filtered out {} short intervals (total: {})",
             info.count,
@@ -214,22 +196,17 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
     }
 
     // What is still waiting in the inbox - the day is not only what was done.
-    let counts = JiraInbox::new()?.counts()?;
-    if !counts.is_empty() {
+    if !day.inbox.is_empty() {
         msg_info!(Message::JiraInboxSummary {
-            total: counts.total,
-            fresh: counts.fresh,
-            taken: counts.taken,
+            total: day.inbox.total,
+            fresh: day.inbox.fresh,
+            taken: day.inbox.taken,
         });
     }
 
     // Warn when productivity is below the configured threshold
-    let productivity = Productivity::new(&workday)?;
-    if productivity.is_below_threshold() {
-        msg_error!(Message::LowProductivityWarning {
-            current: productivity.calculate_productivity(),
-            threshold: productivity.config.min_productivity_threshold,
-        });
+    if let (true, Some(current), Some(threshold)) = (day.below_threshold, day.productivity, day.threshold) {
+        msg_error!(Message::LowProductivityWarning { current, threshold });
     }
 
     Ok(())
@@ -258,11 +235,16 @@ async fn display_daily_report(date: DateTime<Local>) -> Result<()> {
 /// Nothing is authenticated. No session is opened, no credential is read: the
 /// address comes from the config, and a preview that logged in would reach
 /// the network to tell you what it would do if it reached the network.
-async fn show_daily_payload(date: DateTime<Local>) -> Result<()> {
+///
+/// With `--json` a day that cannot be sent is an error rather than a message:
+/// there is no payload to print, and an empty stdout with exit 0 would read
+/// as one that sends nothing.
+async fn show_daily_payload(date: DateTime<Local>, json: bool) -> Result<()> {
     let naive_date = date.date_naive();
 
     let workday = match Workdays::new()?.fetch(naive_date)? {
         Some(workday) => workday,
+        None if json => return Err(msg_error_anyhow!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()))),
         None => {
             msg_print!(Message::WorkdayNotFoundForDate(date.format("%B %-d, %Y").to_string()), true);
             return Ok(());
@@ -275,6 +257,9 @@ async fn show_daily_payload(date: DateTime<Local>) -> Result<()> {
         // report to describe. Reported rather than shown as an empty payload,
         // which would read as "this day sends nothing" when what it means is
         // "this day cannot be sent".
+        if json {
+            return Err(msg_error_anyhow!(Message::TasksNotFoundForDate(date.format("%B %-d, %Y").to_string())));
+        }
         msg_error!(Message::TasksNotFoundForDate(date.format("%B %-d, %Y").to_string()));
         return Ok(());
     }
@@ -295,6 +280,21 @@ async fn show_daily_payload(date: DateTime<Local>) -> Result<()> {
     // The destination is half the answer to "what leaves this machine", so it
     // is named from the configured client rather than described in prose.
     let si = get_si_service()?;
+    let fields = daily_report_fields(&naive_date.format("%Y-%m-%d").to_string(), &events_json);
+    if json {
+        return output::print_json(&json::Payload {
+            url: si.daily_report_url(),
+            date: naive_date,
+            fields: fields
+                .into_iter()
+                .map(|(name, value)| json::Field {
+                    name: name.to_string(),
+                    value: value.to_string(),
+                })
+                .collect(),
+            tasks: report_json,
+        });
+    }
     msg_info!(Message::ReportPayloadHeading {
         url: si.daily_report_url(),
         date: naive_date.to_string(),
@@ -304,7 +304,7 @@ async fn show_daily_payload(date: DateTime<Local>) -> Result<()> {
     // the work is described, but a person asking what is sent about them is
     // owed the whole request - a field they were not shown is a field they
     // were not told about.
-    for (name, value) in daily_report_fields(&naive_date.format("%Y-%m-%d").to_string(), &events_json) {
+    for (name, value) in fields {
         // The tasks field holds the report as JSON; pretty-printing it is the
         // difference between a payload someone can read and one they can only
         // confirm exists.

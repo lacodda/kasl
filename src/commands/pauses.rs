@@ -27,7 +27,9 @@ use crate::db::pauses::Pauses;
 use crate::db::workdays::Workdays;
 use crate::libs::config::Config;
 use crate::libs::formatter::parse_date;
+use crate::libs::json;
 use crate::libs::messages::Message;
+use crate::libs::output::{self, Format};
 use crate::libs::pick;
 use crate::libs::view::View;
 use crate::{msg_error, msg_print, msg_success};
@@ -52,6 +54,9 @@ pub struct PausesArgs {
     /// Minimum pause duration filter in minutes
     #[arg(long, short, help = "Minimum pause duration in minutes")]
     min_duration: Option<u64>,
+
+    #[command(flatten)]
+    format: Format,
 }
 
 /// Subcommands for viewing and editing pause records.
@@ -108,6 +113,9 @@ struct ListArgs {
     /// Minimum pause duration filter in minutes
     #[arg(long, short, help = "Minimum pause duration in minutes")]
     min_duration: Option<u64>,
+
+    #[command(flatten)]
+    format: Format,
 }
 
 /// Arguments for removing a pause.
@@ -128,17 +136,23 @@ struct RemoveArgs {
 
 /// Executes the pauses command.
 pub async fn cmd(args: PausesArgs) -> Result<()> {
+    // The top-level flags are the bare form's; given before `add` or
+    // `remove`, `--json` would be dropped on the floor, and a script asking
+    // for JSON must not be answered in prose.
+    if args.format.json && matches!(args.command, Some(PausesCommand::Add(_) | PausesCommand::Remove(_))) {
+        bail!("--json applies to listing pauses: `kasl pauses list --json`");
+    }
     match args.command {
         Some(PausesCommand::Add(add_args)) => add(add_args),
         Some(PausesCommand::Remove(remove_args)) => remove(remove_args),
-        Some(PausesCommand::List(list_args)) => list(&list_args.date, list_args.min_duration),
+        Some(PausesCommand::List(list_args)) => list(&list_args.date, list_args.min_duration, list_args.format.json || args.format.json),
         // Bare `kasl pauses` keeps showing the day, as it always has.
-        None => list(&args.date, args.min_duration),
+        None => list(&args.date, args.min_duration, args.format.json),
     }
 }
 
 /// Displays pauses for the given date.
-fn list(date_str: &str, min_duration_override: Option<u64>) -> Result<()> {
+fn list(date_str: &str, min_duration_override: Option<u64>, json: bool) -> Result<()> {
     let date = parse_date(date_str)?;
 
     // Load configuration to get default minimum pause duration
@@ -154,6 +168,15 @@ fn list(date_str: &str, min_duration_override: Option<u64>) -> Result<()> {
 
     // Calculate total pause time for summary statistics
     let total_pause_time = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);
+
+    if json {
+        return output::print_json(&json::Pauses {
+            date,
+            min_minutes: min_duration,
+            pauses: pauses.iter().map(json::Pause::from).collect(),
+            total_seconds: json::seconds(&total_pause_time),
+        });
+    }
 
     // Display formatted results with date header
     msg_print!(Message::PausesTitle(date.format("%B %-d, %Y").to_string()), true);

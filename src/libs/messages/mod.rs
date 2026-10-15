@@ -43,7 +43,7 @@ pub use types::Message;
 /// msg_success!(Message::TaskCreated);
 /// ```
 pub fn success(msg: Message) -> String {
-    format!("✅ {}", msg)
+    format!("{}{}", crate::libs::output::style().prefix(crate::libs::output::Kind::Success), msg)
 }
 
 /// Prefixes the message with the error mark.
@@ -73,7 +73,7 @@ pub fn success(msg: Message) -> String {
 /// }
 /// ```
 pub fn error(msg: Message) -> String {
-    format!("❌ {}", msg)
+    format!("{}{}", crate::libs::output::style().prefix(crate::libs::output::Kind::Error), msg)
 }
 
 /// Prefixes the message with the warning mark.
@@ -97,7 +97,7 @@ pub fn error(msg: Message) -> String {
 /// msg_warning!(Message::ShortIntervalsDetected(count, duration));
 /// ```
 pub fn warning(msg: Message) -> String {
-    format!("⚠️  {}", msg)
+    format!("{}{}", crate::libs::output::style().prefix(crate::libs::output::Kind::Warning), msg)
 }
 
 /// Prefixes the message with the info mark.
@@ -124,7 +124,7 @@ pub fn warning(msg: Message) -> String {
 /// msg_success!(Message::WatcherStarted(12345));
 /// ```
 pub fn info(msg: Message) -> String {
-    format!("ℹ️  {}", msg)
+    format!("{}{}", crate::libs::output::style().prefix(crate::libs::output::Kind::Info), msg)
 }
 
 /// Wraps the message in blank lines for emphasis; use sparingly.

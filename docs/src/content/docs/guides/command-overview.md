@@ -159,6 +159,20 @@ Commands for application configuration and maintenance:
 - `autostart` - System integration
 - `self-update` - Application updates
 
+## Output for scripts and logs
+
+- **`--json`**, on every command that prints data (`report`, `sum`,
+  `pauses list`, `task list`/`show`, `tag`, `template`, `inbox list`/`show`/`rules`,
+  `server status`/`queue`/`pulse`/`manifest`, `autostart status`): one JSON
+  document on stdout, everything else on stderr.
+- **`--plain`**, on every command: the same output without colour, emoji or
+  blank padding, and tables as tab-separated lines that are never cut to the
+  terminal's width - for logs and `grep`.
+- **`NO_COLOR`** is honoured everywhere kasl paints.
+
+The conventions and the full list are in
+[kasl in scripts and CI](/guides/scripting/#json-for-programs).
+
 ## Getting Help
 
 ### Omitting an identifier

@@ -99,6 +99,7 @@ encoding_rs = "0.8.35" # Text encoding conversion
 csv = "1.4.0"              # CSV reading/writing
 rust_xlsxwriter = "0.99.0" # Excel file generation
 indicatif = "0.18.6"
+console = "0.16.6"       # Colour switch for indicatif and dialoguer, decided once by libs::output
 terminal_size = "0.4.4"
 unicode-width = "0.2.2"
 clap_complete = "4.6.9"

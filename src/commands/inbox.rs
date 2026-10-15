@@ -10,12 +10,14 @@ use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, prio
 use crate::libs::inbox_rules::{self, RuleBook};
 use crate::libs::jira_bridge::{self, Goal, MoveOptions};
 use crate::libs::jira_inbox::{self as inbox_lib, ResolvedIssue};
+use crate::libs::json;
 use crate::libs::messages::Message;
+use crate::libs::output::{self, Format};
 use crate::libs::pick::{self, TriageAction, TriageAnswer};
 use crate::libs::prompt::is_interactive;
 use crate::libs::toast_apply::{self, Applied};
 use crate::libs::view::View;
-use crate::{msg_error, msg_info, msg_print, msg_success, msg_warning};
+use crate::{msg_error, msg_error_anyhow, msg_info, msg_print, msg_success, msg_warning};
 use anyhow::{Result, bail};
 use chrono::Local;
 use clap::{Args, Subcommand, ValueEnum};
@@ -47,6 +49,9 @@ pub struct InboxArgs {
 
     #[command(flatten)]
     filter: FilterArgs,
+
+    #[command(flatten)]
+    format: Format,
 }
 
 /// The cuts an inbox of two hundred issues needs before it is a list.
@@ -211,6 +216,9 @@ enum InboxCommand {
 
         #[command(flatten)]
         filter: FilterArgs,
+
+        #[command(flatten)]
+        format: Format,
     },
 
     /// Pin an issue so it stays on top
@@ -260,6 +268,9 @@ enum InboxCommand {
         /// Apply the rules to the issues already in the inbox
         #[arg(long)]
         apply: bool,
+
+        #[command(flatten)]
+        format: Format,
     },
 
     /// Open an issue in the browser
@@ -297,6 +308,9 @@ enum InboxCommand {
 
         #[command(flatten)]
         filter: FilterArgs,
+
+        #[command(flatten)]
+        format: Format,
     },
 
     /// Put an issue to sleep until a moment passes
@@ -390,6 +404,13 @@ enum InboxCommand {
 /// Entry point for `kasl inbox`.
 pub async fn cmd(args: InboxArgs) -> Result<()> {
     let top = args.filter;
+    // The top-level flags are the bare form's, `kasl inbox --json`. Before a
+    // subcommand that does not list, `--json` would be dropped on the floor,
+    // and a script asking for JSON must not be answered in prose.
+    let top_json = args.format.json;
+    if top_json && !matches!(args.command, None | Some(InboxCommand::List { .. })) {
+        bail!("--json before a subcommand applies to the list; give it to the subcommand: `kasl inbox show KEY --json`");
+    }
     match args.command {
         Some(InboxCommand::Sync) => {
             let outcome = inbox_lib::sync_interactive(true).await?;
@@ -411,24 +432,25 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
             snoozed,
             dismissed,
             filter,
+            format,
         }) => {
             let include = Include {
                 gone: all || args.all,
                 snoozed: snoozed || args.snoozed,
                 dismissed: dismissed || args.dismissed,
             };
-            list_inbox(limit.or(args.limit), include, &filter.or(top))
+            list_inbox(limit.or(args.limit), include, &filter.or(top), format.json || top_json)
         }
         Some(InboxCommand::Pin { key, filter }) => set_pinned(&resolve_key(key, "Pin which issue?", false, &filter.or(top))?, true),
         Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
         Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Undismiss { key }) => undismiss(key),
-        Some(InboxCommand::Rules { apply }) => rules(apply),
+        Some(InboxCommand::Rules { apply, format }) => rules(apply, format.json),
         Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
         Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &filter.or(top)).await,
-        Some(InboxCommand::Show { key, why, filter }) => {
+        Some(InboxCommand::Show { key, why, filter, format }) => {
             let key = resolve_key(key, "Show which issue?", false, &filter.or(top))?;
-            show_issue(&key, why)
+            show_issue(&key, why, format.json)
         }
         Some(InboxCommand::Snooze { key, duration, filter }) => {
             let key = resolve_key(key, "Snooze which issue?", false, &filter.or(top))?;
@@ -461,7 +483,7 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
                 snoozed: args.snoozed,
                 dismissed: args.dismissed,
             };
-            list_inbox(args.limit, include, &top)
+            list_inbox(args.limit, include, &top, top_json)
         }
     }
 }
@@ -502,9 +524,25 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
     pick::inbox_issue(&items, prompt)
 }
 
-fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs) -> Result<()> {
+/// Prints the inbox, cut and ordered as asked.
+///
+/// With `--json` the same slice, in the same order, as one document - read
+/// from the local table only, never from Jira, so it answers at once
+/// (rigger reads it this way, `kasl inbox list --all --snoozed --json`).
+fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs, json: bool) -> Result<()> {
     warn_skipped_rules();
     let (mut items, total) = sliced(include, filter)?;
+    if json {
+        if let Some(n) = limit {
+            items.truncate(n);
+        }
+        let now = Local::now().naive_local();
+        return output::print_json(&json::InboxList {
+            issues: items.iter().map(|item| json::Issue::at(item, now)).collect(),
+            total,
+            filter: filter.describe(),
+        });
+    }
     if total == 0 {
         // "Empty" over an inbox that is only asleep would read as nothing to
         // do, when in fact everything in it is coming back.
@@ -674,26 +712,41 @@ struct TriageTally {
 /// A row in the table is six narrow columns; this is where the whole summary,
 /// the URL and the dates fit. `--why` adds where the ordering comes from,
 /// which is the question a list sorted by a field nobody can see invites.
-fn show_issue(key: &str, why: bool) -> Result<()> {
+///
+/// An issue the inbox does not hold is a failure (exit 1), so a script can
+/// tell it from one it got.
+fn show_issue(key: &str, why: bool, json: bool) -> Result<()> {
     let db = JiraInbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
-        msg_error!(Message::JiraInboxNotFound(key.to_string()));
-        return Ok(());
+        return Err(msg_error_anyhow!(Message::JiraInboxNotFound(key.to_string())));
     };
 
+    let reasons = if why { Some(explain_issue(&db, &item)?) } else { None };
+    if json {
+        return output::print_json(&json::IssueShown {
+            issue: json::Issue::now(&item),
+            why: reasons.map(|reasons| reasons.iter().map(json::Reason::from).collect()),
+        });
+    }
+
     View::jira_inbox_issue(&item)?;
-    if why {
-        // The label lives in config, not on the row: the number means nothing
-        // without the name of the field it was read from.
-        let label = Config::read()
-            .ok()
-            .and_then(|c| c.jira_inbox)
-            .and_then(|cfg| cfg.sort_by_field.and_then(|id| score_field_label(&cfg.custom_fields, &id)));
-        let mut reasons = inbox_filter::explain(&item, label.as_deref(), Local::now().naive_local());
-        reasons.extend(inbox_rules::explain(&RuleBook::from_config(&db)?, &item));
+    if let Some(reasons) = reasons {
         View::jira_inbox_why(&reasons)?;
     }
     Ok(())
+}
+
+/// Where an issue's place in the list comes from, and what the rules make of it.
+fn explain_issue(db: &JiraInbox, item: &JiraInboxItem) -> Result<Vec<inbox_filter::Reason>> {
+    // The label lives in config, not on the row: the number means nothing
+    // without the name of the field it was read from.
+    let label = Config::read()
+        .ok()
+        .and_then(|c| c.jira_inbox)
+        .and_then(|cfg| cfg.sort_by_field.and_then(|id| score_field_label(&cfg.custom_fields, &id)));
+    let mut reasons = inbox_filter::explain(item, label.as_deref(), Local::now().naive_local());
+    reasons.extend(inbox_rules::explain(&RuleBook::from_config(db)?, item));
+    Ok(reasons)
 }
 
 /// The human name of the ranking field, when the user gave it one.
@@ -818,13 +871,48 @@ fn undismiss(key: Option<String>) -> Result<()> {
 /// Without `--apply` this is a dry run: what each rule would act on is shown
 /// before it acts on anything, which is how a dismiss rule is checked before
 /// it hides real work.
-fn rules(apply: bool) -> Result<()> {
+///
+/// With `--json` the document carries what the table and the lines around it
+/// say: the rules with what each matches, the ones skipped and why, and what
+/// `--apply` changed.
+fn rules(apply: bool, json: bool) -> Result<()> {
     let db = JiraInbox::new()?;
     let Some(config) = Config::read()?.jira_inbox.filter(|inbox| !inbox.rules.is_empty()) else {
+        if json {
+            return output::print_json(&json::Rules {
+                rules: Vec::new(),
+                skipped: Vec::new(),
+                applied: apply.then(Vec::new),
+            });
+        }
         msg_info!(Message::InboxRulesNone);
         return Ok(());
     };
     let book = RuleBook::of_inbox(&config, &db)?;
+    if json {
+        let applied = if apply && !book.is_empty() {
+            Some(inbox_rules::apply_now(&db, &book)?)
+        } else {
+            apply.then(Vec::new)
+        };
+        let items = db.list(Include {
+            snoozed: true,
+            dismissed: true,
+            ..Include::default()
+        })?;
+        return output::print_json(&json::Rules {
+            rules: book.rules.iter().map(|rule| json::Rule::from(&inbox_rules::standing(rule, &items))).collect(),
+            skipped: book
+                .problems
+                .iter()
+                .map(|problem| json::RuleSkipped {
+                    number: problem.number,
+                    reason: problem.reason.clone(),
+                })
+                .collect(),
+            applied: applied.map(|ruled| ruled.iter().map(json::RuleActed::from).collect()),
+        });
+    }
     for problem in &book.problems {
         msg_warning!(Message::InboxRuleSkipped(problem.number, problem.reason.clone()));
     }

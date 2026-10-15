@@ -22,11 +22,13 @@ kasl task add < /dev/null
 ```
 
 ```
-Error: task name is required; pass --name outside an interactive terminal
+❌ task name is required; pass --name outside an interactive terminal
 ```
 
 That message is the contract: every command that refuses this way tells you
-exactly which flag makes it work without a terminal. This guide lists them.
+exactly which flag makes it work without a terminal. This guide lists them,
+and then how to read kasl's output from a program
+([`--json`](#json-for-programs)) or a log ([`--plain`](#plain-text-for-logs-and-pipes)).
 
 ## Commands that already work without a terminal
 
@@ -72,7 +74,7 @@ kasl task add --name "Ship the scripting guide"
 `--name` is required outside a terminal for both commands - without it:
 
 ```
-Error: task name is required; pass --name outside an interactive terminal
+❌ task name is required; pass --name outside an interactive terminal
 ```
 
 `--comment`, `--completeness` and (for `task add`) `--tags` are optional -
@@ -101,7 +103,7 @@ kasl task remove 3 --yes
 kasl template remove standup --yes
 ```
 
-Without `--yes`, outside a terminal, both refuse (`Error: refusing to remove
+Without `--yes`, outside a terminal, both refuse (`❌ refusing to remove
 tasks without --yes outside an interactive terminal`) - deliberately: a
 destructive command doesn't get to assume "yes" just because nobody could say
 "no". Interactively, `--yes` skips the same confirmation prompt.
@@ -139,8 +141,104 @@ needs a terminal ``:
   never taken from an argument where it would land in shell history. Connect
   once by hand; everything that sends days afterwards runs unattended.
 
+## JSON for programs
+
+Every command that prints data takes `--json`: a status bar, a script or
+another tool gets the same facts as the table, without scraping it.
+
+```bash
+kasl inbox list --json | jq -r '.issues[] | select(.pinned) | .key'
+kasl report --json | jq '.work_seconds / 3600 | floor'
+kasl task list --all --json | jq '[.tasks[] | select(.completeness < 100)] | length'
+```
+
+With `--json`, stdout carries exactly one JSON document and nothing else.
+Everything else the run has to say - a warning about a skipped inbox rule, the
+debug log - goes to stderr, so `kasl … --json | jq` never chokes on a stray
+line. The update check is skipped too: a script never waits on GitHub.
+
+The commands that take it:
+
+| Command | Document |
+| --- | --- |
+| [`report`](/reference/report/#json-output) | the day: workday, intervals, productivity, tasks, inbox counts |
+| [`report --send --show`](/reference/report/#what-gets-sent) | the payload `--send` would post |
+| [`sum`](/reference/sum/#json-output) | the month, day by day |
+| [`pauses list`](/reference/pauses/#json-output) | a day's pauses |
+| [`task list`, `task show`](/reference/task/#json-output) | tasks |
+| [`tag list`, `tag show`](/reference/tag/#json-output) | tags, and the tasks carrying one |
+| [`template list`, `show`, `search`](/reference/template/#json-output) | templates |
+| [`inbox list`, `inbox show`, `inbox rules`](/reference/inbox/#json-output) | issues, one issue and why it sits where it does, the rules |
+| [`server status`, `queue`, `pulse`, `manifest`](/reference/server/#json-output) | the connection, the owed days, the pulse, what the server stores |
+| [`autostart status`](/reference/autostart/#json-output) | whether kasl starts at login |
+
+A command with no data to print does not take the flag: `kasl task add --json`
+is a usage error, not a task added with the answer in prose. The same goes
+for the short forms that carry list flags - `kasl inbox --json pin PROJ-412`
+refuses before pinning anything; give `--json` to the subcommand that lists.
+
+Every document keeps the same conventions, so a reader learns them once:
+
+- The top level is an object, never a bare list - a field can be added later
+  without breaking anyone reading the ones already there.
+- Every key is always present. A value that does not exist is `null`; an empty
+  list is `[]`.
+- Moments are the machine's local time as `YYYY-MM-DDTHH:MM:SS` - whole
+  seconds, no offset. Dates are `YYYY-MM-DD`.
+- Durations are whole seconds, in fields whose names end in `_seconds`.
+- Percentages are numbers from 0 to 100, rounded to one decimal.
+
+`kasl inbox list --json` reads the local inbox table only, never Jira, so it
+answers at once - which is how [rigger](https://github.com/lacodda/rigger)
+shows the inbox beside its own tasks:
+
+```bash
+kasl inbox list --all --snoozed --json
+```
+
+## Plain text for logs and pipes
+
+`--plain` works on every command and keeps the output a person reads, minus
+the decoration a log or `grep` trips over: no colour, no emoji (a warning says
+`warning:`, an error `error:`), no blank lines around headings, and tables as
+tab-separated lines under a header row, with no cell cut to the terminal's
+width.
+
+```console
+$ kasl task list --plain
+#	ID	TASK ID	NAME	COMMENT	DONE	TAGS
+1	1	1	PROJ-412 Fix session timeout on the settings page	stale cookie jar	100%	backend
+2	2	2	Review PR #318: pause merging		100%	
+3	3	3	PROJ-419 Draft migration for protected pauses	backfill pending	60%	backend, db
+```
+
+```bash
+kasl inbox --plain | awk -F'\t' 'NR > 2 && $4 == "High" { print $5 }'
+```
+
+The shape never changes on its own: kasl prints the same table to a terminal
+and to a pipe, and only `--plain` changes it. For anything you parse, prefer
+`--json` - plain text is for reading and grepping.
+
+Warnings and errors always go to stderr, in every mode, so they never land
+between the rows a pipe is reading.
+
+### Colour
+
+kasl paints little - clap's help, the `task find` spinner, the interactive
+prompts, the debug log - and decides once, for all of them, per stream:
+
+1. `--plain` (or `--json`): no colour.
+2. `NO_COLOR` set to anything but an empty string: no colour
+   ([no-color.org](https://no-color.org)).
+3. `CLICOLOR_FORCE` set to anything but `0`: colour, even into a pipe.
+4. `CLICOLOR=0`: no colour.
+5. Otherwise: colour only when the stream is a terminal.
+
 ## Environment variables
 
+- **`NO_COLOR`**, **`CLICOLOR`**, **`CLICOLOR_FORCE`** - colour, in the order
+  [above](#colour).
 - **`KASL_DEBUG=1`** or **`RUST_LOG=kasl=debug`** - diagnostic logging to
   stderr. kasl keeps no log file; see
   [Troubleshooting](/guides/troubleshooting/) for detail and
@@ -156,7 +254,13 @@ live only in `config.json` and the OS keyring (see
 ## Exit codes and a cron example
 
 Success is exit code 0; any failure - a refused prompt, a missing workday, a
-rejected report - is exit code 1. A nightly job, run weekdays at 20:00
+rejected report, a task, tag, template or inbox issue asked for by name that is
+not there - is exit code 1, with the reason on stderr. A command line kasl
+cannot parse - an unknown flag, `--json` on a command with no data - is exit
+code 2, clap's code for usage errors. An empty list is not a failure:
+`kasl task list --json` on a day with no tasks prints `{"tasks": []}` and exits
+0. A reader that stops reading early (`kasl inbox --plain | head -3`) is not a
+failure either: kasl stops quietly with exit code 0. A nightly job, run weekdays at 20:00
 (`0 20 * * 1-5 kasl-nightly-report.sh`), that files the day's report and only
 makes noise on failure relies on exactly this:
 

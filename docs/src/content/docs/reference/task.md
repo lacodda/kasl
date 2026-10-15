@@ -41,14 +41,18 @@ kasl task list [OPTIONS]
 
 - `-a, --all`: List tasks from every date, not just today.
 - `--tag <TAG>`: Only tasks carrying this tag.
+- `--json`: Print the tasks as one JSON document - see [JSON output](#json-output). An empty list is `{"tasks": []}`, exit code 0.
 
 ### `show` - Show tasks by id
 
 ```bash
-kasl task show [ID]...
+kasl task show [ID]... [--json]
 ```
 
 - `ID...`: One or more task ids to show. Omit them on a terminal to pick from today's tasks.
+- `--json`: Print them as one JSON document - see [JSON output](#json-output).
+
+Of several ids, the ones that exist are shown. When none of them does, the command fails with exit code 1, so a script can tell a missing task from one it got.
 
 ### `edit` - Edit a task by id, or several interactively
 
@@ -148,6 +152,51 @@ Running `kasl task list` after adding one task:
 ```
 
 The `TASK ID`, `COMMENT` and `TAGS` columns only appear when at least one listed task actually has that data - an all-local, comment-less, tag-less list renders as just `#`, `ID`, `NAME`, `DONE`.
+
+With `--plain` the same rows are tab-separated under a header row, and no
+name is cut to the terminal's width:
+
+```console
+$ kasl task list --plain
+#	ID	TASK ID	NAME	COMMENT	DONE	TAGS
+1	1	1	PROJ-412 Fix session timeout on the settings page	stale cookie jar	100%	backend
+2	2	2	Review PR #318: pause merging		100%	
+3	3	3	PROJ-419 Draft migration for protected pauses	backfill pending	60%	backend, db
+```
+
+## JSON output
+
+`kasl task list --json` and `kasl task show --json` print the tasks as one
+document (conventions: [kasl in scripts and CI](/guides/scripting/#json-for-programs)).
+Every listing of tasks - the day in [`report --json`](/reference/report/#json-output),
+a tag's tasks in [`tag show --json`](/reference/tag/#json-output) - uses the same
+shape for a task:
+
+```json
+{
+  "tasks": [
+    {
+      "id": 3,
+      "chain_id": 3,
+      "created_at": "2026-08-08T10:05:41",
+      "name": "PROJ-419 Draft migration for protected pauses",
+      "comment": "backfill pending",
+      "completeness": 60,
+      "tags": ["backend", "db"],
+      "jira_key": null
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `id` | The task's own id - the table's `ID`. |
+| `chain_id` | The first task of the chain this one continues across days - the table's `TASK ID`; a task that starts a chain carries its own id. |
+| `created_at` | When the row was written, local time. |
+| `completeness` | 0-100; a task with none recorded counts as done, as the table shows it. |
+| `tags` | Tag names. |
+| `jira_key` | The Jira issue the task was [taken](/reference/inbox/#take---start-working-on-an-issue) from; `null` for a task of your own. |
 
 ## Related commands
 

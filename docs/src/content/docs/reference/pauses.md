@@ -28,8 +28,11 @@ kasl pauses list [OPTIONS]
 
 - `-d, --date <DATE>`: Date to fetch pauses for (default: `today`). Accepts `today` or `YYYY-MM-DD`.
 - `-m, --min-duration <MINUTES>`: Only show pauses at least this long. Overrides the configured `min_pause_duration`.
+- `--json`: Print the pauses as one JSON document instead of the table - see [JSON output](#json-output).
 
 Protected pauses (see below) are always listed, whatever the threshold.
+
+The bare `kasl pauses` takes the same flags. Given before `add` or `remove`, `--json` is refused rather than ignored: `kasl pauses --json add …` is an error, not a pause recorded with the answer in prose.
 
 ## `kasl pauses add`
 
@@ -109,6 +112,28 @@ August 8, 2026
 | TOTAL        |       |       | 01:30    |
 +--------------+-------+-------+----------+
 ```
+
+## JSON output
+
+`kasl pauses list --json` (or `kasl pauses --json`) prints the same day as one
+document (conventions: [kasl in scripts and CI](/guides/scripting/#json-for-programs)):
+
+```json
+{
+  "date": "2026-08-08",
+  "min_minutes": 15,
+  "pauses": [
+    { "id": 1, "start": "2026-08-08T10:30:00", "end": "2026-08-08T10:45:00", "seconds": 900, "kept": false },
+    { "id": 2, "start": "2026-08-08T12:00:00", "end": "2026-08-08T13:00:00", "seconds": 3600, "kept": true },
+    { "id": 3, "start": "2026-08-08T15:15:00", "end": "2026-08-08T15:30:00", "seconds": 900, "kept": false }
+  ],
+  "total_seconds": 5400
+}
+```
+
+`min_minutes` is the threshold the list was cut at - `--min-duration`, or the
+configured `min_pause_duration`. `kept` marks a [protected pause](#protected-pauses---keep).
+A pause still running has `end` and `seconds` set to `null`.
 
 ## How pauses affect productivity
 

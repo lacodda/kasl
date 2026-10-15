@@ -28,7 +28,11 @@ pub mod toast_action;
 pub mod update;
 pub mod watch;
 
-use crate::{db::workdays::Workdays, libs::messages::types::Message, msg_error_anyhow, msg_info, msg_warning};
+use crate::{
+    db::workdays::Workdays,
+    libs::{messages::types::Message, output},
+    msg_error_anyhow, msg_info, msg_warning,
+};
 use anyhow::Result;
 use chrono::Local;
 use clap::{Parser, Subcommand};
@@ -188,6 +192,10 @@ enum Commands {
 ///
 /// # Run a specific command
 /// kasl task add --name "New task"
+///
+/// # The inbox as JSON, and today's report for a log
+/// kasl inbox list --json
+/// kasl report --plain
 /// ```
 #[derive(Debug, Parser)]
 #[command(name = "kasl", author, version, about, long_about = None)]
@@ -195,13 +203,42 @@ enum Commands {
 pub struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    /// Plain text for logs and pipes: no colour, no emoji, tables as tab-separated lines
+    #[arg(long, global = true)]
+    plain: bool,
+
+    /// Whether the command asked for `--json`, read off the parsed arguments.
+    #[arg(skip)]
+    json: bool,
 }
 
 impl Cli {
-    /// Parses command-line arguments and executes the corresponding command.
+    /// Parses `args` (the program name first), exiting with clap's message on a usage error.
     ///
-    /// This is the main entry point for the CLI logic. It handles command
-    /// routing and provides centralized error handling for all commands.
+    /// `--json` is flattened into each command that prints data (see
+    /// [`crate::libs::output::Format`]), so whether this run asked for it is
+    /// read off the parsed arguments wherever in the subcommand chain it sits,
+    /// rather than out of a match over every command that has it.
+    pub fn from_args(args: &[String]) -> Cli {
+        use clap::{CommandFactory, FromArgMatches};
+        let matches = Self::command().color(output::clap_colour(args)).get_matches_from(args);
+        let mut cli = Self::from_arg_matches(&matches).unwrap_or_else(|error| error.exit());
+        cli.json = json_requested(&matches);
+        cli
+    }
+
+    /// Whether this run prints a JSON document.
+    pub fn json(&self) -> bool {
+        self.json
+    }
+
+    /// Whether this run asked for plain text.
+    pub fn plain(&self) -> bool {
+        self.plain
+    }
+
+    /// Executes the parsed command.
     ///
     /// # Examples
     ///
@@ -210,12 +247,12 @@ impl Cli {
     ///
     /// #[tokio::main]
     /// async fn main() -> anyhow::Result<()> {
-    ///     Cli::menu().await
+    ///     let args: Vec<String> = std::env::args().collect();
+    ///     Cli::from_args(&args).dispatch().await
     /// }
     /// ```
-    pub async fn menu() -> Result<()> {
-        let cli = Self::parse();
-
+    pub async fn dispatch(self) -> Result<()> {
+        let cli = self;
         match cli.command {
             Commands::Autostart(args) => autostart::cmd(args),
             Commands::Setup(args) => {
@@ -248,8 +285,17 @@ impl Cli {
             Commands::Pauses(args) => pauses::cmd(args).await,
             Commands::Completions { shell } => {
                 use clap::CommandFactory;
-                clap_complete::generate(shell, &mut Self::command(), "kasl", &mut std::io::stdout());
-                Ok(())
+                use std::io::Write;
+                // Generated whole, then written: clap_complete panics on a
+                // failed write in its own words, which the closed-pipe hook
+                // does not know, so `kasl completions bash | head` would end
+                // in a panic instead of quietly.
+                let mut script = Vec::new();
+                clap_complete::generate(shell, &mut Self::command(), "kasl", &mut script);
+                match std::io::stdout().write_all(&script) {
+                    Err(error) if output::is_a_closed_pipe_error(&error) => Ok(()),
+                    written => Ok(written?),
+                }
             }
             Commands::Server(args) => server::cmd(args).await,
             Commands::Inbox(args) => inbox::cmd(*args).await,
@@ -260,6 +306,12 @@ impl Cli {
             Commands::Migrations(args) => migrations::cmd(args),
         }
     }
+}
+
+/// Whether `--json` was given to the command at the end of the chain or on the way to it.
+fn json_requested(matches: &clap::ArgMatches) -> bool {
+    let here = matches!(matches.try_get_one::<bool>("json"), Ok(Some(true)));
+    here || matches.subcommand().is_some_and(|(_, sub)| json_requested(sub))
 }
 
 /// Old command names still accepted as aliases, with their replacements.

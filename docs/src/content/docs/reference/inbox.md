@@ -24,6 +24,7 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 - `--all`: Include issues gone from Jira (closed or reassigned); they sort below the present ones
 - `--snoozed`: Include issues that are still asleep, each showing the date it is due back
 - `--dismissed`: Include dismissed issues, each saying whether you or a rule dismissed it
+- `--json`: Print the list as one JSON document - see [JSON output](#json-output). It belongs to the list: `kasl inbox --json pin PROJ-412` is refused before anything is pinned; give `--json` to the subcommand that prints data
 
 ### Filters
 
@@ -69,6 +70,7 @@ kasl inbox list [OPTIONS]
 - `--snoozed`: Include issues that are still asleep
 - `--dismissed`: Include dismissed issues
 - The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--type`, `--project`, `--sort`
+- `--json`: Print the same slice, in the same order, as one JSON document - see [JSON output](#json-output)
 
 The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything - and for an issue you took, it reads `resolved` once Jira has said that is why it left. Under `--dismissed`, a dismissed issue reads `dismissed`, or `ruled out: NAME` when a [rule](#rules) hid it.
 
@@ -104,7 +106,7 @@ Triage is a conversation, so it needs a terminal. In a script, use `inbox take`,
 ### `show` - Show one inbox issue
 
 ```bash
-kasl inbox show [KEY] [--why] [FILTERS]
+kasl inbox show [KEY] [--why] [--json] [FILTERS]
 ```
 
 **Arguments:**
@@ -112,8 +114,9 @@ kasl inbox show [KEY] [--why] [FILTERS]
 
 **Options:**
 - `--why`: Explain where the ranking comes from and what each mark means
+- `--json`: Print the issue - and with `--why` the explanation - as one JSON document; see [JSON output](#json-output)
 
-One issue in full: the whole summary, its type and project, the URL, and the dates a six-column table row has no room for.
+One issue in full: the whole summary, its type and project, the URL, and the dates a six-column table row has no room for. A key the inbox does not hold is an error (exit code 1).
 
 `--why` answers the question a list sorted by an invisible field invites - why is this issue *here*:
 
@@ -421,11 +424,12 @@ What a rule pinned or dismissed carries its name: `show --why` says `pinned by t
 ### `rules` - Show and apply inbox rules
 
 ```bash
-kasl inbox rules [--apply]
+kasl inbox rules [--apply] [--json]
 ```
 
 **Options:**
 - `--apply`: Apply the rules to the issues already in the inbox, as if each had just arrived
+- `--json`: Print the rules, the ones skipped and what `--apply` changed as one JSON document; see [JSON output](#json-output)
 
 Lists the rules with what each matches in the inbox now and what its pin or dismissal has not reached yet. Without `--apply` this is a dry run - the way to check a dismiss rule before it hides anything:
 
@@ -616,6 +620,95 @@ kasl inbox close PROJ-123 --to Closed --resolution Done
 ```
 
 `start` and `close` exit non-zero when the issue did not end up where they were sent, and name the flag that settles it.
+
+## JSON output
+
+`list`, `show` and `rules` take `--json` and print one document each; the
+conventions every kasl document keeps are in
+[kasl in scripts and CI](/guides/scripting/#json-for-programs). They read the
+local inbox table only - never Jira - so they answer at once, whatever the
+network is doing.
+
+`kasl inbox list --json` - the same slice in the same order the table shows,
+the [filters](#filters), `--sort` and `--limit` included:
+
+```json
+{
+  "issues": [
+    {
+      "key": "PROJ-431",
+      "summary": "Checkout fails on saved cards",
+      "status": "In Progress",
+      "status_id": "3",
+      "priority": "High",
+      "score": 8.5,
+      "type": "Bug",
+      "project": "PROJ",
+      "url": "https://jira.example.com/browse/PROJ-431",
+      "pinned": true,
+      "dismissed": false,
+      "ruled_by": null,
+      "badge": "NEW",
+      "first_seen": "2026-08-08T08:41:07",
+      "last_seen": "2026-08-08T18:05:00",
+      "changed_at": null,
+      "taken_at": null,
+      "snoozed_until": null,
+      "gone_at": null,
+      "left": null,
+      "resolution": null
+    }
+  ],
+  "total": 3,
+  "filter": ["since 7d", "priority High+"]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `total` | How many issues the inbox holds before the filters and the limit; fewer `issues` than this is a slice. |
+| `filter` | The filters in the words the list's header uses; `[]` for the whole inbox. |
+| `status` | The status's name; `null` until kasl has learnt the name for `status_id`. |
+| `score` | The ranking field's value, when one is [configured](#configuration). |
+| `ruled_by` | The [rule](#rules) behind the pin or the dismissal; `null` when a hand set it, or nothing did. |
+| `badge` | What the `CHANGE` column shows: `NEW`, `taken`, `status→In Progress`, `zzz Mar 4`, `gone`. |
+| `left` | Why a gone issue left: `resolved` or `moved`; `null` while it is present, or not yet known. |
+| `resolution` | The resolution Jira gave, when it left resolved. |
+
+[rigger](https://github.com/lacodda/rigger) reads the inbox this way, beside
+its own tasks:
+
+```bash
+kasl inbox list --all --snoozed --json
+```
+
+`kasl inbox show KEY --json` prints `{"issue": {...}, "why": null}`; with
+`--why`, `why` lists what the table under `--why` says, one object per line:
+
+```json
+{
+  "issue": { "key": "PROJ-431", "...": "..." },
+  "why": [
+    { "what": "score", "value": "8.5", "because": "read from the ranking field in Jira; the list is ordered by it, highest first" },
+    { "what": "pinned", "value": "yes", "because": "pinned by hand; pinned issues lead the list whatever the order" }
+  ]
+}
+```
+
+`kasl inbox rules --json` - the table, the skipped rules and, with `--apply`,
+what changed (`applied` is `null` on a dry run):
+
+```json
+{
+  "rules": [
+    { "number": 1, "name": "on fire", "when": "priority High+", "then": "pin, urgent toast", "matches": "1 match, 1 not yet pinned", "waiting": 1 }
+  ],
+  "skipped": [
+    { "number": 2, "reason": "unknown field `prority`, expected one of `priority`, `min_score`, `status`, `type`, `project`" }
+  ],
+  "applied": null
+}
+```
 
 ## Related commands
 

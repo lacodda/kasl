@@ -30,15 +30,16 @@ use crate::{
     db::tasks::Tasks,
     db::templates::Templates,
     libs::{
-        jira_bridge,
+        jira_bridge, json,
         messages::Message,
+        output::{self, Format},
         pick,
         prompt::{ensure_interactive, is_interactive},
         stdin_drain::drain_available_stdin_lines,
         task::{Task, TaskFilter, collapse_whitespace},
         view::View,
     },
-    msg_error, msg_info, msg_print, msg_success,
+    msg_error, msg_error_anyhow, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
 use chrono::Local;
@@ -75,6 +76,9 @@ enum TaskCommand {
         /// Task ids to show; omit to pick from today's tasks
         #[arg(value_name = "ID", num_args = 1..)]
         id: Vec<i32>,
+
+        #[command(flatten)]
+        format: Format,
     },
 
     /// Edit a task
@@ -132,6 +136,9 @@ pub struct ListArgs {
     /// Only tasks carrying this tag
     #[arg(long)]
     tag: Option<String>,
+
+    #[command(flatten)]
+    format: Format,
 }
 
 /// Arguments for removing tasks.
@@ -173,16 +180,16 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
             } else {
                 TaskFilter::Date(date.date_naive())
             };
-            show_tasks(filter)
+            list_tasks(filter, args.format.json)
         }
-        Some(TaskCommand::Show { id }) => {
+        Some(TaskCommand::Show { id, format }) => {
             let ids = if id.is_empty() {
                 let today = Tasks::new()?.fetch(TaskFilter::Date(Local::now().date_naive()))?;
                 pick::tasks(&today, "Show which tasks?")?
             } else {
                 id
             };
-            show_tasks(TaskFilter::ByIds(ids))
+            show_tasks(ids, format.json)
         }
         Some(TaskCommand::Edit { id }) => match id {
             Some(id) => handle_edit_by_id(id).await,
@@ -205,11 +212,33 @@ pub async fn cmd(task_args: TaskArgs) -> Result<()> {
 }
 
 /// Fetches and renders tasks for the given filter.
-fn show_tasks(filter: TaskFilter) -> Result<()> {
+///
+/// An empty list is an answer, not a failure: `{"tasks": []}` with `--json`.
+fn list_tasks(filter: TaskFilter, json: bool) -> Result<()> {
     let tasks = Tasks::new()?.fetch(filter)?;
+    if json {
+        return output::print_json(&json::Tasks::of(&tasks));
+    }
     if tasks.is_empty() {
         msg_error!(Message::TaskNotFound);
         return Ok(());
+    }
+    View::tasks(&tasks)?;
+    Ok(())
+}
+
+/// Renders the tasks with these ids.
+///
+/// Asked for by id, a task that is not there is a failure - exit 1, in
+/// every output mode - so a script can tell a missing task from one it got.
+/// Of several ids, the ones found are shown.
+fn show_tasks(ids: Vec<i32>, json: bool) -> Result<()> {
+    let tasks = Tasks::new()?.fetch(TaskFilter::ByIds(ids.clone()))?;
+    if tasks.is_empty() {
+        return Err(msg_error_anyhow!(Message::TasksNotFoundForIds(ids)));
+    }
+    if json {
+        return output::print_json(&json::Tasks::of(&tasks));
     }
     View::tasks(&tasks)?;
     Ok(())

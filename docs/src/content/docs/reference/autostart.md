@@ -40,8 +40,10 @@ Removes the autostart configuration. On Windows this attempts to remove both the
 ## `kasl autostart status`
 
 ```bash
-kasl autostart status
+kasl autostart status [--json]
 ```
+
+- `--json`: Print `{"enabled": true}` or `{"enabled": false}` instead of the sentence - see [JSON output](#json-output).
 
 Reports whether autostart is currently enabled or disabled. The check only reports one of these two states - it does not report which mechanism (Task Scheduler vs. Registry, or LaunchAgent vs. systemd) is in use.
 
@@ -56,10 +58,22 @@ Reports whether autostart is currently enabled or disabled. The check only repor
 ```
 
 ```
-ℹ️ Autostart is currently: enabled
+Autostart is currently: enabled
 ```
 
 `status` prints either `enabled` or `disabled` - nothing else.
+
+## JSON output
+
+```console
+$ kasl autostart status --json
+{
+  "enabled": true
+}
+```
+
+The conventions every kasl document keeps are in
+[kasl in scripts and CI](/guides/scripting/#json-for-programs).
 
 ## Examples
 

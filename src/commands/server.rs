@@ -28,11 +28,13 @@ use crate::libs::config::{Config, KaslServerConfig};
 use crate::libs::daemon;
 use crate::libs::day_delivery::{Delivered, deliver, record_single};
 use crate::libs::day_upload::build_day_upload;
+use crate::libs::json;
 use crate::libs::messages::Message;
+use crate::libs::output::{self, Format};
 use crate::libs::pulse::{self, format_ago};
 use crate::libs::secret::Secret;
 use crate::{msg_error_anyhow, msg_info, msg_print, msg_success, msg_warning};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use chrono::{Duration, Local, NaiveDate, Utc};
 use clap::{Args, Subcommand};
 use dialoguer::{Input, Password, theme::ColorfulTheme};
@@ -54,7 +56,10 @@ enum ServerCommand {
 
     /// Show the current connection
     #[command(about = "Show the current connection to a kasl-server")]
-    Status,
+    Status {
+        #[command(flatten)]
+        format: Format,
+    },
 
     /// Send a day to the server
     #[command(about = "Send a day's work to the connected kasl-server")]
@@ -66,11 +71,17 @@ enum ServerCommand {
 
     /// Show what is still waiting to be sent
     #[command(about = "Show the days still waiting to reach the server")]
-    Queue,
+    Queue {
+        #[command(flatten)]
+        format: Format,
+    },
 
     /// Show what this server keeps about you
     #[command(about = "Show what the connected kasl-server stores about you")]
-    Manifest,
+    Manifest {
+        #[command(flatten)]
+        format: Format,
+    },
 
     /// Queue a stretch of past days
     #[command(about = "Queue every recorded day in a date range and send them")]
@@ -102,6 +113,10 @@ pub struct BackfillArgs {
 pub struct PulseArgs {
     #[command(subcommand)]
     command: Option<PulseCommand>,
+
+    /// How the pulse is going, as JSON; applies to the bare `kasl server pulse`
+    #[command(flatten)]
+    format: Format,
 }
 
 /// What `kasl server pulse` can do; without one, it shows how the pulse is
@@ -145,16 +160,18 @@ pub struct ConnectArgs {
 pub async fn cmd(args: ServerArgs) -> Result<()> {
     match args.command {
         ServerCommand::Connect(args) => connect(args).await,
-        ServerCommand::Status => status().await,
+        ServerCommand::Status { format } => status(format.json).await,
         ServerCommand::Push(args) => push(args).await,
         ServerCommand::Flush => flush().await,
-        ServerCommand::Queue => queue(),
-        ServerCommand::Manifest => manifest().await,
+        ServerCommand::Queue { format } => queue(format.json),
+        ServerCommand::Manifest { format } => manifest(format.json).await,
         ServerCommand::Backfill(args) => backfill(args).await,
         ServerCommand::Pulse(args) => match args.command {
+            // `--json` belongs to showing; turning the pulse on or off prints what it did.
+            Some(_) if args.format.json => bail!("--json applies to showing the pulse: `kasl server pulse --json`"),
             Some(PulseCommand::Enable) => pulse_enable().await,
             Some(PulseCommand::Disable) => pulse_disable(),
-            None => pulse_show(),
+            None => pulse_show(args.format.json),
         },
         ServerCommand::Disconnect => disconnect(),
     }
@@ -249,15 +266,46 @@ async fn connect(args: ConnectArgs) -> Result<()> {
 /// Reaches the server rather than reading the config back: a connection that
 /// was valid when it was made and is not any more - a revoked token, a server
 /// that moved - is exactly what someone runs this to find out.
-async fn status() -> Result<()> {
+async fn status(json: bool) -> Result<()> {
     let config = Config::read().unwrap_or_default();
     let Some(server_config) = config.kasl_server else {
+        if json {
+            return output::print_json(&json::ServerStatus {
+                connected: false,
+                url: None,
+                token: None,
+                reachable: None,
+                server_version: None,
+                api_version: None,
+                user: None,
+                agent: None,
+                problem: None,
+                pulse: None,
+            });
+        }
         msg_print!(Message::KaslServerNotConnected);
         return Ok(());
     };
 
+    let check = check_connection(&server_config).await?;
+    if json {
+        let identity = check.identity.as_ref().and_then(|identity| identity.as_ref().ok());
+        return output::print_json(&json::ServerStatus {
+            connected: true,
+            url: Some(server_config.url.clone()),
+            token: Some(check.token),
+            reachable: check.health.as_ref().map(Result::is_ok),
+            server_version: check.health.as_ref().and_then(|health| health.as_ref().ok().cloned()),
+            api_version: identity.map(|identity| identity.api_version.clone()),
+            user: identity.map(|identity| identity.user_name.clone()),
+            agent: identity.map(|identity| identity.agent_name.clone()),
+            problem: check.problem().map(|problem| problem.to_string()),
+            pulse: Some(pulse_json(server_config.pulse)?),
+        });
+    }
+
     msg_info!(Message::KaslServerConfigured(server_config.url.clone()));
-    report_connection(&server_config).await?;
+    report_connection(&server_config, check);
 
     // Last, and whatever the connection checks found: the pulse's record is
     // local, and a server that cannot be reached is exactly when "the last
@@ -265,31 +313,86 @@ async fn status() -> Result<()> {
     report_pulse(server_config.pulse)
 }
 
-/// The connection checks of `status`: the token, the server, whose token it is.
-async fn report_connection(server_config: &KaslServerConfig) -> Result<()> {
+/// What the connection checks of `status` found: the token, the server, whose token it is.
+///
+/// Each check runs only when the one before it passed, so a later field is
+/// `None` when an earlier check stopped the walk - not asked, rather than failed.
+struct ConnectionCheck {
+    /// Whether the agent token is in the keyring.
+    token: bool,
+    /// The server's version from its health check, or why it did not answer.
+    health: Option<Result<String, String>>,
+    /// Whose token it is, or why the server refused it.
+    identity: Option<Result<crate::api::kasl_server::AgentIdentity, String>>,
+}
+
+impl ConnectionCheck {
+    /// The first check that failed, in the words `status` prints for it.
+    fn problem(&self) -> Option<Message> {
+        if !self.token {
+            return Some(Message::KaslServerTokenMissing);
+        }
+        if let Some(Err(error)) = &self.health {
+            return Some(Message::KaslServerUnreachable(error.clone()));
+        }
+        if let Some(Err(error)) = &self.identity {
+            return Some(Message::KaslServerTokenRejected(error.clone()));
+        }
+        None
+    }
+}
+
+/// Runs the connection checks, stopping at the first that fails.
+async fn check_connection(server_config: &KaslServerConfig) -> Result<ConnectionCheck> {
     let secret = Secret::new(AGENT_TOKEN_SECRET, AGENT_TOKEN_PROMPT);
     let Some(token) = secret.try_get_cached() else {
-        // The config says connected and the keyring disagrees: reconnecting is
-        // the fix, and saying so beats a 401 at the next upload.
-        msg_warning!(Message::KaslServerTokenMissing);
-        return Ok(());
+        return Ok(ConnectionCheck {
+            token: false,
+            health: None,
+            identity: None,
+        });
     };
 
     let client = KaslServer::new(server_config)?;
+    let health = client.health().await.map(|health| health.version).map_err(|error| error.to_string());
+    if health.is_err() {
+        return Ok(ConnectionCheck {
+            token: true,
+            health: Some(health),
+            identity: None,
+        });
+    }
+    let identity = client.identify(&token).await.map_err(|error| error.to_string());
+    Ok(ConnectionCheck {
+        token: true,
+        health: Some(health),
+        identity: Some(identity),
+    })
+}
 
-    match client.health().await {
-        Ok(health) => msg_info!(Message::KaslServerReached {
-            url: server_config.url.clone(),
-            version: health.version,
-        }),
-        Err(error) => {
-            msg_warning!(Message::KaslServerUnreachable(error.to_string()));
-            return Ok(());
-        }
+/// Says what the connection checks of `status` found.
+fn report_connection(server_config: &KaslServerConfig, check: ConnectionCheck) {
+    if !check.token {
+        // The config says connected and the keyring disagrees: reconnecting is
+        // the fix, and saying so beats a 401 at the next upload.
+        msg_warning!(Message::KaslServerTokenMissing);
+        return;
     }
 
-    match client.identify(&token).await {
-        Ok(identity) => {
+    match check.health {
+        Some(Ok(version)) => msg_info!(Message::KaslServerReached {
+            url: server_config.url.clone(),
+            version,
+        }),
+        Some(Err(error)) => {
+            msg_warning!(Message::KaslServerUnreachable(error));
+            return;
+        }
+        None => return,
+    }
+
+    match check.identity {
+        Some(Ok(identity)) => {
             msg_success!(Message::KaslServerConnected {
                 user_name: identity.user_name,
                 agent_name: identity.agent_name,
@@ -305,10 +408,9 @@ async fn report_connection(server_config: &KaslServerConfig) -> Result<()> {
                 api_version: identity.api_version,
             });
         }
-        Err(error) => msg_warning!(Message::KaslServerTokenRejected(error.to_string())),
+        Some(Err(error)) => msg_warning!(Message::KaslServerTokenRejected(error)),
+        None => {}
     }
-
-    Ok(())
 }
 
 /// Prints how the pulse is going, from what the watcher last recorded.
@@ -322,6 +424,24 @@ fn report_pulse(enabled: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// How the pulse is going, as `--json` prints it: the record, and the warnings `status` would print.
+fn pulse_json(enabled: bool) -> Result<json::Pulse> {
+    let record = if enabled { ServerPulse::new()?.last()? } else { None };
+    let warnings = pulse::describe(enabled, record.as_ref(), Utc::now())
+        .into_iter()
+        .filter(|line| line.warning)
+        .map(|line| line.message.to_string())
+        .collect();
+    Ok(json::Pulse {
+        enabled,
+        sent_at: record.as_ref().and_then(|record| record.sent_at),
+        state: record.as_ref().and_then(|record| record.state).map(|state| state.as_str()),
+        attempted_at: record.as_ref().map(|record| record.attempted_at),
+        error: record.as_ref().and_then(|record| record.error.clone()),
+        warnings,
+    })
 }
 
 /// Whether a connection being made keeps the pulse the previous one had.
@@ -415,12 +535,19 @@ fn pulse_disable() -> Result<()> {
 }
 
 /// Shows how the pulse is going, without touching the network.
-fn pulse_show() -> Result<()> {
+fn pulse_show(json: bool) -> Result<()> {
     let config = Config::read().unwrap_or_default();
     let Some(server) = config.kasl_server else {
+        if json {
+            // Not connected is not sending: the pulse is off, with nothing recorded.
+            return output::print_json(&pulse_json(false)?);
+        }
         msg_print!(Message::KaslServerNotConnected);
         return Ok(());
     };
+    if json {
+        return output::print_json(&pulse_json(server.pulse)?);
+    }
     report_pulse(server.pulse)
 }
 
@@ -437,10 +564,13 @@ fn pulse_show() -> Result<()> {
 /// and an administrator sets it; there is no personal opt-out (ADR 0011), and
 /// a flag here that appeared to narrow it would be a promise kasl cannot
 /// keep.
-async fn manifest() -> Result<()> {
+async fn manifest(json: bool) -> Result<()> {
     let (client, token) = connected_client()?;
 
     let manifest = client.privacy(&token).await?;
+    if json {
+        return output::print_json(&json::Manifest::from(manifest));
+    }
 
     msg_info!(Message::KaslServerPrivacyHeading(manifest.level));
     msg_print!(Message::KaslServerPrivacySummary(manifest.summary));
@@ -651,9 +781,14 @@ async fn flush_with(client: &KaslServer, token: &str) -> Result<()> {
 ///
 /// Deliberately offline: this is the command someone runs to find out whether
 /// their work is safe, and it has to answer on a train.
-fn queue() -> Result<()> {
+fn queue(json: bool) -> Result<()> {
     let outbox = ServerOutbox::new()?;
     let owed = outbox.pending()?;
+    if json {
+        return output::print_json(&json::Queue {
+            days: owed.iter().map(json::OwedDay::from).collect(),
+        });
+    }
 
     if owed.is_empty() {
         msg_print!(Message::KaslServerQueueEmpty);

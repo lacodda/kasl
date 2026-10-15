@@ -15,7 +15,11 @@
 //! kasl autostart status
 //! ```
 
-use crate::libs::{autostart, messages::Message};
+use crate::libs::{
+    autostart, json,
+    messages::Message,
+    output::{self, Format},
+};
 use crate::msg_print;
 use anyhow::Result;
 use clap::{Args, Subcommand};
@@ -55,7 +59,10 @@ enum AutostartCommand {
     ///
     /// Checks and displays whether autostart is currently enabled
     /// or disabled on the system.
-    Status,
+    Status {
+        #[command(flatten)]
+        format: Format,
+    },
 }
 
 /// Executes the autostart command based on the specified operation.
@@ -72,7 +79,10 @@ pub fn cmd(args: AutostartArgs) -> Result<()> {
             autostart::disable()?;
             Ok(())
         }
-        AutostartCommand::Status => {
+        AutostartCommand::Status { format } if format.json => output::print_json(&json::Autostart {
+            enabled: autostart::is_enabled()?,
+        }),
+        AutostartCommand::Status { .. } => {
             let status = autostart::status()?;
             msg_print!(Message::AutostartStatus(status));
             Ok(())

@@ -277,6 +277,9 @@ mod tests {
             .await;
 
         let shown = stdout_of(&kasl_cmd(dir.path()).args(["report", "--send", "--show"]).output().unwrap());
+        let shown_json: serde_json::Value =
+            serde_json::from_slice(&kasl_cmd(dir.path()).args(["report", "--send", "--show", "--json"]).output().unwrap().stdout)
+                .expect("--show --json prints one document");
         let sent = kasl_cmd(dir.path()).args(["report", "--send"]).output().unwrap();
         assert!(sent.status.success(), "--send failed: {}", String::from_utf8_lossy(&sent.stderr));
 
@@ -304,6 +307,19 @@ mod tests {
 preview:
 {shown}
 posted: {posted_fields:?}"
+        );
+
+        // The JSON form makes the same promise, field by field.
+        let json_fields: Vec<String> = shown_json["fields"]
+            .as_array()
+            .expect("a list of fields")
+            .iter()
+            .map(|field| field["name"].as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(json_fields, posted_fields, "--show --json and the request disagree:\n{shown_json:#}");
+        assert!(
+            shown_json["tasks"].is_array() && shown_json["url"].as_str().is_some_and(|url| url.ends_with("/report-card/send-daily-report")),
+            "{shown_json:#}"
         );
     }
 

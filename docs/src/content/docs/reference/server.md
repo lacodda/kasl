@@ -74,8 +74,10 @@ The scheme is never guessed. `http://` and `https://` differ by whether the toke
 ## `kasl server status`
 
 ```bash
-kasl server status
+kasl server status [--json]
 ```
+
+- `--json`: Print what the checks found as one JSON document - see [JSON output](#json-output).
 
 Reaches the server rather than reading the config back, because what you run this to find out is whether the connection still works:
 
@@ -204,8 +206,10 @@ A day the server refuses is named and dropped rather than kept: it would be refu
 ### `kasl server queue`
 
 ```bash
-kasl server queue
+kasl server queue [--json]
 ```
+
+- `--json`: Print the owed days as one JSON document - see [JSON output](#json-output).
 
 Shows what is still owed, with how many attempts each has taken and what went wrong last time. It does not touch the network, so it answers on a train:
 
@@ -258,8 +262,10 @@ Only dates that actually have a workday are queued, so weekends and leave inside
 ## `kasl server manifest`
 
 ```bash
-kasl server manifest
+kasl server manifest [--json]
 ```
+
+- `--json`: Print the manifest as one JSON document, field by field as the server sent it - see [JSON output](#json-output).
 
 What this installation stores about you, read from the server itself:
 
@@ -318,6 +324,7 @@ kasl server pulse [enable | disable]
 - `enable`: Start telling the server whether you are working right now.
 - `disable`: Stop telling it.
 - With neither, shows how the pulse is going, without touching the network.
+- `--json`: With neither, print how the pulse is going as one JSON document - see [JSON output](#json-output). Refused with `enable` or `disable`, which print what they did.
 
 Everything else this command sends is about the past: a day goes up when it is pushed. The pulse is the one thing about the present. Once it is on, the watcher tells the server once a minute whether you are **working** (in an open workday, not in a pause), **paused** (in an open workday, in a pause) or **idle** (no workday open - before it starts, or after `kasl end`). The team dashboard shows it as who is working right now.
 
@@ -436,6 +443,70 @@ kasl server disconnect
 Removes the stored token, then the configured address - in that order, so a failure never leaves a working credential behind with nothing pointing at it. The pulse goes with the address: a later `connect` starts with it off. Disconnecting does not revoke the token on the server; ask an administrator to revoke it if the machine is being handed on.
 
 Local data is untouched. Days already uploaded stay on the server, and everything in the local database stays where it is.
+
+## JSON output
+
+`status`, `queue`, `pulse` and `manifest` take `--json` and print one document
+each; the conventions every kasl document keeps are in
+[kasl in scripts and CI](/guides/scripting/#json-for-programs).
+
+`kasl server status --json` - each check, and the first that failed:
+
+```json
+{
+  "connected": true,
+  "url": "https://kasl.example.com",
+  "token": true,
+  "reachable": true,
+  "server_version": "X.Y.Z",
+  "api_version": "v1",
+  "user": "Ada Lovelace",
+  "agent": "laptop",
+  "problem": null,
+  "pulse": {
+    "enabled": true,
+    "sent_at": "2026-09-03T14:05:12",
+    "state": "working",
+    "attempted_at": "2026-09-03T14:05:12",
+    "error": null,
+    "warnings": []
+  }
+}
+```
+
+The checks run in order and stop at the first that fails, so a later field is
+`null` when an earlier one stopped the walk - not asked, rather than failed:
+no `token` means the server was never asked, `reachable: false` means nobody
+was identified. `problem` is the failure in the words `status` prints for it.
+Not connected at all, everything but `connected: false` is `null`.
+
+`kasl server pulse --json` is the `pulse` object on its own. `state` is what
+the last pulse that arrived said - `working`, `paused` or `idle`; `error` is
+why the last attempt did not arrive, `null` when it did; `warnings` are the
+lines `status` would warn with (failing, silent, shown offline, clock skew).
+Not connected, it is the pulse switched off: `enabled: false`, the rest
+`null` or empty.
+
+`kasl server queue --json`:
+
+```json
+{
+  "days": [
+    {
+      "date": "2026-08-30",
+      "queued_at": "2026-08-30T18:02:44",
+      "attempts": 3,
+      "last_attempt_at": "2026-08-31T09:15:03",
+      "last_error": "cannot reach kasl-server at https://kasl.example.com"
+    }
+  ]
+}
+```
+
+`kasl server manifest --json` carries the manifest's fields as the server sent
+them - `level`, `summary`, `stored` (a list of `{what, detail}`),
+`never_collected`, `visible_to`, `retention`, `on_change` - and `updated_at`
+in local time, `null` when the server does not record when the level was set.
 
 ## Examples
 

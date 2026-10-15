@@ -20,8 +20,15 @@
 
 use crate::{
     db::tags::{Tag, Tags},
-    libs::{messages::Message, pick, prompt::ensure_interactive, view::View},
-    msg_error, msg_info, msg_print, msg_success,
+    libs::{
+        json,
+        messages::Message,
+        output::{self, Format},
+        pick,
+        prompt::ensure_interactive,
+        view::View,
+    },
+    msg_error, msg_error_anyhow, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
 use clap::{Args, Subcommand};
@@ -64,7 +71,10 @@ enum TagCommand {
     /// Displays a formatted table of all existing tags with their names,
     /// colors, and creation dates. Useful for reviewing the current tag
     /// library and understanding available categorization options.
-    List,
+    List {
+        #[command(flatten)]
+        format: Format,
+    },
 
     /// Show a tag and the tasks that carry it
     ///
@@ -73,6 +83,9 @@ enum TagCommand {
     Show {
         /// Tag name or ID to show
         tag: String,
+
+        #[command(flatten)]
+        format: Format,
     },
 
     /// Edit an existing tag's properties
@@ -131,8 +144,8 @@ enum TagCommand {
 pub async fn cmd(args: TagArgs) -> Result<()> {
     match args.command {
         Some(TagCommand::Add { name, color }) => handle_create(name, color),
-        Some(TagCommand::List) => handle_list(),
-        Some(TagCommand::Show { tag }) => handle_show_tasks(tag).await,
+        Some(TagCommand::List { format }) => handle_list(format.json),
+        Some(TagCommand::Show { tag, format }) => handle_show_tasks(tag, format.json).await,
         Some(TagCommand::Edit { tag }) => handle_edit(resolve_tag(tag, "Edit which tag?")?),
         Some(TagCommand::Remove { tag, yes }) => handle_delete(resolve_tag(tag, "Remove which tag?")?, yes),
         None => {
@@ -169,9 +182,14 @@ fn handle_create(name: String, color: Option<String>) -> Result<()> {
 }
 
 /// Displays all available tags in a formatted table.
-fn handle_list() -> Result<()> {
+fn handle_list(json: bool) -> Result<()> {
     let mut tags_db = Tags::new()?;
     let tags = tags_db.get_all()?;
+    if json {
+        return output::print_json(&json::Tags {
+            tags: tags.iter().map(json::Tag::from).collect(),
+        });
+    }
 
     if tags.is_empty() {
         msg_info!(Message::NoTagsFound);
@@ -284,20 +302,26 @@ fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
 }
 
 /// Displays all tasks associated with a specific tag.
-async fn handle_show_tasks(tag_name: String) -> Result<()> {
+///
+/// A tag that does not exist is a failure (exit 1), so a script can tell it
+/// from a tag that exists and carries nothing.
+async fn handle_show_tasks(tag_name: String, json: bool) -> Result<()> {
     let mut tags_db = Tags::new()?;
 
-    // Validate tag exists
-    let tag = match tags_db.get_by_name(&tag_name)? {
-        Some(t) => t,
-        None => {
-            msg_error!(Message::TagNotFound(tag_name));
-            return Ok(());
-        }
+    let Some(tag) = tags_db.get_by_name(&tag_name)? else {
+        return Err(msg_error_anyhow!(Message::TagNotFound(tag_name)));
     };
 
     // Get task IDs associated with this tag
     let task_ids = tags_db.get_tasks_by_tag(tag.id.unwrap())?;
+
+    if json {
+        let tasks = crate::db::tasks::Tasks::new()?.fetch(crate::libs::task::TaskFilter::ByIds(task_ids))?;
+        return output::print_json(&json::TagTasks {
+            tag: json::Tag::from(&tag),
+            tasks: tasks.iter().map(json::Task::from).collect(),
+        });
+    }
 
     if task_ids.is_empty() {
         msg_info!(Message::NoTasksWithTag(tag_name));
@@ -335,7 +359,7 @@ fn handle_interactive() -> Result<()> {
                 .interact_text()?;
             handle_create(name, if color.is_empty() { None } else { Some(color) })
         }
-        1 => handle_list(),
+        1 => handle_list(false),
         2 => {
             let tags = Tags::new()?.get_all()?;
             if tags.is_empty() {

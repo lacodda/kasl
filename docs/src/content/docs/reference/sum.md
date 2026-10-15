@@ -11,6 +11,7 @@ kasl sum [OPTIONS]
 ```
 
 - `--send`: Submit the monthly summary to the configured reporting API, in addition to displaying it.
+- `--json`: Print the month as one JSON document instead of the table - see [JSON output](#json-output). Not accepted with `--send`.
 
 ## Examples
 
@@ -40,6 +41,29 @@ Working hours for August, 2026
 
 Monthly work productivity: 95.4%
 ```
+
+## JSON output
+
+`kasl sum --json` prints the same month as one document (conventions:
+[kasl in scripts and CI](/guides/scripting/#json-for-programs)):
+
+```json
+{
+  "month": "2026-08",
+  "days": [
+    { "date": "2026-08-07", "work_seconds": 29040, "productivity": 94.7, "rest_day": false },
+    { "date": "2026-08-08", "work_seconds": 27420, "productivity": 96.1, "rest_day": false }
+  ],
+  "total_seconds": 56460,
+  "average_seconds": 28230,
+  "productivity": 95.4
+}
+```
+
+`rest_day` marks a company rest day the reporting API named, which the month
+counts as a full eight-hour day without anyone having worked it. The closing
+`productivity` is the average over recorded days; it is `null` while there are
+none.
 
 ## Related commands
 

@@ -16,6 +16,7 @@ kasl report [OPTIONS]
 - `-l, --last`: Generate the report for the previous day instead of today.
 - `--month`: Submit a monthly summary report to the configured API instead of a daily one.
 - `--show`: Print the payload `--send` would post, and post nothing. Requires `--send`; not accepted with `--month`.
+- `--json`: Print the day as one JSON document instead of the table - see [JSON output](#json-output). With `--send --show`, the payload as JSON. Not accepted with `--month`, nor with `--send` alone: sending prints what happened to the request, not data.
 
 ## Examples
 
@@ -137,6 +138,88 @@ are deliberately left undone:
 For the other channel - the team server - the same question is answered by
 [`kasl server manifest`](/reference/server/#kasl-server-manifest), which reads
 what that installation stores from the server itself.
+
+`kasl report --send --show --json` prints the same payload as one document:
+the address, the date, every field of the form in order and exactly as sent,
+and the `tasks` field once more, parsed:
+
+```json
+{
+  "url": "https://api.example.com/report-card/send-daily-report",
+  "date": "2026-08-08",
+  "fields": [
+    { "name": "date", "value": "2026-08-08" },
+    { "name": "tasks", "value": "[{\"from\":\"09:12\",\"index\":1,…}]" },
+    { "name": "comment", "value": "" },
+    { "name": "day_type", "value": "1" },
+    { "name": "duty", "value": "0" },
+    { "name": "only_save", "value": "0" }
+  ],
+  "tasks": [
+    {
+      "from": "09:12",
+      "index": 1,
+      "result": "",
+      "task": "PROJ-412 Fix session timeout on the settings page (100%)",
+      "time": "",
+      "to": "13:30",
+      "total_ts": "04:18"
+    }
+  ]
+}
+```
+
+A day that cannot be sent - no workday, or no tasks - is exit code 1 with
+`--json`, rather than the message the table form prints: there is no payload
+to print, and an empty answer with exit 0 would read as a day that sends
+nothing.
+
+## JSON output
+
+`kasl report --json` prints the day the table shows, as one document - the
+same reading, not a second one, so the two cannot disagree. The conventions
+every kasl document keeps are in
+[kasl in scripts and CI](/guides/scripting/#json-for-programs).
+
+```json
+{
+  "date": "2026-08-08",
+  "workday": { "start": "2026-08-08T09:12:00", "end": null },
+  "intervals": [
+    { "start": "2026-08-08T09:12:00", "end": "2026-08-08T13:30:00", "seconds": 15480 },
+    { "start": "2026-08-08T14:18:00", "end": "2026-08-08T16:02:00", "seconds": 6240 },
+    { "start": "2026-08-08T16:29:00", "end": "2026-08-08T18:04:00", "seconds": 5700 }
+  ],
+  "work_seconds": 27420,
+  "productivity": 96.1,
+  "below_threshold": false,
+  "dropped": { "count": 0, "seconds": 0 },
+  "tasks": [
+    {
+      "id": 3,
+      "chain_id": 3,
+      "created_at": "2026-08-08T10:05:41",
+      "name": "PROJ-419 Draft migration for protected pauses",
+      "comment": "backfill pending",
+      "completeness": 60,
+      "tags": ["backend", "db"],
+      "jira_key": null
+    }
+  ],
+  "inbox": { "total": 3, "fresh": 1, "taken": 1 }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `workday` | When the day began and ended; `end` is `null` while it is open, and the whole field is `null` for a day nothing was recorded on. |
+| `intervals` | The stretches of work the table lists - short ones already left out. |
+| `work_seconds` | Their sum: the table's TOTAL. |
+| `productivity` | The table's PRODUCTIVITY; `null` without a workday. |
+| `below_threshold` | Whether the day is below the configured minimum yet - the gate `--send` enforces. |
+| `dropped` | The short intervals left out, and how long they were together. |
+| `tasks` | The day's tasks, in the shape [`task list --json`](/reference/task/#json-output) prints. |
+| `inbox` | What the closing line counts: issues waiting, of them new, of them taken. |
 
 ## Related commands
 

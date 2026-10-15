@@ -101,6 +101,22 @@ kasl export all --format json    # report + tasks + summary
 
 Formats: CSV, pretty-printed JSON, or Excel (one worksheet per export, with headers and autofit).
 
+## Output for Scripts
+
+Exports are files; `--json` is the same data on stdout, for a status bar or a
+script that asks a question and goes on:
+
+```bash
+kasl report --json | jq '.work_seconds'
+kasl inbox list --json | jq -r '.issues[0].key'
+```
+
+Every command that prints data takes it, and every document keeps the same
+conventions - an object at the top, every key present, local moments,
+durations in seconds. `--plain` keeps the human output but drops colour, emoji
+and table frames, for logs and `grep`. See
+[kasl in scripts and CI](/guides/scripting/#json-for-programs).
+
 ## GitLab and Jira
 
 Both are configured through `kasl setup` and feed `kasl task find`, which imports today's GitLab commits and Jira issues resolved today as completed tasks.

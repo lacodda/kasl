@@ -109,7 +109,12 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
     let jira_config = config.jira.clone();
     let ignore_names = config.effective_ignore_names();
 
-    let spinner = ProgressBar::new_spinner();
+    // `--plain` asks for no animation; a hidden bar takes the same calls.
+    let spinner = if crate::libs::output::style().animate() {
+        ProgressBar::new_spinner()
+    } else {
+        ProgressBar::hidden()
+    };
     spinner.set_style(
         ProgressStyle::with_template("{spinner:.cyan} {msg}")
             .unwrap_or_else(|_| ProgressStyle::default_spinner())

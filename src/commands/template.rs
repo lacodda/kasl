@@ -21,12 +21,14 @@
 use crate::{
     db::templates::{TaskTemplate, Templates},
     libs::{
+        json,
         messages::Message,
+        output::{self, Format},
         pick,
         prompt::{ensure_interactive, is_interactive},
         view::View,
     },
-    msg_error, msg_info, msg_print, msg_success,
+    msg_error, msg_error_anyhow, msg_info, msg_print, msg_success,
 };
 use anyhow::Result;
 use clap::{Args, Subcommand};
@@ -78,7 +80,10 @@ enum TemplateCommand {
     /// Displays a formatted table of all existing templates with their
     /// names, task names, comments, and default completion values.
     /// Useful for reviewing available templates and their configurations.
-    List,
+    List {
+        #[command(flatten)]
+        format: Format,
+    },
 
     /// Show a single template's contents
     ///
@@ -87,6 +92,9 @@ enum TemplateCommand {
     Show {
         /// Name of the template to show
         name: Option<String>,
+
+        #[command(flatten)]
+        format: Format,
     },
 
     /// Edit an existing template
@@ -130,6 +138,9 @@ enum TemplateCommand {
         /// Searches both template names and task names for matches.
         /// Case-insensitive partial matching is supported.
         query: String,
+
+        #[command(flatten)]
+        format: Format,
     },
 }
 
@@ -164,11 +175,11 @@ pub fn cmd(args: TemplateArgs) -> Result<()> {
             comment,
             completeness,
         }) => handle_create(name, task_name, comment, completeness),
-        Some(TemplateCommand::List) => handle_list(),
-        Some(TemplateCommand::Show { name }) => handle_show(name),
+        Some(TemplateCommand::List { format }) => handle_list(format.json),
+        Some(TemplateCommand::Show { name, format }) => handle_show(name, format.json),
         Some(TemplateCommand::Edit { name }) => handle_edit(name),
         Some(TemplateCommand::Remove { name, yes }) => handle_delete(name, yes),
-        Some(TemplateCommand::Search { query }) => handle_search(query),
+        Some(TemplateCommand::Search { query, format }) => handle_search(query, format.json),
         None => {
             ensure_interactive("no subcommand given; run `kasl template list` or see `kasl template --help`")?;
             handle_interactive()
@@ -251,9 +262,12 @@ fn handle_create(name: Option<String>, task_name: Option<String>, comment: Optio
 }
 
 /// Displays all available templates in a formatted table.
-fn handle_list() -> Result<()> {
+fn handle_list(json: bool) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let templates = templates_db.get_all()?;
+    if json {
+        return output::print_json(&json::Templates::of(&templates));
+    }
 
     if templates.is_empty() {
         msg_info!(Message::NoTemplatesFound);
@@ -269,8 +283,8 @@ fn handle_list() -> Result<()> {
 ///
 /// Reuses the same table rendering as `list` so a template reads identically
 /// whether shown alone or among others. Without a name, the template is picked
-/// interactively.
-fn handle_show(name: Option<String>) -> Result<()> {
+/// interactively. A template that does not exist is a failure (exit 1).
+fn handle_show(name: Option<String>, json: bool) -> Result<()> {
     let mut templates_db = Templates::new()?;
 
     let name = match name {
@@ -288,13 +302,16 @@ fn handle_show(name: Option<String>) -> Result<()> {
         }
     };
 
-    match templates_db.get(&name)? {
-        Some(template) => {
-            msg_print!(Message::TemplateListHeader, true);
-            View::templates(&[template])?;
-        }
-        None => msg_error!(Message::TemplateNotFound(name)),
+    let Some(template) = templates_db.get(&name)? else {
+        return Err(msg_error_anyhow!(Message::TemplateNotFound(name)));
+    };
+    if json {
+        return output::print_json(&json::TemplateShown {
+            template: json::Template::from(&template),
+        });
     }
+    msg_print!(Message::TemplateListHeader, true);
+    View::templates(&[template])?;
 
     Ok(())
 }
@@ -399,9 +416,12 @@ fn handle_delete(name: Option<String>, assume_yes: bool) -> Result<()> {
 }
 
 /// Handles template search functionality.
-fn handle_search(query: String) -> Result<()> {
+fn handle_search(query: String, json: bool) -> Result<()> {
     let mut templates_db = Templates::new()?;
     let templates = templates_db.search(&query)?;
+    if json {
+        return output::print_json(&json::Templates::of(&templates));
+    }
 
     if templates.is_empty() {
         msg_info!(Message::NoTemplatesMatchingQuery(query));
@@ -424,8 +444,8 @@ fn handle_interactive() -> Result<()> {
 
     match selection {
         0 => handle_create(None, None, None, None),
-        1 => handle_list(),
-        2 => handle_show(None),
+        1 => handle_list(false),
+        2 => handle_show(None, false),
         3 => handle_edit(None),
         4 => handle_delete(None, false),
         _ => Ok(()),
