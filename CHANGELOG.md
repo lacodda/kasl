@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.17.0] - 2026-10-15
+
+### Features
+- Add --json to reading commands and a global --plain
+
 ## [1.16.0] - 2026-10-12
 
 ### Features
