@@ -26,6 +26,10 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 22
+          # The runner's cached 22.x lags the release, and Astro raises its
+          # Node floor in patch versions: without this the build ran on a
+          # 22.x below the floor and stopped.
+          check-latest: true
           cache: pnpm
           cache-dependency-path: docs/pnpm-lock.yaml
       - name: Install

@@ -7,6 +7,9 @@ All notable changes to this project are documented in this file.
 ### Bug Fixes
 - Count a day one way in report, sum and send
 
+### CI
+- Build the site on the newest Node 22
+
 ### Features
 - Serve the day, the week, tasks and the inbox over MCP
 
