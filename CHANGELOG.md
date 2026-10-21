@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.18.0] - 2026-10-21
+
+### Bug Fixes
+- Count a day one way in report, sum and send
+
+### Features
+- Serve the day, the week, tasks and the inbox over MCP
+
 ## [1.17.0] - 2026-10-15
 
 ### Features
