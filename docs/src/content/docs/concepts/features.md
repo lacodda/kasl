@@ -88,7 +88,7 @@ kasl sum             # this month's totals and daily breakdown
 kasl sum --send      # submit the monthly summary
 ```
 
-A report shows work intervals, pauses, tasks, and productivity for one day; `sum` aggregates the current month - daily hours, an average, and rest-day integration from the company calendar. Both filter out intervals shorter than `min_work_interval` before display and before submission, so a few minutes of stray activity around a break does not clutter the numbers.
+A report shows work intervals, pauses, tasks, and productivity for one day; `sum` aggregates the current month - daily hours, an average, and rest-day integration from the company calendar. Both filter out intervals shorter than `min_work_interval` before display and before submission, so a few minutes of stray activity around a break does not clutter the numbers - and a day's hours in the month are exactly its report's total.
 
 ## Data Export
 

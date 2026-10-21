@@ -21,7 +21,7 @@ use crate::db::db::Db;
 use crate::db::workdays::Workday;
 use crate::libs::config::Config;
 use crate::libs::pause::Pause;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeDelta};
 use parking_lot::Mutex;
 use rusqlite::{Connection, params};
@@ -295,26 +295,23 @@ impl Pauses {
         // Fetch all completed pauses for the date, ordered chronologically.
         let mut stmt = conn_guard.prepare(SELECT_DAILY_PAUSES)?;
         let pause_iter = stmt.query_map([&date_str], |row| {
-            // Parse timestamps from database strings
-            let start_str: String = row.get(1)?;
-            let end_str: Option<String> = row.get(2)?;
             let duration: i64 = row.get(3).unwrap_or(0);
 
-            // Create Pause object with parsed data
+            // The moments go through rusqlite's own conversion, as the
+            // workdays do: a fraction of a second or a `T` is read, anything
+            // else is an error naming the column rather than a panic.
             Ok(Pause {
                 id: row.get(0)?,
-                start: NaiveDateTime::parse_from_str(&start_str, "%Y-%m-%d %H:%M:%S").unwrap(),
-                end: end_str.map(|s| NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").unwrap()),
+                start: row.get(1)?,
+                end: row.get(2)?,
                 duration: Some(TimeDelta::seconds(duration)),
                 protected: row.get::<_, i64>(4).unwrap_or(0) != 0,
             })
         })?;
 
-        // Collect results, handling any parsing errors
-        let mut pauses = Vec::new();
-        for pause_result in pause_iter {
-            pauses.push(pause_result?);
-        }
+        let pauses = pause_iter
+            .collect::<rusqlite::Result<Vec<Pause>>>()
+            .with_context(|| format!("cannot read the pauses of {date_str}"))?;
 
         // Merge consecutive pauses separated only by an insignificant gap so that
         // a chain of adjacent pauses (split by a stray input) is treated as a

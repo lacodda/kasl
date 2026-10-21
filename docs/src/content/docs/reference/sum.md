@@ -42,6 +42,10 @@ Working hours for August, 2026
 Monthly work productivity: 95.4%
 ```
 
+Each day's hours are the TOTAL its [`report`](/reference/report/) shows: the
+intervals between long pauses, with the ones shorter than `min_work_interval`
+left out. A day reads the same in the report and in the month.
+
 ## JSON output
 
 `kasl sum --json` prints the same month as one document (conventions:

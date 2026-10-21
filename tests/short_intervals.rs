@@ -2,7 +2,7 @@
 mod tests {
     use chrono::{Duration, NaiveDate};
     use kasl::db::workdays::Workday;
-    use kasl::libs::report::{analyze_short_intervals, calculate_work_intervals};
+    use kasl::libs::report::{analyze_short_intervals, calculate_work_intervals, workday_end_time};
     use serial_test::serial;
     use tempfile::TempDir;
     use test_context::{TestContext, test_context};
@@ -57,7 +57,7 @@ mod tests {
             ),
         ];
 
-        let intervals = calculate_work_intervals(&workday, &pauses);
+        let intervals = calculate_work_intervals(&workday, workday_end_time(&workday, &pauses), &pauses);
         let analysis = analyze_short_intervals(&intervals, 10);
 
         assert!(analysis.is_some());
@@ -86,7 +86,7 @@ mod tests {
             Some(Duration::hours(1)),
         )];
 
-        let intervals = calculate_work_intervals(&workday, &pauses);
+        let intervals = calculate_work_intervals(&workday, workday_end_time(&workday, &pauses), &pauses);
         let analysis = analyze_short_intervals(&intervals, 10);
 
         assert!(analysis.is_none());

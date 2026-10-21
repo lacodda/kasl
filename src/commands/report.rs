@@ -8,7 +8,6 @@
 use crate::{
     api::si::{Si, daily_report_fields},
     db::{
-        pauses::Pauses,
         tasks::Tasks,
         workdays::{Workday, Workdays},
     },
@@ -18,8 +17,7 @@ use crate::{
         json,
         messages::Message,
         output::{self, Format},
-        productivity::Productivity,
-        report::{self, DayReport},
+        report::{self, DayReport, DayWork},
         task::{FormatTasks, Task, TaskFilter},
         view::View,
     },
@@ -264,17 +262,9 @@ async fn show_daily_payload(date: DateTime<Local>, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    let config = Config::read()?;
-    let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
-
-    let long_pauses = Pauses::new()?
-        .set_min_duration(monitor_config.min_pause_duration)
-        .get_workday_pauses(&workday)?;
-
-    let intervals = report::calculate_work_intervals(&workday, &long_pauses);
-    let (filtered_intervals, _) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
-
-    let report_json = build_report_payload(&workday, &mut tasks, &filtered_intervals);
+    // The intervals the report shows are the ones that would be sent.
+    let day = DayWork::of(&workday, &Config::read()?.monitor.unwrap_or_default())?;
+    let report_json = build_report_payload(&workday, &mut tasks, &day.intervals);
     let events_json = serde_json::to_string(&report_json)?;
 
     // The destination is half the answer to "what leaves this machine", so it
@@ -355,33 +345,18 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
         return Ok(());
     }
 
-    let config = Config::read()?;
-    let monitor_config = config.monitor.as_ref().cloned().unwrap_or_default();
-
-    // Load interruptions for the submitted intervals: detected pauses above the
-    // threshold plus any manual pauses the user recorded.
-    let long_pauses = Pauses::new()?
-        .set_min_duration(monitor_config.min_pause_duration)
-        .get_workday_pauses(&workday)?;
-
-    // Validate productivity before allowing report submission
-    // Uses centralized Productivity module for consistent threshold checking
-    let productivity = Productivity::new(&workday)?;
-    let current_productivity = productivity.calculate_productivity();
-    if current_productivity < productivity.config.min_productivity_threshold {
+    // The day as the report counts it: intervals between long pauses, short
+    // ones left out, productivity against the configured minimum.
+    let day = DayWork::of(&workday, &Config::read()?.monitor.unwrap_or_default())?;
+    if day.productivity < day.threshold {
         msg_error!(Message::ProductivityTooLowToSend {
-            current: current_productivity,
-            threshold: productivity.config.min_productivity_threshold,
+            current: day.productivity,
+            threshold: day.threshold,
         });
         return Ok(());
     }
 
-    // Apply interval filtering for API submission
-    let intervals = report::calculate_work_intervals(&workday, &long_pauses);
-    let (filtered_intervals, _) = report::filter_short_intervals(&intervals, monitor_config.min_work_interval);
-
-    // Generate JSON payload for API submission using filtered intervals
-    let report_json = build_report_payload(&workday, &mut tasks, &filtered_intervals);
+    let report_json = build_report_payload(&workday, &mut tasks, &day.intervals);
     let events_json = serde_json::to_string(&report_json)?;
     let mut si = get_si_service()?;
 

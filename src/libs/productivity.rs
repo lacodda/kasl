@@ -143,7 +143,11 @@ impl Productivity {
     /// }
     /// ```
     pub fn calculate_productivity(&self) -> f64 {
-        let end_time = crate::libs::report::workday_end_time(&self.workday, &self.long_pauses);
+        // The end is seen in every pause, short ones included: measured to the
+        // last long pause, an unclosed day would lose the evening worked
+        // between short breaks.
+        let every_pause: Vec<Pause> = self.long_pauses.iter().chain(&self.short_pauses).cloned().collect();
+        let end_time = crate::libs::report::workday_end_time(&self.workday, &every_pause);
         let gross_duration = end_time - self.workday.start;
 
         // Long pauses: detected absences above the threshold, plus any manual

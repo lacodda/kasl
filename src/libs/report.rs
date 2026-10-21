@@ -2,7 +2,7 @@
 //! pauses, short-interval filtering, and the end-time fallbacks.
 //!
 //! ```rust
-//! use kasl::libs::report::{calculate_work_intervals, filter_short_intervals, WorkInterval};
+//! use kasl::libs::report::{calculate_work_intervals, filter_short_intervals, workday_end_time, WorkInterval};
 //! use kasl::db::workdays::Workday;
 //! use kasl::libs::pause::Pause;
 //! use chrono::Local;
@@ -15,7 +15,8 @@
 //! };
 //!
 //! let pauses: Vec<Pause> = vec![/* pause data */];
-//! let intervals = calculate_work_intervals(&workday, &pauses);
+//! let end = workday_end_time(&workday, &pauses);
+//! let intervals = calculate_work_intervals(&workday, end, &pauses);
 //!
 //! // Filter short intervals for cleaner reporting
 //! let (filtered_intervals, filter_info) = filter_short_intervals(&intervals, 30);
@@ -87,6 +88,12 @@ pub struct ShortIntervalsInfo {
 /// for today (guarded so a start ahead of the clock cannot make the day
 /// negative); else, for an unclosed past day, the last observed pause
 /// end - falling back to the start rather than stretching to "now".
+///
+/// `pauses` must be every pause of the day, whatever its length. For an
+/// unclosed past day the end is the last moment activity was seen, and the
+/// end of a two-minute pause is as good a sighting as the end of a lunch:
+/// given only the long pauses, an evening worked between short breaks
+/// vanishes from the day.
 pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDateTime {
     if let Some(end) = workday.end {
         return end;
@@ -110,10 +117,14 @@ pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDat
         .unwrap_or(workday.start)
 }
 
-/// Slices the workday at its completed pauses into work intervals.
+/// Slices the workday at its completed pauses into work intervals, up to `end`.
 ///
 /// Pauses without an end are skipped; the rest are processed in
-/// chronological order, and the tail interval runs to [`workday_end_time`].
+/// chronological order, and the tail interval runs to `end` - the day's
+/// [`workday_end_time`], taken from every pause of the day. It is an
+/// argument rather than worked out here from `pauses`, because the pauses a
+/// day is sliced at (the long ones) are not the ones its end is seen in (all
+/// of them), and deriving one from the other cut evenings off unclosed days.
 ///
 /// ```rust
 /// use kasl::libs::report::calculate_work_intervals;
@@ -144,13 +155,10 @@ pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDat
 ///     },
 /// ];
 ///
-/// let intervals = calculate_work_intervals(&workday, &pauses);
+/// let intervals = calculate_work_intervals(&workday, end_time, &pauses);
 /// println!("Generated {} work intervals", intervals.len());
 /// ```
-pub fn calculate_work_intervals(workday: &Workday, pauses: &[Pause]) -> Vec<WorkInterval> {
-    // Determine workday end time (current time if still ongoing)
-    let end_time = workday_end_time(workday, pauses);
-
+pub fn calculate_work_intervals(workday: &Workday, end_time: NaiveDateTime, pauses: &[Pause]) -> Vec<WorkInterval> {
     // Initialize interval collection and current time tracker
     let mut intervals = vec![];
     let mut current_time = workday.start;
@@ -256,7 +264,7 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
 /// database is never modified by this filter.
 ///
 /// ```rust
-/// use kasl::libs::report::{calculate_work_intervals, filter_short_intervals};
+/// use kasl::libs::report::{calculate_work_intervals, filter_short_intervals, workday_end_time};
 /// use kasl::db::workdays::Workday;
 /// use kasl::libs::pause::Pause;
 /// use chrono::Local;
@@ -269,7 +277,7 @@ pub fn analyze_short_intervals(intervals: &[WorkInterval], min_minutes: u64) -> 
 /// };
 /// let pauses: Vec<Pause> = vec![];
 ///
-/// let intervals = calculate_work_intervals(&workday, &pauses);
+/// let intervals = calculate_work_intervals(&workday, workday_end_time(&workday, &pauses), &pauses);
 /// let (filtered, info) = filter_short_intervals(&intervals, 30);
 ///
 /// if let Some(info) = info {
@@ -341,6 +349,53 @@ pub fn report_with_intervals(workday: &Workday, intervals: &[WorkInterval]) -> R
     Ok((filtered_duration, productivity))
 }
 
+/// What one recorded day comes to: the intervals a report counts, their sum,
+/// and productivity against the configured minimum.
+///
+/// The one place a day's work time is worked out. The daily report, the week
+/// and the month all read their days through it, so no two of them can
+/// disagree about how long a day was.
+pub struct DayWork {
+    /// The intervals between long pauses, short ones already left out.
+    pub intervals: Vec<WorkInterval>,
+    /// The sum of `intervals`.
+    pub work: Duration,
+    pub productivity: f64,
+    /// The configured minimum.
+    pub threshold: f64,
+    /// Whether the day is below the minimum yet - see [`Productivity::is_below_threshold`].
+    pub below_threshold: bool,
+    /// The short intervals `intervals` leaves out.
+    pub dropped: Option<ShortIntervalsInfo>,
+}
+
+impl DayWork {
+    /// Works out the day: ended at the last activity any pause saw, sliced
+    /// at its long pauses (manual ones always count), short intervals
+    /// dropped, productivity from [`Productivity`].
+    pub fn of(workday: &Workday, monitor: &crate::libs::config::MonitorConfig) -> Result<DayWork> {
+        use crate::db::pauses::Pauses;
+        // The end is seen in every pause; the day is sliced at the long ones -
+        // detected pauses above the threshold plus any manual pauses the user
+        // recorded (protected records bypass the threshold).
+        let end = workday_end_time(workday, &Pauses::new()?.get_workday_pauses(workday)?);
+        let long_pauses = Pauses::new()?.set_min_duration(monitor.min_pause_duration).get_workday_pauses(workday)?;
+        let all_intervals = calculate_work_intervals(workday, end, &long_pauses);
+        let (intervals, dropped) = filter_short_intervals(&all_intervals, monitor.min_work_interval);
+        let work = intervals.iter().fold(Duration::zero(), |sum, interval| sum + interval.duration);
+        let gauge = Productivity::new(workday)?;
+
+        Ok(DayWork {
+            intervals,
+            work,
+            productivity: gauge.calculate_productivity(),
+            threshold: gauge.config.min_productivity_threshold,
+            below_threshold: gauge.is_below_threshold(),
+            dropped,
+        })
+    }
+}
+
 /// Everything `kasl report` says about one day, read once for every way of printing it.
 ///
 /// The table and `--json` are two renderings of this, not two readings of the
@@ -367,7 +422,7 @@ pub struct DayReport {
 impl DayReport {
     /// Reads the day as `kasl report` shows it.
     pub fn read(date: NaiveDate) -> Result<DayReport> {
-        use crate::db::{jira_inbox::JiraInbox, pauses::Pauses, tasks::Tasks, workdays::Workdays};
+        use crate::db::{jira_inbox::JiraInbox, tasks::Tasks, workdays::Workdays};
         use crate::libs::{config::Config, task::TaskFilter};
 
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
@@ -387,25 +442,16 @@ impl DayReport {
             });
         };
 
-        let monitor_config = Config::read()?.monitor.unwrap_or_default();
-        // Interruptions: detected pauses above the threshold plus any manual
-        // pauses the user recorded (protected records bypass the threshold).
-        let long_pauses = Pauses::new()?
-            .set_min_duration(monitor_config.min_pause_duration)
-            .get_workday_pauses(&workday)?;
-        let all_intervals = calculate_work_intervals(&workday, &long_pauses);
-        let (intervals, dropped) = filter_short_intervals(&all_intervals, monitor_config.min_work_interval);
-        let (work, productivity) = report_with_intervals(&workday, &intervals)?;
-        let gauge = Productivity::new(&workday)?;
+        let day = DayWork::of(&workday, &Config::read()?.monitor.unwrap_or_default())?;
 
         Ok(DayReport {
             date,
-            intervals,
-            work,
-            productivity: Some(productivity),
-            threshold: Some(gauge.config.min_productivity_threshold),
-            below_threshold: gauge.is_below_threshold(),
-            dropped,
+            intervals: day.intervals,
+            work: day.work,
+            productivity: Some(day.productivity),
+            threshold: Some(day.threshold),
+            below_threshold: day.below_threshold,
+            dropped: day.dropped,
             tasks,
             inbox,
             workday: Some(workday),

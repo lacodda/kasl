@@ -71,7 +71,7 @@ mod tests {
         // tasks variable removed as it's no longer needed with new API
 
         // Calculate intervals for the test
-        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, kasl::libs::report::workday_end_time(&workday, &pauses_vec), &pauses_vec);
         let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
         assert!(output.is_ok());
     }
@@ -103,7 +103,7 @@ mod tests {
 
         assert_eq!(pauses_vec.len(), 0);
         // Calculate intervals for the test
-        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, kasl::libs::report::workday_end_time(&workday, &pauses_vec), &pauses_vec);
         let output = kasl::libs::report::report_with_intervals(&workday, &intervals);
         assert!(output.is_ok());
     }
@@ -150,7 +150,7 @@ mod tests {
         // Should have both the automatic pause and the manual (protected) pause
         assert_eq!(pauses_vec.len(), 2);
 
-        let intervals = kasl::libs::report::calculate_work_intervals(&workday, &pauses_vec);
+        let intervals = kasl::libs::report::calculate_work_intervals(&workday, kasl::libs::report::workday_end_time(&workday, &pauses_vec), &pauses_vec);
 
         // Should create 3 work intervals:
         // 1. 09:00 - 10:30 (before pause)

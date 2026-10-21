@@ -366,7 +366,7 @@ impl Exporter {
         let end_time = report::workday_end_time(&workday, &pauses);
 
         // Calculate work intervals by analyzing workday and pause data
-        let intervals = report::calculate_work_intervals(&workday, &pauses);
+        let intervals = report::calculate_work_intervals(&workday, end_time, &pauses);
 
         // Calculate total pause duration for productivity metrics
         let total_pause_duration = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);
@@ -682,12 +682,12 @@ impl Exporter {
             .set_min_duration(monitor_config.min_pause_duration)
             .get_workday_pauses(&workday)?;
 
-        let intervals = report::calculate_work_intervals(&workday, &pauses);
-        let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
-
         // End of the workday (now while it is still today, otherwise the last
-        // observed activity - see report::workday_end_time).
-        let end_time = report::workday_end_time(&workday, &pauses);
+        // observed activity - see report::workday_end_time), seen in every
+        // pause rather than only in the long ones the hours are sliced at.
+        let end_time = report::workday_end_time(&workday, &Pauses::new()?.get_workday_pauses(&workday)?);
+        let intervals = report::calculate_work_intervals(&workday, end_time, &pauses);
+        let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
 
         let slots = classify_hour_slots(workday.start, end_time, &intervals, &pauses);
         let task_texts = assign_tasks_to_hour_slots(&tasks, &slots, locale);

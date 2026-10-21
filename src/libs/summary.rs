@@ -20,9 +20,167 @@
 //!     .calculate_totals();
 //! ```
 
+use crate::api::si::Si;
+use crate::db::workdays::Workdays;
+use crate::libs::config::Config;
 use crate::libs::formatter::format_duration;
-use chrono::{Duration, NaiveDate};
+use crate::libs::json;
+use crate::libs::messages::Message;
+use crate::libs::report::DayWork;
+use crate::msg_error;
+use anyhow::Result;
+use chrono::{Datelike, Days, Duration, Months, NaiveDate, Weekday};
 use std::collections::{HashMap, HashSet};
+
+/// The first and the last day of the month `date` falls in.
+pub fn month_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
+    let first = date - Days::new(u64::from(date.day0()));
+    // Only the last month chrono can represent has no next one to step back from.
+    let last = first
+        .checked_add_months(Months::new(1))
+        .and_then(|next| next.pred_opt())
+        .unwrap_or(NaiveDate::MAX);
+    (first, last)
+}
+
+/// The Monday and the Sunday of the ISO week `date` falls in.
+pub fn week_bounds(date: NaiveDate) -> (NaiveDate, NaiveDate) {
+    let week = date.week(Weekday::Mon);
+    // Only the first and the last week chrono can represent run past its range.
+    (
+        week.checked_first_day().unwrap_or(NaiveDate::MIN),
+        week.checked_last_day().unwrap_or(NaiveDate::MAX),
+    )
+}
+
+/// A stretch of days as the summaries read it: a month for `kasl sum`, a week
+/// for the MCP `week` tool.
+///
+/// Read once for every way of printing it, like [`crate::libs::report::DayReport`].
+/// Each recorded day is worked out by [`DayWork`] - the daily report's own
+/// arithmetic - so a day reads the same in a report, a week and a month.
+pub struct Summary {
+    pub from: NaiveDate,
+    pub to: NaiveDate,
+    /// Recorded days and company rest days, in date order.
+    pub days: Vec<DailySummary>,
+    pub total: Duration,
+    pub average: Duration,
+    /// The average over recorded days; `None` while there are none.
+    pub productivity: Option<f64>,
+}
+
+impl Summary {
+    /// The month `date` falls in.
+    pub async fn month(date: NaiveDate) -> Result<Summary> {
+        let (from, to) = month_bounds(date);
+        Self::read(from, to).await
+    }
+
+    /// The week, Monday to Sunday, `date` falls in.
+    pub async fn week(date: NaiveDate) -> Result<Summary> {
+        let (from, to) = week_bounds(date);
+        Self::read(from, to).await
+    }
+
+    /// Reads the days from `from` to `to`, both included, with the company's
+    /// rest days among them when the reporting API is configured.
+    pub async fn read(from: NaiveDate, to: NaiveDate) -> Result<Summary> {
+        let config = Config::read()?;
+        let monitor = config.monitor.clone().unwrap_or_default();
+        let rest_dates = rest_dates(&config, from, to).await;
+
+        let workdays = Workdays::new()?.fetch_range(from, to)?;
+        let mut daily_summaries = Vec::with_capacity(workdays.len());
+        let mut total_productivity = 0.0;
+        for workday in &workdays {
+            let day = DayWork::of(workday, &monitor)?;
+            total_productivity += day.productivity;
+            daily_summaries.push(DailySummary {
+                date: workday.date,
+                duration: day.work,
+                productivity: day.productivity,
+                rest_day: false,
+            });
+        }
+
+        let (days, total, average) = daily_summaries
+            .add_rest_dates(rest_dates, Duration::hours(8)) // Default 8 hours for rest days
+            .calculate_totals();
+        let recorded = workdays.len() as f64;
+        let productivity = (total_productivity > 0.0 && recorded > 0.0).then(|| total_productivity / recorded);
+
+        Ok(Summary {
+            from,
+            to,
+            days,
+            total,
+            average,
+            productivity,
+        })
+    }
+
+    /// The days as both documents list them.
+    fn json_days(&self) -> Vec<json::SummaryDay> {
+        self.days
+            .iter()
+            .map(|day| json::SummaryDay {
+                date: day.date,
+                work_seconds: json::seconds(&day.duration),
+                productivity: json::percent(day.productivity),
+                rest_day: day.rest_day,
+            })
+            .collect()
+    }
+
+    /// The month as `kasl sum --json` prints it.
+    pub fn to_month_json(&self) -> json::Month {
+        json::Month {
+            month: self.from.format("%Y-%m").to_string(),
+            days: self.json_days(),
+            total_seconds: json::seconds(&self.total),
+            average_seconds: json::seconds(&self.average),
+            productivity: self.productivity.map(json::percent),
+        }
+    }
+
+    /// The week as the MCP `week` tool returns it.
+    pub fn to_week_json(&self) -> json::Week {
+        let week = self.from.iso_week();
+        json::Week {
+            week: format!("{}-W{:02}", week.year(), week.week()),
+            from: self.from,
+            to: self.to,
+            days: self.json_days(),
+            total_seconds: json::seconds(&self.total),
+            average_seconds: json::seconds(&self.average),
+            productivity: self.productivity.map(json::percent),
+        }
+    }
+}
+
+/// The company's rest days from `from` to `to`, asked of the reporting API
+/// year by year; none when it is not configured.
+///
+/// A failed request is said on stderr and leaves the summary to local data:
+/// the hours recorded on this machine are worth showing without the calendar.
+async fn rest_dates(config: &Config, from: NaiveDate, to: NaiveDate) -> HashSet<NaiveDate> {
+    let mut dates = HashSet::new();
+    let Some(si_config) = &config.si else {
+        return dates;
+    };
+    let mut si = Si::new(si_config);
+    for year in from.year()..=to.year() {
+        let Some(in_year) = NaiveDate::from_ymd_opt(year, 1, 1) else {
+            continue;
+        };
+        match si.rest_dates(in_year).await {
+            Ok(found) => dates.extend(found.into_iter().filter(|date| (from..=to).contains(date))),
+            Err(e) => msg_error!(Message::ErrorRequestingRestDates(e.to_string())),
+        }
+    }
+    dates
+}
 
 /// One day's line in the monthly summary.
 #[derive(Debug, Clone)]

@@ -15,7 +15,7 @@
 //! ```
 
 use crate::{db::db::Db, libs::messages::Message, msg_error_anyhow};
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{NaiveDate, NaiveDateTime};
 use rusqlite::{Connection, OptionalExtension};
 
@@ -29,7 +29,8 @@ const SCHEMA_WORKDAYS: &str = "CREATE TABLE IF NOT EXISTS workdays (
 const INSERT_START: &str = "INSERT INTO workdays (date, start) VALUES (?1, datetime(CURRENT_TIMESTAMP, 'localtime'))";
 const UPDATE_END: &str = "UPDATE workdays SET end = datetime(CURRENT_TIMESTAMP, 'localtime') WHERE date = ?1";
 const SELECT_BY_DATE: &str = "SELECT id, date, start, end FROM workdays WHERE date = ?1";
-const SELECT_BY_MONTH: &str = "SELECT id, date, start, end FROM workdays WHERE strftime('%Y-%m', date) = strftime('%Y-%m', ?1)";
+/// Compared as text, like [`SELECT_RECORDED_DATES`]: `YYYY-MM-DD` sorts as the dates it spells.
+const SELECT_BY_RANGE: &str = "SELECT id, date, start, end FROM workdays WHERE date >= ?1 AND date <= ?2 ORDER BY date";
 /// Every recorded date, oldest first, optionally bounded on either side.
 ///
 /// The bounds are compared as text because `date` is stored as `YYYY-MM-DD`,
@@ -59,6 +60,22 @@ pub struct Workday {
 
     /// When the session ended; `None` while it is open.
     pub end: Option<NaiveDateTime>,
+}
+
+/// One `SELECT id, date, start, end` row.
+///
+/// The moments are read through rusqlite's own conversion, which takes the
+/// `YYYY-MM-DD HH:MM:SS` kasl writes and also a fraction of a second or a `T`
+/// separator - what a row edited by hand or written by another tool holds. A
+/// value that is none of these is an error naming the column, never a panic:
+/// a reader that dies on one row takes the MCP session down with it.
+fn workday_from_row(row: &rusqlite::Row) -> rusqlite::Result<Workday> {
+    Ok(Workday {
+        id: row.get(0)?,
+        date: row.get(1)?,
+        start: row.get(2)?,
+        end: row.get(3)?,
+    })
 }
 
 /// Workday table access.
@@ -159,17 +176,9 @@ impl Workdays {
 
         let workday = self
             .conn
-            .query_row(SELECT_BY_DATE, [&date_str], |row| {
-                Ok(Workday {
-                    id: row.get(0)?,
-                    date: NaiveDate::parse_from_str(&row.get::<_, String>(1)?, "%Y-%m-%d").unwrap(),
-                    start: NaiveDateTime::parse_from_str(&row.get::<_, String>(2)?, "%Y-%m-%d %H:%M:%S").unwrap(),
-                    end: row
-                        .get::<_, Option<String>>(3)?
-                        .map(|s| NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").unwrap()),
-                })
-            })
-            .optional()?;
+            .query_row(SELECT_BY_DATE, [&date_str], workday_from_row)
+            .optional()
+            .with_context(|| format!("cannot read the workday of {date_str}"))?;
 
         Ok(workday)
     }
@@ -197,24 +206,33 @@ impl Workdays {
     /// # }
     /// ```
     pub fn fetch_month(&mut self, date: NaiveDate) -> Result<Vec<Workday>> {
-        let date_str = date.format("%Y-%m-%d").to_string();
+        let (first, last) = crate::libs::summary::month_bounds(date);
+        self.fetch_range(first, last)
+    }
 
-        let mut stmt = self.conn.prepare(SELECT_BY_MONTH)?;
-        let workday_iter = stmt.query_map([&date_str], |row| {
-            Ok(Workday {
-                id: row.get(0)?,
-                date: NaiveDate::parse_from_str(&row.get::<_, String>(1)?, "%Y-%m-%d").unwrap(),
-                start: NaiveDateTime::parse_from_str(&row.get::<_, String>(2)?, "%Y-%m-%d %H:%M:%S").unwrap(),
-                end: row
-                    .get::<_, Option<String>>(3)?
-                    .map(|s| NaiveDateTime::parse_from_str(&s, "%Y-%m-%d %H:%M:%S").unwrap()),
-            })
-        })?;
+    /// Fetches every workday from `from` to `to`, both included, in date order.
+    ///
+    /// ```rust,no_run
+    /// # use kasl::db::workdays::Workdays;
+    /// use chrono::NaiveDate;
+    ///
+    /// # fn main() -> anyhow::Result<()> {
+    /// let monday = NaiveDate::from_ymd_opt(2026, 10, 19).unwrap();
+    /// let sunday = NaiveDate::from_ymd_opt(2026, 10, 25).unwrap();
+    /// let week = Workdays::new()?.fetch_range(monday, sunday)?;
+    /// println!("{} days recorded this week", week.len());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fetch_range(&mut self, from: NaiveDate, to: NaiveDate) -> Result<Vec<Workday>> {
+        let from = from.format("%Y-%m-%d").to_string();
+        let to = to.format("%Y-%m-%d").to_string();
 
-        let mut workdays = Vec::new();
-        for workday in workday_iter {
-            workdays.push(workday?);
-        }
+        let mut stmt = self.conn.prepare(SELECT_BY_RANGE)?;
+        let workdays = stmt
+            .query_map([&from, &to], workday_from_row)?
+            .collect::<rusqlite::Result<Vec<Workday>>>()
+            .with_context(|| format!("cannot read the workdays from {from} to {to}"))?;
 
         Ok(workdays)
     }

@@ -152,10 +152,11 @@ pub struct Day {
     pub inbox: InboxCounts,
 }
 
-/// One day of a month's summary.
+/// One day of a summary, a month's or a week's.
 #[derive(Debug, Serialize)]
-pub struct MonthDay {
+pub struct SummaryDay {
     pub date: NaiveDate,
+    /// The day's work time as `kasl report` counts it: the `work_seconds` of its [`Day`].
     pub work_seconds: i64,
     pub productivity: f64,
     /// A company rest day counted as a full day, not a recorded one.
@@ -167,7 +168,23 @@ pub struct MonthDay {
 pub struct Month {
     /// `YYYY-MM`.
     pub month: String,
-    pub days: Vec<MonthDay>,
+    pub days: Vec<SummaryDay>,
+    pub total_seconds: i64,
+    pub average_seconds: i64,
+    /// The average over recorded days; `null` while there are none.
+    pub productivity: Option<f64>,
+}
+
+/// A week, Monday to Sunday: the MCP `week` tool.
+#[derive(Debug, Serialize)]
+pub struct Week {
+    /// The ISO week, `YYYY-Www`.
+    pub week: String,
+    /// The Monday.
+    pub from: NaiveDate,
+    /// The Sunday.
+    pub to: NaiveDate,
+    pub days: Vec<SummaryDay>,
     pub total_seconds: i64,
     pub average_seconds: i64,
     /// The average over recorded days; `null` while there are none.

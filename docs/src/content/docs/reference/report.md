@@ -44,6 +44,10 @@ kasl report --send --show
 
 Work intervals shorter than the configured `min_work_interval` are left out of the table - at display time only, so nothing in the database changes - and the same filtering applies whether the report is shown locally or sent with `--send`. When intervals are filtered, the report says how many and their total duration.
 
+## A day that was never closed
+
+A day ends when `kasl end` or `kasl report --send` closes it. Today, an open day runs to now. A past day nobody closed runs to the last moment activity was seen: the end of its last pause, of any length. The end of a two-minute break is as good a sighting as the end of a lunch, so an evening worked between short breaks stays in the day. Productivity is measured to the same moment, and [`sum`](/reference/sum/) counts the day the same way.
+
 ## Sample Output
 
 ```
