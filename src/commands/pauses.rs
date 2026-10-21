@@ -34,7 +34,7 @@ use crate::libs::pick;
 use crate::libs::view::View;
 use crate::{msg_error, msg_print, msg_success};
 use anyhow::{Result, bail};
-use chrono::{Duration, NaiveTime, TimeDelta};
+use chrono::{Duration, NaiveDate, NaiveTime, TimeDelta};
 use clap::{Args, Subcommand};
 use dialoguer::{Confirm, theme::ColorfulTheme};
 use std::io::IsTerminal;
@@ -151,36 +151,62 @@ pub async fn cmd(args: PausesArgs) -> Result<()> {
     }
 }
 
+/// A day's pauses as `kasl pauses list` shows them, read once for the table
+/// and for `--json` - and for the MCP `pauses` tool.
+pub struct DayPauses {
+    pub date: NaiveDate,
+    /// The shortest pause listed; shorter ones are left out unless kept.
+    pub min_minutes: u64,
+    pub pauses: Vec<crate::libs::pause::Pause>,
+    pub total: Duration,
+}
+
+impl DayPauses {
+    /// Reads the pauses of `date` at least `min_minutes` long - the configured
+    /// minimum when not given. With a workday on record, only the pauses
+    /// inside it.
+    pub fn read(date: NaiveDate, min_minutes: Option<u64>) -> Result<DayPauses> {
+        let min_minutes = match min_minutes {
+            Some(minutes) => minutes,
+            None => Config::read()?.monitor.unwrap_or_default().min_pause_duration,
+        };
+
+        let pauses_db = Pauses::new()?.set_min_duration(min_minutes);
+        let pauses = match Workdays::new()?.fetch(date)? {
+            Some(workday) => pauses_db.get_workday_pauses(&workday)?,
+            None => pauses_db.get_daily_pauses(date)?,
+        };
+        let total = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);
+
+        Ok(DayPauses {
+            date,
+            min_minutes,
+            pauses,
+            total,
+        })
+    }
+
+    /// The day's pauses as `--json` prints them.
+    pub fn to_json(&self) -> json::Pauses {
+        json::Pauses {
+            date: self.date,
+            min_minutes: self.min_minutes,
+            pauses: self.pauses.iter().map(json::Pause::from).collect(),
+            total_seconds: json::seconds(&self.total),
+        }
+    }
+}
+
 /// Displays pauses for the given date.
 fn list(date_str: &str, min_duration_override: Option<u64>, json: bool) -> Result<()> {
-    let date = parse_date(date_str)?;
-
-    // Load configuration to get default minimum pause duration
-    let config = Config::read()?;
-    let min_duration = min_duration_override.unwrap_or(config.monitor.unwrap_or_default().min_pause_duration);
-
-    // Fetch pause records; when a workday exists, keep only in-bounds pauses.
-    let pauses_db = Pauses::new()?.set_min_duration(min_duration);
-    let pauses = match Workdays::new()?.fetch(date)? {
-        Some(workday) => pauses_db.get_workday_pauses(&workday)?,
-        None => pauses_db.get_daily_pauses(date)?,
-    };
-
-    // Calculate total pause time for summary statistics
-    let total_pause_time = pauses.iter().filter_map(|p| p.duration).fold(Duration::zero(), |acc, d| acc + d);
-
+    let day = DayPauses::read(parse_date(date_str)?, min_duration_override)?;
     if json {
-        return output::print_json(&json::Pauses {
-            date,
-            min_minutes: min_duration,
-            pauses: pauses.iter().map(json::Pause::from).collect(),
-            total_seconds: json::seconds(&total_pause_time),
-        });
+        return output::print_json(&day.to_json());
     }
 
     // Display formatted results with date header
-    msg_print!(Message::PausesTitle(date.format("%B %-d, %Y").to_string()), true);
-    View::pauses(&pauses, total_pause_time)?;
+    msg_print!(Message::PausesTitle(day.date.format("%B %-d, %Y").to_string()), true);
+    View::pauses(&day.pauses, day.total)?;
 
     Ok(())
 }

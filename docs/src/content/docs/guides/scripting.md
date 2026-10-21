@@ -196,6 +196,11 @@ shows the inbox beside its own tasks:
 kasl inbox list --all --snoozed --json
 ```
 
+A coding assistant gets the same documents without a shell: [`kasl mcp`](/reference/mcp/)
+serves the day, the week, the month, pauses, tasks, the inbox and the server
+connection as MCP tools, each answering with the document its command prints
+here.
+
 ## Plain text for logs and pipes
 
 `--plain` works on every command and keeps the output a person reads, minus
@@ -323,6 +328,7 @@ daemon at all.
 - [`template`](/reference/template/) - full flag reference
 - [`report`](/reference/report/) - daily report and submission
 - [`watch`](/reference/watch/) - the daemon in detail
+- [`mcp`](/reference/mcp/) - the same documents, served to a coding assistant
 - [Getting Started](/getting-started/) - installation and the installer's own
   environment variables
 - [Configuration](/concepts/configuration/) - where settings actually live

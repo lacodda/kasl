@@ -38,6 +38,10 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 - **[`self-update`](/reference/self-update/)** - Update application to latest version
 - **[`completions`](/reference/completions/)** - Print a shell completion script
 
+### Coding assistants
+
+- **[`mcp`](/reference/mcp/)** - Serve the day, the week, tasks and the inbox to a coding assistant over MCP, read-only
+
 ## Quick Reference
 
 ### Daily Workflow

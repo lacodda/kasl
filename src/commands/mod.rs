@@ -16,6 +16,7 @@ pub mod autostart;
 pub mod export;
 pub mod inbox;
 pub mod init;
+pub mod mcp;
 pub mod migrations;
 pub mod pauses;
 pub mod report;
@@ -149,6 +150,16 @@ enum Commands {
     #[command(about = "Manage Jira inbox issues")]
     Inbox(Box<inbox::InboxArgs>),
 
+    /// Serve kasl's records to a coding assistant over MCP, read-only
+    ///
+    /// Speaks the Model Context Protocol on stdin and stdout: a client such as
+    /// Claude Code starts it and calls its tools - the day, the week, the
+    /// month, pauses, tasks, the inbox, the team server connection - each
+    /// answering with the document the matching `--json` command prints.
+    /// Not meant to be typed.
+    #[command(about = "Serve the day, tasks and the inbox to a coding assistant over MCP (read-only)")]
+    Mcp,
+
     /// Print a shell completion script
     ///
     /// Emits the completion script for the chosen shell on stdout; source it
@@ -224,11 +235,14 @@ impl Cli {
         use clap::{CommandFactory, FromArgMatches};
         let matches = Self::command().color(output::clap_colour(args)).get_matches_from(args);
         let mut cli = Self::from_arg_matches(&matches).unwrap_or_else(|error| error.exit());
-        cli.json = json_requested(&matches);
+        // MCP's stdout is the protocol: like a JSON document's, nothing else
+        // may reach it, so the run prints - and skips the update check - the
+        // way a `--json` run does.
+        cli.json = json_requested(&matches) || matches!(cli.command, Commands::Mcp);
         cli
     }
 
-    /// Whether this run prints a JSON document.
+    /// Whether this run's stdout belongs to a program: a JSON document, or the MCP protocol.
     pub fn json(&self) -> bool {
         self.json
     }
@@ -298,6 +312,7 @@ impl Cli {
                 }
             }
             Commands::Server(args) => server::cmd(args).await,
+            Commands::Mcp => mcp::cmd().await,
             Commands::Inbox(args) => inbox::cmd(*args).await,
             Commands::ToastAction(args) => toast_action::cmd(args).await,
 

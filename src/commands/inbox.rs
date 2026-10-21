@@ -58,47 +58,50 @@ pub struct InboxArgs {
 ///
 /// Shared by `list` and by every picker: a `take` that offers all two
 /// hundred is as useless as a list of them.
+///
+/// The MCP `inbox` tool builds one from its arguments, which carry the same
+/// names, so a cut means the same thing typed or asked for.
 #[derive(Debug, Args, Clone, Default)]
 pub struct FilterArgs {
     /// Only issues first seen within a window: 1d, 7d, 12h, 2w
     #[arg(long, value_name = "WINDOW")]
-    since: Option<String>,
+    pub(crate) since: Option<String>,
 
     /// Only issues discovered in the last day (same window as the NEW badge)
     #[arg(long, conflicts_with = "since")]
-    new: bool,
+    pub(crate) new: bool,
 
     /// Only issues that visibly changed within a window: 1d, 7d, 12h, 2w
     #[arg(long, value_name = "WINDOW")]
-    changed: Option<String>,
+    pub(crate) changed: Option<String>,
 
     /// Only issues whose ranking field (e.g. Scoring) is at least N
     #[arg(long, value_name = "N")]
-    min_score: Option<f64>,
+    pub(crate) min_score: Option<f64>,
 
     /// Only issues of this priority; add + for that priority and above (High+)
     #[arg(long, value_name = "NAME[+]")]
-    priority: Option<String>,
+    pub(crate) priority: Option<String>,
 
     /// Only issues in this status (name as Jira shows it); repeat for any of several
     #[arg(long, value_name = "NAME")]
-    status: Vec<String>,
+    pub(crate) status: Vec<String>,
 
     /// Only issues of this type (Bug, Story - as Jira names them); repeat for any of several
     #[arg(long = "type", value_name = "NAME")]
-    issue_type: Vec<String>,
+    pub(crate) issue_type: Vec<String>,
 
     /// Only issues of this project (the prefix of the key); repeat for any of several
     #[arg(long, value_name = "KEY")]
-    project: Vec<String>,
+    pub(crate) project: Vec<String>,
 
     /// Order of the list; pinned issues lead whatever the order
     #[arg(long, value_enum, value_name = "KEY")]
-    sort: Option<SortKey>,
+    pub(crate) sort: Option<SortKey>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
-enum SortKey {
+pub(crate) enum SortKey {
     /// Ranking field, then priority (the default)
     Score,
     /// Most urgent first
@@ -524,6 +527,23 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
     pick::inbox_issue(&items, prompt)
 }
 
+/// The inbox, cut and ordered as asked: what `kasl inbox list --json` prints
+/// and the MCP `inbox` tool returns.
+///
+/// Read from the local table only, never from Jira, so it answers at once.
+pub(crate) fn list_document(limit: Option<usize>, include: Include, filter: &FilterArgs) -> Result<json::InboxList> {
+    let (mut items, total) = sliced(include, filter)?;
+    if let Some(n) = limit {
+        items.truncate(n);
+    }
+    let now = Local::now().naive_local();
+    Ok(json::InboxList {
+        issues: items.iter().map(|item| json::Issue::at(item, now)).collect(),
+        total,
+        filter: filter.describe(),
+    })
+}
+
 /// Prints the inbox, cut and ordered as asked.
 ///
 /// With `--json` the same slice, in the same order, as one document - read
@@ -531,18 +551,10 @@ fn resolve_key(key: Option<String>, prompt: &str, pinned_only: bool, filter: &Fi
 /// (rigger reads it this way, `kasl inbox list --all --snoozed --json`).
 fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs, json: bool) -> Result<()> {
     warn_skipped_rules();
-    let (mut items, total) = sliced(include, filter)?;
     if json {
-        if let Some(n) = limit {
-            items.truncate(n);
-        }
-        let now = Local::now().naive_local();
-        return output::print_json(&json::InboxList {
-            issues: items.iter().map(|item| json::Issue::at(item, now)).collect(),
-            total,
-            filter: filter.describe(),
-        });
+        return output::print_json(&list_document(limit, include, filter)?);
     }
+    let (mut items, total) = sliced(include, filter)?;
     if total == 0 {
         // "Empty" over an inbox that is only asleep would read as nothing to
         // do, when in fact everything in it is coming back.
@@ -716,24 +728,36 @@ struct TriageTally {
 /// An issue the inbox does not hold is a failure (exit 1), so a script can
 /// tell it from one it got.
 fn show_issue(key: &str, why: bool, json: bool) -> Result<()> {
+    if json {
+        return output::print_json(&issue_document(key, why)?);
+    }
     let db = JiraInbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
         return Err(msg_error_anyhow!(Message::JiraInboxNotFound(key.to_string())));
     };
 
     let reasons = if why { Some(explain_issue(&db, &item)?) } else { None };
-    if json {
-        return output::print_json(&json::IssueShown {
-            issue: json::Issue::now(&item),
-            why: reasons.map(|reasons| reasons.iter().map(json::Reason::from).collect()),
-        });
-    }
-
     View::jira_inbox_issue(&item)?;
     if let Some(reasons) = reasons {
         View::jira_inbox_why(&reasons)?;
     }
     Ok(())
+}
+
+/// One issue as `kasl inbox show --json` prints it and the MCP `issue` tool
+/// returns it; with `why`, where its place in the list comes from.
+///
+/// An issue the inbox does not hold is an error, not an empty answer.
+pub(crate) fn issue_document(key: &str, why: bool) -> Result<json::IssueShown> {
+    let db = JiraInbox::new()?;
+    let Some(item) = db.get_by_key(key)? else {
+        return Err(msg_error_anyhow!(Message::JiraInboxNotFound(key.to_string())));
+    };
+    let reasons = if why { Some(explain_issue(&db, &item)?) } else { None };
+    Ok(json::IssueShown {
+        issue: json::Issue::now(&item),
+        why: reasons.map(|reasons| reasons.iter().map(json::Reason::from).collect()),
+    })
 }
 
 /// Where an issue's place in the list comes from, and what the rules make of it.

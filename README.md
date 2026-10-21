@@ -135,6 +135,10 @@ Monthly work productivity: 95.4%
   document on stdout for a status bar or `jq`. `--plain` keeps the human output
   for logs and `grep`: no colour, no emoji, tables as tab-separated lines.
   `NO_COLOR` is honoured.
+- **Readable by your coding assistant, when you let it.** `kasl mcp` serves
+  the day, the week, tasks and the Jira inbox to Claude Code or any MCP client:
+  read-only, the same documents `--json` prints, connected by you and not by
+  the installer.
 - **A team server, when there is one.** `kasl server connect` points this
   machine at a self-hosted
   [kasl-server](https://github.com/lacodda/kasl-server); a day that cannot be

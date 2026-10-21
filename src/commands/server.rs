@@ -267,43 +267,16 @@ async fn connect(args: ConnectArgs) -> Result<()> {
 /// was valid when it was made and is not any more - a revoked token, a server
 /// that moved - is exactly what someone runs this to find out.
 async fn status(json: bool) -> Result<()> {
+    if json {
+        return output::print_json(&status_document().await?);
+    }
     let config = Config::read().unwrap_or_default();
     let Some(server_config) = config.kasl_server else {
-        if json {
-            return output::print_json(&json::ServerStatus {
-                connected: false,
-                url: None,
-                token: None,
-                reachable: None,
-                server_version: None,
-                api_version: None,
-                user: None,
-                agent: None,
-                problem: None,
-                pulse: None,
-            });
-        }
         msg_print!(Message::KaslServerNotConnected);
         return Ok(());
     };
 
     let check = check_connection(&server_config).await?;
-    if json {
-        let identity = check.identity.as_ref().and_then(|identity| identity.as_ref().ok());
-        return output::print_json(&json::ServerStatus {
-            connected: true,
-            url: Some(server_config.url.clone()),
-            token: Some(check.token),
-            reachable: check.health.as_ref().map(Result::is_ok),
-            server_version: check.health.as_ref().and_then(|health| health.as_ref().ok().cloned()),
-            api_version: identity.map(|identity| identity.api_version.clone()),
-            user: identity.map(|identity| identity.user_name.clone()),
-            agent: identity.map(|identity| identity.agent_name.clone()),
-            problem: check.problem().map(|problem| problem.to_string()),
-            pulse: Some(pulse_json(server_config.pulse)?),
-        });
-    }
-
     msg_info!(Message::KaslServerConfigured(server_config.url.clone()));
     report_connection(&server_config, check);
 
@@ -311,6 +284,41 @@ async fn status(json: bool) -> Result<()> {
     // local, and a server that cannot be reached is exactly when "the last
     // one went 20 min ago" is worth reading.
     report_pulse(server_config.pulse)
+}
+
+/// The connection as `kasl server status --json` prints it and the MCP
+/// `server_status` tool returns it - the server asked, not the config read back.
+pub(crate) async fn status_document() -> Result<json::ServerStatus> {
+    let config = Config::read().unwrap_or_default();
+    let Some(server_config) = config.kasl_server else {
+        return Ok(json::ServerStatus {
+            connected: false,
+            url: None,
+            token: None,
+            reachable: None,
+            server_version: None,
+            api_version: None,
+            user: None,
+            agent: None,
+            problem: None,
+            pulse: None,
+        });
+    };
+
+    let check = check_connection(&server_config).await?;
+    let identity = check.identity.as_ref().and_then(|identity| identity.as_ref().ok());
+    Ok(json::ServerStatus {
+        connected: true,
+        url: Some(server_config.url.clone()),
+        token: Some(check.token),
+        reachable: check.health.as_ref().map(Result::is_ok),
+        server_version: check.health.as_ref().and_then(|health| health.as_ref().ok().cloned()),
+        api_version: identity.map(|identity| identity.api_version.clone()),
+        user: identity.map(|identity| identity.user_name.clone()),
+        agent: identity.map(|identity| identity.agent_name.clone()),
+        problem: check.problem().map(|problem| problem.to_string()),
+        pulse: Some(pulse_json(server_config.pulse)?),
+    })
 }
 
 /// What the connection checks of `status` found: the token, the server, whose token it is.
@@ -777,18 +785,25 @@ async fn flush_with(client: &KaslServer, token: &str) -> Result<()> {
     Ok(())
 }
 
+/// The days still owed, as `kasl server queue --json` prints them and the MCP
+/// `server_queue` tool returns them; offline, like the command.
+pub(crate) fn queue_document() -> Result<json::Queue> {
+    let owed = ServerOutbox::new()?.pending()?;
+    Ok(json::Queue {
+        days: owed.iter().map(json::OwedDay::from).collect(),
+    })
+}
+
 /// Lists what is still owed, without touching the network.
 ///
 /// Deliberately offline: this is the command someone runs to find out whether
 /// their work is safe, and it has to answer on a train.
 fn queue(json: bool) -> Result<()> {
+    if json {
+        return output::print_json(&queue_document()?);
+    }
     let outbox = ServerOutbox::new()?;
     let owed = outbox.pending()?;
-    if json {
-        return output::print_json(&json::Queue {
-            days: owed.iter().map(json::OwedDay::from).collect(),
-        });
-    }
 
     if owed.is_empty() {
         msg_print!(Message::KaslServerQueueEmpty);

@@ -11,3 +11,4 @@ Technical decisions that shape kasl, in the order they were made. Format: Contex
 | [0005](0005-jira-moves-by-category.md) | Jira moves by status category, and says why an issue left | accepted |
 | [0006](0006-inbox-rules-act-on-an-edge.md) | Inbox rules act on an edge, and a bad rule is skipped | accepted |
 | [0007](0007-output-for-scripts-and-logs.md) | Output for scripts and logs - `--json`, `--plain`, one colour decision | accepted |
+| [0008](0008-mcp-reads-the-json-documents.md) | The MCP server reads, and answers with the `--json` documents | accepted |
