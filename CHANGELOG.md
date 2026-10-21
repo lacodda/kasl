@@ -9,6 +9,7 @@ All notable changes to this project are documented in this file.
 
 ### CI
 - Build the site on the newest Node 22
+- Rebuild the site when its workflow changes
 
 ### Features
 - Serve the day, the week, tasks and the inbox over MCP

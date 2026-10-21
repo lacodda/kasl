@@ -3,7 +3,9 @@ name: Docs
 on:
   push:
     branches: [main]
-    paths: ['docs/**']
+    # The workflow itself too: a change to how the site is built is proven
+    # by building it, not by the next edit to a page.
+    paths: ['docs/**', '.github/workflows/documentation.yml']
   workflow_dispatch:
 
 permissions:
