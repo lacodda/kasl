@@ -316,6 +316,8 @@ pub struct Issue {
     #[serde(rename = "type")]
     pub issue_type: Option<String>,
     pub project: Option<String>,
+    /// Where it came from: `jira`, or the name of the plugin that listed it.
+    pub source: String,
     pub url: String,
     pub pinned: bool,
     pub dismissed: bool,
@@ -353,6 +355,7 @@ impl Issue {
             score: item.sort_value,
             issue_type: item.issue_type.clone(),
             project: item.project.clone(),
+            source: item.source.clone(),
             url: item.url.clone(),
             pinned: item.pinned,
             dismissed: item.dismissed,
@@ -376,6 +379,61 @@ impl Issue {
     pub fn now(item: &InboxItem) -> Self {
         Self::at(item, Local::now().naive_local())
     }
+}
+
+/// One plugin as `kasl plugin list` shows it.
+#[derive(Debug, Serialize)]
+pub struct PluginShown {
+    /// What kasl calls it: `gitlab` for `kasl-plugin-gitlab`.
+    pub name: String,
+    pub executable: String,
+    pub path: String,
+    /// `ready`, `needs_setup` (a required setting has no value) or `unusable`.
+    pub state: &'static str,
+    /// Why it cannot be used; `null` when it can.
+    pub problem: Option<String>,
+    /// The required settings without a value, by key.
+    pub missing: Vec<String>,
+    /// What the plugin said about itself; `null` when it could not say.
+    pub manifest: Option<crate::libs::plugin::manifest::Manifest>,
+}
+
+impl From<&crate::libs::plugin::Plugin> for PluginShown {
+    fn from(plugin: &crate::libs::plugin::Plugin) -> Self {
+        let state = if !plugin.usable() {
+            "unusable"
+        } else if plugin.ready() {
+            "ready"
+        } else {
+            "needs_setup"
+        };
+        PluginShown {
+            name: plugin.name.clone(),
+            executable: plugin.executable.clone(),
+            path: plugin.path.display().to_string(),
+            state,
+            problem: plugin.problem.clone(),
+            missing: plugin.missing.clone(),
+            manifest: plugin.manifest.clone(),
+        }
+    }
+}
+
+/// The plugins installed: `kasl plugin list`.
+#[derive(Debug, Serialize)]
+pub struct PluginList {
+    /// kasl's own plugins directory, searched before `PATH`.
+    pub directory: String,
+    pub plugins: Vec<PluginShown>,
+}
+
+/// What a plugin's command answered: `kasl plugin run`.
+#[derive(Debug, Serialize)]
+pub struct PluginRun {
+    pub plugin: String,
+    pub command: String,
+    /// The plugin's reply, as it printed it.
+    pub reply: serde_json::Map<String, serde_json::Value>,
 }
 
 /// The inbox, cut and ordered as asked: `kasl inbox list`.
@@ -617,12 +675,16 @@ pub struct Field {
 /// What `report --send` would post: `kasl report --send --show`.
 #[derive(Debug, Serialize)]
 pub struct Payload {
-    pub url: String,
+    /// Where SiServer is posted the form; `null` when SiServer is not
+    /// configured, and the day goes to plugins only.
+    pub url: Option<String>,
     pub date: NaiveDate,
-    /// Every field of the form, in order, as sent.
+    /// Every field of the form, in order, as sent; `[]` without SiServer.
     pub fields: Vec<Field>,
-    /// The `tasks` field's JSON, parsed.
+    /// The `tasks` field's JSON, parsed; `null` without SiServer.
     pub tasks: serde_json::Value,
+    /// The plugins that would hear `report_ready` and be handed the day, by name.
+    pub plugins: Vec<String>,
 }
 
 #[cfg(test)]

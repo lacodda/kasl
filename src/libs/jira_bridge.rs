@@ -25,9 +25,10 @@
 //! source other than Jira can answer the same questions later.
 
 use crate::api::jira::{Jira, JiraStatus, JiraTransition, SessionMode, StatusCategory};
-use crate::db::inbox::{Inbox, LeftReason};
+use crate::db::inbox::{Inbox, JIRA_SOURCE, LeftReason};
 use crate::db::inbox_statuses::InboxStatuses;
 use crate::libs::config::Config;
+use crate::libs::inbox_source;
 use crate::libs::messages::Message;
 use crate::libs::prompt::is_interactive;
 use crate::{msg_info, msg_success, msg_warning};
@@ -123,11 +124,16 @@ impl Moved {
 
     /// One line saying what happened, with the command that settles a move
     /// that did not happen.
+    ///
+    /// The issue's source is named, read from its row: a GitLab issue is now
+    /// Doing in gitlab, not in Jira. The three answers only Jira gives -
+    /// no way, several ways, no such issue - name Jira.
     pub fn sentence(&self, key: &str, goal: Goal) -> String {
         let verb = goal.verb();
+        let at = || inbox_source::label(&inbox_source::source_of(key).unwrap_or_else(|_| JIRA_SOURCE.to_string()));
         match self {
-            Moved::Moved { to } => format!("{key} is now {to} in Jira"),
-            Moved::Already { status } => format!("{key} is already {status} in Jira"),
+            Moved::Moved { to } => format!("{key} is now {to} in {}", at()),
+            Moved::Already { status } => format!("{key} is already {status} in {}", at()),
             Moved::NoWay { status } => format!("Jira offers no way to {verb} {key} from {status}"),
             Moved::Ambiguous { options } => format!(
                 "Jira offers {} ways to {verb} {key} ({}); run `kasl inbox {verb} {key}` on a terminal, or pass --to",
@@ -379,9 +385,10 @@ enum Offer {
 
 /// Offers to close or comment on the issue a task came from, once the task is done.
 ///
-/// Asked only on a terminal, only when Jira is configured, and not when the
-/// inbox already knows the issue was resolved - then the work is done on both
-/// sides and the question would be noise. Leaving it is the default: Enter on
+/// Asked only on a terminal, only of what the issue's source can do - Jira
+/// when it is configured, a plugin when it answers `transition` or
+/// `comment` - and not when the inbox already knows the issue was resolved:
+/// then the work is done on both sides and the question would be noise. Leaving it is the default: Enter on
 /// a question about a shared tracker should change nothing in it.
 ///
 /// Never fails the caller. The task is already saved when this runs; a Jira
@@ -396,7 +403,8 @@ pub async fn offer_after_done(key: &str) {
 }
 
 async fn offer_after_done_inner(key: &str) -> Result<()> {
-    if Config::read()?.jira.is_none() {
+    let (can_close, can_comment) = inbox_source::can_close_and_comment(key)?;
+    if !can_close && !can_comment {
         return Ok(());
     }
     if let Some(item) = Inbox::new()?.get_by_key(key)?
@@ -405,8 +413,16 @@ async fn offer_after_done_inner(key: &str) -> Result<()> {
         return Ok(());
     }
 
-    let choices = [Offer::Leave, Offer::Close, Offer::Comment];
-    let labels = [format!("Leave {key} as it is"), format!("Close {key}"), format!("Comment on {key}")];
+    let mut choices = vec![Offer::Leave];
+    let mut labels = vec![format!("Leave {key} as it is")];
+    if can_close {
+        choices.push(Offer::Close);
+        labels.push(format!("Close {key}"));
+    }
+    if can_comment {
+        choices.push(Offer::Comment);
+        labels.push(format!("Comment on {key}"));
+    }
     let index = Select::with_theme(&ColorfulTheme::default())
         .with_prompt(Message::PromptJiraAfterDone(key.to_string()).to_string())
         .items(&labels)
@@ -420,9 +436,8 @@ async fn offer_after_done_inner(key: &str) -> Result<()> {
                 .with_prompt(Message::PromptJiraCloseComment.to_string())
                 .allow_empty(true)
                 .interact_text()?;
-            let mut jira = client()?;
             let options = MoveOptions::from_cli(None, None);
-            let moved = close_issue(&mut jira, key, Some(&comment), &options).await?;
+            let moved = inbox_source::close_issue(key, Some(&comment), &options).await?;
             report_move(key, Goal::Close, &moved);
             Ok(())
         }
@@ -430,8 +445,7 @@ async fn offer_after_done_inner(key: &str) -> Result<()> {
             let comment: String = Input::with_theme(&ColorfulTheme::default())
                 .with_prompt(Message::PromptJiraComment.to_string())
                 .interact_text()?;
-            let mut jira = client()?;
-            jira.add_comment(key, comment.trim(), SessionMode::Interactive).await?;
+            inbox_source::comment_issue(key, comment.trim(), SessionMode::Interactive).await?;
             msg_success!(Message::JiraCommented(key.to_string()));
             Ok(())
         }

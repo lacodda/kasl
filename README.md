@@ -135,8 +135,12 @@ Monthly work productivity: 95.4%
   document on stdout for a status bar or `jq`. `--plain` keeps the human output
   for logs and `grep`: no colour, no emoji, tables as tab-separated lines.
   `NO_COLOR` is honoured.
+- **Plugins in any language.** A program named `kasl-plugin-*` hears the day
+  end and the report go out, runs on a day or an issue by hand, or feeds the
+  inbox beside Jira - `kasl plugin list` shows what is installed and what each
+  needs.
 - **Readable by your coding assistant, when you let it.** `kasl mcp` serves
-  the day, the week, tasks and the Jira inbox to Claude Code or any MCP client:
+  the day, the week, tasks and the inbox to Claude Code or any MCP client:
   read-only, the same documents `--json` prints, connected by you and not by
   the installer.
 - **A team server, when there is one.** `kasl server connect` points this
@@ -200,8 +204,9 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 ## Status
 
 In daily use on Windows, macOS and Linux. Everything above works today: the
-daemon, the Jira and GitLab integrations, the reports and the optional team
-server. The current version and what landed in it:
+daemon, the Jira and GitLab integrations, the reports, the optional team
+server and the plugin protocol - GitLab's assigned issues become its first
+inbox source next. The current version and what landed in it:
 [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation

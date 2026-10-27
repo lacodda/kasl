@@ -2,7 +2,7 @@
 title: "mcp"
 ---
 
-The `mcp` command serves kasl's records to a coding assistant over the [Model Context Protocol](https://modelcontextprotocol.io): the day, the week, the month, pauses, tasks, the Jira inbox and the connection to the team server, as tools the assistant calls when it needs them. It only reads. Nothing an assistant does through it adds a task, records a pause or closes a day - the command line does that.
+The `mcp` command serves kasl's records to a coding assistant over the [Model Context Protocol](https://modelcontextprotocol.io): the day, the week, the month, pauses, tasks, the inbox and the connection to the team server, as tools the assistant calls when it needs them. It only reads. Nothing an assistant does through it adds a task, records a pause or closes a day - the command line does that.
 
 It is not meant to be typed. An assistant starts it, talks JSON-RPC to it on stdin and stdout, and stops it when the session ends. Typed by hand in a terminal, it says on stderr what it is for and waits for a client; Ctrl+C ends it.
 

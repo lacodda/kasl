@@ -1,7 +1,9 @@
 #[cfg(test)]
 mod tests {
     use chrono::{Local, NaiveDate};
+    use kasl::db::pauses::Pauses;
     use kasl::db::workdays::Workdays;
+    use kasl::libs::day_end::{self, Closed};
     use serial_test::serial;
     use tempfile::TempDir;
     use test_context::{TestContext, test_context};
@@ -41,7 +43,7 @@ mod tests {
         assert!(workday.end.is_none());
 
         // Insert end
-        workdays.insert_end(date).unwrap();
+        workdays.update_end(date, Some(Local::now().naive_local())).unwrap();
         let workday = workdays.fetch(date).unwrap().unwrap();
         assert!(workday.end.is_some());
     }
@@ -107,7 +109,11 @@ mod tests {
         let mut workdays = Workdays::new().unwrap();
         let date = Local::now().date_naive();
 
-        assert!(!workdays.insert_end(date).unwrap(), "a day that was never started must report as missing");
+        assert_eq!(
+            day_end::close(date).unwrap(),
+            Closed::NeverStarted,
+            "a day that was never started must report as missing"
+        );
         assert!(
             workdays.fetch(date).unwrap().is_none(),
             "ending an unstarted day must not conjure a workday record"
@@ -115,7 +121,66 @@ mod tests {
 
         // And the other side of the same answer: a day that exists closes.
         workdays.insert_start(date).unwrap();
-        assert!(workdays.insert_end(date).unwrap(), "an open day must report as closed");
+        assert!(matches!(day_end::close(date).unwrap(), Closed::Ended(_)), "an open day must report as closed");
+    }
+
+    /// Today ends now, and ending it again later moves the end: the person kept working.
+    #[test_context(WorkdayTestContext)]
+    #[serial]
+    #[test]
+    fn today_ends_when_it_is_ended(_ctx: &mut WorkdayTestContext) {
+        let mut workdays = Workdays::new().unwrap();
+        let today = Local::now().date_naive();
+        workdays.insert_start(today).unwrap();
+        let earlier = workdays.fetch(today).unwrap().unwrap().start;
+        workdays.update_end(today, Some(earlier)).unwrap();
+
+        let Closed::Ended(end) = day_end::close(today).unwrap() else {
+            panic!("today closes again");
+        };
+
+        assert!(end >= earlier, "the end moves to now");
+        assert!(Local::now().naive_local() - end < chrono::Duration::seconds(5), "now, not some other moment");
+        assert_eq!(workdays.fetch(today).unwrap().unwrap().end, Some(end));
+    }
+
+    /// A past day ends at its last observed activity, not when it is closed (wish 5615).
+    ///
+    /// `report --send --last` this morning closes yesterday; closing it at
+    /// "now" stretched yesterday into today, and that is the day a payroll
+    /// would be paid by.
+    #[test_context(WorkdayTestContext)]
+    #[serial]
+    #[test]
+    fn a_past_day_ends_at_its_last_activity(_ctx: &mut WorkdayTestContext) {
+        let yesterday = Local::now().date_naive() - chrono::Duration::days(1);
+        let at = |hour: u32, minute: u32| yesterday.and_hms_opt(hour, minute, 0).unwrap();
+        let mut workdays = Workdays::new().unwrap();
+        workdays.insert_start(yesterday).unwrap();
+        workdays.update_start(yesterday, at(9, 0)).unwrap();
+        let pauses = Pauses::new().unwrap();
+        // A short break late in the evening is the last sign of work.
+        pauses.insert_manual(at(13, 0), chrono::Duration::minutes(45), false, None).unwrap();
+        pauses.insert_manual(at(19, 40), chrono::Duration::minutes(5), false, None).unwrap();
+
+        assert_eq!(day_end::close(yesterday).unwrap(), Closed::Ended(at(19, 45)));
+        assert_eq!(workdays.fetch(yesterday).unwrap().unwrap().end, Some(at(19, 45)));
+    }
+
+    /// A past day that has an end keeps it: sending it again is no reason to move it (wish 5615).
+    #[test_context(WorkdayTestContext)]
+    #[serial]
+    #[test]
+    fn a_closed_past_day_keeps_its_end(_ctx: &mut WorkdayTestContext) {
+        let yesterday = Local::now().date_naive() - chrono::Duration::days(1);
+        let end = yesterday.and_hms_opt(17, 30, 0).unwrap();
+        let mut workdays = Workdays::new().unwrap();
+        workdays.insert_start(yesterday).unwrap();
+        workdays.update_start(yesterday, yesterday.and_hms_opt(9, 0, 0).unwrap()).unwrap();
+        workdays.update_end(yesterday, Some(end)).unwrap();
+
+        assert_eq!(day_end::close(yesterday).unwrap(), Closed::Kept(end));
+        assert_eq!(workdays.fetch(yesterday).unwrap().unwrap().end, Some(end));
     }
 
     /// Records a day on each of `dates`, in a scrambled order.

@@ -67,7 +67,15 @@ pub struct InboxItem {
     pub project: Option<String>,
     /// The rule behind the row's pin or dismissal; `None` when a hand set it, or nothing did.
     pub ruled_by: Option<String>,
+    /// Where the issue came from: [`JIRA_SOURCE`], or the name of the plugin that listed it.
+    pub source: String,
 }
+
+/// The source name of kasl's own Jira integration.
+///
+/// Every row written before v1.19 is Jira's, and a plugin called `jira` is
+/// refused as a source while this one is configured: one name, one owner.
+pub const JIRA_SOURCE: &str = "jira";
 
 /// Which rows a listing includes besides the ones asking for attention now.
 ///
@@ -217,6 +225,8 @@ pub struct InboxUpsert {
     pub raw_updated: Option<String>,
     pub issue_type: Option<String>,
     pub project: Option<String>,
+    /// The source the poll asked: [`JIRA_SOURCE`] or a plugin's name.
+    pub source: String,
 }
 
 /// An existing issue whose tracked fields changed during a sync.
@@ -243,6 +253,12 @@ pub struct UpsertBatchResult {
     pub new_keys: Vec<String>,
     pub updated: usize,
     pub changed: Vec<ChangedIssue>,
+    /// Keys another source already holds, with that source: left as they were.
+    ///
+    /// A key is one row and one owner. Letting a second source write over
+    /// the row would let its poll mark the first source's issue gone, or
+    /// bring it back, depending on which answered last.
+    pub refused: Vec<(String, String)>,
 }
 
 /// Database operations for the Jira inbox table.
@@ -265,18 +281,11 @@ impl Inbox {
         let mut result = UpsertBatchResult::default();
 
         for item in items {
-            if let Some(name) = &item.priority {
-                self.db.conn.execute(
-                    "INSERT INTO inbox_priorities (name, rank) VALUES (?1, ?2)
-                     ON CONFLICT(name) DO UPDATE SET rank = excluded.rank",
-                    params![name, item.priority_rank],
-                )?;
-            }
             let existing: Option<ExistingRow> = self
                 .db
                 .conn
                 .query_row(
-                    "SELECT status_id, priority, priority_rank, sort_value, gone_at, dismissed
+                    "SELECT status_id, priority, priority_rank, sort_value, gone_at, dismissed, source
                      FROM inbox WHERE issue_key = ?1",
                     params![item.issue_key],
                     |row| {
@@ -287,10 +296,28 @@ impl Inbox {
                             sort_value: row.get(3)?,
                             gone_at: row.get(4)?,
                             dismissed: row.get::<_, i32>(5)? != 0,
+                            source: row.get(6)?,
                         })
                     },
                 )
                 .optional()?;
+
+            if let Some(old) = &existing
+                && old.source != item.source
+            {
+                result.refused.push((item.issue_key.clone(), old.source.clone()));
+                continue;
+            }
+
+            // Learnt only from a row this source owns, so a refused key
+            // cannot rewrite the vocabulary either.
+            if let Some(name) = &item.priority {
+                self.db.conn.execute(
+                    "INSERT INTO inbox_priorities (name, rank) VALUES (?1, ?2)
+                     ON CONFLICT(name) DO UPDATE SET rank = excluded.rank",
+                    params![name, item.priority_rank],
+                )?;
+            }
 
             if let Some(old) = existing {
                 self.db.conn.execute(
@@ -344,8 +371,8 @@ impl Inbox {
                     "INSERT INTO inbox (
                         issue_key, issue_id, summary, status_id, priority, priority_rank,
                         sort_value, url, first_seen, last_seen, notified, pinned, dismissed, raw_updated,
-                        issue_type, project
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, 0, ?11, ?12, ?13)",
+                        issue_type, project, source
+                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, 0, 0, 0, ?11, ?12, ?13, ?14)",
                     params![
                         item.issue_key,
                         item.issue_id,
@@ -360,6 +387,7 @@ impl Inbox {
                         item.raw_updated,
                         item.issue_type,
                         item.project,
+                        item.source,
                     ],
                 )?;
                 result.new_keys.push(item.issue_key.clone());
@@ -369,12 +397,14 @@ impl Inbox {
         Ok(result)
     }
 
-    /// Marks issues missing from the current poll as gone.
+    /// Marks the issues of `source` missing from its current poll as gone.
     ///
-    /// Every non-gone row whose key is not in `present_keys` gets `gone_at`
-    /// stamped. Returns keys that were both visible (not dismissed) and newly
-    /// gone — the candidates for a "left the inbox" toast.
-    pub fn mark_gone(&self, present_keys: &[String]) -> Result<Vec<String>> {
+    /// Every non-gone row of that source whose key is not in `present_keys`
+    /// gets `gone_at` stamped. Returns keys that were both visible (not
+    /// dismissed) and newly gone — the candidates for a "left the inbox"
+    /// toast. Another source's rows are not this poll's to judge: a GitLab
+    /// poll knows nothing about where a Jira issue went.
+    pub fn mark_gone(&self, source: &str, present_keys: &[String]) -> Result<Vec<String>> {
         let now = Local::now().naive_local();
         let placeholders = vec!["?"; present_keys.len()].join(", ");
         let not_in = if present_keys.is_empty() {
@@ -383,15 +413,16 @@ impl Inbox {
             format!(" AND issue_key NOT IN ({placeholders})")
         };
 
-        let select = format!("SELECT issue_key FROM inbox WHERE gone_at IS NULL AND dismissed = 0{not_in}");
+        let select = format!("SELECT issue_key FROM inbox WHERE source = ? AND gone_at IS NULL AND dismissed = 0{not_in}");
         let mut stmt = self.db.conn.prepare(&select)?;
+        let select_params = std::iter::once(source).chain(present_keys.iter().map(String::as_str));
         let newly_gone: Vec<String> = stmt
-            .query_map(rusqlite::params_from_iter(present_keys.iter()), |row| row.get(0))?
+            .query_map(rusqlite::params_from_iter(select_params), |row| row.get(0))?
             .collect::<Result<Vec<_>, _>>()?;
         drop(stmt);
 
-        let update = format!("UPDATE inbox SET gone_at = ?1 WHERE gone_at IS NULL{not_in}");
-        let mut update_params: Vec<&dyn rusqlite::types::ToSql> = vec![&now];
+        let update = format!("UPDATE inbox SET gone_at = ? WHERE source = ? AND gone_at IS NULL{not_in}");
+        let mut update_params: Vec<&dyn rusqlite::types::ToSql> = vec![&now, &source];
         for key in present_keys {
             update_params.push(key);
         }
@@ -407,14 +438,20 @@ impl Inbox {
     /// Jira about all of them in one poll would stall it. The rest are asked
     /// about on the polls that follow. Dismissed rows are included - a
     /// dismissed issue that was taken still has a task waiting on the answer.
+    ///
+    /// Only Jira's: Jira is the source kasl knows how to ask why an issue
+    /// left, and asking it about another source's key would get "no such
+    /// issue" back and file the departure as moved.
     pub fn unexplained_departures(&self, limit: usize) -> Result<Vec<String>> {
         let mut stmt = self.db.conn.prepare(
             "SELECT issue_key FROM inbox
-             WHERE gone_at IS NOT NULL AND taken_at IS NOT NULL AND left_reason IS NULL
+             WHERE source = ?1 AND gone_at IS NOT NULL AND taken_at IS NOT NULL AND left_reason IS NULL
              ORDER BY gone_at, issue_key
-             LIMIT ?1",
+             LIMIT ?2",
         )?;
-        let keys = stmt.query_map(params![limit as i64], |row| row.get(0))?.collect::<Result<Vec<String>, _>>()?;
+        let keys = stmt
+            .query_map(params![JIRA_SOURCE, limit as i64], |row| row.get(0))?
+            .collect::<Result<Vec<String>, _>>()?;
         Ok(keys)
     }
 
@@ -639,6 +676,15 @@ impl Inbox {
         Ok(())
     }
 
+    /// Whether any row came from `source`: whether kasl has polled it before.
+    pub fn has_source(&self, source: &str) -> Result<bool> {
+        let count: i64 = self
+            .db
+            .conn
+            .query_row("SELECT COUNT(*) FROM inbox WHERE source = ?1", params![source], |row| row.get(0))?;
+        Ok(count > 0)
+    }
+
     /// Un-notified newly inserted items (for toast after sync).
     pub fn list_unnotified_new(&self, keys: &[String]) -> Result<Vec<InboxItem>> {
         let mut items = Vec::new();
@@ -662,6 +708,7 @@ struct ExistingRow {
     sort_value: Option<f64>,
     gone_at: Option<NaiveDateTime>,
     dismissed: bool,
+    source: String,
 }
 
 /// A visible change on an existing row: what to show, and whether to toast it.
@@ -732,7 +779,7 @@ const SELECT_ITEM: &str = "SELECT i.issue_key, i.issue_id, i.summary, i.status_i
         i.priority, i.priority_rank, i.sort_value, i.url,
         i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
         i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
-        i.left_reason, i.resolution, i.issue_type, i.project, i.ruled_by
+        i.left_reason, i.resolution, i.issue_type, i.project, i.ruled_by, i.source
      FROM inbox i
      LEFT JOIN inbox_statuses s ON s.id = i.status_id";
 
@@ -764,5 +811,6 @@ fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InboxItem> {
         issue_type: row.get(23)?,
         project: row.get(24)?,
         ruled_by: row.get(25)?,
+        source: row.get(26)?,
     })
 }

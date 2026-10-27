@@ -45,6 +45,7 @@ fn upsert(key: &str) -> InboxUpsert {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }
 }
 
@@ -116,7 +117,7 @@ fn test_mark_gone_reconciles_missing_issues(_ctx: &mut InboxTestContext) {
     db.upsert_batch(&[upsert("KA-1"), upsert("KA-2")]).unwrap();
 
     // Next poll returns only KA-1: KA-2 must be marked gone.
-    let gone = db.mark_gone(&["KA-1".to_string()]).unwrap();
+    let gone = db.mark_gone("jira", &["KA-1".to_string()]).unwrap();
     assert_eq!(gone, vec!["KA-2"]);
 
     // Default list hides gone issues; --all shows them at the bottom.
@@ -130,7 +131,7 @@ fn test_mark_gone_reconciles_missing_issues(_ctx: &mut InboxTestContext) {
     assert!(all[1].gone_at.is_some());
 
     // A second reconcile with the same poll does not report KA-2 again.
-    let gone = db.mark_gone(&["KA-1".to_string()]).unwrap();
+    let gone = db.mark_gone("jira", &["KA-1".to_string()]).unwrap();
     assert!(gone.is_empty());
 }
 
@@ -140,7 +141,7 @@ fn test_mark_gone_reconciles_missing_issues(_ctx: &mut InboxTestContext) {
 fn test_gone_issue_comes_back(_ctx: &mut InboxTestContext) {
     let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1")]).unwrap();
-    db.mark_gone(&[]).unwrap();
+    db.mark_gone("jira", &[]).unwrap();
     assert!(db.get_by_key("KA-1").unwrap().unwrap().gone_at.is_some());
 
     // The issue reappears in the poll: gone_at clears, change says "back".
@@ -160,7 +161,7 @@ fn test_dismissed_issues_are_not_toast_candidates(_ctx: &mut InboxTestContext) {
     db.set_dismissed("KA-1", true).unwrap();
 
     // Dismissed issues still get gone_at but are not reported for toasts.
-    let gone = db.mark_gone(&[]).unwrap();
+    let gone = db.mark_gone("jira", &[]).unwrap();
     assert!(gone.is_empty());
     assert!(db.get_by_key("KA-1").unwrap().unwrap().gone_at.is_some());
 
@@ -205,6 +206,7 @@ fn test_badge_precedence_and_freshness() {
         issue_type: None,
         project: None,
         ruled_by: None,
+        source: "jira".to_string(),
     };
 
     // Old, unchanged issue: no badge.
@@ -304,7 +306,7 @@ fn test_counts_report_what_still_asks_for_attention(_ctx: &mut InboxTestContext)
     // Dismissed and gone issues drop out of the count entirely: the number is
     // about what still asks for attention.
     db.set_dismissed("KA-21", true).unwrap();
-    db.mark_gone(&["KA-20".to_string(), "KA-21".to_string(), "KA-23".to_string()]).unwrap();
+    db.mark_gone("jira", &["KA-20".to_string(), "KA-21".to_string(), "KA-23".to_string()]).unwrap();
     let counts = db.counts().unwrap();
     assert_eq!(
         (counts.total, counts.fresh, counts.taken),

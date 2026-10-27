@@ -45,6 +45,7 @@ fn upsert(key: &str) -> InboxUpsert {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }
 }
 

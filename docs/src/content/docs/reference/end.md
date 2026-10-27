@@ -3,7 +3,7 @@ title: "end"
 ---
 
 The `end` command writes the end timestamp for today's workday, closing the day
-by hand.
+by hand, and tells the [plugins](/reference/plugin/) that hear `workday_end`.
 
 ## Usage
 
@@ -15,15 +15,17 @@ The command takes no arguments.
 
 ## When You Need It
 
-The watcher normally closes the day on its own: it notices when activity stops
-and finalises the workday. `end` exists for the times it cannot.
+The watcher opens a day but does not close it: an unclosed day is read up to
+the last activity it saw (see [A day that was never
+closed](/reference/report/#a-day-that-was-never-closed)), and stays unclosed in
+the database. `end` writes the end down.
 
-- **The watcher was not running.** A day recorded without the daemon has a start
-  but no end until you say so.
-- **You are leaving now and want the day closed now.** Rather than letting the
-  daemon decide later, this stamps the end at the moment you run it.
+- **You are leaving now and want the day closed now.** This stamps the end at
+  the moment you run it, rather than at whatever activity comes last.
 - **The last stretch was not at the keyboard.** A meeting or a call that ended
   the working day leaves no activity for the monitor to see.
+- **Something should hear that the day is over.** A plugin that mails the day
+  or files it somewhere hears `workday_end` when an end is written.
 
 ## What It Does
 
@@ -33,6 +35,15 @@ pauses are untouched - only the closing timestamp is written.
 Running it again overwrites the timestamp with the new current time, so a day
 closed too early can be closed again later.
 
+Then every plugin that is set up and hears `workday_end` is handed the day, as
+`kasl report --json` prints it, its new end included. Each one's answer is
+printed after the command's own line; a plugin that fails is a warning, and the
+day stays closed. Ending the day twice tells them twice, with the later end.
+
+`kasl report --send` closes a day by the same rule, and for a past day the rule
+is different: a past day ends at its last observed activity, and one already
+closed keeps its end.
+
 The command closes a day that exists; it never opens one. If nothing was
 recorded for today - the watcher never ran - there is no day to close, and
 `end` says so and fails rather than reporting a stamp it did not write.
@@ -41,6 +52,13 @@ recorded for today - the watcher never ran - there is no day to close, and
 
 ```
 ℹ️ Workday ended for today.
+```
+
+With a plugin that hears it:
+
+```
+ℹ️ Workday ended for today.
+ℹ️ outlook: Mailed the day to me@example.com
 ```
 
 With no workday for today:
@@ -66,3 +84,4 @@ kasl report --send
 - **[`watch`](/reference/watch/)** - The daemon that normally opens and closes the day
 - **[`report`](/reference/report/)** - The day's intervals, tasks and productivity
 - **[`pauses`](/reference/pauses/)** - Record an absence the monitor missed
+- **[`plugin`](/reference/plugin/)** - The plugins that hear `workday_end`

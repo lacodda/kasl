@@ -6,9 +6,10 @@
 
 use crate::db::inbox::{Inbox, InboxItem, Include};
 use crate::libs::config::Config;
-use crate::libs::inbox::{self as inbox_lib, ResolvedIssue};
+use crate::libs::inbox::{self as inbox_lib, ResolvedIssue, SourceSync};
 use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_in};
 use crate::libs::inbox_rules::{self, RuleBook};
+use crate::libs::inbox_source;
 use crate::libs::jira_bridge::{self, Goal, MoveOptions};
 use crate::libs::json;
 use crate::libs::messages::Message;
@@ -195,7 +196,7 @@ fn either(own: Vec<String>, fallback: Vec<String>) -> Vec<String> {
 #[derive(Debug, Subcommand)]
 enum InboxCommand {
     /// Sync assigned open issues from Jira now
-    #[command(about = "Sync inbox from Jira")]
+    #[command(about = "Sync the inbox from every source")]
     Sync,
 
     /// List active (non-dismissed) inbox issues
@@ -351,7 +352,7 @@ enum InboxCommand {
     },
 
     /// Move an issue into progress in Jira
-    #[command(about = "Start an issue in Jira")]
+    #[command(about = "Start an issue at its source")]
     Start {
         /// Issue key, e.g. PROJ-123; omit to pick from the inbox
         #[arg(value_name = "KEY")]
@@ -366,7 +367,7 @@ enum InboxCommand {
     },
 
     /// Resolve an issue in Jira, optionally leaving a comment first
-    #[command(about = "Close an issue in Jira")]
+    #[command(about = "Close an issue at its source")]
     Close {
         /// Issue key, e.g. PROJ-123; omit to pick from the inbox
         #[arg(value_name = "KEY")]
@@ -389,7 +390,7 @@ enum InboxCommand {
     },
 
     /// Add a comment to an issue in Jira
-    #[command(about = "Comment on an issue in Jira")]
+    #[command(about = "Comment on an issue at its source")]
     Comment {
         /// Issue key, e.g. PROJ-123; omit to pick from the inbox
         #[arg(value_name = "KEY")]
@@ -416,16 +417,41 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
     }
     match args.command {
         Some(InboxCommand::Sync) => {
-            let outcome = inbox_lib::sync_interactive(true).await?;
-            if !outcome.skipped {
-                msg_success!(Message::InboxSynced {
-                    fetched: outcome.fetched,
-                    new_count: outcome.new_keys.len(),
-                    changed: outcome.changed.len(),
-                    gone: outcome.gone_keys.len(),
-                });
-                report_rules(&outcome.ruled, &outcome.rule_problems);
-                offer_resolved(&outcome.resolved)?;
+            let synced = inbox_lib::sync_interactive(true).await?;
+            let mut failed = 0;
+            for SourceSync { source, outcome } in synced {
+                let label = inbox_source::label(&source);
+                match outcome {
+                    Ok(outcome) if !outcome.skipped => {
+                        msg_success!(Message::InboxSynced {
+                            source: label.clone(),
+                            fetched: outcome.fetched,
+                            new_count: outcome.new_keys.len(),
+                            changed: outcome.changed.len(),
+                            gone: outcome.gone_keys.len(),
+                        });
+                        if !outcome.refused.is_empty() {
+                            let keys: Vec<String> = outcome.refused.iter().map(|(key, owner)| format!("{key} ({owner})")).collect();
+                            msg_warning!(Message::InboxRefusedKeys {
+                                source: label,
+                                keys: keys.join(", "),
+                            });
+                        }
+                        report_rules(&outcome.ruled, &outcome.rule_problems);
+                        offer_resolved(&outcome.resolved)?;
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        failed += 1;
+                        msg_error!(Message::InboxSyncFailed {
+                            source: label,
+                            error: format!("{error:#}"),
+                        });
+                    }
+                }
+            }
+            if failed > 0 {
+                bail!("{failed} inbox source(s) did not sync");
             }
             Ok(())
         }
@@ -999,15 +1025,13 @@ fn warn_skipped_rules() {
 /// command: a script that asked for the issue to be started must be able to
 /// tell that it was not.
 async fn start_issue(key: &str, to: Option<String>) -> Result<()> {
-    let mut jira = jira_bridge::client()?;
-    let moved = jira_bridge::move_issue(&mut jira, key, Goal::Start, &MoveOptions::from_cli(to, None)).await?;
+    let moved = inbox_source::move_issue(key, Goal::Start, &MoveOptions::from_cli(to, None)).await?;
     finish_move(key, Goal::Start, moved)
 }
 
-/// Resolves an issue in Jira, after the comment when one is given.
+/// Resolves an issue at its source, after the comment when one is given.
 async fn close_issue(key: &str, comment: Option<String>, to: Option<String>, resolution: Option<String>) -> Result<()> {
-    let mut jira = jira_bridge::client()?;
-    let moved = jira_bridge::close_issue(&mut jira, key, comment.as_deref(), &MoveOptions::from_cli(to, resolution)).await?;
+    let moved = inbox_source::close_issue(key, comment.as_deref(), &MoveOptions::from_cli(to, resolution)).await?;
     finish_move(key, Goal::Close, moved)
 }
 
@@ -1021,11 +1045,11 @@ fn finish_move(key: &str, goal: Goal, moved: jira_bridge::Moved) -> Result<()> {
     }
 }
 
-/// Adds a comment to an issue in Jira.
+/// Adds a comment to an issue at its source.
 ///
 /// The text is asked for on a terminal when it is not given; an empty comment
-/// is refused rather than sent, since Jira would refuse it anyway, less
-/// clearly.
+/// is refused rather than sent, since the source would refuse it anyway,
+/// less clearly.
 async fn comment_issue(key: &str, text: Option<String>) -> Result<()> {
     let text = match text {
         Some(text) => text,
@@ -1038,8 +1062,7 @@ async fn comment_issue(key: &str, text: Option<String>) -> Result<()> {
     if text.is_empty() {
         bail!("an empty comment is not a comment; nothing was sent");
     }
-    let mut jira = jira_bridge::client()?;
-    jira.add_comment(key, text, crate::api::jira::SessionMode::Interactive).await?;
+    inbox_source::comment_issue(key, text, crate::api::jira::SessionMode::Interactive).await?;
     msg_success!(Message::JiraCommented(key.to_string()));
     Ok(())
 }

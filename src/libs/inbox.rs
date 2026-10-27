@@ -1,7 +1,10 @@
-//! Jira inbox sync and desktop toast helpers.
+//! Inbox sync and desktop toast helpers.
 //!
-//! Polls assigned open issues, upserts them into `inbox`, and optionally
-//! shows desktop toast notifications for newly discovered keys. Toast click
+//! Polls every source for the issues assigned now - kasl's own Jira, and each
+//! plugin that is an inbox source ([`crate::libs::inbox_source`]) - upserts
+//! them into `inbox`, and optionally shows desktop toast notifications for
+//! newly discovered keys. Each source is reconciled on its own: its poll
+//! decides which of its rows are gone, never another source's. Toast click
 //! opens the issue browse URL (Windows: win-toast-notify protocol activation;
 //! other platforms: notify-rust action callback).
 //!
@@ -16,11 +19,15 @@
 //! into an urgent one that stays on screen.
 
 use crate::api::jira::{Jira, SessionMode};
-use crate::db::inbox::{ChangedIssue, Inbox, InboxItem, InboxUpsert, Include, LeftReason, UpsertBatchResult};
+use crate::db::inbox::{ChangedIssue, Inbox, InboxItem, InboxUpsert, Include, JIRA_SOURCE, LeftReason, UpsertBatchResult};
 use crate::db::inbox_statuses::InboxStatuses;
 use crate::libs::config::{Config, InboxConfig};
 use crate::libs::inbox_rules::{self, RuleBook, RuleProblem, Ruled};
+use crate::libs::inbox_source;
 use crate::libs::messages::Message;
+use crate::libs::plugin::Plugin;
+use crate::libs::plugin::events;
+use crate::libs::plugin::manifest::Event;
 use crate::libs::toast_action::{Mailbox, ToastAction};
 use crate::libs::toast_apply;
 use crate::{msg_info, msg_warning};
@@ -215,6 +222,8 @@ pub struct SyncOutcome {
     pub ruled: Vec<Ruled>,
     /// Rules that could not be read, and were skipped.
     pub rule_problems: Vec<RuleProblem>,
+    /// Keys this source listed that another source already holds, with that source.
+    pub refused: Vec<(String, String)>,
     pub notified: usize,
     /// True when sync was skipped (no jira config / disabled / no credentials).
     pub skipped: bool,
@@ -274,33 +283,62 @@ async fn explain_departures(jira: &mut Jira, mode: SessionMode) -> Result<Vec<Re
     Ok(resolved)
 }
 
-/// Runs one interactive sync (may prompt for Jira password).
-///
-/// `--sync` always fetches even when the inbox poller is disabled in config;
-/// toasts respect `inbox.notify` when that section exists. A sync run
-/// by hand gets a budget of its own: it is one poll, asked for.
-pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
-    let config = Config::read()?;
-    let Some(jira_config) = config.jira.clone() else {
-        msg_warning!(Message::InboxRequiresJiraConfig);
-        return Ok(SyncOutcome {
-            skipped: true,
-            ..Default::default()
-        });
-    };
+/// What one source's sync came to, named by the source.
+#[derive(Debug)]
+pub struct SourceSync {
+    /// [`JIRA_SOURCE`] or the plugin's name.
+    pub source: String,
+    pub outcome: Result<SyncOutcome>,
+}
 
+/// Runs one sync of every source, by hand (may prompt for the Jira password).
+///
+/// `kasl inbox sync` always fetches even when the poller is disabled in the
+/// config; toasts respect `inbox.notify`. A sync run by hand gets a budget of
+/// its own: it is one poll, asked for. One source failing does not stop the
+/// others - each answers for itself.
+pub async fn sync_interactive(notify: bool) -> Result<Vec<SourceSync>> {
+    let config = Config::read()?;
     let inbox_cfg = config.inbox.clone().unwrap_or_default();
     let allow_toast = notify && inbox_cfg.notify;
+    let mut budget = ToastBudget::new();
+    let mut synced = Vec::new();
 
-    let mut jira = Jira::new(&jira_config);
-    let issues = jira.get_assigned_open_issues(&inbox_cfg.extra_field_ids()).await?;
-    // The caller is a terminal: resolved issues are asked about there, not toasted.
-    let poll = Poll {
-        mode: SessionMode::Interactive,
-        notify: allow_toast,
-        offer_by_toast: false,
-    };
-    apply_issues(&mut jira, &issues, &inbox_cfg, poll, &mut ToastBudget::new()).await
+    if let Some(jira_config) = config.jira.clone() {
+        let outcome = async {
+            let mut jira = Jira::new(&jira_config);
+            let issues = jira.get_assigned_open_issues(&inbox_cfg.extra_field_ids()).await?;
+            // The caller is a terminal: resolved issues are asked about there, not toasted.
+            let poll = Poll {
+                mode: SessionMode::Interactive,
+                notify: allow_toast,
+                offer_by_toast: false,
+            };
+            let polled = jira_poll(&jira, &issues, &inbox_cfg)?;
+            apply_issues(Some(&mut jira), polled, &inbox_cfg, poll, &mut budget).await
+        }
+        .await;
+        synced.push(SourceSync {
+            source: JIRA_SOURCE.to_string(),
+            outcome,
+        });
+    }
+
+    for plugin in inbox_source::sources()? {
+        let poll = Poll {
+            mode: SessionMode::Interactive,
+            notify: allow_toast,
+            offer_by_toast: false,
+        };
+        let source = plugin.name.clone();
+        let outcome = sync_plugin_with(plugin, &inbox_cfg, poll, &mut budget).await;
+        synced.push(SourceSync { source, outcome });
+    }
+
+    if synced.is_empty() {
+        msg_warning!(Message::InboxHasNoSource);
+    }
+    Ok(synced)
 }
 
 /// Who is polling, and so where its news goes.
@@ -313,11 +351,12 @@ struct Poll {
     offer_by_toast: bool,
 }
 
-/// Runs one non-interactive sync for the background watcher.
+/// Runs Jira's unattended poll, for the background watcher.
 ///
 /// `budget` is the poller's, carried from poll to poll, so the toasts it
-/// allows are counted across polls rather than within one.
-pub async fn sync_noninteractive(inbox_cfg: &InboxConfig, budget: &mut ToastBudget) -> Result<SyncOutcome> {
+/// allows are counted across polls rather than within one - and across
+/// sources, since one person reads them all.
+pub async fn sync_jira(inbox_cfg: &InboxConfig, budget: &mut ToastBudget) -> Result<SyncOutcome> {
     if !inbox_cfg.enabled {
         return Ok(SyncOutcome {
             skipped: true,
@@ -347,17 +386,45 @@ pub async fn sync_noninteractive(inbox_cfg: &InboxConfig, budget: &mut ToastBudg
         notify: inbox_cfg.notify,
         offer_by_toast: true,
     };
-    apply_issues(&mut jira, &issues, inbox_cfg, poll, budget).await
+    let polled = jira_poll(&jira, &issues, inbox_cfg)?;
+    apply_issues(Some(&mut jira), polled, inbox_cfg, poll, budget).await
 }
 
-async fn apply_issues(
-    jira: &mut Jira,
-    issues: &[crate::api::jira::JiraIssue],
-    inbox_cfg: &InboxConfig,
-    poll: Poll,
-    budget: &mut ToastBudget,
-) -> Result<SyncOutcome> {
-    let notify = poll.notify;
+/// Runs one plugin source's unattended poll, for the background watcher.
+pub async fn sync_plugin(plugin: Plugin, inbox_cfg: &InboxConfig, budget: &mut ToastBudget) -> Result<SyncOutcome> {
+    if !inbox_cfg.enabled {
+        return Ok(SyncOutcome {
+            skipped: true,
+            ..Default::default()
+        });
+    }
+    let poll = Poll {
+        mode: SessionMode::Unattended,
+        notify: inbox_cfg.notify,
+        offer_by_toast: true,
+    };
+    sync_plugin_with(plugin, inbox_cfg, poll, budget).await
+}
+
+async fn sync_plugin_with(plugin: Plugin, inbox_cfg: &InboxConfig, poll: Poll, budget: &mut ToastBudget) -> Result<SyncOutcome> {
+    let source = plugin.name.clone();
+    let listing = tokio::task::spawn_blocking(move || inbox_source::list_issues(&plugin))
+        .await
+        .map_err(|error| anyhow::anyhow!("the plugin `{source}` stopped while listing: {error}"))??;
+    let polled = plugin_poll(&source, listing)?;
+    apply_issues(None, polled, inbox_cfg, poll, budget).await
+}
+
+/// One source's poll, turned into rows: what `apply_issues` reconciles.
+struct Polled {
+    source: String,
+    upserts: Vec<InboxUpsert>,
+    /// What a summary toast opens: the page that lists these issues at the source.
+    list_url: String,
+}
+
+/// Jira's issues as inbox rows.
+fn jira_poll(jira: &Jira, issues: &[crate::api::jira::JiraIssue], inbox_cfg: &InboxConfig) -> Result<Polled> {
     let statuses = InboxStatuses::new()?;
     let sort_field = inbox_cfg.sort_by_field.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
@@ -395,10 +462,80 @@ async fn apply_issues(
                 .as_ref()
                 .map(|p| p.key.clone())
                 .or_else(|| issue.key.split_once('-').map(|(project, _)| project.to_string())),
+            source: JIRA_SOURCE.to_string(),
         });
     }
+    Ok(Polled {
+        source: JIRA_SOURCE.to_string(),
+        upserts,
+        list_url: jira.open_issues_url(),
+    })
+}
+
+/// A plugin's listing as inbox rows.
+///
+/// A priority the plugin names without a rank takes the rank the inbox
+/// already knows for that name, so a `High+` rule reads a GitLab "High" as
+/// it reads Jira's - and the vocabulary is not rewritten to "unranked" by a
+/// source that simply did not say.
+fn plugin_poll(source: &str, listing: inbox_source::Listing) -> Result<Polled> {
+    let statuses = InboxStatuses::new()?;
+    let known: HashMap<String, i32> = Inbox::new()?.priorities()?.into_iter().collect();
+    let first_url = listing.issues.first().map(|issue| issue.url.clone()).unwrap_or_default();
+    let mut upserts = Vec::with_capacity(listing.issues.len());
+    for issue in listing.issues {
+        let status_id = match issue.status.as_deref().map(str::trim).filter(|status| !status.is_empty()) {
+            Some(status) => {
+                let id = inbox_source::status_id(source, status);
+                statuses.upsert(&id, status)?;
+                Some(id)
+            }
+            None => None,
+        };
+        let priority_rank = issue
+            .priority_rank
+            .or_else(|| issue.priority.as_ref().and_then(|name| known.get(name).copied()))
+            .unwrap_or(UNRANKED);
+        upserts.push(InboxUpsert {
+            issue_id: issue.id.unwrap_or_else(|| issue.key.clone()),
+            issue_key: issue.key,
+            summary: issue.summary,
+            status_id,
+            status_name: issue.status.unwrap_or_default(),
+            priority: issue.priority,
+            priority_rank,
+            sort_value: issue.score,
+            url: issue.url,
+            raw_updated: issue.updated,
+            issue_type: issue.issue_type,
+            project: issue.project,
+            source: source.to_string(),
+        });
+    }
+    Ok(Polled {
+        source: source.to_string(),
+        upserts,
+        list_url: listing.list_url.unwrap_or(first_url),
+    })
+}
+
+/// The rank of a priority nobody ranked: after every ranked one, as Jira's
+/// own fallback puts it.
+const UNRANKED: i32 = 999;
+
+/// Reconciles one source's poll with the inbox: rows, departures, rules, toasts, events.
+///
+/// `jira` is there for Jira's poll only: Jira is the source kasl can ask why
+/// a taken issue left. A plugin's issue that leaves is simply gone.
+async fn apply_issues(jira: Option<&mut Jira>, polled: Polled, inbox_cfg: &InboxConfig, poll: Poll, budget: &mut ToastBudget) -> Result<SyncOutcome> {
+    let notify = poll.notify;
+    let Polled { source, upserts, list_url } = polled;
 
     let db = Inbox::new()?;
+    // A source's first poll is where kasl starts watching it, not a moment
+    // two hundred issues arrived: it announces nothing to plugins. Toasts
+    // keep their own rule - a storm of them collapses into one.
+    let baseline = !db.has_source(&source)?;
     // Rules act on what an issue has just come to be, so what it was is
     // read before the poll overwrites it.
     let before: HashMap<String, InboxItem> = if inbox_cfg.rules.is_empty() {
@@ -406,39 +543,56 @@ async fn apply_issues(
     } else {
         db.list(Include::EVERYTHING)?.into_iter().map(|item| (item.issue_key.clone(), item)).collect()
     };
-    let UpsertBatchResult { new_keys, updated, changed } = db.upsert_batch(&upserts)?;
+    let UpsertBatchResult {
+        new_keys,
+        updated,
+        changed,
+        refused,
+    } = db.upsert_batch(&upserts)?;
+    for (key, owner) in &refused {
+        warn!("Inbox: {} listed {}, which {} already holds; left as it was", source, key, owner);
+    }
 
-    // Reconcile: issues missing from this poll are gone (closed, reassigned),
-    // not frozen in the list forever.
-    let present_keys: Vec<String> = upserts.iter().map(|u| u.issue_key.clone()).collect();
-    let gone_keys = db.mark_gone(&present_keys)?;
+    // Reconcile: this source's issues missing from its poll are gone
+    // (closed, reassigned), not frozen in the list forever. A key another
+    // source holds is not this source's to keep present.
+    let present_keys: Vec<String> = upserts
+        .iter()
+        .map(|u| u.issue_key.clone())
+        .filter(|key| !refused.iter().any(|(refused, _)| refused == key))
+        .collect();
+    let gone_keys = db.mark_gone(&source, &present_keys)?;
 
     // Compiled after the upsert, so a priority name first seen in this very
     // poll is already known to a rule that names it.
     let book = RuleBook::of_inbox(inbox_cfg, &db)?;
     for problem in &book.problems {
-        debug!("Jira inbox: rule {} is skipped: {}", problem.number, problem.reason);
+        debug!("Inbox: rule {} is skipped: {}", problem.number, problem.reason);
     }
     let ruled = inbox_rules::apply_entering(&db, &book, &before, &present_keys)?;
 
     // A taken issue that left is either finished or no longer yours, and only
     // Jira knows which. The answer decides whether its task is offered as done.
-    let resolved = match explain_departures(jira, poll.mode).await {
-        Ok(resolved) => resolved,
-        Err(e) => {
-            warn!("Jira inbox: could not explain departures: {}", e);
-            Vec::new()
-        }
+    let resolved = match jira {
+        Some(jira) => match explain_departures(jira, poll.mode).await {
+            Ok(resolved) => resolved,
+            Err(e) => {
+                warn!("Jira inbox: could not explain departures: {}", e);
+                Vec::new()
+            }
+        },
+        None => Vec::new(),
     };
+
+    // What arrived and is not hidden: a new issue a rule dismissed is not
+    // news at all - hiding it was the rule's whole point.
+    let arrived = db.list_unnotified_new(&new_keys)?;
 
     // Every toast this poll would show is gathered first and shown under
     // one decision per lane, so the budget sees the poll as a whole.
     let mut pending = Vec::new();
     if notify {
-        // A new issue a rule dismissed is not listed here at all: hiding it
-        // was the rule's whole point.
-        let to_notify = db.list_unnotified_new(&new_keys)?;
-        let fresh: Vec<String> = to_notify.iter().map(|i| i.issue_key.clone()).collect();
+        let fresh: Vec<String> = arrived.iter().map(|i| i.issue_key.clone()).collect();
         let moved: Vec<(String, String)> = if inbox_cfg.notify_changes {
             changed
                 .iter()
@@ -488,12 +642,26 @@ async fn apply_issues(
 
     let (urgent_pending, ordinary): (Vec<Pending>, Vec<Pending>) = pending.into_iter().partition(|p| matches!(p, Pending::Urgent(..)));
     let now = Local::now().naive_local();
+    let title = format!("{} inbox", inbox_source::label(&source));
     let mut notified = 0;
-    notified += show_pending(jira, &urgent_pending, budget.admit_urgent(now, urgent_pending.len()));
-    notified += show_pending(jira, &ordinary, budget.admit(now, ordinary.len()));
+    notified += show_pending(&title, &list_url, &urgent_pending, budget.admit_urgent(now, urgent_pending.len()));
+    notified += show_pending(&title, &list_url, &ordinary, budget.admit(now, ordinary.len()));
+
+    // Read again for the same reason as the toasts: a rule may have hidden
+    // an arrival in this very poll.
+    if !baseline {
+        for item in arrived {
+            if let Ok(Some(item)) = db.get_by_key(&item.issue_key)
+                && !item.dismissed
+            {
+                let subject = serde_json::to_value(crate::libs::json::Issue::now(&item))?;
+                events::tell_async(Event::NewInboxIssue, subject).await;
+            }
+        }
+    }
 
     Ok(SyncOutcome {
-        fetched: issues.len(),
+        fetched: upserts.len(),
         new_keys,
         updated,
         changed,
@@ -501,13 +669,14 @@ async fn apply_issues(
         resolved,
         ruled,
         rule_problems: book.problems,
+        refused,
         notified,
         skipped: false,
     })
 }
 
 /// Shows one lane's toasts as its budget decided; returns how many appeared.
-fn show_pending(jira: &Jira, pending: &[Pending], plan: ToastPlan) -> usize {
+fn show_pending(title: &str, list_url: &str, pending: &[Pending], plan: ToastPlan) -> usize {
     match plan {
         ToastPlan::Each => pending
             .iter()
@@ -519,9 +688,9 @@ fn show_pending(jira: &Jira, pending: &[Pending], plan: ToastPlan) -> usize {
                 Pending::Urgent(item, rule) => show_urgent_toast(item, rule),
             })
             .count(),
-        ToastPlan::Summary => usize::from(show_summary_toast(jira, &summary_line(pending))),
+        ToastPlan::Summary => usize::from(show_summary_toast(title, &summary_line(pending), list_url)),
         ToastPlan::Quiet => {
-            debug!("Jira inbox: held back {} toast(s); the hour's budget is spent", pending.len());
+            debug!("{}: held back {} toast(s); the hour's budget is spent", title, pending.len());
             0
         }
     }
@@ -544,7 +713,7 @@ pub fn wake_snoozed(notify: bool) -> Result<usize> {
             // opens without this reaching for the Jira config.
             let list_url = open_issues_url_from(&woken[0].url);
             show_raw_toast(
-                "Jira inbox",
+                "kasl inbox",
                 &format!("{} snoozed issues are back - see `kasl inbox`", woken.len()),
                 &list_url,
                 "inbox",
@@ -595,7 +764,7 @@ pub fn show_toast(item: &InboxItem) -> bool {
 pub fn show_urgent_toast(item: &InboxItem, rule: &str) -> bool {
     let body = format!("Urgent by the rule '{rule}' - {}", toast_body(item));
     show_toast_as(
-        &format!("Jira {} - urgent", item.issue_key),
+        &format!("{} - urgent", toast_title(item)),
         &body,
         &item.url,
         &item.issue_key,
@@ -610,12 +779,17 @@ pub fn show_change_toast(item: &InboxItem, change: &str) -> bool {
     show_issue_toast(item, &body)
 }
 
-/// Shows one toast standing in for many; clicking opens the open-issues list in Jira.
+/// Shows one toast standing in for many; clicking opens the source's list of issues.
 ///
 /// No buttons: a summary is about a pile, and there is no one issue for Take
 /// to take. The pile is triaged in `kasl inbox triage`, which the body says.
-pub fn show_summary_toast(jira: &Jira, what: &str) -> bool {
-    show_raw_toast("Jira inbox", &format!("{what} - see `kasl inbox`"), &jira.open_issues_url(), "inbox", &[])
+pub fn show_summary_toast(title: &str, what: &str, list_url: &str) -> bool {
+    show_raw_toast(title, &format!("{what} - see `kasl inbox`"), list_url, "inbox", &[])
+}
+
+/// What a toast about one issue is titled: its source and its key, `Jira KA-1`.
+fn toast_title(item: &InboxItem) -> String {
+    format!("{} {}", inbox_source::label(&item.source), item.issue_key)
 }
 
 /// Shows a toast for an issue that left the inbox (closed or reassigned).
@@ -624,7 +798,7 @@ pub fn show_summary_toast(jira: &Jira, what: &str) -> bool {
 /// about work that is no longer there.
 pub fn show_gone_toast(item: &InboxItem) -> bool {
     let body = format!("Left the inbox — {}", item.summary);
-    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[])
+    show_raw_toast(&toast_title(item), &body, &item.url, &item.issue_key, &[])
 }
 
 /// Shows a toast for a taken issue Jira resolved while its task is open.
@@ -633,13 +807,17 @@ pub fn show_gone_toast(item: &InboxItem) -> bool {
 /// resolved - and the only question left is the person's task.
 pub fn show_resolved_toast(item: &InboxItem) -> bool {
     let resolution = item.resolution.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
-    let body = format!("Resolved in Jira{resolution} - your task is still open. {}", item.summary);
-    show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[ToastAction::Done])
+    let body = format!(
+        "Resolved in {}{resolution} - your task is still open. {}",
+        inbox_source::label(&item.source),
+        item.summary
+    );
+    show_raw_toast(&toast_title(item), &body, &item.url, &item.issue_key, &[ToastAction::Done])
 }
 
 /// A toast about one live issue: the body opens it, the buttons decide it.
 fn show_issue_toast(item: &InboxItem, body: &str) -> bool {
-    show_raw_toast(&format!("Jira {}", item.issue_key), body, &item.url, &item.issue_key, &ToastAction::ALL)
+    show_raw_toast(&toast_title(item), body, &item.url, &item.issue_key, &ToastAction::ALL)
 }
 
 /// How insistent a toast is.
@@ -868,7 +1046,7 @@ pub async fn drain_toast_actions() -> Result<usize> {
                 // The answer opens the issue, not nothing: an empty launch
                 // target makes the toast body a dead click area, which reads
                 // as the toast being broken.
-                show_raw_toast("Jira inbox", &outcome.summary(&request.issue_key), &url, &request.issue_key, &[]);
+                show_raw_toast("kasl inbox", &outcome.summary(&request.issue_key), &url, &request.issue_key, &[]);
                 done += 1;
             }
             Err(e) => {
@@ -908,62 +1086,86 @@ pub async fn run_mailbox_watcher() {
 
 /// Background poll loop used by `kasl watch`.
 ///
-/// Idle when `inbox` is absent or disabled; re-reads config each wake so
-/// `kasl setup` can enable polling without restarting the watcher in most cases
-/// (restart still recommended after config changes).
+/// Polls Jira when the `jira` block and the `inbox` section are both there
+/// (the inbox section is how Jira's poll was always switched on), and every
+/// plugin source that is set up - installing and setting one up is the
+/// switch. `inbox.enabled: false` stops all of them. Re-reads the config each
+/// wake, so `kasl setup` and `kasl plugin setup` take effect without a
+/// restart of the watcher.
 pub async fn run_poller() {
     let mut budget = ToastBudget::new();
     loop {
         let config = match Config::read() {
             Ok(c) => c,
             Err(e) => {
-                warn!("Jira inbox: failed to read config: {}", e);
+                warn!("Inbox: failed to read config: {}", e);
                 tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                 continue;
             }
         };
 
-        let Some(inbox_cfg) = config.inbox.clone() else {
-            // Section not configured — do not poll until user runs init.
-            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
-            continue;
+        let inbox_cfg = config.inbox.clone().unwrap_or_default();
+        let jira_polls = config.jira.is_some() && config.inbox.is_some();
+        let plugins = if inbox_cfg.enabled {
+            match inbox_source::sources() {
+                Ok(plugins) => plugins,
+                Err(e) => {
+                    warn!("Inbox: could not look for plugin sources: {}", e);
+                    Vec::new()
+                }
+            }
+        } else {
+            Vec::new()
         };
 
-        if !inbox_cfg.enabled || config.jira.is_none() {
+        if !inbox_cfg.enabled || (!jira_polls && plugins.is_empty()) {
             tokio::time::sleep(std::time::Duration::from_secs(inbox_cfg.poll_interval_secs.max(60))).await;
             continue;
         }
 
         // Waking is local bookkeeping and runs before the sync, on its own:
-        // an issue deferred to Monday is due on Monday whether or not Jira
-        // answers, and hanging the return off a successful poll would mean a
-        // VPN outage silently held issues asleep past their moment.
+        // an issue deferred to Monday is due on Monday whether or not its
+        // source answers, and hanging the return off a successful poll would
+        // mean a VPN outage silently held issues asleep past their moment.
         match wake_snoozed(inbox_cfg.notify) {
             Ok(count) if count > 0 => msg_info!(Message::InboxWoke(count)),
             Ok(_) => {}
-            Err(e) => warn!("Jira inbox wake error: {}", e),
+            Err(e) => warn!("Inbox wake error: {}", e),
         }
 
-        match sync_noninteractive(&inbox_cfg, &mut budget).await {
-            Ok(outcome) if !outcome.skipped => {
-                if !outcome.new_keys.is_empty() {
-                    msg_info!(Message::InboxNewIssues(outcome.new_keys.len()));
-                }
-                debug!(
-                    "Jira inbox sync: fetched={}, new={}, updated={}, changed={}, gone={}, notified={}",
-                    outcome.fetched,
-                    outcome.new_keys.len(),
-                    outcome.updated,
-                    outcome.changed.len(),
-                    outcome.gone_keys.len(),
-                    outcome.notified
-                );
-            }
-            Ok(_) => {}
-            Err(e) => warn!("Jira inbox sync error: {}", e),
+        if jira_polls {
+            report_poll(JIRA_SOURCE, sync_jira(&inbox_cfg, &mut budget).await);
+        }
+        for plugin in plugins {
+            let source = plugin.name.clone();
+            report_poll(&source, sync_plugin(plugin, &inbox_cfg, &mut budget).await);
         }
 
         let secs = inbox_cfg.poll_interval_secs.max(30);
         tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
+    }
+}
+
+/// Writes one source's poll to the watcher's log.
+fn report_poll(source: &str, outcome: Result<SyncOutcome>) {
+    match outcome {
+        Ok(outcome) if !outcome.skipped => {
+            if !outcome.new_keys.is_empty() {
+                msg_info!(Message::InboxNewIssues(outcome.new_keys.len()));
+            }
+            debug!(
+                "Inbox sync of {}: fetched={}, new={}, updated={}, changed={}, gone={}, refused={}, notified={}",
+                source,
+                outcome.fetched,
+                outcome.new_keys.len(),
+                outcome.updated,
+                outcome.changed.len(),
+                outcome.gone_keys.len(),
+                outcome.refused.len(),
+                outcome.notified
+            );
+        }
+        Ok(_) => {}
+        Err(e) => warn!("Inbox sync of {} failed: {:#}", source, e),
     }
 }

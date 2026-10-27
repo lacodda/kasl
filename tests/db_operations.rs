@@ -244,7 +244,7 @@ mod tests {
         assert!(create_result.is_ok());
 
         // End workday
-        let end_result = workdays.insert_end(today);
+        let end_result = workdays.update_end(today, Some(chrono::Utc::now().naive_local()));
         assert!(end_result.is_ok());
 
         // Verify workday has end time

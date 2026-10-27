@@ -35,6 +35,7 @@ fn a_toast_button_reaches_the_mailbox() {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }])
     .unwrap();
 

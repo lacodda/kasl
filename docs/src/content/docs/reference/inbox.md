@@ -2,13 +2,13 @@
 title: "inbox"
 ---
 
-The `inbox` command manages a local inbox of open Jira issues assigned to you. The watcher polls Jira in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, snooze, dismiss, open in the browser, or take an issue into your task list - one at a time, or the whole pile in one sitting with `triage`.
+The `inbox` command manages a local inbox of the open issues assigned to you - from Jira, and from any [plugin](/reference/plugin/) that is an inbox source. The watcher polls every source in the background, stores discovered issues locally, and shows a desktop toast when a new issue appears or an existing one visibly changes. From the inbox you can pin, snooze, dismiss, open in the browser, or take an issue into your task list - one at a time, or the whole pile in one sitting with `triage`.
 
-Every sync reconciles the list against Jira: issues that stop appearing in the poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
+Every sync reconciles the list against each source: issues that stop appearing in their source's poll (closed or reassigned) are marked gone and leave the list instead of lingering forever. They stay inspectable with `--all`.
 
 Decisions that are the same every time - anything High or above goes on top, Epics are never yours, work from one project carries one tag - are written once as [rules](#rules), and the inbox applies them by itself.
 
-The inbox also writes to Jira, in two places and no more: `start` moves an issue into progress, `close` resolves it, and `comment` leaves a note. Those are the two moments a local task and its issue meet - taking the issue and finishing the work - and [Closing the loop](#closing-the-loop) is how they connect.
+The inbox also writes to an issue's source, in two places and no more: `start` moves an issue into progress, `close` resolves it, and `comment` leaves a note. Those are the two moments a local task and its issue meet - taking the issue and finishing the work - and [Closing the loop](#closing-the-loop) is how they connect.
 
 ## Usage
 
@@ -21,7 +21,7 @@ Running `kasl inbox` without a subcommand lists the active (non-dismissed) issue
 ## Options
 
 - `-n, --limit <N>`: Show only the top N issues after filtering and sorting
-- `--all`: Include issues gone from Jira (closed or reassigned); they sort below the present ones
+- `--all`: Include issues gone from their source (closed or reassigned); they sort below the present ones
 - `--snoozed`: Include issues that are still asleep, each showing the date it is due back
 - `--dismissed`: Include dismissed issues, each saying whether you or a rule dismissed it
 - `--json`: Print the list as one JSON document - see [JSON output](#json-output). It belongs to the list: `kasl inbox --json pin PROJ-412` is refused before anything is pinned; give `--json` to the subcommand that prints data
@@ -42,21 +42,24 @@ An inbox of two hundred open issues is a pile, not a list. These cuts turn it in
 
 Priority names are read against every priority the inbox has ever seen, not only the ones on the list right now. The same words are what a [rule](#rules)'s `when` is written in, so a rule pins exactly what the same cuts would list.
 
-A cut list says so in its header - `Jira inbox: 12 of 200 issues (since 7d, score ≥ 5):` - so a filtered view never reads as the whole inbox. When nothing matches, the message names the cuts and the size of the whole.
+A cut list says so in its header - `Inbox: 12 of 200 issues (since 7d, score ≥ 5):` - so a filtered view never reads as the whole inbox. When nothing matches, the message names the cuts and the size of the whole.
 
 ## Commands
 
-### `sync` - Sync inbox from Jira
+### `sync` - Sync the inbox from every source
 
 ```bash
 kasl inbox sync
 ```
 
-Polls Jira immediately instead of waiting for the background cadence. The summary counts fetched, new, changed, and gone issues:
+Polls every source immediately instead of waiting for the background cadence: Jira when it is configured, and each plugin source that is set up. Each source answers for itself, counting fetched, new, changed and gone issues:
 
 ```
-[✓] Jira inbox synced: 7 fetched, 1 new, 2 changed, 1 gone.
+[✓] Jira synced: 7 fetched, 1 new, 2 changed, 1 gone.
+[✓] gitlab synced: 3 fetched, 0 new, 1 changed, 0 gone.
 ```
+
+A source that fails is named with its reason and the others still sync; the command then exits non-zero. With no source at all, `sync` says how to add one.
 
 ### `list` - List active inbox issues
 
@@ -268,7 +271,7 @@ again.
 [✓] PROJ-123 is now In Progress in Jira.
 ```
 
-### `start` - Start an issue in Jira
+### `start` - Start an issue at its source
 
 ```bash
 kasl inbox start [KEY] [--to <NAME>] [FILTERS]
@@ -291,7 +294,12 @@ refuses to guess anywhere else; `--to` settles it in a script. A move that does
 not happen - no way from the current status, several ways and nobody to ask,
 an issue Jira does not show you - fails the command, so a script can tell.
 
-### `close` - Close an issue in Jira
+An issue from a [plugin source](#sources) is started by the plugin: kasl sends
+it a `transition` with `to: start` and the `--to` you gave, and keeps the
+status it answers. A source that does not move issues says so, and the command
+fails.
+
+### `close` - Close an issue at its source
 
 ```bash
 kasl inbox close [KEY] [--comment <TEXT>] [--to <NAME>] [--resolution <NAME>] [FILTERS]
@@ -320,7 +328,10 @@ Other required fields on the close screen are Jira's to explain: its own words
 come back as the error - `customfield_10100: Story points are required.` -
 and the issue is finished in the browser.
 
-### `comment` - Comment on an issue in Jira
+An issue from a plugin source is closed by the plugin, with the comment,
+`--to` and `--resolution` handed over in the same `transition` request.
+
+### `comment` - Comment on an issue at its source
 
 ```bash
 kasl inbox comment [KEY] [TEXT] [FILTERS]
@@ -492,22 +503,51 @@ On macOS the notification API cannot report a click at all, so the buttons are n
 
 Windows needs no registry entry and no protocol of its own. A toast button there can only ask the shell to launch a URI, and no argument survives that trip, so the watcher writes one shortcut per (action, issue) under `toast-buttons/` in the data directory and the button launches that. The shortcuts of a decided issue are removed once it is settled.
 
+## Sources
+
+An issue comes from one source, and its row says which: `jira`, or the name of
+the plugin that listed it (`source` in the [JSON](#json-output)). Everything
+the inbox does by itself is the same whatever the source - the list, badges,
+snoozes, triage, toasts and [rules](#rules); a source only says what is
+assigned, and moves or comments on an issue when asked.
+
+- **Jira** is kasl's own source: the `jira` block and the `inbox` section of
+  the config switch it on.
+- **A plugin** is a source when its manifest answers `list_issues`; it is
+  polled once it is installed and [set up](/reference/plugin/#setup---tell-a-plugin-what-it-needs),
+  on the same cadence as Jira. `kasl plugin list` shows which plugins are
+  sources and what else they answer (`transition`, `comment`). How a source
+  answers is in [Writing a plugin](/guides/writing-a-plugin/#a-request-to-an-inbox-source).
+
+Each source is reconciled on its own: a poll marks gone only its own issues
+that it no longer lists, never another source's. A key belongs to the source
+that listed it first; another source listing the same key is left out, with a
+warning naming both. A source's answer that kasl cannot read whole fails its
+sync and changes nothing, as a failed Jira poll does. Only Jira is asked why a
+taken issue left, so the **Mark done** offer of [Closing the
+loop](#closing-the-loop) is Jira's; a plugin's issue that leaves is simply
+gone.
+
+`start`, `close` and `comment` go to the issue's source, and so does the start
+of `inbox.start_on_take`. A key the inbox has never seen goes to Jira, the one
+source kasl can ask about an issue it did not list.
+
 ## Background Polling
 
-Polling runs inside `kasl watch` (both daemon and `--foreground` modes). New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux, and its buttons decide it. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Status and priority changes on existing issues also toast (a score change or a return after a missed poll only sets the badge), and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
+Polling runs inside `kasl watch` (both daemon and `--foreground` modes), for every source. New issues trigger a desktop notification; clicking the toast opens the issue in the browser on Windows and Linux, and its buttons decide it. On macOS the toast is display-only - the notification API cannot report a click - so opening stays on `kasl inbox open`. Each issue is notified about only once. Status and priority changes on existing issues also toast (a score change or a return after a missed poll only sets the badge), and issues leaving the inbox can toast too when `notify_gone` is enabled. Snoozed issues whose time is up are woken at the start of each poll and toast their return; that step is local and runs even when the Jira poll itself is skipped or fails.
 
 When an issue you took leaves the inbox, the poll also asks Jira why, and a resolved one with an open task gets the **Mark done** toast described in [Closing the loop](#closing-the-loop). That toast counts against the same hourly budget as the rest, and is not held back by `notify_gone`: it is a question about your task, not news that an issue left.
 
 A poll that fails - VPN down, Jira unreachable, a session that could not be renewed - changes nothing: the list is reconciled only against an answer Jira actually gave, so a bad night does not mark every issue `gone` and bring all of them `back` in the morning. Two answers that look like answers are refused the same way: an expired session that Jira serves as the anonymous user (an empty page with status 200), and a list shorter than the total Jira counted, which happens when an issue is created or resolved while the pages are read.
 
-Toasts are budgeted over time, not per poll. Within any hour at most five single toasts show; past that, one summary toast says how many issues were new, changed or left and opens your open-issues list in Jira, and the rest of the hour stays quiet. A trickle of three changes every five minutes is held to the same bound as two hundred at once.
+Toasts are budgeted over time, not per poll, and across sources: one person reads them all. Within any hour at most five single toasts show; past that, one summary toast says how many issues were new, changed or left and opens the source's list of your issues, and the rest of the hour stays quiet. A trickle of three changes every five minutes is held to the same bound as two hundred at once.
 
 Urgent toasts - the ones a [rule](#rules) asks for - are budgeted the same way in a lane of their own: an afternoon of ordinary changes does not spend the room an escalation needs, and fifty issues turning urgent at once still collapse into one summary.
 
 Each poll also runs the [rules](#rules) over what it brought. Pins and dismissals by rule happen with or without toasts; `kasl inbox sync` says what each rule did:
 
 ```
-[✓] Jira inbox synced: 6 fetched, 2 new, 1 changed, 0 gone.
+[✓] Jira synced: 6 fetched, 2 new, 1 changed, 0 gone.
 [i] PROJ-420: pinned by 'on fire'; urgent by 'on fire'.
 [i] PROJ-431: pinned by 'on fire'; urgent by 'on fire'.
 [i] PROJ-433: dismissed by 'type Epic or Sub-task'.
@@ -515,7 +555,7 @@ Each poll also runs the [rules](#rules) over what it brought. Pins and dismissal
 
 ## Configuration
 
-Polling is enabled by adding the `inbox` section to the config; the `jira` section must be configured as well.
+Jira's poll is enabled by adding the `inbox` section to the config; the `jira` section must be configured as well. A plugin source needs no section - it is polled once it is set up - and these settings apply to it all the same, their defaults when the section is absent. `enabled: false` stops every source.
 
 ```json
 {
@@ -537,13 +577,13 @@ Polling is enabled by adding the `inbox` section to the config; the `jira` secti
 }
 ```
 
-- `enabled`: Whether the watcher polls Jira (default `true` when the section is present)
+- `enabled`: Whether the watcher polls the inbox's sources (default `true`)
 - `poll_interval_secs`: Seconds between polls (default `300`)
 - `notify`: Show desktop toasts for new issues (default `true`); when `false`, all inbox toasts are off
 - `notify_changes`: Toast when an existing issue changes status or priority (default `true`); score changes only set the badge
 - `notify_gone`: Toast when an issue leaves the inbox — closed or reassigned (default `false`)
 - `toast_snooze_for`: How long a toast's **Snooze** button sleeps — `3d`, `12h`, `2w` (default `1d`), the same spelling as `triage --snooze-for`
-- `start_on_take`: Every take - command, triage, toast button - also starts the issue in Jira (default `false`). Off by default because it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list"
+- `start_on_take`: Every take - command, triage, toast button - also starts the issue at its source (default `false`). Off by default because it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list"
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field
 - `sort_by_field`: Field id used to rank the list in descending order
 - `rules`: What the inbox does by itself - see [Rules](#rules) (default: none)
@@ -644,6 +684,7 @@ the [filters](#filters), `--sort` and `--limit` included:
       "score": 8.5,
       "type": "Bug",
       "project": "PROJ",
+      "source": "jira",
       "url": "https://jira.example.com/browse/PROJ-431",
       "pinned": true,
       "dismissed": false,
@@ -670,6 +711,7 @@ the [filters](#filters), `--sort` and `--limit` included:
 | `filter` | The filters in the words the list's header uses; `[]` for the whole inbox. |
 | `status` | The status's name; `null` until kasl has learnt the name for `status_id`. |
 | `score` | The ranking field's value, when one is [configured](#configuration). |
+| `source` | Where the issue came from: `jira`, or the name of the plugin that listed it - see [Sources](#sources). |
 | `ruled_by` | The [rule](#rules) behind the pin or the dismissal; `null` when a hand set it, or nothing did. |
 | `badge` | What the `CHANGE` column shows: `NEW`, `taken`, `status→In Progress`, `zzz Mar 4`, `gone`. |
 | `left` | Why a gone issue left: `resolved` or `moved`; `null` while it is present, or not yet known. |

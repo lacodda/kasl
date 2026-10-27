@@ -255,10 +255,14 @@ Defaults for generated report files. Every field is optional.
 }
 ```
 
-## Jira Inbox Configuration
+## Inbox Configuration
 
-Controls the background poll behind [`kasl inbox`](/reference/inbox/). Requires
-the `jira` block; the inbox stays off when this one is absent.
+Controls the background poll behind [`kasl inbox`](/reference/inbox/), for every
+[source](/reference/inbox/#sources). Jira's poll requires the `jira` block and
+stays off when this one is absent; a plugin source is polled once it is set up,
+with these settings or their defaults. Written `jira_inbox` before v1.19, when
+Jira was the only source: a file with the old key is read as it is and saved
+under `inbox`.
 
 ### `enabled`
 - **Type**: `bool`
@@ -334,6 +338,28 @@ the `jira` block; the inbox stays off when this one is absent.
   }
 }
 ```
+
+## Plugins Configuration
+
+What each [plugin](/reference/plugin/) has been told, by its name - `gitlab` for
+`kasl-plugin-gitlab`. [`kasl plugin setup NAME`](/reference/plugin/#setup---tell-a-plugin-what-it-needs)
+writes it; a plugin is used because it is installed, not because it is listed
+here.
+
+```json
+{
+  "plugins": {
+    "gitlab": {
+      "settings": { "url": "https://gitlab.example.com" }
+    }
+  }
+}
+```
+
+### `settings`
+- **Type**: an object of the plugin's own setting keys
+- **Default**: `{}`
+- **Description**: The plugin's settings that are not secret. Only the keys its manifest declares are passed to it; a secret one - a token, a password - is kept in the OS keyring as `plugin.NAME.KEY`, never here
 
 ## Interactive Configuration
 
@@ -431,7 +457,8 @@ Common validation errors:
 ## Credentials are not in this file
 
 Passwords are never written to `config.json`; they live in the OS keyring - see
-[API Integrations](/concepts/api-integrations/). The file does hold two
+[API Integrations](/concepts/api-integrations/). So do a plugin's secret settings,
+as `plugin.NAME.KEY`. The file does hold two
 non-password secrets as written: the GitLab `access_token` and the reporting
 server's `auth_token`. On Linux and macOS it is worth keeping the file to
 yourself:

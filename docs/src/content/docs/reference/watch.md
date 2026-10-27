@@ -4,7 +4,7 @@ title: "watch"
 
 The `watch` command is kasl's activity monitor. It watches keyboard and mouse input to detect when a workday starts, records pauses when input stops, and closes the day when activity ends for good.
 
-It also does two things for the [Jira inbox](/reference/inbox/): it polls Jira on its own cadence, and it is what answers the **Take** / **Snooze** / **Dismiss** buttons on an inbox toast. Both run in daemon and `--foreground` modes alike. With the watcher stopped, a toast button still works - the press is carried out on the spot instead - but nothing polls Jira, so no new toast appears.
+It also does two things for the [inbox](/reference/inbox/): it polls its sources - Jira, and every [plugin](/reference/plugin/) source that is set up - on their cadence, and it is what answers the **Take** / **Snooze** / **Dismiss** buttons on an inbox toast. Both run in daemon and `--foreground` modes alike. With the watcher stopped, a toast button still works - the press is carried out on the spot instead - but nothing polls, so no new toast appears.
 
 If this machine is connected to a team server and you have turned on [the pulse](/reference/server/#kasl-server-pulse), the watcher is also what sends it: once a minute, and at once on a change, whether you are working, paused or not in a day. With the watcher stopped, no pulse goes, and the server shows you as offline once the last one is too old to believe.
 
@@ -21,7 +21,7 @@ Running `kasl watch` with no options starts the background daemon - the normal w
 
 ## One watcher at a time
 
-There is one watcher per user, however it is started. `kasl watch` stops the watcher it knows about and starts a new one; a watcher it does not know about - started by another copy of kasl, or at the same moment by two autostart entries - is left running, and `watch` says so instead of starting a second. `--foreground` refuses while a watcher runs: stop it with `kasl watch --stop` first. Two watchers would poll Jira twice and show every toast twice.
+There is one watcher per user, however it is started. `kasl watch` stops the watcher it knows about and starts a new one; a watcher it does not know about - started by another copy of kasl, or at the same moment by two autostart entries - is left running, and `watch` says so instead of starting a second. `--foreground` refuses while a watcher runs: stop it with `kasl watch --stop` first. Two watchers would poll every source twice and show every toast twice.
 
 `--stop` stops only a kasl process: when the recorded process has ended and its number now belongs to another program, the stale record is cleared and nothing is killed.
 

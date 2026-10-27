@@ -49,6 +49,7 @@ fn seed(key: &str, priority: &str, rank: i32, score: f64) -> InboxUpsert {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }
 }
 
@@ -85,7 +86,7 @@ fn a_cut_list_says_how_much_of_the_whole_it_is() {
     let (ok, out) = kasl(dir.path(), &["inbox"]);
     assert!(ok, "{out}");
     assert!(
-        out.contains("Jira inbox:") && !out.contains(" of 3 "),
+        out.contains("Inbox:") && !out.contains(" of 3 "),
         "the whole inbox must not read as a slice:\n{out}"
     );
 }
@@ -115,7 +116,7 @@ fn nothing_matching_is_not_an_empty_inbox() {
     let (ok, out) = kasl(dir.path(), &["inbox", "--status", "Done"]);
     assert!(ok, "{out}");
     assert!(out.contains("No issue matches (status Done); 3 in the inbox"), "{out}");
-    assert!(!out.contains("Jira inbox is empty"), "{out}");
+    assert!(!out.contains("Inbox is empty"), "{out}");
 }
 
 #[test]

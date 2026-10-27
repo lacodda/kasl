@@ -13,7 +13,8 @@ use crate::db::inbox::Inbox;
 use crate::db::tasks::Tasks;
 use crate::libs::inbox_filter;
 use crate::libs::inbox_rules;
-use crate::libs::jira_bridge::{self, Goal, MoveOptions, Moved};
+use crate::libs::inbox_source;
+use crate::libs::jira_bridge::{Goal, MoveOptions, Moved};
 use crate::libs::task::{Task, TaskFilter};
 use crate::libs::toast_action::{ToastAction, ToastRequest};
 use anyhow::Result;
@@ -152,12 +153,10 @@ pub async fn take(key: &str, options: &MoveOptions) -> Result<Applied> {
     if !start_on_take() {
         return Ok(Applied::Taken { started: None, tags });
     }
-    let started = match jira_bridge::client() {
-        Ok(mut jira) => jira_bridge::move_issue(&mut jira, key, Goal::Start, options)
-            .await
-            .map_err(|e| format!("Jira did not start it: {e}; `kasl inbox start {key}` tries again")),
-        Err(e) => Err(format!("Jira did not start it: {e}")),
-    };
+    let at = inbox_source::label(&inbox_source::source_of(key)?);
+    let started = inbox_source::move_issue(key, Goal::Start, options)
+        .await
+        .map_err(|e| format!("{at} did not start it: {e:#}; `kasl inbox start {key}` tries again"));
     Ok(Applied::Taken { started: Some(started), tags })
 }
 

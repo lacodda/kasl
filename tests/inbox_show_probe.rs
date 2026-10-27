@@ -36,6 +36,7 @@ fn print_show_and_why() {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }])
     .unwrap();
     db.set_pinned("PROJ-4471", true).unwrap();

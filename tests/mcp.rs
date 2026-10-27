@@ -136,6 +136,7 @@ fn upsert(key: &str, priority: &str, rank: i32, score: f64) -> InboxUpsert {
         raw_updated: None,
         issue_type: Some("Bug".to_string()),
         project: Some("KA".to_string()),
+        source: "jira".to_string(),
     }
 }
 

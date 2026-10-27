@@ -19,6 +19,7 @@ pub mod init;
 pub mod mcp;
 pub mod migrations;
 pub mod pauses;
+pub mod plugin;
 pub mod report;
 pub mod server;
 pub mod sum;
@@ -30,8 +31,7 @@ pub mod update;
 pub mod watch;
 
 use crate::{
-    db::workdays::Workdays,
-    libs::{messages::types::Message, output},
+    libs::{day_end, messages::types::Message, output},
     msg_error_anyhow, msg_info, msg_warning,
 };
 use anyhow::Result;
@@ -140,15 +140,24 @@ enum Commands {
     #[command(about = "Manage the connection to a kasl-server")]
     Server(server::ServerArgs),
 
-    /// Jira inbox of assigned open issues
+    /// The inbox of issues assigned to you
     ///
-    /// Syncs assigned unresolved Jira issues into a local table, lists them
-    /// by priority, and supports pin / dismiss / open / import into tasks,
-    /// and starting, closing and commenting on issues in Jira.
+    /// Syncs assigned open issues from Jira and from plugin sources into a
+    /// local table, lists them by priority, and supports pin / dismiss / open
+    /// / import into tasks, and starting, closing and commenting on issues
+    /// at their source.
     // Boxed: a filter set on every subcommand makes these the largest
     // arguments by far, and every other variant would carry their size.
-    #[command(about = "Manage Jira inbox issues")]
+    #[command(about = "Manage the inbox of assigned issues")]
     Inbox(Box<inbox::InboxArgs>),
+
+    /// Plugins: programs named `kasl-plugin-*` that kasl runs for a moment
+    ///
+    /// Lists the installed plugins and what each offers, asks one for its
+    /// settings, and runs one of its commands by hand. Plugins also hear
+    /// kasl's events and can be sources of the inbox.
+    #[command(about = "List, set up and run plugins")]
+    Plugin(plugin::PluginArgs),
 
     /// Serve kasl's records to a coding assistant over MCP, read-only
     ///
@@ -280,10 +289,11 @@ impl Cli {
                 // empty database taught users to trust a stamp that is not
                 // there.
                 let today = Local::now().date_naive();
-                if !Workdays::new()?.insert_end(today)? {
+                if day_end::close(today)? == day_end::Closed::NeverStarted {
                     return Err(msg_error_anyhow!(Message::WorkdayNeverStarted(today.to_string())));
                 }
                 msg_info!(Message::WorkdayEnded);
+                day_end::tell(today);
                 Ok(())
             }
             Commands::Sum(args) => sum::cmd(args).await,
@@ -314,6 +324,7 @@ impl Cli {
             Commands::Server(args) => server::cmd(args).await,
             Commands::Mcp => mcp::cmd().await,
             Commands::Inbox(args) => inbox::cmd(*args).await,
+            Commands::Plugin(args) => plugin::cmd(args).await,
             Commands::ToastAction(args) => toast_action::cmd(args).await,
 
             // Database migrations only available in debug builds

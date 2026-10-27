@@ -40,6 +40,7 @@ fn item(key: &str) -> InboxItem {
         issue_type: None,
         project: None,
         ruled_by: None,
+        source: "jira".to_string(),
     }
 }
 

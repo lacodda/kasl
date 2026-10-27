@@ -551,26 +551,30 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::SelectingTask(name) => format!("Selected task: {}", name),
 
             // === JIRA INBOX MESSAGES ===
-            Message::InboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl setup` and select Jira.".to_string(),
-            Message::InboxEmpty => "Jira inbox is empty.".to_string(),
-            Message::InboxListHeader => "Jira inbox:".to_string(),
+            Message::InboxHasNoSource => {
+                "The inbox has no source: configure Jira (`kasl setup`, then Jira), or install a plugin that lists issues and run `kasl plugin setup NAME`."
+                    .to_string()
+            }
+            Message::InboxEmpty => "Inbox is empty.".to_string(),
+            Message::InboxListHeader => "Inbox:".to_string(),
             Message::InboxListSliced { shown, total, what } => {
                 if what.is_empty() {
-                    format!("Jira inbox: {} of {} issues:", shown, total)
+                    format!("Inbox: {} of {} issues:", shown, total)
                 } else {
-                    format!("Jira inbox: {} of {} issues ({}):", shown, total, what)
+                    format!("Inbox: {} of {} issues ({}):", shown, total, what)
                 }
             }
             Message::InboxNoMatch { total, what } => format!("No issue matches ({}); {} in the inbox.", what, total),
             Message::InboxSynced {
+                source,
                 fetched,
                 new_count,
                 changed,
                 gone,
             } => {
-                format!("Jira inbox synced: {} fetched, {} new, {} changed, {} gone.", fetched, new_count, changed, gone)
+                format!("{} synced: {} fetched, {} new, {} changed, {} gone.", source, fetched, new_count, changed, gone)
             }
-            Message::InboxNewIssues(count) => format!("Jira inbox: {} new issue(s).", count),
+            Message::InboxNewIssues(count) => format!("Inbox: {} new issue(s).", count),
             Message::InboxNotFound(key) => format!("Issue '{}' not found in inbox.", key),
             Message::InboxPinned(key) => format!("Pinned {}.", key),
             Message::InboxUnpinned(key) => format!("Unpinned {}.", key),
@@ -579,9 +583,9 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::InboxSnoozed(key, until) => format!("Snoozed {} until {}.", key, until),
             Message::InboxUnsnoozed(key) => format!("Woke {}.", key),
             Message::InboxAllSnoozed(count) => {
-                format!("Jira inbox is clear; {} issue(s) are snoozed. `kasl inbox --snoozed` shows them.", count)
+                format!("Inbox is clear; {} issue(s) are snoozed. `kasl inbox --snoozed` shows them.", count)
             }
-            Message::InboxWoke(count) => format!("Jira inbox: {} snoozed issue(s) came back.", count),
+            Message::InboxWoke(count) => format!("Inbox: {} snoozed issue(s) came back.", count),
             Message::InboxTriaged {
                 taken,
                 snoozed,
@@ -617,6 +621,24 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::ToastActionApplied(what) => format!("{}.", what),
             Message::ToastActionFailed(key, why) => format!("Could not act on {} from the toast: {}", key, why),
             Message::JiraMoved(sentence) => format!("{}.", sentence),
+            Message::PluginSaid { plugin, message } => format!("{}: {}", plugin, message),
+            Message::PluginEventFailed { event, error } => format!("{} was not taken: {}", event, error),
+            Message::InboxSyncFailed { source, error } => format!("{} did not sync: {}", source, error),
+            Message::InboxRefusedKeys { source, keys } => {
+                format!("{} listed {} that another source already holds; left as they were.", source, keys)
+            }
+            Message::PluginSetUp(name) => format!("The plugin `{}` is set up.", name),
+            Message::ReportHasNowhereToGo => "Nowhere to send the day: SiServer is not configured, and no plugin hears report_ready. Run `kasl setup` for SiServer, or install a plugin that does.".to_string(),
+            Message::ReportGoesToPlugins(names) => format!("The day also goes to plugins that hear report_ready: {}.", names),
+            Message::ReportNotPostedToSiServer => {
+                "SiServer is not configured, so nothing is posted to it; the plugins above are handed the day as `kasl report --json` prints it."
+                    .to_string()
+            }
+            Message::PluginNothingToSetUp(name) => format!("The plugin `{}` needs no settings.", name),
+            Message::PluginsNone(dir) => format!(
+                "No plugins installed. kasl looks for programs named `kasl-plugin-*` in {} and on your PATH.",
+                dir
+            ),
             Message::JiraCommented(key) => format!("Commented on {} in Jira.", key),
             Message::JiraWriteFailed(key, why) => format!("Jira was not updated for {}: {}", key, why),
             Message::JiraResolvedTaskOpen(key, resolution) => format!(
@@ -649,7 +671,7 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::InboxRulesSkipped(count) => format!("{} inbox rule(s) skipped as unreadable - `kasl inbox rules` says why.", count),
             Message::InboxRuleSkipped(number, why) => format!("Inbox rule {} is skipped: {}.", number, why),
             Message::InboxRuleActed(what) => format!("{}.", what),
-            Message::InboxRulesNone => "No inbox rules yet. They go under `inbox.rules` in the config; the Jira inbox guide shows how.".to_string(),
+            Message::InboxRulesNone => "No inbox rules yet. They go under `inbox.rules` in the config; the inbox guide shows how.".to_string(),
             Message::InboxRulesApplied(0) => "The rules have nothing to change.".to_string(),
             Message::InboxRulesApplied(count) => format!("The rules changed {} issue(s).", count),
             Message::InboxRulesNotApplied(count) => format!(

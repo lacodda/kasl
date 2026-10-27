@@ -75,7 +75,7 @@ mod tests {
         tasks.update(&completed_task2).unwrap();
 
         // 6. End the workday
-        workdays.insert_end(today).unwrap();
+        workdays.update_end(today, Some(chrono::Local::now().naive_local())).unwrap();
 
         // 7. Verify the workflow completed successfully
         let final_workday = workdays.fetch(today).unwrap();
@@ -114,7 +114,7 @@ mod tests {
             tasks.update(&last_task).unwrap();
 
             // End the workday
-            workdays.insert_end(day_date).unwrap();
+            workdays.update_end(day_date, Some(chrono::Local::now().naive_local())).unwrap();
         }
 
         // Verify all tasks were created
@@ -148,6 +148,7 @@ mod tests {
             gitlab: None,
             jira: None,
             inbox: None,
+            plugins: Default::default(),
             productivity: None,
             report: None,
             task_discovery: None,
@@ -210,7 +211,7 @@ mod tests {
         }
 
         // End workday
-        workdays.insert_end(today).unwrap();
+        workdays.update_end(today, Some(chrono::Local::now().naive_local())).unwrap();
 
         // Verify consistency
         let final_workday = workdays.fetch(today).unwrap();
@@ -301,8 +302,8 @@ mod tests {
         assert!(tasks_via_handle1.len() >= 2);
 
         // Clean up workdays
-        workdays1.insert_end(yesterday).unwrap();
-        workdays2.insert_end(today).unwrap();
+        workdays1.update_end(yesterday, Some(chrono::Local::now().naive_local())).unwrap();
+        workdays2.update_end(today, Some(chrono::Local::now().naive_local())).unwrap();
     }
 
     #[test_context(WorkflowTestContext)]
@@ -319,7 +320,7 @@ mod tests {
             let today = Utc::now().date_naive();
             workdays.insert_start(today).unwrap();
             tasks.insert(&task).unwrap();
-            workdays.insert_end(today).unwrap();
+            workdays.update_end(today, Some(chrono::Local::now().naive_local())).unwrap();
         } // Database connection closes here
 
         // Second session: verify data persists
@@ -388,8 +389,8 @@ mod tests {
         workdays.insert_start(today).unwrap();
 
         // End workdays
-        workdays.insert_end(yesterday).unwrap();
-        workdays.insert_end(today).unwrap();
+        workdays.update_end(yesterday, Some(chrono::Local::now().naive_local())).unwrap();
+        workdays.update_end(today, Some(chrono::Local::now().naive_local())).unwrap();
 
         // Verify both workdays exist and are completed
         let yesterday_workday = workdays.fetch(yesterday).unwrap();

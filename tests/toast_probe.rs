@@ -35,6 +35,7 @@ fn toast_shows_with_logo() {
         issue_type: None,
         project: None,
         ruled_by: None,
+        source: "jira".to_string(),
     };
     assert!(kasl::libs::inbox::show_toast(&item));
 }

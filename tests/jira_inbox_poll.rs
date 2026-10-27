@@ -16,7 +16,7 @@ use kasl::api::jira::{Jira, JiraConfig};
 use kasl::db::inbox::{Inbox, InboxUpsert};
 use kasl::libs::config::{Config, InboxConfig};
 use kasl::libs::data_storage::DataStorage;
-use kasl::libs::inbox::{TOAST_STORM_THRESHOLD, TOAST_WINDOW_MINUTES, ToastBudget, ToastPlan, sync_noninteractive, toasts_collapse};
+use kasl::libs::inbox::{TOAST_STORM_THRESHOLD, TOAST_WINDOW_MINUTES, ToastBudget, ToastPlan, sync_jira, toasts_collapse};
 use serde_json::json;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -76,6 +76,7 @@ fn seed(key: &str) -> InboxUpsert {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }
 }
 
@@ -106,7 +107,7 @@ async fn a_poll_that_fails_leaves_the_inbox_untouched() {
         .mount(&server)
         .await;
 
-    let result = sync_noninteractive(&inbox, &mut ToastBudget::new()).await;
+    let result = sync_jira(&inbox, &mut ToastBudget::new()).await;
     let err = result.expect_err("a 503 from Jira must fail the poll, not answer with an empty inbox");
     assert!(err.to_string().contains("503"), "the error names the status: {err}");
 
@@ -136,7 +137,7 @@ async fn a_poll_that_answers_still_reconciles() {
         .mount(&server)
         .await;
 
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(!outcome.skipped);
     assert_eq!(outcome.fetched, 1);
     assert_eq!(outcome.gone_keys, vec!["KA-2".to_string()]);
@@ -178,7 +179,7 @@ async fn an_answer_given_to_nobody_leaves_the_inbox_untouched() {
     // With the session refused there is no way back in without a stored
     // secret, so the poll either fails or is skipped - both are fine; what
     // must not happen is a reconcile against the empty page.
-    if let Ok(outcome) = sync_noninteractive(&inbox, &mut ToastBudget::new()).await {
+    if let Ok(outcome) = sync_jira(&inbox, &mut ToastBudget::new()).await {
         assert!(outcome.skipped, "an anonymous answer was taken as the inbox: {outcome:?}");
     }
 
@@ -223,7 +224,7 @@ async fn a_list_that_shifted_between_pages_leaves_the_inbox_untouched() {
         .mount(&server)
         .await;
 
-    let result = sync_noninteractive(&inbox, &mut ToastBudget::new()).await;
+    let result = sync_jira(&inbox, &mut ToastBudget::new()).await;
     let err = result.expect_err("a list short of what Jira counted must fail the poll");
     assert!(err.to_string().contains("2 of 3"), "the error says what was short: {err}");
 
@@ -258,7 +259,7 @@ async fn an_issue_read_twice_is_still_one_issue() {
         .mount(&server)
         .await;
 
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert_eq!(outcome.fetched, 3);
     assert_eq!(outcome.new_keys, vec!["KA-1", "KA-2", "KA-3"]);
 }
@@ -287,7 +288,7 @@ fn only_a_status_or_priority_change_is_worth_a_toast() {
 
     // Missed by one poll and read again by the next: the inbox corrects its
     // own view, which is not something that happened to the issue.
-    db.mark_gone(&["KA-1".to_string(), "KA-2".to_string(), "KA-3".to_string()]).unwrap();
+    db.mark_gone("jira", &["KA-1".to_string(), "KA-2".to_string(), "KA-3".to_string()]).unwrap();
     let result = db.upsert_batch(&[seed("KA-4")]).unwrap();
     let back = result.changed.iter().find(|c| c.issue_key == "KA-4").expect("the return is recorded");
     assert!(back.change.contains("back"), "the badge still says so: {}", back.change);

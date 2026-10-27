@@ -94,9 +94,15 @@ You never started a timer or stopped one. The daemon has been watching activity 
 		honoured. See [kasl in scripts and CI](/guides/scripting/#json-for-programs).
 	</Card>
 	<Card title="Talks to your assistant" icon="puzzle">
-		[`kasl mcp`](/reference/mcp/) serves the day, the week, tasks and the Jira
+		[`kasl mcp`](/reference/mcp/) serves the day, the week, tasks and the
 		inbox to a coding assistant such as Claude Code over MCP - read-only, the
 		same documents `--json` prints, and connected only when you connect it.
+	</Card>
+	<Card title="Takes plugins" icon="setting">
+		A program named `kasl-plugin-*`, in any language, hears the day end and
+		the report go out, runs on a day or an issue by hand, or feeds the inbox
+		beside Jira. [`kasl plugin`](/reference/plugin/) lists them and sets them
+		up; [Writing a plugin](/guides/writing-a-plugin/) is the protocol.
 	</Card>
 	<Card title="Stays out of the way" icon="approve-check">
 		Single binary, no runtime dependencies, credentials in the OS keyring.

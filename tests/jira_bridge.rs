@@ -11,7 +11,7 @@ use kasl::api::jira::{Jira, JiraConfig};
 use kasl::db::inbox::{Inbox, InboxUpsert, LeftReason};
 use kasl::libs::config::{Config, InboxConfig};
 use kasl::libs::data_storage::DataStorage;
-use kasl::libs::inbox::{ToastBudget, sync_noninteractive};
+use kasl::libs::inbox::{ToastBudget, sync_jira};
 use kasl::libs::jira_bridge::{self, Goal, MoveOptions, Moved};
 use kasl::libs::toast_apply::{self, Applied};
 use serde_json::{Value, json};
@@ -118,6 +118,7 @@ fn seed(key: &str) -> InboxUpsert {
         raw_updated: None,
         issue_type: None,
         project: None,
+        source: "jira".to_string(),
     }
 }
 
@@ -425,7 +426,7 @@ async fn a_sync_learns_why_taken_issues_left() {
         .mount(&server)
         .await;
 
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert_eq!(
         outcome.resolved.iter().map(|r| r.issue_key.as_str()).collect::<Vec<_>>(),
         ["KA-11"],
@@ -443,7 +444,7 @@ async fn a_sync_learns_why_taken_issues_left() {
     assert_eq!(db.get_by_key("KA-13").unwrap().unwrap().left_reason, None);
 
     // Asked once: the next sync has nothing left to ask, and offers nothing again.
-    let again = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let again = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(again.resolved.is_empty(), "a resolution is offered once, not every poll: {:?}", again.resolved);
 }
 
@@ -459,7 +460,7 @@ async fn a_resolved_issue_whose_task_is_done_is_not_offered() {
     inbox_is_empty(&server).await;
     issue_is(&server, "KA-14", "Done", "done", Some("Done")).await;
 
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(outcome.resolved.is_empty(), "the work is done on both sides: {:?}", outcome.resolved);
     let item = Inbox::new().unwrap().get_by_key("KA-14").unwrap().unwrap();
     assert_eq!(item.left_reason, Some(LeftReason::Resolved), "the reason is kept all the same");
@@ -481,15 +482,40 @@ async fn a_departure_jira_could_not_explain_is_asked_about_again() {
         .mount_as_scoped(&server)
         .await;
 
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(outcome.resolved.is_empty());
     assert_eq!(db.get_by_key("KA-15").unwrap().unwrap().left_reason, None, "no answer is no answer");
     drop(busy);
 
     issue_is(&server, "KA-15", "Closed", "done", Some("Fixed")).await;
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert_eq!(outcome.resolved.len(), 1, "the next poll asks again and gets the answer");
     assert_eq!(db.get_by_key("KA-15").unwrap().unwrap().resolution.as_deref(), Some("Fixed"));
+}
+
+/// Jira is asked why its own issues left, never another source's.
+///
+/// A plugin source's taken issue that left is simply gone; asked of Jira, an
+/// answer for a key Jira happens to know too would be filed against it.
+#[tokio::test]
+#[serial]
+async fn jira_is_not_asked_why_another_sources_issue_left() {
+    let _dir = sandbox();
+    let server = MockServer::start().await;
+    let inbox = configure(&server, false);
+    let db = Inbox::new().unwrap();
+    let mut elsewhere = seed("APP-1");
+    elsewhere.source = "tracker".to_string();
+    db.upsert_batch(&[elsewhere]).unwrap();
+    db.set_taken("APP-1", true).unwrap();
+    db.mark_gone("tracker", &[]).unwrap();
+    inbox_is_empty(&server).await;
+    issue_is(&server, "APP-1", "Closed", "done", Some("Fixed")).await;
+
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
+
+    assert!(outcome.resolved.is_empty());
+    assert_eq!(db.get_by_key("APP-1").unwrap().unwrap().left_reason, None, "not Jira's to explain");
 }
 
 #[tokio::test]
@@ -501,7 +527,7 @@ async fn an_issue_that_comes_back_forgets_why_it_left() {
     let db = Inbox::new().unwrap();
     db.upsert_batch(&[seed("KA-16")]).unwrap();
     toast_apply::take("KA-16", &MoveOptions::unattended()).await.unwrap();
-    db.mark_gone(&[]).unwrap();
+    db.mark_gone("jira", &[]).unwrap();
     db.set_left("KA-16", LeftReason::Resolved, Some("Done")).unwrap();
 
     // Reopened in Jira: it is back in the poll.
@@ -516,7 +542,7 @@ async fn an_issue_that_comes_back_forgets_why_it_left() {
         })))
         .mount(&server)
         .await;
-    sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
 
     let item = db.get_by_key("KA-16").unwrap().unwrap();
     assert!(item.gone_at.is_none());

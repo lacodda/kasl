@@ -28,6 +28,12 @@ kasl watch
 `kasl inbox sync` fetches immediately if you don't want to wait for the next
 scheduled poll or the daemon isn't running yet.
 
+Jira is not the only possible source. A [plugin](/reference/plugin/) that lists
+issues - GitLab's, a company tracker's - fills the same inbox, and everything
+on this page applies to its issues too: badges, toasts, snoozes, triage and
+rules. `start`, `close` and `comment` go to whichever source an issue came
+from. See [Sources](/reference/inbox/#sources).
+
 ## What happens to an issue over time
 
 **It appears.** The next poll after Jira assigns you an issue, it lands in the
@@ -39,7 +45,7 @@ kasl inbox
 ```
 
 ```
-Jira inbox:
+Inbox:
 
 +---+--------+-------+----------+----------+--------+-------------------------------------+
 | ★ | CHANGE | SCORE | PRIORITY | KEY      | STATUS | SUMMARY                             |

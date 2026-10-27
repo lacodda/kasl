@@ -445,7 +445,8 @@ pub enum Message {
     SelectingTask(String), // task name
 
     // === JIRA INBOX MESSAGES ===
-    InboxRequiresJiraConfig,
+    /// Neither Jira nor a plugin source is there to sync.
+    InboxHasNoSource,
     InboxEmpty,
     InboxListHeader,
     /// A cut or truncated list: how many shown of how many active, and the cuts in words.
@@ -460,6 +461,8 @@ pub enum Message {
         what: String,
     },
     InboxSynced {
+        /// How the source is named: "Jira", or the plugin's name.
+        source: String,
         fetched: usize,
         new_count: usize,
         changed: usize,
@@ -523,6 +526,38 @@ pub enum Message {
 
     /// What a move in Jira came to, already worded.
     JiraMoved(String),
+    /// A plugin's own line, said as it answered.
+    PluginSaid {
+        plugin: String,
+        message: String,
+    },
+    /// A plugin could not take an event; the error names the plugin.
+    PluginEventFailed {
+        event: String,
+        error: String,
+    },
+    /// One source of the inbox failed to sync; the others went on.
+    InboxSyncFailed {
+        source: String,
+        error: String,
+    },
+    /// A source listed keys another source holds.
+    InboxRefusedKeys {
+        source: String,
+        keys: String,
+    },
+    /// `kasl plugin setup` stored what the plugin needs.
+    PluginSetUp(String),
+    /// `kasl plugin setup` on a plugin that declares no settings.
+    PluginNothingToSetUp(String),
+    /// `kasl plugin list` with nothing installed; where kasl looks.
+    PluginsNone(String),
+    /// `report --send` with neither SiServer nor a plugin to hand the day to.
+    ReportHasNowhereToGo,
+    /// The plugins `report --send` hands the day to, named in the preview.
+    ReportGoesToPlugins(String),
+    /// The preview without SiServer: nothing is posted, the plugins get the day.
+    ReportNotPostedToSiServer,
     /// A comment landed on the issue.
     JiraCommented(String),
     /// The local change stands, but Jira was not updated: key, then why.

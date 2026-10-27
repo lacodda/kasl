@@ -135,5 +135,5 @@ were working.
 - [`watch`](/reference/watch/) - the daemon and its settings
 - [`report`](/reference/report/) - the daily report and submission
 - [`pauses`](/reference/pauses/) - recording absences the monitor missed
-- [`inbox`](/reference/inbox/) - the Jira inbox in detail
+- [`inbox`](/reference/inbox/) - the inbox in detail
 - [Configuration](/concepts/configuration/) - thresholds behind all of this

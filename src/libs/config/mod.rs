@@ -227,6 +227,22 @@ pub struct Config {
     /// file with the old key is read as it is and saved under the new one.
     #[serde(default, alias = "jira_inbox", skip_serializing_if = "Option::is_none")]
     pub inbox: Option<InboxConfig>,
+
+    /// What each plugin has been told, by its name (`gitlab` for
+    /// `kasl-plugin-gitlab`). A plugin is used because it is installed, not
+    /// because it is listed here; this holds only its settings.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub plugins: std::collections::BTreeMap<String, PluginConfig>,
+}
+
+/// One plugin's settings, as `kasl plugin setup` wrote them.
+///
+/// Only the ones that are not secret: a setting its manifest marks secret is
+/// kept in the OS keyring, under `plugin.NAME.KEY`, and never in this file.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+pub struct PluginConfig {
+    #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
+    pub settings: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Settings for the inbox, whichever source its issues come from.

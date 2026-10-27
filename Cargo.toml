@@ -104,6 +104,9 @@ terminal_size = "0.4.4"
 unicode-width = "0.2.2"
 clap_complete = "4.6.9"
 keyring = { version = "4.1.6", features = ["apple-native-keyring-store", "windows-native-keyring-store", "zbus-secret-service-keyring-store"] }
+# Plugins run as a process group (a job object on Windows), so stopping one at
+# its time limit stops whatever it started too - the same crate kilna uses.
+process-wrap = { version = "10.0.1", default-features = false, features = ["std", "job-object", "creation-flags", "process-group"] }
 
 # Build-time dependencies
 [build-dependencies]
@@ -122,6 +125,9 @@ notify-rust = "4.18.0"
 # Platform-specific dependencies for Windows
 [target.'cfg(windows)'.dependencies]
 win-toast-notify = "0.1.6"
+# Only for the creation flag process-wrap takes in its own type: a plugin is
+# started without a console window of its own.
+windows = { version = "0.62.2", default-features = false, features = ["Win32_System_Threading"] }
 winapi = { version = "0.3", features = [
     "processthreadsapi",
     "winnt",

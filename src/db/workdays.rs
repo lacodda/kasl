@@ -9,7 +9,7 @@
 //! let today = Local::now().date_naive();
 //!
 //! workdays.insert_start(today)?;
-//! workdays.insert_end(today)?; // false when the day was never started
+//! workdays.update_end(today, Some(chrono::Local::now().naive_local()))?; // errors when the day was never started
 //! # Ok(())
 //! # }
 //! ```
@@ -27,7 +27,6 @@ const SCHEMA_WORKDAYS: &str = "CREATE TABLE IF NOT EXISTS workdays (
 );";
 
 const INSERT_START: &str = "INSERT INTO workdays (date, start) VALUES (?1, datetime(CURRENT_TIMESTAMP, 'localtime'))";
-const UPDATE_END: &str = "UPDATE workdays SET end = datetime(CURRENT_TIMESTAMP, 'localtime') WHERE date = ?1";
 const SELECT_BY_DATE: &str = "SELECT id, date, start, end FROM workdays WHERE date = ?1";
 /// Compared as text, like [`SELECT_RECORDED_DATES`]: `YYYY-MM-DD` sorts as the dates it spells.
 const SELECT_BY_RANGE: &str = "SELECT id, date, start, end FROM workdays WHERE date >= ?1 AND date <= ?2 ORDER BY date";
@@ -120,32 +119,6 @@ impl Workdays {
             self.conn.execute(INSERT_START, [&date_str])?;
         }
         Ok(())
-    }
-
-    /// Stamps the current time as the day's end; calling again re-stamps.
-    ///
-    /// Returns whether a day was there to close. The UPDATE matches no row
-    /// when the date has no workday, and for a long time that came back as
-    /// plain `Ok` - so `kasl end` announced a day it had not written. The
-    /// answer belongs in the return value rather than in the data: ending an
-    /// unstarted day must still create nothing.
-    ///
-    /// ```rust,no_run
-    /// # use kasl::db::workdays::Workdays;
-    /// use chrono::Local;
-    ///
-    /// # fn main() -> anyhow::Result<()> {
-    /// let mut workdays = Workdays::new()?;
-    /// let today = Local::now().date_naive();
-    ///
-    /// workdays.insert_start(today)?;
-    /// assert!(workdays.insert_end(today)?);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn insert_end(&mut self, date: NaiveDate) -> Result<bool> {
-        let date_str = date.format("%Y-%m-%d").to_string();
-        Ok(self.conn.execute(UPDATE_END, [&date_str])? > 0)
     }
 
     /// Fetches the workday for a date, or `None` if the date has none.

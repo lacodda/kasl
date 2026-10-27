@@ -14,7 +14,7 @@ use kasl::db::tags::Tags;
 use kasl::db::tasks::Tasks;
 use kasl::libs::config::{Config, InboxConfig};
 use kasl::libs::data_storage::DataStorage;
-use kasl::libs::inbox::{Notice, TOAST_STORM_THRESHOLD, ToastBudget, ToastPlan, notices, sync_noninteractive};
+use kasl::libs::inbox::{Notice, TOAST_STORM_THRESHOLD, ToastBudget, ToastPlan, notices, sync_jira};
 use kasl::libs::inbox_rules::{self, InboxRule, RuleBook, Verdict};
 use kasl::libs::jira_bridge::MoveOptions;
 use kasl::libs::task::TaskFilter;
@@ -111,6 +111,7 @@ fn upsert(key: &str, priority: (&str, i32), issue_type: &str) -> InboxUpsert {
         raw_updated: None,
         issue_type: Some(issue_type.to_string()),
         project: key.split('-').next().map(str::to_string),
+        source: "jira".to_string(),
     }
 }
 
@@ -144,6 +145,7 @@ fn item(key: &str, priority: (&str, i32), issue_type: Option<&str>) -> InboxItem
         issue_type: issue_type.map(str::to_string),
         project: key.split('-').next().map(str::to_string),
         ruled_by: None,
+        source: "jira".to_string(),
     }
 }
 
@@ -371,7 +373,7 @@ async fn a_rule_pins_an_arrival_and_an_unpin_by_hand_stands() {
     let inbox = configure(&server.uri(), json!([{"name": "hot", "when": {"priority": "High+"}, "then": {"pin": true}}]));
 
     jira_holds(&server, vec![issue("KA-1", ("High", 2), "Bug"), issue("KA-2", ("Medium", 3), "Bug")]).await;
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(row("KA-1").pinned, "an issue arriving High is pinned");
     assert_eq!(row("KA-1").ruled_by.as_deref(), Some("hot"), "and the row names the rule");
     assert!(!row("KA-2").pinned);
@@ -381,16 +383,16 @@ async fn a_rule_pins_an_arrival_and_an_unpin_by_hand_stands() {
 
     Inbox::new().unwrap().set_pinned("KA-1", false).unwrap();
     assert_eq!(row("KA-1").ruled_by, None, "a hand takes the decision back");
-    sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(!row("KA-1").pinned, "the person's unpin stands while nothing changes");
 
     jira_holds(&server, vec![issue("KA-1", ("Medium", 3), "Bug"), issue("KA-2", ("Highest", 1), "Bug")]).await;
-    sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(row("KA-2").pinned, "an escalation is pinned");
     assert!(!row("KA-1").pinned);
 
     jira_holds(&server, vec![issue("KA-1", ("High", 2), "Bug"), issue("KA-2", ("Highest", 1), "Bug")]).await;
-    sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(row("KA-1").pinned, "leaving the rule and coming back is news, and pins again");
 }
 
@@ -410,7 +412,7 @@ async fn a_dismiss_rule_hides_an_arrival_but_never_work_in_hand() {
     db.set_taken("KA-2", true).unwrap();
 
     jira_holds(&server, vec![issue("KA-1", ("Medium", 3), "Epic"), issue("KA-2", ("Medium", 3), "Epic")]).await;
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
 
     let hidden = row("KA-1");
     assert!(hidden.dismissed, "an Epic arriving is dismissed");
@@ -443,7 +445,7 @@ async fn dismissal_beats_pin_and_rules_leave_a_dismissed_issue_alone() {
     db.set_dismissed("KA-5", true).unwrap();
 
     jira_holds(&server, vec![issue("KA-3", ("High", 2), "Epic"), issue("KA-5", ("Highest", 1), "Bug")]).await;
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
 
     let epic = row("KA-3");
     assert!(epic.dismissed && !epic.pinned, "a High Epic is hidden, not pinned");
@@ -482,7 +484,7 @@ async fn an_urgent_rule_wakes_a_snoozed_issue_and_a_pin_alone_does_not() {
         .unwrap();
 
     jira_holds(&server, vec![issue("KA-4", ("High", 2), "Bug"), issue("PAY-1", ("Low", 4), "Bug")]).await;
-    let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
+    let outcome = sync_jira(&inbox, &mut ToastBudget::new()).await.unwrap();
 
     let woken = row("KA-4");
     assert_eq!(woken.snoozed_until, None, "an urgent rule wakes a sleeping issue");

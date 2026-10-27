@@ -308,7 +308,10 @@ mod tests {
 
         // The day is closed: whatever the monitor says, it is over.
         in_pause.store(false, Ordering::Relaxed);
-        Workdays::new().unwrap().insert_end(Local::now().date_naive()).unwrap();
+        Workdays::new()
+            .unwrap()
+            .update_end(Local::now().date_naive(), Some(Local::now().naive_local()))
+            .unwrap();
         assert_eq!(pulser.tick().await.unwrap(), Some(Beat::Accepted(AgentState::Idle)));
 
         assert_eq!(claims(&server).await, vec!["idle", "working", "paused", "idle"]);

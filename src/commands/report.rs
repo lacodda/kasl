@@ -13,10 +13,12 @@ use crate::{
     },
     libs::{
         config::Config,
+        day_end::{self, Closed},
         formatter::format_duration,
         json,
         messages::Message,
         output::{self, Format},
+        plugin::{events, manifest::Event},
         report::{self, DayReport, DayWork},
         task::{FormatTasks, Task, TaskFilter},
         view::View,
@@ -267,13 +269,37 @@ async fn show_daily_payload(date: DateTime<Local>, json: bool) -> Result<()> {
     let report_json = build_report_payload(&workday, &mut tasks, &day.intervals);
     let events_json = serde_json::to_string(&report_json)?;
 
+    // The plugins are the other half of where the day goes: each gets the day
+    // as `kasl report --json` prints it, and is named here before it does.
+    let plugins: Vec<String> = events::listeners(Event::ReportReady).into_iter().map(|plugin| plugin.name).collect();
+    if !plugins.is_empty() && !json {
+        msg_info!(Message::ReportGoesToPlugins(plugins.join(", ")));
+    }
+
     // The destination is half the answer to "what leaves this machine", so it
     // is named from the configured client rather than described in prose.
-    let si = get_si_service()?;
+    // Without SiServer the day may still go to plugins: then that is the
+    // whole answer, and nothing is posted anywhere else.
+    let Some(si) = Config::read()?.si.map(|config| Si::new(&config)) else {
+        if plugins.is_empty() {
+            return Err(msg_error_anyhow!(Message::ReportHasNowhereToGo));
+        }
+        if json {
+            return output::print_json(&json::Payload {
+                url: None,
+                date: naive_date,
+                fields: Vec::new(),
+                tasks: serde_json::Value::Null,
+                plugins,
+            });
+        }
+        msg_info!(Message::ReportNotPostedToSiServer);
+        return Ok(());
+    };
     let fields = daily_report_fields(&naive_date.format("%Y-%m-%d").to_string(), &events_json);
     if json {
         return output::print_json(&json::Payload {
-            url: si.daily_report_url(),
+            url: Some(si.daily_report_url()),
             date: naive_date,
             fields: fields
                 .into_iter()
@@ -283,6 +309,7 @@ async fn show_daily_payload(date: DateTime<Local>, json: bool) -> Result<()> {
                 })
                 .collect(),
             tasks: report_json,
+            plugins,
         });
     }
     msg_info!(Message::ReportPayloadHeading {
@@ -321,16 +348,30 @@ async fn show_daily_payload(date: DateTime<Local>, json: bool) -> Result<()> {
     Ok(())
 }
 
-/// Handles the complete process of sending a daily report to external API.
+/// Sends the day to every channel it goes to: SiServer, and the plugins that hear `report_ready`.
+///
+/// The channels are found first, before anything is written: a send with
+/// nowhere to go must not close the day on its way to saying so. Then the
+/// day is closed by the one rule a day's end follows ([`day_end`]) - a past
+/// day keeps the end it has - and checked: tasks there, productivity over
+/// the minimum. A day that passes is ready, and each channel gets it on its
+/// own: SiServer failing does not keep the plugins from hearing, nor the
+/// other way round.
 async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
     let naive_date = date.date_naive();
+    let si_config = Config::read()?.si;
+    let listeners = events::listeners(Event::ReportReady);
+    if si_config.is_none() && listeners.is_empty() {
+        return Err(msg_error_anyhow!(Message::ReportHasNowhereToGo));
+    }
     let mut workdays_db = Workdays::new()?;
 
-    // Finalize the workday by recording end time. A day that was never
-    // started cannot be sent, and saying so here beats the fetch below
-    // failing with "could not find after finalizing".
-    if !workdays_db.insert_end(naive_date)? {
-        return Err(msg_error_anyhow!(Message::WorkdayNeverStarted(naive_date.to_string())));
+    // A day that was never started cannot be sent, and saying so here beats
+    // the fetch below failing with "could not find after finalizing".
+    match day_end::close(naive_date)? {
+        Closed::NeverStarted => return Err(msg_error_anyhow!(Message::WorkdayNeverStarted(naive_date.to_string()))),
+        Closed::Ended(_) => day_end::tell(naive_date),
+        Closed::Kept(_) => {}
     }
 
     // Load the finalized workday data
@@ -356,26 +397,36 @@ async fn send_daily_report(date: DateTime<Local>) -> Result<()> {
         return Ok(());
     }
 
-    let report_json = build_report_payload(&workday, &mut tasks, &day.intervals);
-    let events_json = serde_json::to_string(&report_json)?;
-    let mut si = get_si_service()?;
+    if let Some(si_config) = si_config {
+        let report_json = build_report_payload(&workday, &mut tasks, &day.intervals);
+        let events_json = serde_json::to_string(&report_json)?;
+        let mut si = Si::new(&si_config);
 
-    // Submit the report to external API
-    match si.send(&events_json, &naive_date).await {
-        Ok(status) => {
-            if status.is_success() {
-                msg_info!(Message::DailyReportSent(date.format("%B %-d, %Y").to_string()));
+        // Submit the report to external API
+        match si.send(&events_json, &naive_date).await {
+            Ok(status) => {
+                if status.is_success() {
+                    msg_info!(Message::DailyReportSent(date.format("%B %-d, %Y").to_string()));
 
-                // Check if monthly report should be automatically triggered
-                if si.is_last_working_day_of_month(&naive_date)? {
-                    msg_info!(Message::MonthlyReportTriggered);
-                    handle_monthly_report(date).await?;
+                    // Check if monthly report should be automatically triggered
+                    if si.is_last_working_day_of_month(&naive_date)? {
+                        msg_info!(Message::MonthlyReportTriggered);
+                        handle_monthly_report(date).await?;
+                    }
+                } else {
+                    msg_error!(Message::ReportSendFailed(status.to_string()));
                 }
-            } else {
-                msg_error!(Message::ReportSendFailed(status.to_string()));
             }
+            Err(e) => msg_error!(Message::ErrorSendingEvents(e.to_string())),
         }
-        Err(e) => msg_error!(Message::ErrorSendingEvents(e.to_string())),
+    }
+
+    if !listeners.is_empty() {
+        let subject = day_end::day_document(naive_date)?;
+        let deliveries = tokio::task::spawn_blocking(move || events::fire_to(&listeners, Event::ReportReady, &subject))
+            .await
+            .map_err(|error| anyhow::anyhow!("handing the day to plugins stopped: {error}"))?;
+        events::announce(Event::ReportReady, &deliveries);
     }
 
     Ok(())

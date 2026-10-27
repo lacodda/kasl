@@ -206,6 +206,7 @@ responses. It does not print credentials.
 ## Related pages
 
 - [`task`](/reference/task/) - `task find` is where GitLab and Jira candidates appear
-- [`inbox`](/reference/inbox/) - the Jira inbox and its polling
+- [`inbox`](/reference/inbox/) - the inbox, its sources and its polling
+- [Writing a plugin](/guides/writing-a-plugin/) - an integration of your own, as a plugin
 - [`report`](/reference/report/) - filing the day with `--send`
 - [Configuration](/concepts/configuration/) - every configuration block in one place

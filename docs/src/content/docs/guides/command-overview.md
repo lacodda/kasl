@@ -24,7 +24,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 ### Incoming work
 
-- **[`inbox`](/reference/inbox/)** - Jira issues assigned to you, polled in the background
+- **[`inbox`](/reference/inbox/)** - Issues assigned to you, polled in the background from Jira and from plugin sources
 
 ### Organization
 
@@ -37,6 +37,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 - **[`autostart`](/reference/autostart/)** - Configure automatic startup
 - **[`self-update`](/reference/self-update/)** - Update application to latest version
 - **[`completions`](/reference/completions/)** - Print a shell completion script
+- **[`plugin`](/reference/plugin/)** - List, set up and run plugins: programs named `kasl-plugin-*` that hear kasl's events and fill the inbox
 
 ### Coding assistants
 
