@@ -5,7 +5,7 @@
 //! `cargo test --test inbox_show_probe -- --ignored --nocapture`.
 
 use chrono::{Duration, Local};
-use kasl::db::jira_inbox::{Include, JiraInbox, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxUpsert, Include};
 use kasl::libs::inbox_filter::explain;
 use kasl::libs::view::View;
 use serial_test::serial;
@@ -22,8 +22,8 @@ fn print_show_and_why() {
         std::env::set_var("LOCALAPPDATA", temp_dir.path());
     }
 
-    let db = JiraInbox::new().unwrap();
-    db.upsert_batch(&[JiraInboxUpsert {
+    let db = Inbox::new().unwrap();
+    db.upsert_batch(&[InboxUpsert {
         issue_key: "PROJ-4471".to_string(),
         issue_id: "1".to_string(),
         summary: "Reconcile the ledger export with the monthly close".to_string(),
@@ -50,6 +50,6 @@ fn print_show_and_why() {
         .into_iter()
         .next()
         .unwrap();
-    View::jira_inbox_issue(&item).unwrap();
-    View::jira_inbox_why(&explain(&item, Some("Scoring"), Local::now().naive_local())).unwrap();
+    View::inbox_issue(&item).unwrap();
+    View::inbox_why(&explain(&item, Some("Scoring"), Local::now().naive_local())).unwrap();
 }

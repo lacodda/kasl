@@ -13,10 +13,10 @@
 use chrono::{Duration, NaiveDate, NaiveDateTime};
 use kasl::api::Session;
 use kasl::api::jira::{Jira, JiraConfig};
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
-use kasl::libs::config::{Config, JiraInboxConfig};
+use kasl::db::inbox::{Inbox, InboxUpsert};
+use kasl::libs::config::{Config, InboxConfig};
 use kasl::libs::data_storage::DataStorage;
-use kasl::libs::jira_inbox::{TOAST_STORM_THRESHOLD, TOAST_WINDOW_MINUTES, ToastBudget, ToastPlan, sync_noninteractive, toasts_collapse};
+use kasl::libs::inbox::{TOAST_STORM_THRESHOLD, TOAST_WINDOW_MINUTES, ToastBudget, ToastPlan, sync_noninteractive, toasts_collapse};
 use serde_json::json;
 use serial_test::serial;
 use tempfile::TempDir;
@@ -37,8 +37,8 @@ fn sandbox() -> TempDir {
 
 /// Points the config at the mock server, with toasts off: the sync under
 /// test must not pop real notifications on the machine running the tests.
-fn configure(server: &MockServer) -> JiraInboxConfig {
-    let inbox = JiraInboxConfig {
+fn configure(server: &MockServer) -> InboxConfig {
+    let inbox = InboxConfig {
         notify: false,
         notify_changes: false,
         notify_gone: false,
@@ -50,7 +50,7 @@ fn configure(server: &MockServer) -> JiraInboxConfig {
             api_url: server.uri(),
             completed_statuses: Vec::new(),
         }),
-        jira_inbox: Some(inbox.clone()),
+        inbox: Some(inbox.clone()),
         ..Default::default()
     }
     .save()
@@ -62,8 +62,8 @@ fn configure(server: &MockServer) -> JiraInboxConfig {
     inbox
 }
 
-fn seed(key: &str) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn seed(key: &str) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -98,7 +98,7 @@ async fn a_poll_that_fails_leaves_the_inbox_untouched() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2")]).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/rest/api/2/search"))
@@ -110,7 +110,7 @@ async fn a_poll_that_fails_leaves_the_inbox_untouched() {
     let err = result.expect_err("a 503 from Jira must fail the poll, not answer with an empty inbox");
     assert!(err.to_string().contains("503"), "the error names the status: {err}");
 
-    let items = JiraInbox::new().unwrap().list_active(true).unwrap();
+    let items = Inbox::new().unwrap().list_active(true).unwrap();
     assert_eq!(items.len(), 2);
     assert!(
         items.iter().all(|i| i.gone_at.is_none()),
@@ -125,7 +125,7 @@ async fn a_poll_that_answers_still_reconciles() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2")]).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/rest/api/2/search"))
@@ -141,7 +141,7 @@ async fn a_poll_that_answers_still_reconciles() {
     assert_eq!(outcome.fetched, 1);
     assert_eq!(outcome.gone_keys, vec!["KA-2".to_string()]);
 
-    let items = JiraInbox::new().unwrap().list_active(true).unwrap();
+    let items = Inbox::new().unwrap().list_active(true).unwrap();
     let gone: Vec<&str> = items.iter().filter(|i| i.gone_at.is_some()).map(|i| i.issue_key.as_str()).collect();
     assert_eq!(gone, vec!["KA-2"]);
 }
@@ -162,7 +162,7 @@ async fn an_answer_given_to_nobody_leaves_the_inbox_untouched() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2")]).unwrap();
 
     Mock::given(method("GET"))
         .and(path("/rest/api/2/search"))
@@ -182,7 +182,7 @@ async fn an_answer_given_to_nobody_leaves_the_inbox_untouched() {
         assert!(outcome.skipped, "an anonymous answer was taken as the inbox: {outcome:?}");
     }
 
-    let items = JiraInbox::new().unwrap().list_active(true).unwrap();
+    let items = Inbox::new().unwrap().list_active(true).unwrap();
     assert!(
         items.iter().all(|i| i.gone_at.is_none()),
         "an anonymous answer marked issues gone: {:?}",
@@ -199,7 +199,7 @@ async fn a_list_that_shifted_between_pages_leaves_the_inbox_untouched() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2"), seed("KA-3")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-1"), seed("KA-2"), seed("KA-3")]).unwrap();
 
     // Page one holds KA-1 and KA-2 of three. By the time page two is read,
     // KA-1 is resolved and KA-3 has moved left into the offset already read,
@@ -227,7 +227,7 @@ async fn a_list_that_shifted_between_pages_leaves_the_inbox_untouched() {
     let err = result.expect_err("a list short of what Jira counted must fail the poll");
     assert!(err.to_string().contains("2 of 3"), "the error says what was short: {err}");
 
-    let items = JiraInbox::new().unwrap().list_active(true).unwrap();
+    let items = Inbox::new().unwrap().list_active(true).unwrap();
     assert!(items.iter().all(|i| i.gone_at.is_none()), "a short list marked issues gone");
 }
 
@@ -267,7 +267,7 @@ async fn an_issue_read_twice_is_still_one_issue() {
 #[serial]
 fn only_a_status_or_priority_change_is_worth_a_toast() {
     let _dir = sandbox();
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[seed("KA-1"), seed("KA-2"), seed("KA-3"), seed("KA-4")]).unwrap();
 
     let mut rescored = seed("KA-1");

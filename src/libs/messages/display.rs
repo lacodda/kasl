@@ -551,18 +551,18 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::SelectingTask(name) => format!("Selected task: {}", name),
 
             // === JIRA INBOX MESSAGES ===
-            Message::JiraInboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl setup` and select Jira.".to_string(),
-            Message::JiraInboxEmpty => "Jira inbox is empty.".to_string(),
-            Message::JiraInboxListHeader => "Jira inbox:".to_string(),
-            Message::JiraInboxListSliced { shown, total, what } => {
+            Message::InboxRequiresJiraConfig => "Jira inbox requires Jira to be configured. Run `kasl setup` and select Jira.".to_string(),
+            Message::InboxEmpty => "Jira inbox is empty.".to_string(),
+            Message::InboxListHeader => "Jira inbox:".to_string(),
+            Message::InboxListSliced { shown, total, what } => {
                 if what.is_empty() {
                     format!("Jira inbox: {} of {} issues:", shown, total)
                 } else {
                     format!("Jira inbox: {} of {} issues ({}):", shown, total, what)
                 }
             }
-            Message::JiraInboxNoMatch { total, what } => format!("No issue matches ({}); {} in the inbox.", what, total),
-            Message::JiraInboxSynced {
+            Message::InboxNoMatch { total, what } => format!("No issue matches ({}); {} in the inbox.", what, total),
+            Message::InboxSynced {
                 fetched,
                 new_count,
                 changed,
@@ -570,19 +570,19 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             } => {
                 format!("Jira inbox synced: {} fetched, {} new, {} changed, {} gone.", fetched, new_count, changed, gone)
             }
-            Message::JiraInboxNewIssues(count) => format!("Jira inbox: {} new issue(s).", count),
-            Message::JiraInboxNotFound(key) => format!("Issue '{}' not found in inbox.", key),
-            Message::JiraInboxPinned(key) => format!("Pinned {}.", key),
-            Message::JiraInboxUnpinned(key) => format!("Unpinned {}.", key),
-            Message::JiraInboxDismissed(key) => format!("Dismissed {}.", key),
-            Message::JiraInboxUndismissed(key) => format!("{} is back in the inbox.", key),
-            Message::JiraInboxSnoozed(key, until) => format!("Snoozed {} until {}.", key, until),
-            Message::JiraInboxUnsnoozed(key) => format!("Woke {}.", key),
-            Message::JiraInboxAllSnoozed(count) => {
+            Message::InboxNewIssues(count) => format!("Jira inbox: {} new issue(s).", count),
+            Message::InboxNotFound(key) => format!("Issue '{}' not found in inbox.", key),
+            Message::InboxPinned(key) => format!("Pinned {}.", key),
+            Message::InboxUnpinned(key) => format!("Unpinned {}.", key),
+            Message::InboxDismissed(key) => format!("Dismissed {}.", key),
+            Message::InboxUndismissed(key) => format!("{} is back in the inbox.", key),
+            Message::InboxSnoozed(key, until) => format!("Snoozed {} until {}.", key, until),
+            Message::InboxUnsnoozed(key) => format!("Woke {}.", key),
+            Message::InboxAllSnoozed(count) => {
                 format!("Jira inbox is clear; {} issue(s) are snoozed. `kasl inbox --snoozed` shows them.", count)
             }
-            Message::JiraInboxWoke(count) => format!("Jira inbox: {} snoozed issue(s) came back.", count),
-            Message::JiraInboxTriaged {
+            Message::InboxWoke(count) => format!("Jira inbox: {} snoozed issue(s) came back.", count),
+            Message::InboxTriaged {
                 taken,
                 snoozed,
                 dismissed,
@@ -611,8 +611,8 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
                     format!("Triaged: {}.", what)
                 }
             }
-            Message::JiraInboxOpened(key) => format!("Opened {} in browser.", key),
-            Message::JiraInboxTaken(key) => format!("Imported {} into tasks.", key),
+            Message::InboxOpened(key) => format!("Opened {} in browser.", key),
+            Message::InboxTaken(key) => format!("Imported {} into tasks.", key),
             Message::ToastActionUnknown(name) => format!("Unknown toast action '{}'; expected take, snooze, dismiss or done.", name),
             Message::ToastActionApplied(what) => format!("{}.", what),
             Message::ToastActionFailed(key, why) => format!("Could not act on {} from the toast: {}", key, why),
@@ -627,8 +627,8 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::PromptJiraCloseComment => "Comment to leave on the issue (empty for none)".to_string(),
             Message::PromptJiraComment => "Comment".to_string(),
             Message::PromptMarkResolvedDone => "Resolved in Jira - mark these tasks done (space toggles, enter confirms)".to_string(),
-            Message::JiraInboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),
-            Message::JiraInboxSummary { total, fresh, taken } => {
+            Message::InboxAlreadyTaken(key, name) => format!("{} is already taken as '{}'.", key, name),
+            Message::InboxSummary { total, fresh, taken } => {
                 // Only the parts that carry information: "3 in the inbox" says
                 // enough when none are new and none are taken.
                 let mut parts = Vec::new();
@@ -645,11 +645,11 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
                 };
                 format!("{} in the inbox{}", total, detail)
             }
-            Message::JiraInboxOpenFailed(err) => format!("Failed to open browser: {}", err),
+            Message::InboxOpenFailed(err) => format!("Failed to open browser: {}", err),
             Message::InboxRulesSkipped(count) => format!("{} inbox rule(s) skipped as unreadable - `kasl inbox rules` says why.", count),
             Message::InboxRuleSkipped(number, why) => format!("Inbox rule {} is skipped: {}.", number, why),
             Message::InboxRuleActed(what) => format!("{}.", what),
-            Message::InboxRulesNone => "No inbox rules yet. They go under `jira_inbox.rules` in the config; the Jira inbox guide shows how.".to_string(),
+            Message::InboxRulesNone => "No inbox rules yet. They go under `inbox.rules` in the config; the Jira inbox guide shows how.".to_string(),
             Message::InboxRulesApplied(0) => "The rules have nothing to change.".to_string(),
             Message::InboxRulesApplied(count) => format!("The rules changed {} issue(s).", count),
             Message::InboxRulesNotApplied(count) => format!(

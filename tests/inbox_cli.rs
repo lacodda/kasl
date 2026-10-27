@@ -6,7 +6,7 @@
 //! error and not an empty list.
 
 use chrono::{Duration, Local};
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxUpsert};
 use serial_test::serial;
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -35,8 +35,8 @@ fn kasl(dir: &Path, args: &[&str]) -> (bool, String) {
     (out.status.success(), text)
 }
 
-fn seed(key: &str, priority: &str, rank: i32, score: f64) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn seed(key: &str, priority: &str, rank: i32, score: f64) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -54,7 +54,7 @@ fn seed(key: &str, priority: &str, rank: i32, score: f64) -> JiraInboxUpsert {
 
 /// Three issues: two fresh, one a month old and pushed back in time by hand.
 fn seed_inbox() {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[seed("KA-1", "High", 2, 8.0), seed("KA-2", "Medium", 3, 3.0), seed("KA-3", "Low", 4, 9.0)])
         .unwrap();
     let month_ago = Local::now().naive_local() - Duration::days(30);
@@ -62,7 +62,7 @@ fn seed_inbox() {
     kasl::db::db::Db::new()
         .unwrap()
         .conn
-        .execute("UPDATE jira_inbox SET first_seen = ?1 WHERE issue_key = 'KA-3'", rusqlite::params![month_ago])
+        .execute("UPDATE inbox SET first_seen = ?1 WHERE issue_key = 'KA-3'", rusqlite::params![month_ago])
         .unwrap();
 }
 
@@ -171,7 +171,7 @@ fn a_comment_needs_its_text_outside_a_terminal() {
 async fn a_sync_off_a_terminal_reports_a_resolved_issue_with_an_open_task() {
     use kasl::api::Session;
     use kasl::api::jira::{Jira, JiraConfig};
-    use kasl::libs::config::{Config, JiraInboxConfig};
+    use kasl::libs::config::{Config, InboxConfig};
     use kasl::libs::jira_bridge::MoveOptions;
     use serde_json::json;
     use wiremock::matchers::{method, path};
@@ -185,7 +185,7 @@ async fn a_sync_off_a_terminal_reports_a_resolved_issue_with_an_open_task() {
             api_url: server.uri(),
             completed_statuses: Vec::new(),
         }),
-        jira_inbox: Some(JiraInboxConfig {
+        inbox: Some(InboxConfig {
             notify: false,
             ..Default::default()
         }),

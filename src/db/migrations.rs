@@ -493,6 +493,40 @@ impl MigrationManager {
             )?;
             Ok(())
         });
+
+        // Version 19: the inbox belongs to no one source.
+        //
+        // From v1.19 an inbox issue may come from a plugin as well as from
+        // Jira, so the tables lose the name of the one source they started
+        // with and every row says where it came from. Rows written before are
+        // Jira's, which is what the default says. A task taken from an issue
+        // keeps the issue's key under a name that does not claim it is Jira's.
+        //
+        // SQLite renames carry their indexes along; the ones whose names said
+        // `jira` are made again under the names they mean.
+        self.add_migration(19, "the_inbox_belongs_to_no_one_source", |tx| {
+            tx.execute("ALTER TABLE jira_inbox RENAME TO inbox", [])?;
+            tx.execute("ALTER TABLE jira_statuses RENAME TO inbox_statuses", [])?;
+            tx.execute("ALTER TABLE jira_priorities RENAME TO inbox_priorities", [])?;
+            tx.execute("ALTER TABLE inbox ADD COLUMN source TEXT NOT NULL DEFAULT 'jira'", [])?;
+            tx.execute("CREATE INDEX IF NOT EXISTS idx_inbox_source ON inbox(source)", [])?;
+            tx.execute("DROP INDEX IF EXISTS idx_jira_inbox_active", [])?;
+            tx.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inbox_active ON inbox(dismissed, pinned DESC, priority_rank ASC, last_seen DESC)",
+                [],
+            )?;
+            tx.execute("DROP INDEX IF EXISTS idx_jira_inbox_sort", [])?;
+            tx.execute(
+                "CREATE INDEX IF NOT EXISTS idx_inbox_sort ON inbox(dismissed, pinned DESC, sort_value DESC, priority_rank ASC)",
+                [],
+            )?;
+            tx.execute("DROP INDEX IF EXISTS idx_jira_inbox_snoozed", [])?;
+            tx.execute("CREATE INDEX IF NOT EXISTS idx_inbox_snoozed ON inbox(snoozed_until)", [])?;
+            tx.execute("ALTER TABLE tasks RENAME COLUMN jira_key TO issue_key", [])?;
+            tx.execute("DROP INDEX IF EXISTS idx_tasks_jira_key", [])?;
+            tx.execute("CREATE INDEX IF NOT EXISTS idx_tasks_issue_key ON tasks(issue_key)", [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

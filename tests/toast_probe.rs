@@ -2,13 +2,13 @@
 //! Run: cargo test --test toast_probe -- --ignored
 #![cfg(windows)]
 
-use kasl::db::jira_inbox::JiraInboxItem;
+use kasl::db::inbox::InboxItem;
 
 #[test]
 #[ignore = "pops a real desktop toast; run manually"]
 fn toast_shows_with_logo() {
     let now = chrono::Local::now().naive_local();
-    let item = JiraInboxItem {
+    let item = InboxItem {
         issue_key: "KA-1".into(),
         issue_id: "1".into(),
         summary: "Toast logo probe".into(),
@@ -36,5 +36,5 @@ fn toast_shows_with_logo() {
         project: None,
         ruled_by: None,
     };
-    assert!(kasl::libs::jira_inbox::show_toast(&item));
+    assert!(kasl::libs::inbox::show_toast(&item));
 }

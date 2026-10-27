@@ -40,10 +40,10 @@ pub mod db;
 pub mod migrations;
 
 /// Local inbox of assigned open Jira issues.
-pub mod jira_inbox;
+pub mod inbox;
 
 /// Catalog of Jira status id → name pairs synced from issues.
-pub mod jira_statuses;
+pub mod inbox_statuses;
 
 /// Pause records detected by the monitor or entered by hand.
 pub mod pauses;

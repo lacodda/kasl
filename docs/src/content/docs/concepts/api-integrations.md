@@ -65,7 +65,7 @@ assigned to you that are still open.
 Three things, each only when you ask for it:
 
 - **A move into progress** - `kasl inbox start`, or every take when
-  `jira_inbox.start_on_take` is on.
+  `inbox.start_on_take` is on.
 - **A move into done** - `kasl inbox close`, or the question after a task taken
   from an issue reaches 100%.
 - **A comment** - `kasl inbox comment`, or `close --comment`.
@@ -104,7 +104,7 @@ hold the watcher.
 ```
 
 Inbox polling has its own block - see [Configuration](/concepts/configuration/)
-for `jira_inbox`.
+for `inbox`.
 
 ### Authentication
 

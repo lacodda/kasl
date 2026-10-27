@@ -4,7 +4,7 @@
 //! the per-module parameter prompts, and the two list editors (discovery
 //! ignore names, Jira inbox fields).
 
-use super::{Config, ConfigModule, JiraCustomField, JiraInboxConfig, MonitorConfig, ProductivityConfig, ReportConfig, ServerConfig, TaskDiscoveryConfig};
+use super::{Config, ConfigModule, InboxConfig, JiraCustomField, MonitorConfig, ProductivityConfig, ReportConfig, ServerConfig, TaskDiscoveryConfig};
 use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
@@ -60,7 +60,7 @@ impl Config {
                 name: "Task discovery".to_string(),
             },
             ConfigModule {
-                key: "jira_inbox".to_string(),
+                key: "inbox".to_string(),
                 name: "Jira inbox".to_string(),
             },
         ];
@@ -193,8 +193,8 @@ impl Config {
                     config.task_discovery = Some(configure_task_discovery(config.task_discovery.clone().unwrap_or_default())?);
                 }
 
-                "jira_inbox" => {
-                    config.jira_inbox = Some(configure_jira_inbox(config.jira_inbox.clone().unwrap_or_default())?);
+                "inbox" => {
+                    config.inbox = Some(configure_inbox(config.inbox.clone().unwrap_or_default())?);
                 }
 
                 _ => {} // Unknown module keys are safely ignored
@@ -259,7 +259,7 @@ fn configure_task_discovery(mut discovery: TaskDiscoveryConfig) -> Result<TaskDi
 }
 
 /// Interactive wizard for Jira inbox polling settings.
-fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
+fn configure_inbox(default: InboxConfig) -> Result<InboxConfig> {
     msg_print!(Message::ConfigModuleJiraInbox, true);
 
     let enabled = Confirm::with_theme(&ColorfulTheme::default())
@@ -337,7 +337,7 @@ fn configure_jira_inbox(default: JiraInboxConfig) -> Result<JiraInboxConfig> {
         });
     }
 
-    Ok(JiraInboxConfig {
+    Ok(InboxConfig {
         enabled,
         poll_interval_secs: poll_interval_secs.max(30),
         notify,

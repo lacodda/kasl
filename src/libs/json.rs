@@ -16,7 +16,7 @@
 //! them: a table can change shape without the contract noticing, and the
 //! contract changes only on purpose - with its page in the docs.
 
-use crate::db::jira_inbox::{JiraInboxItem, LeftReason};
+use crate::db::inbox::{InboxItem, LeftReason};
 use crate::libs::output::moment;
 use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
 use serde::Serialize;
@@ -46,7 +46,7 @@ pub struct Task {
     pub completeness: i32,
     pub tags: Vec<String>,
     /// The Jira issue the task was taken from.
-    pub jira_key: Option<String>,
+    pub issue_key: Option<String>,
 }
 
 impl From<&crate::libs::task::Task> for Task {
@@ -60,7 +60,7 @@ impl From<&crate::libs::task::Task> for Task {
             comment: task.comment.clone(),
             completeness: task.completeness.unwrap_or(100),
             tags: task.tags.iter().map(|tag| tag.name.clone()).collect(),
-            jira_key: task.jira_key.clone(),
+            issue_key: task.issue_key.clone(),
         }
     }
 }
@@ -123,8 +123,8 @@ pub struct InboxCounts {
     pub taken: i64,
 }
 
-impl From<crate::db::jira_inbox::InboxCounts> for InboxCounts {
-    fn from(counts: crate::db::jira_inbox::InboxCounts) -> Self {
+impl From<crate::db::inbox::InboxCounts> for InboxCounts {
+    fn from(counts: crate::db::inbox::InboxCounts) -> Self {
         InboxCounts {
             total: counts.total,
             fresh: counts.fresh,
@@ -343,7 +343,7 @@ pub struct Issue {
 
 impl Issue {
     /// The issue as it reads at `now` (the badge depends on it).
-    pub fn at(item: &JiraInboxItem, now: NaiveDateTime) -> Self {
+    pub fn at(item: &InboxItem, now: NaiveDateTime) -> Self {
         Issue {
             key: item.issue_key.clone(),
             summary: item.summary.clone(),
@@ -373,7 +373,7 @@ impl Issue {
     }
 
     /// The issue as it reads now.
-    pub fn now(item: &JiraInboxItem) -> Self {
+    pub fn now(item: &InboxItem) -> Self {
         Self::at(item, Local::now().naive_local())
     }
 }
@@ -419,7 +419,7 @@ pub struct IssueShown {
 /// One inbox rule and where it stands.
 #[derive(Debug, Serialize)]
 pub struct Rule {
-    /// Position in `jira_inbox.rules`, counting from 1.
+    /// Position in `inbox.rules`, counting from 1.
     pub number: usize,
     pub name: Option<String>,
     /// The conditions, in the list's filter words.

@@ -1,6 +1,6 @@
 //! Jira inbox sync and desktop toast helpers.
 //!
-//! Polls assigned open issues, upserts them into `jira_inbox`, and optionally
+//! Polls assigned open issues, upserts them into `inbox`, and optionally
 //! shows desktop toast notifications for newly discovered keys. Toast click
 //! opens the issue browse URL (Windows: win-toast-notify protocol activation;
 //! other platforms: notify-rust action callback).
@@ -16,9 +16,9 @@
 //! into an urgent one that stays on screen.
 
 use crate::api::jira::{Jira, SessionMode};
-use crate::db::jira_inbox::{ChangedIssue, Include, JiraInbox, JiraInboxItem, JiraInboxUpsert, LeftReason, UpsertBatchResult};
-use crate::db::jira_statuses::JiraStatuses;
-use crate::libs::config::{Config, JiraInboxConfig};
+use crate::db::inbox::{ChangedIssue, Inbox, InboxItem, InboxUpsert, Include, LeftReason, UpsertBatchResult};
+use crate::db::inbox_statuses::InboxStatuses;
+use crate::libs::config::{Config, InboxConfig};
 use crate::libs::inbox_rules::{self, RuleBook, RuleProblem, Ruled};
 use crate::libs::messages::Message;
 use crate::libs::toast_action::{Mailbox, ToastAction};
@@ -134,13 +134,13 @@ impl Lane {
 
 /// A toast one poll would like to show.
 enum Pending {
-    New(JiraInboxItem),
-    Changed(JiraInboxItem, String),
-    Gone(JiraInboxItem),
+    New(InboxItem),
+    Changed(InboxItem, String),
+    Gone(InboxItem),
     /// A taken issue Jira resolved while its task is still open.
-    Resolved(JiraInboxItem),
+    Resolved(InboxItem),
     /// An issue a rule calls urgent, with the rule's name.
-    Urgent(JiraInboxItem, String),
+    Urgent(InboxItem, String),
 }
 
 /// What a poll has to say about one issue that is still in the inbox.
@@ -243,7 +243,7 @@ const DEPARTURES_PER_POLL: usize = 20;
 /// next poll asks again; a sync is not failed for it, because the issues that
 /// did arrive are already reconciled and that is the part that matters most.
 async fn explain_departures(jira: &mut Jira, mode: SessionMode) -> Result<Vec<ResolvedIssue>> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let mut resolved = Vec::new();
     for key in db.unexplained_departures(DEPARTURES_PER_POLL)? {
         let state = match jira.issue_state(&key, mode).await {
@@ -277,19 +277,19 @@ async fn explain_departures(jira: &mut Jira, mode: SessionMode) -> Result<Vec<Re
 /// Runs one interactive sync (may prompt for Jira password).
 ///
 /// `--sync` always fetches even when the inbox poller is disabled in config;
-/// toasts respect `jira_inbox.notify` when that section exists. A sync run
+/// toasts respect `inbox.notify` when that section exists. A sync run
 /// by hand gets a budget of its own: it is one poll, asked for.
 pub async fn sync_interactive(notify: bool) -> Result<SyncOutcome> {
     let config = Config::read()?;
     let Some(jira_config) = config.jira.clone() else {
-        msg_warning!(Message::JiraInboxRequiresJiraConfig);
+        msg_warning!(Message::InboxRequiresJiraConfig);
         return Ok(SyncOutcome {
             skipped: true,
             ..Default::default()
         });
     };
 
-    let inbox_cfg = config.jira_inbox.clone().unwrap_or_default();
+    let inbox_cfg = config.inbox.clone().unwrap_or_default();
     let allow_toast = notify && inbox_cfg.notify;
 
     let mut jira = Jira::new(&jira_config);
@@ -317,7 +317,7 @@ struct Poll {
 ///
 /// `budget` is the poller's, carried from poll to poll, so the toasts it
 /// allows are counted across polls rather than within one.
-pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig, budget: &mut ToastBudget) -> Result<SyncOutcome> {
+pub async fn sync_noninteractive(inbox_cfg: &InboxConfig, budget: &mut ToastBudget) -> Result<SyncOutcome> {
     if !inbox_cfg.enabled {
         return Ok(SyncOutcome {
             skipped: true,
@@ -353,12 +353,12 @@ pub async fn sync_noninteractive(inbox_cfg: &JiraInboxConfig, budget: &mut Toast
 async fn apply_issues(
     jira: &mut Jira,
     issues: &[crate::api::jira::JiraIssue],
-    inbox_cfg: &JiraInboxConfig,
+    inbox_cfg: &InboxConfig,
     poll: Poll,
     budget: &mut ToastBudget,
 ) -> Result<SyncOutcome> {
     let notify = poll.notify;
-    let statuses = JiraStatuses::new()?;
+    let statuses = InboxStatuses::new()?;
     let sort_field = inbox_cfg.sort_by_field.as_deref().map(str::trim).filter(|s| !s.is_empty());
 
     let mut upserts = Vec::with_capacity(issues.len());
@@ -375,7 +375,7 @@ async fn apply_issues(
 
         let sort_value = sort_field.and_then(|id| Jira::sort_value_from_issue(issue, id));
 
-        upserts.push(JiraInboxUpsert {
+        upserts.push(InboxUpsert {
             issue_key: issue.key.clone(),
             issue_id: issue.id.clone(),
             summary: issue.fields.summary.clone(),
@@ -398,10 +398,10 @@ async fn apply_issues(
         });
     }
 
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     // Rules act on what an issue has just come to be, so what it was is
     // read before the poll overwrites it.
-    let before: HashMap<String, JiraInboxItem> = if inbox_cfg.rules.is_empty() {
+    let before: HashMap<String, InboxItem> = if inbox_cfg.rules.is_empty() {
         HashMap::new()
     } else {
         db.list(Include::EVERYTHING)?.into_iter().map(|item| (item.issue_key.clone(), item)).collect()
@@ -533,7 +533,7 @@ fn show_pending(jira: &Jira, pending: &[Pending], plan: ToastPlan) -> usize {
 /// reminded, so the return is announced even though the issue was already
 /// known - that reminder is the whole reason to snooze rather than dismiss.
 pub fn wake_snoozed(notify: bool) -> Result<usize> {
-    let woken = JiraInbox::new()?.wake_due()?;
+    let woken = Inbox::new()?.wake_due()?;
     if woken.is_empty() {
         return Ok(0);
     }
@@ -573,16 +573,16 @@ fn open_issues_url_from(issue_url: &str) -> String {
 }
 
 /// Shows a toast for an issue whose snooze has run out.
-pub fn show_snoozed_toast(item: &JiraInboxItem) -> bool {
+pub fn show_snoozed_toast(item: &InboxItem) -> bool {
     let body = format!("Back from snooze - {}", item.summary);
     show_issue_toast(item, &body)
 }
 
 /// Shows a desktop toast for a newly discovered inbox item.
 ///
-/// Clicking the toast body opens [`JiraInboxItem::url`] in the default
+/// Clicking the toast body opens [`InboxItem::url`] in the default
 /// browser; the buttons decide the issue without leaving the desktop.
-pub fn show_toast(item: &JiraInboxItem) -> bool {
+pub fn show_toast(item: &InboxItem) -> bool {
     show_issue_toast(item, &toast_body(item))
 }
 
@@ -592,7 +592,7 @@ pub fn show_toast(item: &JiraInboxItem) -> bool {
 /// so the person can tell an escalation from a slow afternoon - and knows
 /// which rule to change if it keeps being wrong. On Windows the toast stays
 /// on screen until acted on; on Linux it is sent as critical.
-pub fn show_urgent_toast(item: &JiraInboxItem, rule: &str) -> bool {
+pub fn show_urgent_toast(item: &InboxItem, rule: &str) -> bool {
     let body = format!("Urgent by the rule '{rule}' - {}", toast_body(item));
     show_toast_as(
         &format!("Jira {} - urgent", item.issue_key),
@@ -605,7 +605,7 @@ pub fn show_urgent_toast(item: &JiraInboxItem, rule: &str) -> bool {
 }
 
 /// Shows a toast for a visible change on an existing inbox item.
-pub fn show_change_toast(item: &JiraInboxItem, change: &str) -> bool {
+pub fn show_change_toast(item: &InboxItem, change: &str) -> bool {
     let body = format!("{change} — {}", item.summary);
     show_issue_toast(item, &body)
 }
@@ -622,7 +622,7 @@ pub fn show_summary_toast(jira: &Jira, what: &str) -> bool {
 ///
 /// No buttons either: the issue is already gone, so all three decisions are
 /// about work that is no longer there.
-pub fn show_gone_toast(item: &JiraInboxItem) -> bool {
+pub fn show_gone_toast(item: &InboxItem) -> bool {
     let body = format!("Left the inbox — {}", item.summary);
     show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[])
 }
@@ -631,14 +631,14 @@ pub fn show_gone_toast(item: &JiraInboxItem) -> bool {
 ///
 /// One button, **Mark done**: the issue's own decisions are behind it - it is
 /// resolved - and the only question left is the person's task.
-pub fn show_resolved_toast(item: &JiraInboxItem) -> bool {
+pub fn show_resolved_toast(item: &InboxItem) -> bool {
     let resolution = item.resolution.as_deref().map(|r| format!(" ({r})")).unwrap_or_default();
     let body = format!("Resolved in Jira{resolution} - your task is still open. {}", item.summary);
     show_raw_toast(&format!("Jira {}", item.issue_key), &body, &item.url, &item.issue_key, &[ToastAction::Done])
 }
 
 /// A toast about one live issue: the body opens it, the buttons decide it.
-fn show_issue_toast(item: &JiraInboxItem, body: &str) -> bool {
+fn show_issue_toast(item: &InboxItem, body: &str) -> bool {
     show_raw_toast(&format!("Jira {}", item.issue_key), body, &item.url, &item.issue_key, &ToastAction::ALL)
 }
 
@@ -667,7 +667,7 @@ fn show_toast_as(title: &str, body: &str, url: &str, key: &str, actions: &[Toast
     }
 }
 
-fn toast_body(item: &JiraInboxItem) -> String {
+fn toast_body(item: &InboxItem) -> String {
     let priority = item.priority.as_deref().unwrap_or("—");
     match item.sort_value {
         Some(score) => format!("[score {score}] [{priority}] {}", item.summary),
@@ -848,7 +848,7 @@ pub async fn drain_toast_actions() -> Result<usize> {
         return Ok(0);
     }
 
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let mut done = 0;
     for request in &requests {
         // Read the row before acting: the answering toast should still open
@@ -908,7 +908,7 @@ pub async fn run_mailbox_watcher() {
 
 /// Background poll loop used by `kasl watch`.
 ///
-/// Idle when `jira_inbox` is absent or disabled; re-reads config each wake so
+/// Idle when `inbox` is absent or disabled; re-reads config each wake so
 /// `kasl setup` can enable polling without restarting the watcher in most cases
 /// (restart still recommended after config changes).
 pub async fn run_poller() {
@@ -923,7 +923,7 @@ pub async fn run_poller() {
             }
         };
 
-        let Some(inbox_cfg) = config.jira_inbox.clone() else {
+        let Some(inbox_cfg) = config.inbox.clone() else {
             // Section not configured — do not poll until user runs init.
             tokio::time::sleep(std::time::Duration::from_secs(60)).await;
             continue;
@@ -939,7 +939,7 @@ pub async fn run_poller() {
         // answers, and hanging the return off a successful poll would mean a
         // VPN outage silently held issues asleep past their moment.
         match wake_snoozed(inbox_cfg.notify) {
-            Ok(count) if count > 0 => msg_info!(Message::JiraInboxWoke(count)),
+            Ok(count) if count > 0 => msg_info!(Message::InboxWoke(count)),
             Ok(_) => {}
             Err(e) => warn!("Jira inbox wake error: {}", e),
         }
@@ -947,7 +947,7 @@ pub async fn run_poller() {
         match sync_noninteractive(&inbox_cfg, &mut budget).await {
             Ok(outcome) if !outcome.skipped => {
                 if !outcome.new_keys.is_empty() {
-                    msg_info!(Message::JiraInboxNewIssues(outcome.new_keys.len()));
+                    msg_info!(Message::InboxNewIssues(outcome.new_keys.len()));
                 }
                 debug!(
                     "Jira inbox sync: fetched={}, new={}, updated={}, changed={}, gone={}, notified={}",

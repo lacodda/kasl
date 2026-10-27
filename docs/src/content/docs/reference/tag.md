@@ -163,7 +163,7 @@ $ kasl tag remove urgent -y
       "comment": "backfill pending",
       "completeness": 60,
       "tags": ["backend", "db"],
-      "jira_key": null
+      "issue_key": null
     }
   ]
 }

@@ -122,7 +122,7 @@ and table frames, for logs and `grep`. See
 Both are configured through `kasl setup` and feed `kasl task find`, which imports today's GitLab commits and Jira issues resolved today as completed tasks.
 
 - **GitLab**: authenticates with a personal access token (`read_user` + `read_repository` scope); discovers commits from the user's push events.
-- **Jira**: authenticates with a session cookie obtained from login credentials; supports custom fields (`jira_inbox.custom_fields`) so extra Jira fields can be pulled into the inbox view and used for sorting (`sort_by_field`).
+- **Jira**: authenticates with a session cookie obtained from login credentials; supports custom fields (`inbox.custom_fields`) so extra Jira fields can be pulled into the inbox view and used for sorting (`sort_by_field`).
 
 `kasl inbox` keeps a separate, persistent list of assigned open Jira issues - synced, ranked, and actionable independently of `task find`:
 

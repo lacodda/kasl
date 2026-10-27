@@ -221,20 +221,23 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_discovery: Option<TaskDiscoveryConfig>,
 
-    /// Jira inbox polling; requires `jira`, disabled when absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub jira_inbox: Option<JiraInboxConfig>,
+    /// The inbox: how often its sources are polled, what it toasts, its rules.
+    ///
+    /// Written `jira_inbox` before v1.19, when Jira was its only source; a
+    /// file with the old key is read as it is and saved under the new one.
+    #[serde(default, alias = "jira_inbox", skip_serializing_if = "Option::is_none")]
+    pub inbox: Option<InboxConfig>,
 }
 
-/// Settings for polling assigned open Jira issues into the local inbox.
+/// Settings for the inbox, whichever source its issues come from.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct JiraInboxConfig {
+pub struct InboxConfig {
     /// Whether the watcher should poll Jira for open assigned issues.
     #[serde(default = "default_true")]
     pub enabled: bool,
 
     /// Seconds between Jira inbox polls (default 300 = 5 minutes).
-    #[serde(default = "default_jira_inbox_poll_interval")]
+    #[serde(default = "default_inbox_poll_interval")]
     pub poll_interval_secs: u64,
 
     /// Whether to show a desktop toast when a new issue appears.
@@ -301,7 +304,7 @@ fn default_true() -> bool {
     true
 }
 
-fn default_jira_inbox_poll_interval() -> u64 {
+fn default_inbox_poll_interval() -> u64 {
     300
 }
 
@@ -309,11 +312,11 @@ fn default_toast_snooze_for() -> String {
     "1d".to_string()
 }
 
-impl Default for JiraInboxConfig {
+impl Default for InboxConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            poll_interval_secs: default_jira_inbox_poll_interval(),
+            poll_interval_secs: default_inbox_poll_interval(),
             notify: true,
             notify_changes: true,
             notify_gone: false,
@@ -326,7 +329,7 @@ impl Default for JiraInboxConfig {
     }
 }
 
-impl JiraInboxConfig {
+impl InboxConfig {
     /// Field ids to request from Jira search (custom fields only).
     pub fn extra_field_ids(&self) -> Vec<String> {
         let mut ids: Vec<String> = self.custom_fields.iter().map(|f| f.id.trim().to_string()).filter(|id| !id.is_empty()).collect();

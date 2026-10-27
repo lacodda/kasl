@@ -445,41 +445,41 @@ pub enum Message {
     SelectingTask(String), // task name
 
     // === JIRA INBOX MESSAGES ===
-    JiraInboxRequiresJiraConfig,
-    JiraInboxEmpty,
-    JiraInboxListHeader,
+    InboxRequiresJiraConfig,
+    InboxEmpty,
+    InboxListHeader,
     /// A cut or truncated list: how many shown of how many active, and the cuts in words.
-    JiraInboxListSliced {
+    InboxListSliced {
         shown: usize,
         total: usize,
         what: String,
     },
     /// The cuts left nothing; `total` is the whole inbox, so the user knows the list is not empty.
-    JiraInboxNoMatch {
+    InboxNoMatch {
         total: usize,
         what: String,
     },
-    JiraInboxSynced {
+    InboxSynced {
         fetched: usize,
         new_count: usize,
         changed: usize,
         gone: usize,
     },
-    JiraInboxNewIssues(usize),
-    JiraInboxNotFound(String),
-    JiraInboxPinned(String),
-    JiraInboxUnpinned(String),
-    JiraInboxDismissed(String),
-    JiraInboxUndismissed(String),
+    InboxNewIssues(usize),
+    InboxNotFound(String),
+    InboxPinned(String),
+    InboxUnpinned(String),
+    InboxDismissed(String),
+    InboxUndismissed(String),
     /// Key, and when it is due back.
-    JiraInboxSnoozed(String, String),
-    JiraInboxUnsnoozed(String),
+    InboxSnoozed(String, String),
+    InboxUnsnoozed(String),
     /// Nothing is awake, but this many are asleep.
-    JiraInboxAllSnoozed(i64),
+    InboxAllSnoozed(i64),
     /// How many snoozed issues came back.
-    JiraInboxWoke(usize),
+    InboxWoke(usize),
     /// What a triage run came to.
-    JiraInboxTriaged {
+    InboxTriaged {
         taken: usize,
         snoozed: usize,
         dismissed: usize,
@@ -487,19 +487,19 @@ pub enum Message {
         /// Never asked about, because the run was stopped early.
         left: usize,
     },
-    JiraInboxOpened(String),
-    JiraInboxTaken(String),
+    InboxOpened(String),
+    InboxTaken(String),
 
     /// The issue already became a task: key, then the task's name.
-    JiraInboxAlreadyTaken(String, String),
+    InboxAlreadyTaken(String, String),
 
     /// What the inbox holds, shown under the daily report.
-    JiraInboxSummary {
+    InboxSummary {
         total: i64,
         fresh: i64,
         taken: i64,
     },
-    JiraInboxOpenFailed(String),
+    InboxOpenFailed(String),
 
     /// How many inbox rules could not be read and are skipped.
     InboxRulesSkipped(usize),

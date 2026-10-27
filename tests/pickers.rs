@@ -13,7 +13,7 @@
 #[cfg(test)]
 mod tests {
     use chrono::{Local, TimeDelta};
-    use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+    use kasl::db::inbox::{Inbox, InboxUpsert};
     use kasl::db::pauses::Pauses;
     use serial_test::serial;
     use std::path::Path;
@@ -39,9 +39,9 @@ mod tests {
 
     fn seed_inbox(dir: &Path) {
         point_at(dir);
-        JiraInbox::new()
+        Inbox::new()
             .unwrap()
-            .upsert_batch(&[JiraInboxUpsert {
+            .upsert_batch(&[InboxUpsert {
                 issue_key: "KA-1".to_string(),
                 issue_id: "1".to_string(),
                 summary: "An issue to pick".to_string(),

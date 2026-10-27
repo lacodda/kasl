@@ -5,15 +5,15 @@
 //! only checks what stays would not notice.
 
 use chrono::{Duration, Local, NaiveDateTime};
-use kasl::db::jira_inbox::JiraInboxItem;
+use kasl::db::inbox::InboxItem;
 use kasl::libs::inbox_filter::{InboxFilter, InboxSort, PriorityCut, explain, parse_window, priority_cut_in, sort};
 
 fn now() -> NaiveDateTime {
     Local::now().naive_local()
 }
 
-fn item(key: &str) -> JiraInboxItem {
-    JiraInboxItem {
+fn item(key: &str) -> InboxItem {
+    InboxItem {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -43,7 +43,7 @@ fn item(key: &str) -> JiraInboxItem {
     }
 }
 
-fn keys(items: &[JiraInboxItem]) -> Vec<&str> {
+fn keys(items: &[InboxItem]) -> Vec<&str> {
     items.iter().map(|i| i.issue_key.as_str()).collect()
 }
 

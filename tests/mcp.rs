@@ -10,7 +10,7 @@
 //! are compared whole, field for field, with what the command prints.
 
 use chrono::{Duration, Local, NaiveDate};
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxUpsert};
 use serde_json::{Value, json};
 use serial_test::serial;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -122,8 +122,8 @@ impl Server {
     }
 }
 
-fn upsert(key: &str, priority: &str, rank: i32, score: f64) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn upsert(key: &str, priority: &str, rank: i32, score: f64) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -176,7 +176,7 @@ fn seed(dir: &Path) {
         .execute("UPDATE tasks SET timestamp = ?1", rusqlite::params![format!("{day} 10:00:00")])
         .unwrap();
 
-    JiraInbox::new()
+    Inbox::new()
         .unwrap()
         .upsert_batch(&[
             upsert("KA-1", "High", 2, 8.0),
@@ -186,15 +186,15 @@ fn seed(dir: &Path) {
         ])
         .unwrap();
     let now = Local::now().naive_local();
-    db.conn.execute("UPDATE jira_inbox SET pinned = 1 WHERE issue_key = 'KA-1'", []).unwrap();
+    db.conn.execute("UPDATE inbox SET pinned = 1 WHERE issue_key = 'KA-1'", []).unwrap();
     db.conn
         .execute(
-            "UPDATE jira_inbox SET snoozed_until = ?1 WHERE issue_key = 'KA-2'",
+            "UPDATE inbox SET snoozed_until = ?1 WHERE issue_key = 'KA-2'",
             rusqlite::params![now + Duration::days(2)],
         )
         .unwrap();
     db.conn
-        .execute("UPDATE jira_inbox SET gone_at = ?1 WHERE issue_key = 'KA-3'", rusqlite::params![now])
+        .execute("UPDATE inbox SET gone_at = ?1 WHERE issue_key = 'KA-3'", rusqlite::params![now])
         .unwrap();
 }
 

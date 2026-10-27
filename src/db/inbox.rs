@@ -15,12 +15,12 @@ pub const FRESH_BADGE_HOURS: i64 = 24;
 
 /// A single Jira issue tracked in the local inbox.
 #[derive(Debug, Clone)]
-pub struct JiraInboxItem {
+pub struct InboxItem {
     pub issue_key: String,
     pub issue_id: String,
     pub summary: String,
     pub status_id: Option<String>,
-    /// Resolved status name (from `jira_statuses` join), may be empty.
+    /// Resolved status name (from `inbox_statuses` join), may be empty.
     pub status_name: String,
     pub priority: Option<String>,
     pub priority_rank: i32,
@@ -148,7 +148,7 @@ impl InboxCounts {
     }
 }
 
-impl JiraInboxItem {
+impl InboxItem {
     /// Badge for the list view: `gone`, `NEW`, or the recent change text.
     ///
     /// `gone` always wins (such rows only show up with `--all`); a freshly
@@ -203,7 +203,7 @@ impl JiraInboxItem {
 
 /// Input row used when upserting issues from a Jira poll.
 #[derive(Debug, Clone)]
-pub struct JiraInboxUpsert {
+pub struct InboxUpsert {
     pub issue_key: String,
     pub issue_id: String,
     pub summary: String,
@@ -246,11 +246,11 @@ pub struct UpsertBatchResult {
 }
 
 /// Database operations for the Jira inbox table.
-pub struct JiraInbox {
+pub struct Inbox {
     db: Db,
 }
 
-impl JiraInbox {
+impl Inbox {
     pub fn new() -> Result<Self> {
         Ok(Self { db: Db::new()? })
     }
@@ -260,14 +260,14 @@ impl JiraInbox {
     /// Detects visible changes (status, priority, score) on existing rows and
     /// clears `gone_at` for issues that reappeared in the poll. Returns brand
     /// new keys (toast candidates) and the changed issues with descriptions.
-    pub fn upsert_batch(&self, items: &[JiraInboxUpsert]) -> Result<UpsertBatchResult> {
+    pub fn upsert_batch(&self, items: &[InboxUpsert]) -> Result<UpsertBatchResult> {
         let now = Local::now().naive_local();
         let mut result = UpsertBatchResult::default();
 
         for item in items {
             if let Some(name) = &item.priority {
                 self.db.conn.execute(
-                    "INSERT INTO jira_priorities (name, rank) VALUES (?1, ?2)
+                    "INSERT INTO inbox_priorities (name, rank) VALUES (?1, ?2)
                      ON CONFLICT(name) DO UPDATE SET rank = excluded.rank",
                     params![name, item.priority_rank],
                 )?;
@@ -277,7 +277,7 @@ impl JiraInbox {
                 .conn
                 .query_row(
                     "SELECT status_id, priority, priority_rank, sort_value, gone_at, dismissed
-                     FROM jira_inbox WHERE issue_key = ?1",
+                     FROM inbox WHERE issue_key = ?1",
                     params![item.issue_key],
                     |row| {
                         Ok(ExistingRow {
@@ -294,7 +294,7 @@ impl JiraInbox {
 
             if let Some(old) = existing {
                 self.db.conn.execute(
-                    "UPDATE jira_inbox SET
+                    "UPDATE inbox SET
                         issue_id = ?1,
                         summary = ?2,
                         status_id = ?3,
@@ -329,7 +329,7 @@ impl JiraInbox {
 
                 if let Some(Change { text: change, notable }) = describe_change(&old, item) {
                     self.db.conn.execute(
-                        "UPDATE jira_inbox SET last_change = ?1, changed_at = ?2 WHERE issue_key = ?3",
+                        "UPDATE inbox SET last_change = ?1, changed_at = ?2 WHERE issue_key = ?3",
                         params![change, now, item.issue_key],
                     )?;
                     result.changed.push(ChangedIssue {
@@ -341,7 +341,7 @@ impl JiraInbox {
                 }
             } else {
                 self.db.conn.execute(
-                    "INSERT INTO jira_inbox (
+                    "INSERT INTO inbox (
                         issue_key, issue_id, summary, status_id, priority, priority_rank,
                         sort_value, url, first_seen, last_seen, notified, pinned, dismissed, raw_updated,
                         issue_type, project
@@ -383,14 +383,14 @@ impl JiraInbox {
             format!(" AND issue_key NOT IN ({placeholders})")
         };
 
-        let select = format!("SELECT issue_key FROM jira_inbox WHERE gone_at IS NULL AND dismissed = 0{not_in}");
+        let select = format!("SELECT issue_key FROM inbox WHERE gone_at IS NULL AND dismissed = 0{not_in}");
         let mut stmt = self.db.conn.prepare(&select)?;
         let newly_gone: Vec<String> = stmt
             .query_map(rusqlite::params_from_iter(present_keys.iter()), |row| row.get(0))?
             .collect::<Result<Vec<_>, _>>()?;
         drop(stmt);
 
-        let update = format!("UPDATE jira_inbox SET gone_at = ?1 WHERE gone_at IS NULL{not_in}");
+        let update = format!("UPDATE inbox SET gone_at = ?1 WHERE gone_at IS NULL{not_in}");
         let mut update_params: Vec<&dyn rusqlite::types::ToSql> = vec![&now];
         for key in present_keys {
             update_params.push(key);
@@ -409,7 +409,7 @@ impl JiraInbox {
     /// dismissed issue that was taken still has a task waiting on the answer.
     pub fn unexplained_departures(&self, limit: usize) -> Result<Vec<String>> {
         let mut stmt = self.db.conn.prepare(
-            "SELECT issue_key FROM jira_inbox
+            "SELECT issue_key FROM inbox
              WHERE gone_at IS NOT NULL AND taken_at IS NOT NULL AND left_reason IS NULL
              ORDER BY gone_at, issue_key
              LIMIT ?1",
@@ -426,14 +426,14 @@ impl JiraInbox {
         let n = self
             .db
             .conn
-            .execute("UPDATE jira_inbox SET status_id = ?1 WHERE issue_key = ?2", params![status_id, key])?;
+            .execute("UPDATE inbox SET status_id = ?1 WHERE issue_key = ?2", params![status_id, key])?;
         Ok(n > 0)
     }
 
     /// Records why an issue left: resolved with `resolution`, or moved away.
     pub fn set_left(&self, key: &str, reason: LeftReason, resolution: Option<&str>) -> Result<bool> {
         let n = self.db.conn.execute(
-            "UPDATE jira_inbox SET left_reason = ?1, resolution = ?2 WHERE issue_key = ?3 AND gone_at IS NOT NULL",
+            "UPDATE inbox SET left_reason = ?1, resolution = ?2 WHERE issue_key = ?3 AND gone_at IS NOT NULL",
             params![reason.as_str(), resolution, key],
         )?;
         Ok(n > 0)
@@ -444,7 +444,7 @@ impl JiraInbox {
     /// Gone issues are hidden unless `include_gone` is set (`--all`), in which
     /// case they sort below the present ones. Sleeping issues are hidden the
     /// same way: a snooze that still showed the issue would be a no-op.
-    pub fn list_active(&self, include_gone: bool) -> Result<Vec<JiraInboxItem>> {
+    pub fn list_active(&self, include_gone: bool) -> Result<Vec<InboxItem>> {
         self.list(Include {
             gone: include_gone,
             ..Include::default()
@@ -460,7 +460,7 @@ impl JiraInbox {
     /// The clock is SQLite's own local time rather than a bound parameter, so
     /// "due" means the same thing here as in [`Self::wake_due`] - two readings
     /// of the same moment could otherwise disagree about one row.
-    pub fn list(&self, include: Include) -> Result<Vec<JiraInboxItem>> {
+    pub fn list(&self, include: Include) -> Result<Vec<InboxItem>> {
         let mut filters = Vec::new();
         if !include.dismissed {
             filters.push("i.dismissed = 0");
@@ -487,7 +487,7 @@ impl JiraInbox {
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
 
-    pub fn get_by_key(&self, key: &str) -> Result<Option<JiraInboxItem>> {
+    pub fn get_by_key(&self, key: &str) -> Result<Option<InboxItem>> {
         self.db
             .conn
             .query_row(&format!("{SELECT_ITEM} WHERE i.issue_key = ?1"), params![key], map_row)
@@ -502,7 +502,7 @@ impl JiraInbox {
     /// English defaults. A name learnt once stays known: the vocabulary must
     /// not shrink because the last High issue was lowered.
     pub fn priorities(&self) -> Result<Vec<(String, i32)>> {
-        let mut stmt = self.db.conn.prepare("SELECT name, rank FROM jira_priorities ORDER BY rank, name")?;
+        let mut stmt = self.db.conn.prepare("SELECT name, rank FROM inbox_priorities ORDER BY rank, name")?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
     }
@@ -510,7 +510,7 @@ impl JiraInbox {
     /// Pins or unpins by hand, which takes the decision back from any rule.
     pub fn set_pinned(&self, key: &str, pinned: bool) -> Result<bool> {
         let n = self.db.conn.execute(
-            "UPDATE jira_inbox SET pinned = ?1, ruled_by = NULL WHERE issue_key = ?2",
+            "UPDATE inbox SET pinned = ?1, ruled_by = NULL WHERE issue_key = ?2",
             params![pinned as i32, key],
         )?;
         Ok(n > 0)
@@ -519,7 +519,7 @@ impl JiraInbox {
     /// Dismisses or restores by hand, which takes the decision back from any rule.
     pub fn set_dismissed(&self, key: &str, dismissed: bool) -> Result<bool> {
         let n = self.db.conn.execute(
-            "UPDATE jira_inbox SET dismissed = ?1, ruled_by = NULL WHERE issue_key = ?2",
+            "UPDATE inbox SET dismissed = ?1, ruled_by = NULL WHERE issue_key = ?2",
             params![dismissed as i32, key],
         )?;
         Ok(n > 0)
@@ -532,7 +532,7 @@ impl JiraInbox {
             RuledMark::Dismiss => "dismissed",
         };
         let n = self.db.conn.execute(
-            &format!("UPDATE jira_inbox SET {column} = 1, ruled_by = ?1 WHERE issue_key = ?2"),
+            &format!("UPDATE inbox SET {column} = 1, ruled_by = ?1 WHERE issue_key = ?2"),
             params![rule, key],
         )?;
         Ok(n > 0)
@@ -551,7 +551,7 @@ impl JiraInbox {
                 "SELECT COUNT(*),
                         COUNT(taken_at),
                         SUM(CASE WHEN taken_at IS NULL AND first_seen >= ?1 THEN 1 ELSE 0 END)
-                 FROM jira_inbox
+                 FROM inbox
                  WHERE dismissed = 0 AND gone_at IS NULL
                    AND (snoozed_until IS NULL OR snoozed_until <= ?2)",
                 params![fresh_since, now],
@@ -575,7 +575,7 @@ impl JiraInbox {
         let n = self
             .db
             .conn
-            .execute("UPDATE jira_inbox SET taken_at = ?1 WHERE issue_key = ?2", params![value, key])?;
+            .execute("UPDATE inbox SET taken_at = ?1 WHERE issue_key = ?2", params![value, key])?;
         Ok(n > 0)
     }
 
@@ -584,10 +584,10 @@ impl JiraInbox {
     /// Snoozing clears `woke_at`: the mark exists to announce one return, and
     /// a stale one would announce the wrong sleep.
     pub fn set_snoozed(&self, key: &str, until: Option<NaiveDateTime>) -> Result<bool> {
-        let n = self.db.conn.execute(
-            "UPDATE jira_inbox SET snoozed_until = ?1, woke_at = NULL WHERE issue_key = ?2",
-            params![until, key],
-        )?;
+        let n = self
+            .db
+            .conn
+            .execute("UPDATE inbox SET snoozed_until = ?1, woke_at = NULL WHERE issue_key = ?2", params![until, key])?;
         Ok(n > 0)
     }
 
@@ -598,21 +598,20 @@ impl JiraInbox {
     /// is up. `snoozed_until` is cleared and `woke_at` stamped in the same
     /// statement, so an issue is returned here exactly once - a second caller,
     /// or a second poll a minute later, finds nothing left to wake.
-    pub fn wake_due(&self) -> Result<Vec<JiraInboxItem>> {
+    pub fn wake_due(&self) -> Result<Vec<InboxItem>> {
         let now = Local::now().naive_local();
         let mut stmt = self
             .db
             .conn
-            .prepare("SELECT issue_key FROM jira_inbox WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?1 AND dismissed = 0")?;
+            .prepare("SELECT issue_key FROM inbox WHERE snoozed_until IS NOT NULL AND snoozed_until <= ?1 AND dismissed = 0")?;
         let due: Vec<String> = stmt.query_map(params![now], |row| row.get(0))?.collect::<Result<Vec<_>, _>>()?;
         drop(stmt);
 
         let mut woken = Vec::with_capacity(due.len());
         for key in due {
-            self.db.conn.execute(
-                "UPDATE jira_inbox SET snoozed_until = NULL, woke_at = ?1 WHERE issue_key = ?2",
-                params![now, key],
-            )?;
+            self.db
+                .conn
+                .execute("UPDATE inbox SET snoozed_until = NULL, woke_at = ?1 WHERE issue_key = ?2", params![now, key])?;
             if let Some(item) = self.get_by_key(&key)? {
                 woken.push(item);
             }
@@ -626,7 +625,7 @@ impl JiraInbox {
         self.db
             .conn
             .query_row(
-                "SELECT COUNT(*) FROM jira_inbox WHERE dismissed = 0 AND gone_at IS NULL AND snoozed_until > ?1",
+                "SELECT COUNT(*) FROM inbox WHERE dismissed = 0 AND gone_at IS NULL AND snoozed_until > ?1",
                 params![now],
                 |row| row.get(0),
             )
@@ -635,13 +634,13 @@ impl JiraInbox {
 
     pub fn mark_notified(&self, keys: &[String]) -> Result<()> {
         for key in keys {
-            self.db.conn.execute("UPDATE jira_inbox SET notified = 1 WHERE issue_key = ?1", params![key])?;
+            self.db.conn.execute("UPDATE inbox SET notified = 1 WHERE issue_key = ?1", params![key])?;
         }
         Ok(())
     }
 
     /// Un-notified newly inserted items (for toast after sync).
-    pub fn list_unnotified_new(&self, keys: &[String]) -> Result<Vec<JiraInboxItem>> {
+    pub fn list_unnotified_new(&self, keys: &[String]) -> Result<Vec<InboxItem>> {
         let mut items = Vec::new();
         for key in keys {
             if let Some(item) = self.get_by_key(key)?
@@ -672,7 +671,7 @@ struct Change {
 }
 
 /// Builds a human-readable change summary, or `None` when nothing visible changed.
-fn describe_change(old: &ExistingRow, new: &JiraInboxUpsert) -> Option<Change> {
+fn describe_change(old: &ExistingRow, new: &InboxUpsert) -> Option<Change> {
     let mut parts = Vec::new();
 
     if old.gone_at.is_some() {
@@ -734,11 +733,11 @@ const SELECT_ITEM: &str = "SELECT i.issue_key, i.issue_id, i.summary, i.status_i
         i.first_seen, i.last_seen, i.notified, i.pinned, i.dismissed, i.raw_updated,
         i.gone_at, i.last_change, i.changed_at, i.taken_at, i.snoozed_until, i.woke_at,
         i.left_reason, i.resolution, i.issue_type, i.project, i.ruled_by
-     FROM jira_inbox i
-     LEFT JOIN jira_statuses s ON s.id = i.status_id";
+     FROM inbox i
+     LEFT JOIN inbox_statuses s ON s.id = i.status_id";
 
-fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<JiraInboxItem> {
-    Ok(JiraInboxItem {
+fn map_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<InboxItem> {
+    Ok(InboxItem {
         issue_key: row.get(0)?,
         issue_id: row.get(1)?,
         summary: row.get(2)?,

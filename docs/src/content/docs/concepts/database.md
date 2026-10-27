@@ -64,12 +64,12 @@ CREATE TABLE tasks (
     completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
     excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE,
     deleted_at TIMESTAMP,
-    jira_key TEXT
+    issue_key TEXT
 );
 ```
 
 - `task_id` groups a task with its own history across days - it points at the id of the first task in the chain, so `task find` can offer yesterday's unfinished work and see today's progress as the same item. A task that continues nothing is its own chain (`task_id = id`); the column default of 0 is never left on a row. It is not an external reference.
-- `jira_key` is the Jira issue the task was taken from, set by `kasl inbox take`. The `UPDATE` behind `kasl task edit` does not list this column, so renaming a task cannot detach it from its issue.
+- `issue_key` is the inbox issue the task was taken from, set by `kasl inbox take`; the issue's row in `inbox` says which source it came from. The `UPDATE` behind `kasl task edit` does not list this column, so renaming a task cannot detach it from its issue.
 - `deleted_at` was added for soft delete, but nothing in the current codebase sets or reads it - `kasl task remove` deletes rows outright. Treat the column as reserved.
 
 #### `tags`
@@ -108,10 +108,10 @@ CREATE TABLE task_templates (
 );
 ```
 
-#### `jira_inbox`
-Stores Jira issues assigned to you, synced by the background watcher. See [`inbox`](/reference/inbox/) for the command that reads and manages this table:
+#### `inbox`
+Stores the issues assigned to you, synced by the background watcher from Jira and from the [plugins](/guides/writing-a-plugin/) that are inbox sources. See [`inbox`](/reference/inbox/) for the command that reads and manages this table:
 ```sql
-CREATE TABLE jira_inbox (
+CREATE TABLE inbox (
     issue_key TEXT PRIMARY KEY NOT NULL,
     issue_id TEXT NOT NULL,
     summary TEXT NOT NULL,
@@ -136,13 +136,15 @@ CREATE TABLE jira_inbox (
     resolution TEXT,
     issue_type TEXT,
     project TEXT,
-    ruled_by TEXT
+    ruled_by TEXT,
+    source TEXT NOT NULL DEFAULT 'jira'
 );
 ```
 
-- `status_id` references `jira_statuses.id` and resolves to a display name via join.
+- `source` is where the issue came from: `jira` for kasl's own Jira source, or the name of the plugin that listed it (`gitlab` for `kasl-plugin-gitlab`). A key belongs to one source: a poll only reconciles its own rows, and a key another source already holds is refused rather than taken over.
+- `status_id` references `inbox_statuses.id` and resolves to a display name via join. A plugin's statuses are kept under its own name, `gitlab:Opened`, so two sources' words never meet.
 - `sort_value` is the numeric value of a configured Jira custom field (e.g. Scoring), used to rank issues.
-- `gone_at` is stamped when an issue stops appearing in the Jira poll (closed or reassigned); it clears if the issue reappears. Rows with `gone_at` set are hidden from the default list and only shown with `kasl inbox --all`.
+- `gone_at` is stamped when an issue stops appearing in its source's poll (closed or reassigned); it clears if the issue reappears. Rows with `gone_at` set are hidden from the default list and only shown with `kasl inbox --all`.
 - `last_change` / `changed_at` record the most recent visible change (status, priority, or score) so the list can badge it.
 - `taken_at` is stamped by `kasl inbox take`. Unlike `dismissed`, it keeps the row in the list: a taken issue is still part of the picture, it is just already in hand.
 - `pinned` and `dismissed` are set by `kasl inbox pin` / `kasl inbox dismiss`, or by an [inbox rule](/reference/inbox/#rules); `ruled_by` names the rule behind them and is cleared when a hand pins, unpins, dismisses or brings the issue back.
@@ -150,19 +152,19 @@ CREATE TABLE jira_inbox (
 - `snoozed_until` is when a snoozed issue is due back; `woke_at` marks the moment it came back, so the return is announced once.
 - `left_reason` says why a taken issue left the inbox, once Jira has answered: `resolved`, with the resolution's name in `resolution`, or `moved` (unresolved - reassigned, out of reach, deleted). NULL means not asked yet, which is how a question that failed gets asked again on the next poll. Both clear when the issue reappears.
 
-#### `jira_statuses`
-Local catalog of Jira workflow statuses, populated from issue sync so `jira_inbox.status_id` can resolve to a name:
+#### `inbox_statuses`
+Local catalog of workflow statuses, populated from issue sync so `inbox.status_id` can resolve to a name:
 ```sql
-CREATE TABLE jira_statuses (
+CREATE TABLE inbox_statuses (
     id TEXT PRIMARY KEY NOT NULL,
     name TEXT NOT NULL
 );
 ```
 
-#### `jira_priorities`
+#### `inbox_priorities`
 Every priority name the inbox has seen, with its rank - the vocabulary `--priority High+` and an inbox rule's `"priority": "High+"` are read against:
 ```sql
-CREATE TABLE jira_priorities (
+CREATE TABLE inbox_priorities (
     name TEXT PRIMARY KEY,
     rank INTEGER NOT NULL
 );
@@ -259,6 +261,7 @@ Schema history, in order:
 16. `add_server_pulse` - `server_pulse`
 17. `close_the_loop_with_jira` - adds `left_reason` and `resolution` to `jira_inbox`, and gives every task left on `task_id = 0` a chain of its own
 18. `inbox_rules` - adds `issue_type`, `project` (filled from the key's prefix) and `ruled_by` to `jira_inbox`, and `jira_priorities`, started from the priorities the rows carry
+19. `the_inbox_belongs_to_no_one_source` - renames `jira_inbox`, `jira_statuses` and `jira_priorities` to `inbox`, `inbox_statuses` and `inbox_priorities`, adds `source` (every existing row is Jira's), renames `tasks.jira_key` to `issue_key`, and makes the indexes again under names without `jira`
 
 Each migration runs inside a transaction; a failure rolls back that migration.
 
@@ -324,14 +327,16 @@ CREATE INDEX idx_workdays_date ON workdays(date);
 CREATE INDEX idx_tasks_timestamp ON tasks(timestamp);
 CREATE INDEX idx_tasks_task_id ON tasks(task_id);
 CREATE INDEX idx_tasks_deleted_at ON tasks(deleted_at);
-CREATE INDEX idx_tasks_jira_key ON tasks(jira_key);
+CREATE INDEX idx_tasks_issue_key ON tasks(issue_key);
 
 -- Pauses table
 CREATE INDEX idx_pauses_start ON pauses(start);
 
--- Jira inbox table
-CREATE INDEX idx_jira_inbox_active ON jira_inbox(dismissed, pinned DESC, priority_rank ASC, last_seen DESC);
-CREATE INDEX idx_jira_inbox_sort ON jira_inbox(dismissed, pinned DESC, sort_value DESC, priority_rank ASC);
+-- Inbox table
+CREATE INDEX idx_inbox_active ON inbox(dismissed, pinned DESC, priority_rank ASC, last_seen DESC);
+CREATE INDEX idx_inbox_sort ON inbox(dismissed, pinned DESC, sort_value DESC, priority_rank ASC);
+CREATE INDEX idx_inbox_snoozed ON inbox(snoozed_until);
+CREATE INDEX idx_inbox_source ON inbox(source);
 ```
 
 ## Troubleshooting
@@ -452,6 +457,6 @@ ORDER BY usage_count DESC;
 
 - [`pauses`](/reference/pauses/) - protected pauses and the `--keep`/`--reason` flags behind the `pauses` columns
 - [`task`](/reference/task/) - task commands, including `remove`
-- [`inbox`](/reference/inbox/) - the Jira inbox commands backed by `jira_inbox`, `jira_statuses` and `jira_priorities`
+- [`inbox`](/reference/inbox/) - the inbox commands backed by `inbox`, `inbox_statuses` and `inbox_priorities`
 - [`export`](/reference/export/) - export formats and data types, including `export all`
 - [Configuration](/concepts/configuration/) - config keys referenced by pauses, reports, and Jira sync

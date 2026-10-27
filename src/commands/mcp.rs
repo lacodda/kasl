@@ -21,7 +21,7 @@
 //! reach a server - the connection's status, the company's calendar.
 
 use crate::commands::{inbox, pauses::DayPauses, server};
-use crate::db::{jira_inbox::Include, tasks::Tasks};
+use crate::db::{inbox::Include, tasks::Tasks};
 use crate::libs::{json, messages::Message, output, report::DayReport, summary::Summary, task::TaskFilter};
 use crate::msg_error_anyhow;
 use anyhow::{Result, bail};

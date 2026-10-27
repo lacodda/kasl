@@ -9,7 +9,7 @@
 //! daemon has no terminal to print to: a decision made from a toast has to
 //! answer on a toast.
 
-use crate::db::jira_inbox::JiraInbox;
+use crate::db::inbox::Inbox;
 use crate::db::tasks::Tasks;
 use crate::libs::inbox_filter;
 use crate::libs::inbox_rules;
@@ -118,18 +118,18 @@ pub async fn apply(request: &ToastRequest) -> Result<Applied> {
 
 /// How long a toast's Snooze button sleeps.
 pub fn snooze_window() -> chrono::Duration {
-    let configured = crate::libs::config::Config::read().ok().and_then(|c| c.jira_inbox).map(|i| i.toast_snooze_for);
+    let configured = crate::libs::config::Config::read().ok().and_then(|c| c.inbox).map(|i| i.toast_snooze_for);
     match configured.as_deref().map(inbox_filter::parse_window) {
         Some(Ok(window)) => window,
         _ => chrono::Duration::days(1),
     }
 }
 
-/// Whether a take also starts the issue in Jira (`jira_inbox.start_on_take`).
+/// Whether a take also starts the issue in Jira (`inbox.start_on_take`).
 fn start_on_take() -> bool {
     crate::libs::config::Config::read()
         .ok()
-        .and_then(|c| c.jira_inbox)
+        .and_then(|c| c.inbox)
         .is_some_and(|inbox| inbox.start_on_take)
 }
 
@@ -166,13 +166,13 @@ pub async fn take(key: &str, options: &MoveOptions) -> Result<Applied> {
 /// The tags come from the inbox rules that match the issue as it is now, so a
 /// project rule tags the task whichever way it was taken.
 fn take_locally(key: &str) -> Result<Applied> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
         return Ok(Applied::NotFound);
     };
 
     let mut tasks = Tasks::new()?;
-    if let Some(task) = tasks.fetch(TaskFilter::ByJiraKey(key.to_string()))?.first() {
+    if let Some(task) = tasks.fetch(TaskFilter::ByIssueKey(key.to_string()))?.first() {
         // Repair the mark if only the task survived.
         if item.taken_at.is_none() {
             let _ = db.set_taken(key, true)?;
@@ -181,7 +181,7 @@ fn take_locally(key: &str) -> Result<Applied> {
     }
 
     let name = format!("{} {}", item.issue_key, item.summary);
-    let task = Task::new(&name, "", Some(0)).from_jira(key);
+    let task = Task::new(&name, "", Some(0)).from_issue(key);
     tasks.insert(&task)?;
     let _ = db.set_taken(key, true)?;
     let wanted = inbox_rules::tags_for(&item);
@@ -202,7 +202,7 @@ fn take_locally(key: &str) -> Result<Applied> {
 /// task finished today.
 pub fn complete(key: &str) -> Result<Applied> {
     let mut tasks = Tasks::new()?;
-    let rows = tasks.fetch(TaskFilter::ByJiraKey(key.to_string()))?;
+    let rows = tasks.fetch(TaskFilter::ByIssueKey(key.to_string()))?;
     let Some(latest) = latest_row(&rows) else {
         return Ok(Applied::NoTask);
     };
@@ -216,7 +216,7 @@ pub fn complete(key: &str) -> Result<Applied> {
         row.completeness = Some(100);
         tasks.update(&row)?;
     } else {
-        let mut row = Task::new(&latest.name, &latest.comment, Some(100)).from_jira(key);
+        let mut row = Task::new(&latest.name, &latest.comment, Some(100)).from_issue(key);
         row.task_id = latest.task_id.filter(|&chain| chain != 0).or(latest.id);
         tasks.insert(&row)?;
     }
@@ -225,7 +225,7 @@ pub fn complete(key: &str) -> Result<Applied> {
 
 /// Whether the task taken from `key` is still unfinished.
 pub fn task_open(key: &str) -> Result<bool> {
-    let rows = Tasks::new()?.fetch(TaskFilter::ByJiraKey(key.to_string()))?;
+    let rows = Tasks::new()?.fetch(TaskFilter::ByIssueKey(key.to_string()))?;
     Ok(latest_row(&rows).is_some_and(|row| row.completeness != Some(100)))
 }
 
@@ -237,7 +237,7 @@ fn latest_row(rows: &[Task]) -> Option<&Task> {
 /// Puts an issue to sleep for `window`.
 pub fn snooze(key: &str, window: chrono::Duration) -> Result<Applied> {
     let until = Local::now().naive_local() + window;
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     if !db.set_snoozed(key, Some(until))? {
         return Ok(Applied::NotFound);
     }
@@ -246,7 +246,7 @@ pub fn snooze(key: &str, window: chrono::Duration) -> Result<Applied> {
 
 /// Hides an issue from the list.
 pub fn dismiss(key: &str) -> Result<Applied> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     if !db.set_dismissed(key, true)? {
         return Ok(Applied::NotFound);
     }

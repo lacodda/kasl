@@ -66,7 +66,7 @@ mod tests {
             si: None,
             gitlab: None,
             jira: None,
-            jira_inbox: None,
+            inbox: None,
             productivity: None,
             report: None,
             task_discovery: None,

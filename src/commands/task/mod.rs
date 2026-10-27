@@ -501,7 +501,7 @@ async fn handle_edit_by_id(id: i32) -> Result<()> {
         .interact()?;
 
     if confirmed {
-        let finished = finished_jira_key(&task, &edited_task);
+        let finished = finished_issue_key(&task, &edited_task);
         let mut task_to_update = task;
         task_to_update.update_from(&edited_task);
         tasks_db.update(&task_to_update)?;
@@ -556,7 +556,7 @@ async fn handle_edit_interactive() -> Result<()> {
             task_to_update.update_from(&edited_task);
             tasks_db.update(&task_to_update)?;
             msg_success!(Message::TaskUpdatedWithName(task.name.clone()));
-            if let Some(key) = finished_jira_key(task, &edited_task) {
+            if let Some(key) = finished_issue_key(task, &edited_task) {
                 jira_bridge::offer_after_done(&key).await;
             }
         } else {
@@ -572,9 +572,9 @@ async fn handle_edit_interactive() -> Result<()> {
 ///
 /// Only the crossing counts - below 100 before, 100 after. A task already done
 /// that is edited again was offered the question when it was finished.
-pub(crate) fn finished_jira_key(before: &Task, after: &Task) -> Option<String> {
+pub(crate) fn finished_issue_key(before: &Task, after: &Task) -> Option<String> {
     let crossed = before.completeness != Some(100) && after.completeness == Some(100);
-    if crossed { before.jira_key.clone() } else { None }
+    if crossed { before.issue_key.clone() } else { None }
 }
 
 /// Interactive task editing helper function.
@@ -617,7 +617,7 @@ fn edit_task_interactive(task: &Task) -> Result<Task> {
         excluded_from_search: task.excluded_from_search,
         tags: vec![], // Tags are preserved separately
         // Renaming a task does not detach it from the issue it came from.
-        jira_key: task.jira_key.clone(),
+        issue_key: task.issue_key.clone(),
     })
 }
 
@@ -740,25 +740,25 @@ mod tests {
 
     #[test]
     fn only_finishing_a_task_from_jira_asks_about_its_issue() {
-        let mut before = Task::new("KA-1 Fix login", "", Some(60)).from_jira("KA-1");
+        let mut before = Task::new("KA-1 Fix login", "", Some(60)).from_issue("KA-1");
         let mut after = before.clone();
         after.completeness = Some(100);
-        assert_eq!(finished_jira_key(&before, &after).as_deref(), Some("KA-1"));
+        assert_eq!(finished_issue_key(&before, &after).as_deref(), Some("KA-1"));
 
         // Already done, edited again: the question was asked when it was finished.
         before.completeness = Some(100);
-        assert_eq!(finished_jira_key(&before, &after), None);
+        assert_eq!(finished_issue_key(&before, &after), None);
 
         // Progress short of done is not the moment.
         before.completeness = Some(20);
         after.completeness = Some(90);
-        assert_eq!(finished_jira_key(&before, &after), None);
+        assert_eq!(finished_issue_key(&before, &after), None);
 
         // A task of its own has no issue to ask about.
         let plain = Task::new("Write notes", "", Some(10));
         let mut plain_done = plain.clone();
         plain_done.completeness = Some(100);
-        assert_eq!(finished_jira_key(&plain, &plain_done), None);
+        assert_eq!(finished_issue_key(&plain, &plain_done), None);
     }
 
     #[test]

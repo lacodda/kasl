@@ -30,7 +30,7 @@ const SCHEMA_TASKS: &str = "CREATE TABLE IF NOT EXISTS tasks (
     excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE
 );";
 
-const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search, jira_key) VALUES
+const INSERT_TASK: &str = "INSERT INTO tasks (task_id, timestamp, name, comment, completeness, excluded_from_search, issue_key) VALUES
     (?, datetime(CURRENT_TIMESTAMP, 'localtime'), ?, ?, ?, ?, ?) RETURNING id";
 const UPDATE_TASK_ID: &str = "UPDATE tasks SET task_id = ? WHERE id = ?";
 const SELECT_TASKS: &str = "SELECT * FROM tasks";
@@ -47,7 +47,7 @@ const WHERE_INCOMPLETE: &str = "WHERE
   GROUP BY task_id)
   GROUP BY task_id";
 
-const WHERE_JIRA_KEY: &str = "WHERE jira_key = ?1";
+const WHERE_ISSUE_KEY: &str = "WHERE issue_key = ?1";
 const WHERE_TAG: &str = "WHERE id IN (SELECT task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name = ?1)";
 const WHERE_TAGS: &str = "WHERE id IN (SELECT task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN";
 const DELETE_TASK: &str = "DELETE FROM tasks WHERE id = ?";
@@ -107,7 +107,7 @@ impl Tasks {
                 task.comment,
                 task.completeness,
                 task.excluded_from_search,
-                task.jira_key
+                task.issue_key
             ],
             |row| row.get(0),
         )?;
@@ -165,7 +165,7 @@ impl Tasks {
                 (self.conn.prepare(&Self::query_by_ids(&ids))?, ids_params)
             }
             TaskFilter::ByTag(tag_name) => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_TAG))?, vec![Box::new(tag_name)]),
-            TaskFilter::ByJiraKey(key) => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_JIRA_KEY))?, vec![Box::new(key)]),
+            TaskFilter::ByIssueKey(key) => (self.conn.prepare(&format!("{} {}", SELECT_TASKS, WHERE_ISSUE_KEY))?, vec![Box::new(key)]),
             TaskFilter::ByTags(tag_names) => {
                 let placeholders = vec!["?"; tag_names.len()].join(", ");
                 let query = format!("{} {} ({}))", SELECT_TASKS, WHERE_TAGS, placeholders);
@@ -186,7 +186,7 @@ impl Tasks {
                 excluded_from_search: row.get(6)?,
                 // By name, not position: `SELECT *` puts this after
                 // `deleted_at`, and the next migration would shift it again.
-                jira_key: row.get("jira_key")?,
+                issue_key: row.get("issue_key")?,
                 tags: vec![], // Tags will be populated in the next step
             })
         })?;

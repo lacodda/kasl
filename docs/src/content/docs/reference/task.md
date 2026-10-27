@@ -183,7 +183,7 @@ shape for a task:
       "comment": "backfill pending",
       "completeness": 60,
       "tags": ["backend", "db"],
-      "jira_key": null
+      "issue_key": null
     }
   ]
 }
@@ -196,7 +196,7 @@ shape for a task:
 | `created_at` | When the row was written, local time. |
 | `completeness` | 0-100; a task with none recorded counts as done, as the table shows it. |
 | `tags` | Tag names. |
-| `jira_key` | The Jira issue the task was [taken](/reference/inbox/#take---start-working-on-an-issue) from; `null` for a task of your own. |
+| `issue_key` | The inbox issue the task was [taken](/reference/inbox/#take---start-working-on-an-issue) from, whichever source listed it; `null` for a task of your own. |
 
 ## Related commands
 

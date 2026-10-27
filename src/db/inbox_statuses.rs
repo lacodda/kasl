@@ -7,12 +7,12 @@ use crate::db::db::Db;
 use anyhow::Result;
 use rusqlite::params;
 
-/// Database operations for the `jira_statuses` table.
-pub struct JiraStatuses {
+/// Database operations for the `inbox_statuses` table.
+pub struct InboxStatuses {
     db: Db,
 }
 
-impl JiraStatuses {
+impl InboxStatuses {
     pub fn new() -> Result<Self> {
         Ok(Self { db: Db::new()? })
     }
@@ -23,7 +23,7 @@ impl JiraStatuses {
             return Ok(());
         }
         self.db.conn.execute(
-            "INSERT INTO jira_statuses (id, name) VALUES (?1, ?2)
+            "INSERT INTO inbox_statuses (id, name) VALUES (?1, ?2)
              ON CONFLICT(id) DO UPDATE SET name = excluded.name",
             params![id, name],
         )?;

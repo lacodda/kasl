@@ -2,14 +2,14 @@
 //! the two moves kasl makes in Jira itself, start and close - and the rules
 //! that pin, hide and tag issues without being asked each time.
 //!
-//! Manages the local `jira_inbox` table populated from assigned open Jira issues.
+//! Manages the local `inbox` table populated from assigned open Jira issues.
 
-use crate::db::jira_inbox::{Include, JiraInbox, JiraInboxItem};
+use crate::db::inbox::{Inbox, InboxItem, Include};
 use crate::libs::config::Config;
+use crate::libs::inbox::{self as inbox_lib, ResolvedIssue};
 use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_in};
 use crate::libs::inbox_rules::{self, RuleBook};
 use crate::libs::jira_bridge::{self, Goal, MoveOptions};
-use crate::libs::jira_inbox::{self as inbox_lib, ResolvedIssue};
 use crate::libs::json;
 use crate::libs::messages::Message;
 use crate::libs::output::{self, Format};
@@ -143,7 +143,7 @@ impl FilterArgs {
     fn to_filter(&self, priorities: &[(String, i32)]) -> Result<InboxFilter> {
         let since = match (&self.since, self.new) {
             (Some(window), _) => Some(parse_window(window)?),
-            (None, true) => Some(chrono::Duration::hours(crate::db::jira_inbox::FRESH_BADGE_HOURS)),
+            (None, true) => Some(chrono::Duration::hours(crate::db::inbox::FRESH_BADGE_HOURS)),
             (None, false) => None,
         };
         Ok(InboxFilter {
@@ -418,7 +418,7 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
         Some(InboxCommand::Sync) => {
             let outcome = inbox_lib::sync_interactive(true).await?;
             if !outcome.skipped {
-                msg_success!(Message::JiraInboxSynced {
+                msg_success!(Message::InboxSynced {
                     fetched: outcome.fetched,
                     new_count: outcome.new_keys.len(),
                     changed: outcome.changed.len(),
@@ -493,8 +493,8 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
 
 /// The active issues, cut and ordered as asked. Returns the slice and the
 /// size of the whole, so a cut list never reads as the whole inbox.
-fn sliced(include: Include, args: &FilterArgs) -> Result<(Vec<JiraInboxItem>, usize)> {
-    let db = JiraInbox::new()?;
+fn sliced(include: Include, args: &FilterArgs) -> Result<(Vec<InboxItem>, usize)> {
+    let db = Inbox::new()?;
     let items = db.list(include)?;
     let total = items.len();
     let filter = args.to_filter(&db.priorities()?)?;
@@ -558,17 +558,17 @@ fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs, json:
     if total == 0 {
         // "Empty" over an inbox that is only asleep would read as nothing to
         // do, when in fact everything in it is coming back.
-        let asleep = if include.snoozed { 0 } else { JiraInbox::new()?.count_snoozed()? };
+        let asleep = if include.snoozed { 0 } else { Inbox::new()?.count_snoozed()? };
         if asleep > 0 {
-            msg_info!(Message::JiraInboxAllSnoozed(asleep));
+            msg_info!(Message::InboxAllSnoozed(asleep));
         } else {
-            msg_info!(Message::JiraInboxEmpty);
+            msg_info!(Message::InboxEmpty);
         }
         return Ok(());
     }
     let cuts = filter.describe();
     if items.is_empty() {
-        msg_info!(Message::JiraInboxNoMatch { total, what: cuts.join(", ") });
+        msg_info!(Message::InboxNoMatch { total, what: cuts.join(", ") });
         return Ok(());
     }
     if let Some(n) = limit {
@@ -577,10 +577,10 @@ fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs, json:
     // A whole inbox is announced as such; a slice says how much of the whole
     // it is, or a filtered list reads as the inbox itself.
     if items.len() == total && cuts.is_empty() {
-        msg_print!(Message::JiraInboxListHeader, true);
+        msg_print!(Message::InboxListHeader, true);
     } else {
         msg_print!(
-            Message::JiraInboxListSliced {
+            Message::InboxListSliced {
                 shown: items.len(),
                 total,
                 what: cuts.join(", ")
@@ -588,41 +588,41 @@ fn list_inbox(limit: Option<usize>, include: Include, filter: &FilterArgs, json:
             true
         );
     }
-    View::jira_inbox(&items)
+    View::inbox(&items)
 }
 
 fn set_pinned(key: &str, pinned: bool) -> Result<()> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     if !db.set_pinned(key, pinned)? {
-        msg_error!(Message::JiraInboxNotFound(key.to_string()));
+        msg_error!(Message::InboxNotFound(key.to_string()));
         return Ok(());
     }
     if pinned {
-        msg_success!(Message::JiraInboxPinned(key.to_string()));
+        msg_success!(Message::InboxPinned(key.to_string()));
     } else {
-        msg_success!(Message::JiraInboxUnpinned(key.to_string()));
+        msg_success!(Message::InboxUnpinned(key.to_string()));
     }
     Ok(())
 }
 
 fn dismiss(key: &str) -> Result<()> {
     match toast_apply::dismiss(key)? {
-        Applied::NotFound => msg_error!(Message::JiraInboxNotFound(key.to_string())),
-        _ => msg_success!(Message::JiraInboxDismissed(key.to_string())),
+        Applied::NotFound => msg_error!(Message::InboxNotFound(key.to_string())),
+        _ => msg_success!(Message::InboxDismissed(key.to_string())),
     }
     Ok(())
 }
 
 fn open_issue(key: &str) -> Result<()> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
-        msg_error!(Message::JiraInboxNotFound(key.to_string()));
+        msg_error!(Message::InboxNotFound(key.to_string()));
         return Ok(());
     };
 
     match inbox_lib::open_url(&item.url) {
-        Ok(()) => msg_success!(Message::JiraInboxOpened(key.to_string())),
-        Err(e) => msg_error!(Message::JiraInboxOpenFailed(e.to_string())),
+        Ok(()) => msg_success!(Message::InboxOpened(key.to_string())),
+        Err(e) => msg_error!(Message::InboxOpenFailed(e.to_string())),
     }
     Ok(())
 }
@@ -647,11 +647,11 @@ async fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
 
     let (items, total) = sliced(Include::default(), filter)?;
     if total == 0 {
-        msg_info!(Message::JiraInboxEmpty);
+        msg_info!(Message::InboxEmpty);
         return Ok(());
     }
     if items.is_empty() {
-        msg_info!(Message::JiraInboxNoMatch {
+        msg_info!(Message::InboxNoMatch {
             total,
             what: filter.describe().join(", ")
         });
@@ -698,7 +698,7 @@ async fn triage(snooze_for: &str, filter: &FilterArgs) -> Result<()> {
         }
     }
 
-    msg_success!(Message::JiraInboxTriaged {
+    msg_success!(Message::InboxTriaged {
         taken: done.taken,
         snoozed: done.snoozed,
         dismissed: done.dismissed,
@@ -731,15 +731,15 @@ fn show_issue(key: &str, why: bool, json: bool) -> Result<()> {
     if json {
         return output::print_json(&issue_document(key, why)?);
     }
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
-        return Err(msg_error_anyhow!(Message::JiraInboxNotFound(key.to_string())));
+        return Err(msg_error_anyhow!(Message::InboxNotFound(key.to_string())));
     };
 
     let reasons = if why { Some(explain_issue(&db, &item)?) } else { None };
-    View::jira_inbox_issue(&item)?;
+    View::inbox_issue(&item)?;
     if let Some(reasons) = reasons {
-        View::jira_inbox_why(&reasons)?;
+        View::inbox_why(&reasons)?;
     }
     Ok(())
 }
@@ -749,9 +749,9 @@ fn show_issue(key: &str, why: bool, json: bool) -> Result<()> {
 ///
 /// An issue the inbox does not hold is an error, not an empty answer.
 pub(crate) fn issue_document(key: &str, why: bool) -> Result<json::IssueShown> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let Some(item) = db.get_by_key(key)? else {
-        return Err(msg_error_anyhow!(Message::JiraInboxNotFound(key.to_string())));
+        return Err(msg_error_anyhow!(Message::InboxNotFound(key.to_string())));
     };
     let reasons = if why { Some(explain_issue(&db, &item)?) } else { None };
     Ok(json::IssueShown {
@@ -761,12 +761,12 @@ pub(crate) fn issue_document(key: &str, why: bool) -> Result<json::IssueShown> {
 }
 
 /// Where an issue's place in the list comes from, and what the rules make of it.
-fn explain_issue(db: &JiraInbox, item: &JiraInboxItem) -> Result<Vec<inbox_filter::Reason>> {
+fn explain_issue(db: &Inbox, item: &InboxItem) -> Result<Vec<inbox_filter::Reason>> {
     // The label lives in config, not on the row: the number means nothing
     // without the name of the field it was read from.
     let label = Config::read()
         .ok()
-        .and_then(|c| c.jira_inbox)
+        .and_then(|c| c.inbox)
         .and_then(|cfg| cfg.sort_by_field.and_then(|id| score_field_label(&cfg.custom_fields, &id)));
     let mut reasons = inbox_filter::explain(item, label.as_deref(), Local::now().naive_local());
     reasons.extend(inbox_rules::explain(&RuleBook::from_config(db)?, item));
@@ -789,8 +789,8 @@ fn score_field_label(fields: &[crate::libs::config::JiraCustomField], id: &str) 
 fn snooze(key: &str, duration: Option<&str>) -> Result<()> {
     let window = inbox_filter::parse_window(duration.unwrap_or("1d"))?;
     match toast_apply::snooze(key, window)? {
-        Applied::Snoozed(until) => msg_success!(Message::JiraInboxSnoozed(key.to_string(), until.format("%b %-d %H:%M").to_string())),
-        _ => msg_error!(Message::JiraInboxNotFound(key.to_string())),
+        Applied::Snoozed(until) => msg_success!(Message::InboxSnoozed(key.to_string(), until.format("%b %-d %H:%M").to_string())),
+        _ => msg_error!(Message::InboxNotFound(key.to_string())),
     }
     Ok(())
 }
@@ -800,12 +800,12 @@ fn snooze(key: &str, duration: Option<&str>) -> Result<()> {
 /// The picker offers only sleeping issues: waking an awake one does nothing,
 /// and offering it would be offering work with no effect.
 fn unsnooze(key: Option<String>) -> Result<()> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let key = match key {
         Some(key) => key,
         None => {
             let now = Local::now().naive_local();
-            let asleep: Vec<JiraInboxItem> = db
+            let asleep: Vec<InboxItem> = db
                 .list(Include {
                     snoozed: true,
                     ..Include::default()
@@ -821,10 +821,10 @@ fn unsnooze(key: Option<String>) -> Result<()> {
     };
 
     if !db.set_snoozed(&key, None)? {
-        msg_error!(Message::JiraInboxNotFound(key.clone()));
+        msg_error!(Message::InboxNotFound(key.clone()));
         return Ok(());
     }
-    msg_success!(Message::JiraInboxUnsnoozed(key));
+    msg_success!(Message::InboxUnsnoozed(key));
     Ok(())
 }
 
@@ -832,7 +832,7 @@ fn unsnooze(key: Option<String>) -> Result<()> {
 ///
 /// `take` used to create the task and dismiss the issue, which severed the
 /// two: the key survived only inside the task's name, and the inbox forgot the
-/// issue had ever been picked up. Now the task carries `jira_key`, and the
+/// issue had ever been picked up. Now the task carries `issue_key`, and the
 /// issue stays in the list wearing a `taken` badge.
 ///
 /// With `start_on_take` the issue is also started in Jira; the take is said
@@ -840,7 +840,7 @@ fn unsnooze(key: Option<String>) -> Result<()> {
 async fn take_issue(key: &str) -> Result<()> {
     match toast_apply::take(key, &MoveOptions::from_cli(None, None)).await? {
         Applied::Taken { started, tags } => {
-            msg_success!(Message::JiraInboxTaken(key.to_string()));
+            msg_success!(Message::InboxTaken(key.to_string()));
             if !tags.is_empty() {
                 msg_info!(Message::TagsAddedToTask(tags.join(", ")));
             }
@@ -850,8 +850,8 @@ async fn take_issue(key: &str) -> Result<()> {
                 None => {}
             }
         }
-        Applied::AlreadyTaken(name) => msg_info!(Message::JiraInboxAlreadyTaken(key.to_string(), name)),
-        _ => msg_error!(Message::JiraInboxNotFound(key.to_string())),
+        Applied::AlreadyTaken(name) => msg_info!(Message::InboxAlreadyTaken(key.to_string(), name)),
+        _ => msg_error!(Message::InboxNotFound(key.to_string())),
     }
     Ok(())
 }
@@ -862,11 +862,11 @@ async fn take_issue(key: &str) -> Result<()> {
 /// wrong issues is fixed in the config, and the issues it hid come back here -
 /// without this, a mistaken rule would be a one-way door.
 fn undismiss(key: Option<String>) -> Result<()> {
-    let db = JiraInbox::new()?;
+    let db = Inbox::new()?;
     let key = match key {
         Some(key) => key,
         None => {
-            let hidden: Vec<JiraInboxItem> = db
+            let hidden: Vec<InboxItem> = db
                 .list(Include {
                     snoozed: true,
                     dismissed: true,
@@ -883,10 +883,10 @@ fn undismiss(key: Option<String>) -> Result<()> {
     };
 
     if !db.set_dismissed(&key, false)? {
-        msg_error!(Message::JiraInboxNotFound(key));
+        msg_error!(Message::InboxNotFound(key));
         return Ok(());
     }
-    msg_success!(Message::JiraInboxUndismissed(key));
+    msg_success!(Message::InboxUndismissed(key));
     Ok(())
 }
 
@@ -900,8 +900,8 @@ fn undismiss(key: Option<String>) -> Result<()> {
 /// say: the rules with what each matches, the ones skipped and why, and what
 /// `--apply` changed.
 fn rules(apply: bool, json: bool) -> Result<()> {
-    let db = JiraInbox::new()?;
-    let Some(config) = Config::read()?.jira_inbox.filter(|inbox| !inbox.rules.is_empty()) else {
+    let db = Inbox::new()?;
+    let Some(config) = Config::read()?.inbox.filter(|inbox| !inbox.rules.is_empty()) else {
         if json {
             return output::print_json(&json::Rules {
                 rules: Vec::new(),
@@ -984,7 +984,7 @@ fn report_rules(ruled: &[inbox_rules::Ruled], problems: &[inbox_rules::RuleProbl
 fn warn_skipped_rules() {
     let skipped = Config::read()
         .ok()
-        .and_then(|c| c.jira_inbox)
+        .and_then(|c| c.inbox)
         .map(|inbox| RuleBook::compile(&inbox.rules, &[]).problems.len())
         .unwrap_or(0);
     if skipped > 0 {

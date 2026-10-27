@@ -10,7 +10,7 @@
 //! ([`crate::libs::inbox_rules`]), so "the issues `--priority High+` lists"
 //! and "the issues a `priority: High+` rule pins" cannot come apart.
 
-use crate::db::jira_inbox::JiraInboxItem;
+use crate::db::inbox::InboxItem;
 use anyhow::{Result, bail};
 use chrono::{Duration, NaiveDateTime};
 
@@ -80,7 +80,7 @@ impl InboxFilter {
     }
 
     /// Whether one issue passes every set cut.
-    pub fn keeps(&self, item: &JiraInboxItem, now: NaiveDateTime) -> bool {
+    pub fn keeps(&self, item: &InboxItem, now: NaiveDateTime) -> bool {
         let within = |at: Option<NaiveDateTime>, window: Duration| at.is_some_and(|at| now.signed_duration_since(at) <= window);
         if let Some(window) = self.since
             && !within(Some(item.first_seen), window)
@@ -120,7 +120,7 @@ impl InboxFilter {
     }
 
     /// Keeps the issues that pass, in their incoming order.
-    pub fn apply(&self, items: Vec<JiraInboxItem>, now: NaiveDateTime) -> Vec<JiraInboxItem> {
+    pub fn apply(&self, items: Vec<InboxItem>, now: NaiveDateTime) -> Vec<InboxItem> {
         items.into_iter().filter(|item| self.keeps(item, now)).collect()
     }
 }
@@ -129,7 +129,7 @@ impl InboxFilter {
 ///
 /// Priority names belong to the Jira instance (a Russian Jira says
 /// «Высокий», not "High"), so they are looked up among the priorities the
-/// inbox has seen ([`crate::db::jira_inbox::JiraInbox::priorities`]) rather
+/// inbox has seen ([`crate::db::inbox::Inbox::priorities`]) rather
 /// than in a table of English defaults. A trailing `+` widens the cut to
 /// that priority and everything more urgent.
 pub fn priority_cut_in(known: &[(String, i32)], wanted: &str) -> Result<PriorityCut> {
@@ -179,7 +179,7 @@ pub enum InboxSort {
 }
 
 /// Reorders in place. Stable, so equal keys keep the inbox's own order.
-pub fn sort(items: &mut [JiraInboxItem], by: InboxSort) {
+pub fn sort(items: &mut [InboxItem], by: InboxSort) {
     items.sort_by(|a, b| {
         let frame = a
             .gone_at
@@ -220,7 +220,7 @@ pub struct Reason {
 /// `score_label` is what the configured ranking field is called (typically
 /// `Scoring`); naming it is most of the answer, because the number means
 /// nothing without knowing which field it is.
-pub fn explain(item: &JiraInboxItem, score_label: Option<&str>, now: NaiveDateTime) -> Vec<Reason> {
+pub fn explain(item: &InboxItem, score_label: Option<&str>, now: NaiveDateTime) -> Vec<Reason> {
     let mut out = Vec::new();
     let label = score_label.unwrap_or("the ranking field");
 
@@ -291,8 +291,8 @@ pub fn explain(item: &JiraInboxItem, score_label: Option<&str>, now: NaiveDateTi
 
     if let Some(gone) = item.gone_at {
         let because = match item.left_reason {
-            Some(crate::db::jira_inbox::LeftReason::Resolved) => "Jira resolved it, so it left the poll; only `--all` shows it",
-            Some(crate::db::jira_inbox::LeftReason::Moved) => "left the poll unresolved - reassigned or out of reach; only `--all` shows it",
+            Some(crate::db::inbox::LeftReason::Resolved) => "Jira resolved it, so it left the poll; only `--all` shows it",
+            Some(crate::db::inbox::LeftReason::Moved) => "left the poll unresolved - reassigned or out of reach; only `--all` shows it",
             None => "stopped appearing in the Jira poll - closed or reassigned; only `--all` shows it",
         };
         out.push(Reason {

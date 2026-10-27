@@ -1,6 +1,6 @@
 //! Inbox rules: what the inbox does by itself when an issue matches.
 //!
-//! A rule is a `when` and a `then`, written in `jira_inbox.rules`:
+//! A rule is a `when` and a `then`, written in `inbox.rules`:
 //!
 //! ```json
 //! { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } }
@@ -27,10 +27,10 @@
 //! dismisses a taken issue - that is work in hand, and hiding it would hide the
 //! work - and no rule touches an issue that is already dismissed.
 
-use crate::db::jira_inbox::{Include, JiraInbox, JiraInboxItem, RuledMark};
+use crate::db::inbox::{Inbox, InboxItem, Include, RuledMark};
 use crate::db::tags::Tags;
 use crate::db::tasks::Tasks;
-use crate::libs::config::{Config, JiraInboxConfig};
+use crate::libs::config::{Config, InboxConfig};
 use crate::libs::inbox_filter::{InboxFilter, Reason, priority_cut_in};
 use crate::libs::task::TaskFilter;
 use anyhow::Result;
@@ -192,7 +192,7 @@ where
 /// A rule ready to match, with where it sits in the config.
 #[derive(Debug, Clone)]
 pub struct CompiledRule {
-    /// Position in `jira_inbox.rules`, counting from 1.
+    /// Position in `inbox.rules`, counting from 1.
     pub number: usize,
     pub rule: InboxRule,
     pub label: String,
@@ -203,7 +203,7 @@ pub struct CompiledRule {
 
 impl CompiledRule {
     /// Whether the issue meets every condition.
-    pub fn matches(&self, item: &JiraInboxItem) -> bool {
+    pub fn matches(&self, item: &InboxItem) -> bool {
         // Rules carry no time windows, so the moment passed is never read.
         self.dormant.is_none() && self.filter.keeps(item, item.last_seen)
     }
@@ -212,7 +212,7 @@ impl CompiledRule {
 /// A rule that could not be read, and why; it is skipped.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuleProblem {
-    /// Position in `jira_inbox.rules`, counting from 1.
+    /// Position in `inbox.rules`, counting from 1.
     pub number: usize,
     pub reason: String,
 }
@@ -276,7 +276,7 @@ impl RuleBook {
     }
 
     /// The rules of the configured inbox, against the priorities it has seen.
-    pub fn of_inbox(config: &JiraInboxConfig, db: &JiraInbox) -> Result<RuleBook> {
+    pub fn of_inbox(config: &InboxConfig, db: &Inbox) -> Result<RuleBook> {
         if config.rules.is_empty() {
             return Ok(RuleBook::default());
         }
@@ -284,8 +284,8 @@ impl RuleBook {
     }
 
     /// The rules as the config on disk has them; none when it cannot be read.
-    pub fn from_config(db: &JiraInbox) -> Result<RuleBook> {
-        match Config::read().ok().and_then(|c| c.jira_inbox) {
+    pub fn from_config(db: &Inbox) -> Result<RuleBook> {
+        match Config::read().ok().and_then(|c| c.inbox) {
             Some(inbox) => Self::of_inbox(&inbox, db),
             None => Ok(RuleBook::default()),
         }
@@ -297,7 +297,7 @@ impl RuleBook {
     }
 
     /// What every rule the issue matches says about it now.
-    pub fn verdict(&self, item: &JiraInboxItem) -> Verdict {
+    pub fn verdict(&self, item: &InboxItem) -> Verdict {
         self.collect(|rule| rule.matches(item))
     }
 
@@ -305,7 +305,7 @@ impl RuleBook {
     ///
     /// A rule counts when the issue matches it now and did not before - or
     /// there was no before, because the issue is new.
-    pub fn entering(&self, before: Option<&JiraInboxItem>, now: &JiraInboxItem) -> Verdict {
+    pub fn entering(&self, before: Option<&InboxItem>, now: &InboxItem) -> Verdict {
         self.collect(|rule| rule.matches(now) && !before.is_some_and(|old| rule.matches(old)))
     }
 
@@ -367,7 +367,7 @@ impl Ruled {
 /// `before` is the inbox as it stood before the poll was written, keyed by
 /// issue; an issue missing from it is new. Returns what the rules did, for
 /// the toasts and the sync's report.
-pub fn apply_entering(db: &JiraInbox, book: &RuleBook, before: &HashMap<String, JiraInboxItem>, keys: &[String]) -> Result<Vec<Ruled>> {
+pub fn apply_entering(db: &Inbox, book: &RuleBook, before: &HashMap<String, InboxItem>, keys: &[String]) -> Result<Vec<Ruled>> {
     let now = Local::now().naive_local();
     let mut done = Vec::new();
     for key in keys {
@@ -415,7 +415,7 @@ pub fn apply_entering(db: &JiraInbox, book: &RuleBook, before: &HashMap<String, 
 /// that happened before the rule existed is never seen again. Pins and
 /// dismisses, and tags the tasks of issues already taken; no toasts - none of
 /// this is news. Asleep issues count, gone ones do not.
-pub fn apply_now(db: &JiraInbox, book: &RuleBook) -> Result<Vec<Ruled>> {
+pub fn apply_now(db: &Inbox, book: &RuleBook) -> Result<Vec<Ruled>> {
     let items = db.list(Include {
         snoozed: true,
         ..Include::default()
@@ -449,8 +449,8 @@ pub fn apply_now(db: &JiraInbox, book: &RuleBook) -> Result<Vec<Ruled>> {
 }
 
 /// The tags the rules give the task taken from this issue.
-pub fn tags_for(item: &JiraInboxItem) -> Vec<String> {
-    match JiraInbox::new().and_then(|db| RuleBook::from_config(&db)) {
+pub fn tags_for(item: &InboxItem) -> Vec<String> {
+    match Inbox::new().and_then(|db| RuleBook::from_config(&db)) {
         Ok(book) => book.verdict(item).tags,
         Err(_) => Vec::new(),
     }
@@ -462,7 +462,7 @@ pub fn tags_for(item: &JiraInboxItem) -> Vec<String> {
 /// where `kasl task add --tags` puts them too. Tags already there are left
 /// alone, so applying the rules twice changes nothing the second time.
 pub fn tag_task(key: &str, names: &[String]) -> Result<Vec<String>> {
-    let rows = Tasks::new()?.fetch(TaskFilter::ByJiraKey(key.to_string()))?;
+    let rows = Tasks::new()?.fetch(TaskFilter::ByIssueKey(key.to_string()))?;
     let Some(task_id) = rows
         .iter()
         .find(|row| row.id.is_some() && row.id == row.task_id)
@@ -503,7 +503,7 @@ pub fn sentence(ruled: &Ruled) -> String {
 }
 
 /// The rules an issue matches now, as lines of `kasl inbox show --why`.
-pub fn explain(book: &RuleBook, item: &JiraInboxItem) -> Vec<Reason> {
+pub fn explain(book: &RuleBook, item: &InboxItem) -> Vec<Reason> {
     book.rules
         .iter()
         .filter(|rule| rule.matches(item))
@@ -536,7 +536,7 @@ pub struct RuleStanding {
 ///
 /// `items` is the present inbox, asleep and dismissed issues included - a
 /// dismiss rule's work is exactly the issues the ordinary list no longer shows.
-pub fn standing(rule: &CompiledRule, items: &[JiraInboxItem]) -> RuleStanding {
+pub fn standing(rule: &CompiledRule, items: &[InboxItem]) -> RuleStanding {
     let mut standing = RuleStanding {
         number: rule.number,
         name: rule.rule.name.clone().filter(|name| !name.trim().is_empty()),
@@ -550,8 +550,8 @@ pub fn standing(rule: &CompiledRule, items: &[JiraInboxItem]) -> RuleStanding {
         return standing;
     }
 
-    let matching: Vec<&JiraInboxItem> = items.iter().filter(|item| rule.matches(item)).collect();
-    let count = |keep: fn(&JiraInboxItem) -> bool| matching.iter().filter(|item| keep(item)).count();
+    let matching: Vec<&InboxItem> = items.iter().filter(|item| rule.matches(item)).collect();
+    let count = |keep: fn(&InboxItem) -> bool| matching.iter().filter(|item| keep(item)).count();
     let mut parts = vec![format!("{} match", matching.len())];
     let then = &rule.rule.then;
     // Zero counts are left out: "0 pinned" next to "1 not yet pinned" says

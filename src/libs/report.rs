@@ -416,17 +416,17 @@ pub struct DayReport {
     /// The short intervals `intervals` leaves out.
     pub dropped: Option<ShortIntervalsInfo>,
     pub tasks: Vec<crate::libs::task::Task>,
-    pub inbox: crate::db::jira_inbox::InboxCounts,
+    pub inbox: crate::db::inbox::InboxCounts,
 }
 
 impl DayReport {
     /// Reads the day as `kasl report` shows it.
     pub fn read(date: NaiveDate) -> Result<DayReport> {
-        use crate::db::{jira_inbox::JiraInbox, tasks::Tasks, workdays::Workdays};
+        use crate::db::{inbox::Inbox, tasks::Tasks, workdays::Workdays};
         use crate::libs::{config::Config, task::TaskFilter};
 
         let tasks = Tasks::new()?.fetch(TaskFilter::Date(date))?;
-        let inbox = JiraInbox::new()?.counts()?;
+        let inbox = Inbox::new()?.counts()?;
         let Some(workday) = Workdays::new()?.fetch(date)? else {
             return Ok(DayReport {
                 date,

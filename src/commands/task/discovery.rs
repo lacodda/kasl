@@ -4,7 +4,7 @@
 
 use crate::{
     api::{gitlab::GitLab, jira::Jira},
-    db::jira_inbox::{JiraInbox, LeftReason},
+    db::inbox::{Inbox, LeftReason},
     db::tasks::Tasks,
     libs::{
         config::Config,
@@ -165,7 +165,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
     };
 
     let mut candidates: Vec<DiscoveryItem> = Vec::new();
-    let inbox = JiraInbox::new()?;
+    let inbox = Inbox::new()?;
 
     for task in incomplete_tasks {
         if is_ignored_name(&task.name, &ignore_names) {
@@ -176,7 +176,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
         }
         // The lasting form of the offer a sync makes once: an unfinished task
         // whose issue Jira resolved is marked, ticked, and proposed at 100%.
-        let resolved_in_jira = match &task.jira_key {
+        let resolved_in_jira = match &task.issue_key {
             Some(key) => inbox
                 .get_by_key(key)?
                 .filter(|item| item.left_reason == Some(LeftReason::Resolved))
@@ -330,7 +330,7 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
             && !was_done
             && task.completeness == Some(100)
             && item.resolved_in_jira.is_none()
-            && let Some(key) = &task.jira_key
+            && let Some(key) = &task.issue_key
         {
             jira_bridge::offer_after_done(key).await;
         }

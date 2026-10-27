@@ -33,8 +33,8 @@ mod tests {
     #[test]
     fn tasks_without_a_chain_each_start_their_own(_ctx: &mut TaskTestContext) {
         let mut tasks = Tasks::new().unwrap();
-        tasks.insert(&Task::new("KA-1 First issue", "", Some(0)).from_jira("KA-1")).unwrap();
-        tasks.insert(&Task::new("KA-2 Second issue", "", Some(30)).from_jira("KA-2")).unwrap();
+        tasks.insert(&Task::new("KA-1 First issue", "", Some(0)).from_issue("KA-1")).unwrap();
+        tasks.insert(&Task::new("KA-2 Second issue", "", Some(30)).from_issue("KA-2")).unwrap();
         tasks.insert(&Task::new("Imported commit", "", Some(100))).unwrap();
 
         for task in tasks.fetch(TaskFilter::All).unwrap() {

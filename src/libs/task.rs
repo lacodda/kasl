@@ -62,7 +62,7 @@ use chrono::NaiveDate;
 ///     completeness: Some(100), // Imported completed issues
 ///     excluded_from_search: None,
 ///     tags: vec![],
-///     jira_key: Some(jira_issue.key),
+///     issue_key: Some(jira_issue.key),
 /// };
 /// # let _ = jira_task;
 /// ```
@@ -76,7 +76,7 @@ pub struct Task {
     /// Points at the id of the first task in the chain, so `task find` can
     /// offer yesterday's unfinished work and see today's progress as the same
     /// item. Not an external reference - the Jira issue a task came from is
-    /// [`Task::jira_key`].
+    /// [`Task::issue_key`].
     pub task_id: Option<i32>,
 
     /// `"YYYY-MM-DD HH:MM:SS"` in local time, set by the database layer.
@@ -102,7 +102,7 @@ pub struct Task {
     /// Set by `kasl inbox take`; `None` for tasks that did not come from the
     /// inbox. The key also opens the task's name, but only this field survives
     /// a rename.
-    pub jira_key: Option<String>,
+    pub issue_key: Option<String>,
 }
 
 impl Task {
@@ -139,19 +139,19 @@ impl Task {
             completeness,
             excluded_from_search: None,
             tags: Vec::new(),
-            jira_key: None,
+            issue_key: None,
         }
     }
 
     /// Records the Jira issue this task was taken from.
-    pub fn from_jira(mut self, key: &str) -> Self {
-        self.jira_key = Some(key.to_string());
+    pub fn from_issue(mut self, key: &str) -> Self {
+        self.issue_key = Some(key.to_string());
         self
     }
 
     /// Copies `name`, `comment` and `completeness` from `other`, keeping
     /// identity fields (`id`, `task_id`, `timestamp`, search flag, tags,
-    /// `jira_key`).
+    /// `issue_key`).
     ///
     /// ```rust,no_run
     /// # fn f() -> anyhow::Result<()> {
@@ -304,9 +304,9 @@ pub enum TaskFilter {
     /// ```rust
     /// use kasl::libs::task::TaskFilter;
     ///
-    /// let from_issue = TaskFilter::ByJiraKey("PROJ-412".to_string());
+    /// let from_issue = TaskFilter::ByIssueKey("PROJ-412".to_string());
     /// ```
-    ByJiraKey(String),
+    ByIssueKey(String),
 }
 
 /// Display formatting and partitioning for task collections.

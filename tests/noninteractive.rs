@@ -27,9 +27,9 @@ mod tests {
             std::env::set_var("HOME", dir);
             std::env::set_var("LOCALAPPDATA", dir);
         }
-        kasl::db::jira_inbox::JiraInbox::new()
+        kasl::db::inbox::Inbox::new()
             .unwrap()
-            .upsert_batch(&[kasl::db::jira_inbox::JiraInboxUpsert {
+            .upsert_batch(&[kasl::db::inbox::InboxUpsert {
                 issue_key: "PROJ-1".to_string(),
                 issue_id: "1".to_string(),
                 summary: "Something to decide about".to_string(),

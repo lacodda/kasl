@@ -8,7 +8,7 @@
 //! Run: `cargo test --test toast_button_probe -- --ignored --nocapture`
 #![cfg(windows)]
 
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxUpsert};
 use kasl::libs::toast_action::{Mailbox, ToastAction};
 
 /// Shows a toast for a seeded issue and waits for a press to land.
@@ -20,9 +20,9 @@ use kasl::libs::toast_action::{Mailbox, ToastAction};
 #[test]
 #[ignore = "pops a real desktop toast and waits for a click; run manually"]
 fn a_toast_button_reaches_the_mailbox() {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     let key = "KA-9001";
-    db.upsert_batch(&[JiraInboxUpsert {
+    db.upsert_batch(&[InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "9001".to_string(),
         summary: "Toast button probe - press a button on this toast".to_string(),
@@ -56,7 +56,7 @@ fn a_toast_button_reaches_the_mailbox() {
         }
     }
 
-    assert!(kasl::libs::jira_inbox::show_toast(&item), "the toast itself must appear");
+    assert!(kasl::libs::inbox::show_toast(&item), "the toast itself must appear");
     println!("\nToast shown. Waiting up to 60s for a press...");
 
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
@@ -83,7 +83,7 @@ fn a_toast_button_reaches_the_mailbox() {
     // And the whole way through: the daemon side carries it out.
     let done = tokio::runtime::Runtime::new()
         .unwrap()
-        .block_on(kasl::libs::jira_inbox::drain_toast_actions())
+        .block_on(kasl::libs::inbox::drain_toast_actions())
         .unwrap();
     println!("Drain carried out {done} action(s); a second toast should now say what happened.");
 }

@@ -316,7 +316,7 @@ the `jira` block; the inbox stays off when this one is absent.
 **Example:**
 ```json
 {
-  "jira_inbox": {
+  "inbox": {
     "enabled": true,
     "poll_interval_secs": 300,
     "notify": true,

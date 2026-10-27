@@ -5,7 +5,7 @@
 //! score) are detected and described.
 
 use chrono::{Duration, Local};
-use kasl::db::jira_inbox::{Include, JiraInbox, JiraInboxItem, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxItem, InboxUpsert, Include};
 use kasl::db::tasks::Tasks;
 use kasl::libs::task::{Task, TaskFilter};
 use serial_test::serial;
@@ -31,8 +31,8 @@ impl TestContext for InboxTestContext {
     }
 }
 
-fn upsert(key: &str) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn upsert(key: &str) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -52,7 +52,7 @@ fn upsert(key: &str) -> JiraInboxUpsert {
 #[serial]
 #[test]
 fn test_upsert_detects_new_and_unchanged(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
 
     let result = db.upsert_batch(&[upsert("KA-1")]).unwrap();
     assert_eq!(result.new_keys, vec!["KA-1"]);
@@ -69,7 +69,7 @@ fn test_upsert_detects_new_and_unchanged(_ctx: &mut InboxTestContext) {
 #[serial]
 #[test]
 fn test_upsert_describes_visible_changes(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1")]).unwrap();
 
     // Status, priority up, and score all change at once.
@@ -96,7 +96,7 @@ fn test_upsert_describes_visible_changes(_ctx: &mut InboxTestContext) {
 #[serial]
 #[test]
 fn test_priority_down_is_described(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1")]).unwrap();
 
     let mut lowered = upsert("KA-1");
@@ -112,7 +112,7 @@ fn test_priority_down_is_described(_ctx: &mut InboxTestContext) {
 #[serial]
 #[test]
 fn test_mark_gone_reconciles_missing_issues(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1"), upsert("KA-2")]).unwrap();
 
     // Next poll returns only KA-1: KA-2 must be marked gone.
@@ -138,7 +138,7 @@ fn test_mark_gone_reconciles_missing_issues(_ctx: &mut InboxTestContext) {
 #[serial]
 #[test]
 fn test_gone_issue_comes_back(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1")]).unwrap();
     db.mark_gone(&[]).unwrap();
     assert!(db.get_by_key("KA-1").unwrap().unwrap().gone_at.is_some());
@@ -155,7 +155,7 @@ fn test_gone_issue_comes_back(_ctx: &mut InboxTestContext) {
 #[serial]
 #[test]
 fn test_dismissed_issues_are_not_toast_candidates(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1")]).unwrap();
     db.set_dismissed("KA-1", true).unwrap();
 
@@ -178,7 +178,7 @@ fn test_badge_precedence_and_freshness() {
     let fresh = now - Duration::hours(1);
     let stale = now - Duration::hours(48);
 
-    let mut item = JiraInboxItem {
+    let mut item = InboxItem {
         issue_key: "KA-1".to_string(),
         issue_id: "1".to_string(),
         summary: "Badge probe".to_string(),
@@ -245,7 +245,7 @@ fn test_badge_precedence_and_freshness() {
 fn test_taken_issue_stays_in_the_list(_ctx: &mut InboxTestContext) {
     // `take` used to dismiss the issue, which hid the fact it was picked up.
     // A taken issue stays listed; only dismissal removes it.
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-10")]).unwrap();
 
     assert!(db.set_taken("KA-10", true).unwrap());
@@ -267,20 +267,20 @@ fn test_taking_the_same_issue_twice_creates_one_task(_ctx: &mut InboxTestContext
     // A repeated `take` is almost always a repeated keystroke, not a request
     // for a second copy of the same work. The guard is the key lookup, so this
     // drives the same primitives the command uses.
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-30")]).unwrap();
     let mut tasks = Tasks::new().unwrap();
 
     for _ in 0..2 {
-        let existing = tasks.fetch(TaskFilter::ByJiraKey("KA-30".to_string())).unwrap();
+        let existing = tasks.fetch(TaskFilter::ByIssueKey("KA-30".to_string())).unwrap();
         if existing.is_empty() {
-            let task = Task::new("KA-30 Summary for KA-30", "", Some(0)).from_jira("KA-30");
+            let task = Task::new("KA-30 Summary for KA-30", "", Some(0)).from_issue("KA-30");
             tasks.insert(&task).unwrap();
             db.set_taken("KA-30", true).unwrap();
         }
     }
 
-    let found = tasks.fetch(TaskFilter::ByJiraKey("KA-30".to_string())).unwrap();
+    let found = tasks.fetch(TaskFilter::ByIssueKey("KA-30".to_string())).unwrap();
     assert_eq!(found.len(), 1, "taking twice must not fan out into duplicate tasks");
     assert_eq!(db.list_active(false).unwrap()[0].badge(Local::now().naive_local()).as_deref(), Some("taken"));
 }
@@ -289,7 +289,7 @@ fn test_taking_the_same_issue_twice_creates_one_task(_ctx: &mut InboxTestContext
 #[serial]
 #[test]
 fn test_counts_report_what_still_asks_for_attention(_ctx: &mut InboxTestContext) {
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-20"), upsert("KA-21"), upsert("KA-22"), upsert("KA-23")]).unwrap();
 
     // Freshly discovered issues all count as new.
@@ -325,7 +325,7 @@ fn a_snoozed_issue_leaves_the_list_and_comes_back_by_itself(_ctx: &mut InboxTest
     // "never" and hides the issue for good; without a "not now" the only way
     // to defer one was to keep reading past it every day, which is how an
     // inbox stops being read at all.
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-30"), upsert("KA-31")]).unwrap();
 
     let until = Local::now().naive_local() + Duration::hours(3);
@@ -377,7 +377,7 @@ fn snoozed_issues_do_not_count_as_waiting(_ctx: &mut InboxTestContext) {
     // The daily report line says what still asks for attention. An issue the
     // user deliberately put down is not asking, so counting it would make the
     // snooze feel like it did nothing.
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-40"), upsert("KA-41")]).unwrap();
     assert_eq!(db.counts().unwrap().total, 2);
 

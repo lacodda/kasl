@@ -9,14 +9,14 @@
 use chrono::{Duration, Local};
 use kasl::api::Session;
 use kasl::api::jira::{Jira, JiraConfig};
-use kasl::db::jira_inbox::{Include, JiraInbox, JiraInboxItem, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxItem, InboxUpsert, Include};
 use kasl::db::tags::Tags;
 use kasl::db::tasks::Tasks;
-use kasl::libs::config::{Config, JiraInboxConfig};
+use kasl::libs::config::{Config, InboxConfig};
 use kasl::libs::data_storage::DataStorage;
+use kasl::libs::inbox::{Notice, TOAST_STORM_THRESHOLD, ToastBudget, ToastPlan, notices, sync_noninteractive};
 use kasl::libs::inbox_rules::{self, InboxRule, RuleBook, Verdict};
 use kasl::libs::jira_bridge::MoveOptions;
-use kasl::libs::jira_inbox::{Notice, TOAST_STORM_THRESHOLD, ToastBudget, ToastPlan, notices, sync_noninteractive};
 use kasl::libs::task::TaskFilter;
 use kasl::libs::toast_apply::{self, Applied};
 use serde_json::{Value, json};
@@ -39,8 +39,8 @@ fn sandbox() -> TempDir {
 }
 
 /// The inbox config with these rules, toasts off, pointed at `api_url`.
-fn configure(api_url: &str, rules: Value) -> JiraInboxConfig {
-    let inbox = JiraInboxConfig {
+fn configure(api_url: &str, rules: Value) -> InboxConfig {
+    let inbox = InboxConfig {
         notify: false,
         notify_changes: false,
         notify_gone: false,
@@ -53,7 +53,7 @@ fn configure(api_url: &str, rules: Value) -> JiraInboxConfig {
             api_url: api_url.to_string(),
             completed_statuses: Vec::new(),
         }),
-        jira_inbox: Some(inbox.clone()),
+        inbox: Some(inbox.clone()),
         ..Default::default()
     }
     .save()
@@ -93,12 +93,12 @@ async fn jira_holds(server: &MockServer, issues: Vec<Value>) {
         .await;
 }
 
-fn row(key: &str) -> JiraInboxItem {
-    JiraInbox::new().unwrap().get_by_key(key).unwrap().unwrap()
+fn row(key: &str) -> InboxItem {
+    Inbox::new().unwrap().get_by_key(key).unwrap().unwrap()
 }
 
-fn upsert(key: &str, priority: (&str, i32), issue_type: &str) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn upsert(key: &str, priority: (&str, i32), issue_type: &str) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -115,9 +115,9 @@ fn upsert(key: &str, priority: (&str, i32), issue_type: &str) -> JiraInboxUpsert
 }
 
 /// A row in memory, for rules that need no database.
-fn item(key: &str, priority: (&str, i32), issue_type: Option<&str>) -> JiraInboxItem {
+fn item(key: &str, priority: (&str, i32), issue_type: Option<&str>) -> InboxItem {
     let now = Local::now().naive_local();
-    JiraInboxItem {
+    InboxItem {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: String::new(),
@@ -236,20 +236,20 @@ fn a_bad_rule_does_not_make_the_config_unreadable() {
     let path = DataStorage::new().get_path("config.json").unwrap();
     std::fs::write(
         &path,
-        json!({"jira_inbox": {"rules": [{"when": {"prority": "High"}, "then": {"dismiss": true}}, "not even a rule"]}}).to_string(),
+        json!({"inbox": {"rules": [{"when": {"prority": "High"}, "then": {"dismiss": true}}, "not even a rule"]}}).to_string(),
     )
     .unwrap();
 
     // The watcher reads this file for activity tracking too.
     let config = Config::read().expect("a bad rule must not make the whole config unreadable");
-    let inbox = config.jira_inbox.unwrap();
+    let inbox = config.inbox.unwrap();
     let book = RuleBook::compile(&inbox.rules, &[]);
     assert_eq!(book.problems.len(), 2);
     assert!(book.rules.is_empty());
 
     // And saving the config keeps the rules as the person wrote them.
     Config::read().unwrap().save().unwrap();
-    let again = Config::read().unwrap().jira_inbox.unwrap();
+    let again = Config::read().unwrap().inbox.unwrap();
     assert_eq!(again.rules, inbox.rules, "a rewrite of the config must not drop or alter the rules");
 }
 
@@ -379,7 +379,7 @@ async fn a_rule_pins_an_arrival_and_an_unpin_by_hand_stands() {
     assert_eq!(row("KA-1").issue_type.as_deref(), Some("Bug"), "the poll stores the type");
     assert_eq!(row("KA-1").project.as_deref(), Some("KA"), "and the project");
 
-    JiraInbox::new().unwrap().set_pinned("KA-1", false).unwrap();
+    Inbox::new().unwrap().set_pinned("KA-1", false).unwrap();
     assert_eq!(row("KA-1").ruled_by, None, "a hand takes the decision back");
     sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(!row("KA-1").pinned, "the person's unpin stands while nothing changes");
@@ -405,7 +405,7 @@ async fn a_dismiss_rule_hides_an_arrival_but_never_work_in_hand() {
     );
 
     // KA-2 is already taken when Jira turns it into an Epic.
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-2", ("Medium", 3), "Story")]).unwrap();
     db.set_taken("KA-2", true).unwrap();
 
@@ -438,7 +438,7 @@ async fn dismissal_beats_pin_and_rules_leave_a_dismissed_issue_alone() {
     );
 
     // KA-5 was dismissed by hand while it was Medium.
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-5", ("Medium", 3), "Bug")]).unwrap();
     db.set_dismissed("KA-5", true).unwrap();
 
@@ -468,7 +468,7 @@ async fn an_urgent_rule_wakes_a_snoozed_issue_and_a_pin_alone_does_not() {
         ]),
     );
 
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-4", ("Medium", 3), "Bug"), upsert("PAY-1", ("Low", 4), "Bug")])
         .unwrap();
     let next_week = Local::now().naive_local() + Duration::days(7);
@@ -478,7 +478,7 @@ async fn an_urgent_rule_wakes_a_snoozed_issue_and_a_pin_alone_does_not() {
     kasl::db::db::Db::new()
         .unwrap()
         .conn
-        .execute("UPDATE jira_inbox SET project = NULL WHERE issue_key = 'PAY-1'", [])
+        .execute("UPDATE inbox SET project = NULL WHERE issue_key = 'PAY-1'", [])
         .unwrap();
 
     jira_holds(&server, vec![issue("KA-4", ("High", 2), "Bug"), issue("PAY-1", ("Low", 4), "Bug")]).await;
@@ -512,7 +512,7 @@ async fn a_take_tags_the_task_by_the_rules() {
             {"when": {"type": "Incident"}, "then": {"tag": ["fire", "payments"]}}
         ]),
     );
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("PAY-1", ("Medium", 3), "Incident"), upsert("OPS-1", ("Medium", 3), "Story")])
         .unwrap();
 
@@ -526,7 +526,7 @@ async fn a_take_tags_the_task_by_the_rules() {
     );
     assert!(taken.summary("PAY-1").contains("tagged payments, fire"), "the answer says so");
 
-    let task = &Tasks::new().unwrap().fetch(TaskFilter::ByJiraKey("PAY-1".into())).unwrap()[0];
+    let task = &Tasks::new().unwrap().fetch(TaskFilter::ByIssueKey("PAY-1".into())).unwrap()[0];
     let names: Vec<String> = Tags::new()
         .unwrap()
         .get_tags_by_task(task.id.unwrap())
@@ -546,7 +546,7 @@ async fn a_take_tags_the_task_by_the_rules() {
 #[serial]
 fn apply_reaches_the_issues_already_there_once() {
     let _dir = sandbox();
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[
         upsert("PAY-1", ("High", 2), "Bug"),
         upsert("PAY-2", ("Low", 4), "Epic"),
@@ -558,7 +558,7 @@ fn apply_reaches_the_issues_already_there_once() {
     // A task for the taken one, as `take` made it before the rule existed.
     kasl::db::tasks::Tasks::new()
         .unwrap()
-        .insert(&kasl::libs::task::Task::new("PAY-3 Summary", "", Some(0)).from_jira("PAY-3"))
+        .insert(&kasl::libs::task::Task::new("PAY-3 Summary", "", Some(0)).from_issue("PAY-3"))
         .unwrap();
 
     configure(
@@ -619,7 +619,7 @@ fn kasl(dir: &Path, args: &[&str]) -> (bool, String) {
 #[serial]
 fn the_rules_command_shows_rules_skips_the_bad_and_applies_on_request() {
     let dir = sandbox();
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[upsert("KA-1", ("High", 2), "Bug"), upsert("KA-2", ("Low", 4), "Epic")])
         .unwrap();
     configure(
@@ -671,7 +671,7 @@ fn the_rules_command_shows_rules_skips_the_bad_and_applies_on_request() {
 #[serial]
 fn type_and_project_cut_the_list() {
     let dir = sandbox();
-    JiraInbox::new()
+    Inbox::new()
         .unwrap()
         .upsert_batch(&[
             upsert("PAY-1", ("High", 2), "Bug"),

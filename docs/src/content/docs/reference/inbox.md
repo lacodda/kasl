@@ -383,11 +383,11 @@ poll.
 
 ## Rules
 
-Rules are written in the config, under `jira_inbox.rules`. Each has a `when` and a `then`, and may have a `name`:
+Rules are written in the config, under `inbox.rules`. Each has a `when` and a `then`, and may have a `name`:
 
 ```json
 {
-  "jira_inbox": {
+  "inbox": {
     "rules": [
       { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
       { "when": { "min_score": 8 }, "then": { "pin": true } },
@@ -515,11 +515,11 @@ Each poll also runs the [rules](#rules) over what it brought. Pins and dismissal
 
 ## Configuration
 
-Polling is enabled by adding the `jira_inbox` section to the config; the `jira` section must be configured as well.
+Polling is enabled by adding the `inbox` section to the config; the `jira` section must be configured as well.
 
 ```json
 {
-  "jira_inbox": {
+  "inbox": {
     "enabled": true,
     "poll_interval_secs": 300,
     "notify": true,
@@ -715,4 +715,4 @@ what changed (`applied` is `null` on a dry run):
 - [`watch`](/reference/watch/) - the daemon that polls the inbox
 - [`task`](/reference/task/) - where `take` puts the issue
 - [`setup`](/reference/setup/) - configuring the Jira connection
-- [Configuration](/concepts/configuration/) - the `jira_inbox` block in full
+- [Configuration](/concepts/configuration/) - the `inbox` block in full

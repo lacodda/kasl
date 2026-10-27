@@ -25,8 +25,8 @@
 //! source other than Jira can answer the same questions later.
 
 use crate::api::jira::{Jira, JiraStatus, JiraTransition, SessionMode, StatusCategory};
-use crate::db::jira_inbox::{JiraInbox, LeftReason};
-use crate::db::jira_statuses::JiraStatuses;
+use crate::db::inbox::{Inbox, LeftReason};
+use crate::db::inbox_statuses::InboxStatuses;
 use crate::libs::config::Config;
 use crate::libs::messages::Message;
 use crate::libs::prompt::is_interactive;
@@ -277,8 +277,8 @@ fn remember_status(key: &str, status: &JiraStatus) -> Result<()> {
     if status.id.is_empty() {
         return Ok(());
     }
-    JiraStatuses::new()?.upsert(&status.id, &status.name)?;
-    JiraInbox::new()?.set_status(key, &status.id)?;
+    InboxStatuses::new()?.upsert(&status.id, &status.name)?;
+    Inbox::new()?.set_status(key, &status.id)?;
     Ok(())
 }
 
@@ -399,7 +399,7 @@ async fn offer_after_done_inner(key: &str) -> Result<()> {
     if Config::read()?.jira.is_none() {
         return Ok(());
     }
-    if let Some(item) = JiraInbox::new()?.get_by_key(key)?
+    if let Some(item) = Inbox::new()?.get_by_key(key)?
         && item.left_reason == Some(LeftReason::Resolved)
     {
         return Ok(());

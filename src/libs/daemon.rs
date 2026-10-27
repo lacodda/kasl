@@ -168,13 +168,13 @@ pub async fn run_with_signal_handling() -> Result<()> {
 
     // Poll Jira inbox in a sibling task (independent cadence from activity monitor)
     let inbox_handle = tokio::spawn(async move {
-        crate::libs::jira_inbox::run_poller().await;
+        crate::libs::inbox::run_poller().await;
     });
 
     // Toast buttons are answered on their own, much faster cadence: this is
     // the task that makes the daemon the one that receives a click.
     let mailbox_handle = tokio::spawn(async move {
-        crate::libs::jira_inbox::run_mailbox_watcher().await;
+        crate::libs::inbox::run_mailbox_watcher().await;
     });
 
     // Wait for either the monitor to finish or a shutdown signal

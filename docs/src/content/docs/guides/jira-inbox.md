@@ -13,7 +13,7 @@ have to remember to do.
 ## Turning it on
 
 Two config sections are involved: `jira`, which holds the connection, and
-`jira_inbox`, which holds the polling settings. Run `kasl setup` and pick
+`inbox`, which holds the polling settings. Run `kasl setup` and pick
 **Jira** and **Jira inbox** from the module checklist; the wizard walks
 through both.
 
@@ -111,7 +111,7 @@ drifting apart at the two moments that matter - starting and finishing.
 
 ```json
 {
-  "jira_inbox": {
+  "inbox": {
     "start_on_take": true
   }
 }
@@ -160,11 +160,11 @@ what the priority rank is, and what pinning, sleeping or taking did to it.
 Triage asks the same questions every morning, and some of them have the same
 answer every morning: anything High or above goes on top, Epics are someone
 else's, work from the payments project is payments work. Write those answers
-down once as rules, in the `jira_inbox` section of the config:
+down once as rules, in the `inbox` section of the config:
 
 ```json
 {
-  "jira_inbox": {
+  "inbox": {
     "rules": [
       { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
       { "when": { "type": "Epic" }, "then": { "dismiss": true } },
@@ -231,7 +231,7 @@ custom weight, anything comparable), point the inbox at it:
 
 ```json
 {
-  "jira_inbox": {
+  "inbox": {
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],
     "sort_by_field": "customfield_12345"
   }
@@ -331,5 +331,5 @@ finished:
 
 - [`inbox`](/reference/inbox/) - full command and flag reference
 - [A day with kasl](/guides/a-day-with-kasl/) - where the inbox fits into the daily flow
-- [Configuration](/concepts/configuration/) - the `jira` and `jira_inbox` blocks in full
+- [Configuration](/concepts/configuration/) - the `jira` and `inbox` blocks in full
 - [API Integrations](/concepts/api-integrations/) - the Jira connection itself

@@ -19,13 +19,13 @@
 //!
 //! ```rust,no_run
 //! use kasl::libs::pick;
-//! use kasl::db::jira_inbox::JiraInbox;
+//! use kasl::db::inbox::Inbox;
 //!
 //! # fn main() -> anyhow::Result<()> {
 //! // A command with an optional KEY resolves it like this.
 //! let key = match None::<String> {
 //!     Some(key) => key,
-//!     None => pick::inbox_issue(&JiraInbox::new()?.list_active(false)?, "Pick an issue")?,
+//!     None => pick::inbox_issue(&Inbox::new()?.list_active(false)?, "Pick an issue")?,
 //! };
 //! # Ok(())
 //! # }
@@ -35,7 +35,7 @@ use anyhow::{Result, bail};
 use chrono::Local;
 use dialoguer::{MultiSelect, Select, theme::ColorfulTheme};
 
-use crate::db::jira_inbox::JiraInboxItem;
+use crate::db::inbox::InboxItem;
 use crate::db::tags::Tag;
 use crate::db::templates::TaskTemplate;
 use crate::libs::pause::Pause;
@@ -56,7 +56,7 @@ fn select(prompt: &str, labels: &[String]) -> Result<usize> {
 /// Returns the issue key. An empty inbox is a refusal rather than an empty
 /// picker: there is nothing to choose, and saying so names the command that
 /// would fill it.
-pub fn inbox_issue(items: &[JiraInboxItem], prompt: &str) -> Result<String> {
+pub fn inbox_issue(items: &[InboxItem], prompt: &str) -> Result<String> {
     if items.is_empty() {
         bail!("the inbox is empty - run `kasl inbox sync` to fetch assigned issues");
     }
@@ -198,7 +198,7 @@ pub enum TriageAction {
 /// forces a decision on every issue, which is how a triage run gets abandoned
 /// in the middle - and an abandoned run with no way out is worse than the pile
 /// it was meant to clear.
-pub fn triage_action(item: &JiraInboxItem, position: usize, total: usize) -> Result<TriageAnswer> {
+pub fn triage_action(item: &InboxItem, position: usize, total: usize) -> Result<TriageAnswer> {
     ensure_interactive("triage needs a terminal; use `kasl inbox take/snooze/dismiss KEY` in a script")?;
 
     let now = Local::now().naive_local();

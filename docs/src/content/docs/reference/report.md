@@ -207,7 +207,7 @@ every kasl document keeps are in
       "comment": "backfill pending",
       "completeness": 60,
       "tags": ["backend", "db"],
-      "jira_key": null
+      "issue_key": null
     }
   ],
   "inbox": { "total": 3, "fresh": 1, "taken": 1 }

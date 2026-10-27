@@ -195,7 +195,7 @@ fn display_daily_report(date: DateTime<Local>, json: bool) -> Result<()> {
 
     // What is still waiting in the inbox - the day is not only what was done.
     if !day.inbox.is_empty() {
-        msg_info!(Message::JiraInboxSummary {
+        msg_info!(Message::InboxSummary {
             total: day.inbox.total,
             fresh: day.inbox.fresh,
             taken: day.inbox.taken,

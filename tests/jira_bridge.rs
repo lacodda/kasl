@@ -8,11 +8,11 @@
 
 use kasl::api::Session;
 use kasl::api::jira::{Jira, JiraConfig};
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert, LeftReason};
-use kasl::libs::config::{Config, JiraInboxConfig};
+use kasl::db::inbox::{Inbox, InboxUpsert, LeftReason};
+use kasl::libs::config::{Config, InboxConfig};
 use kasl::libs::data_storage::DataStorage;
+use kasl::libs::inbox::{ToastBudget, sync_noninteractive};
 use kasl::libs::jira_bridge::{self, Goal, MoveOptions, Moved};
-use kasl::libs::jira_inbox::{ToastBudget, sync_noninteractive};
 use kasl::libs::toast_apply::{self, Applied};
 use serde_json::{Value, json};
 use serial_test::serial;
@@ -34,8 +34,8 @@ fn sandbox() -> TempDir {
 
 /// Points the config at the mock, toasts off, with a cached session so every
 /// request goes straight to the endpoint under test.
-fn configure(server: &MockServer, start_on_take: bool) -> JiraInboxConfig {
-    let inbox = JiraInboxConfig {
+fn configure(server: &MockServer, start_on_take: bool) -> InboxConfig {
+    let inbox = InboxConfig {
         notify: false,
         notify_changes: false,
         notify_gone: false,
@@ -48,7 +48,7 @@ fn configure(server: &MockServer, start_on_take: bool) -> JiraInboxConfig {
             api_url: server.uri(),
             completed_statuses: Vec::new(),
         }),
-        jira_inbox: Some(inbox.clone()),
+        inbox: Some(inbox.clone()),
         ..Default::default()
     }
     .save()
@@ -104,8 +104,8 @@ async fn moves_sent(server: &MockServer, key: &str) -> Vec<Value> {
         .collect()
 }
 
-fn seed(key: &str) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn seed(key: &str) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -327,7 +327,7 @@ async fn a_take_starts_the_issue_when_asked_to() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     configure(&server, true);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-8")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-8")]).unwrap();
     issue_is(&server, "KA-8", "Open", "new", None).await;
     transitions_are(&server, "KA-8", json!([transition("11", "Start Progress", "In Progress", "indeterminate")])).await;
     Mock::given(method("POST"))
@@ -348,7 +348,7 @@ async fn a_take_starts_the_issue_when_asked_to() {
 
     // The inbox knows at once, so the next poll does not toast the person's
     // own move back at them as a status change.
-    let item = JiraInbox::new().unwrap().get_by_key("KA-8").unwrap().unwrap();
+    let item = Inbox::new().unwrap().get_by_key("KA-8").unwrap().unwrap();
     assert_eq!(item.status_id.as_deref(), Some("In Progress"));
     assert_eq!(item.status_name, "In Progress");
 }
@@ -359,7 +359,7 @@ async fn a_take_stands_when_jira_does_not_answer() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     configure(&server, true);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-9")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-9")]).unwrap();
     Mock::given(method("GET"))
         .and(path("/rest/api/2/issue/KA-9"))
         .respond_with(ResponseTemplate::new(503))
@@ -372,7 +372,7 @@ async fn a_take_stands_when_jira_does_not_answer() {
     };
     assert!(why.contains("kasl inbox start KA-9"), "the answer names the retry: {why}");
     assert!(
-        JiraInbox::new().unwrap().get_by_key("KA-9").unwrap().unwrap().taken_at.is_some(),
+        Inbox::new().unwrap().get_by_key("KA-9").unwrap().unwrap().taken_at.is_some(),
         "the take itself must stand whatever Jira says"
     );
 }
@@ -383,7 +383,7 @@ async fn a_take_does_not_touch_jira_unless_asked() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     configure(&server, false);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-10")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-10")]).unwrap();
 
     let outcome = toast_apply::take("KA-10", &MoveOptions::unattended()).await.unwrap();
     assert_eq!(outcome, Applied::Taken { started: None, tags: vec![] });
@@ -410,7 +410,7 @@ async fn a_sync_learns_why_taken_issues_left() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server, false);
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[seed("KA-11"), seed("KA-12"), seed("KA-13")]).unwrap();
     toast_apply::take("KA-11", &MoveOptions::unattended()).await.unwrap();
     toast_apply::take("KA-12", &MoveOptions::unattended()).await.unwrap();
@@ -453,7 +453,7 @@ async fn a_resolved_issue_whose_task_is_done_is_not_offered() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server, false);
-    JiraInbox::new().unwrap().upsert_batch(&[seed("KA-14")]).unwrap();
+    Inbox::new().unwrap().upsert_batch(&[seed("KA-14")]).unwrap();
     toast_apply::take("KA-14", &MoveOptions::unattended()).await.unwrap();
     toast_apply::complete("KA-14").unwrap();
     inbox_is_empty(&server).await;
@@ -461,7 +461,7 @@ async fn a_resolved_issue_whose_task_is_done_is_not_offered() {
 
     let outcome = sync_noninteractive(&inbox, &mut ToastBudget::new()).await.unwrap();
     assert!(outcome.resolved.is_empty(), "the work is done on both sides: {:?}", outcome.resolved);
-    let item = JiraInbox::new().unwrap().get_by_key("KA-14").unwrap().unwrap();
+    let item = Inbox::new().unwrap().get_by_key("KA-14").unwrap().unwrap();
     assert_eq!(item.left_reason, Some(LeftReason::Resolved), "the reason is kept all the same");
 }
 
@@ -471,7 +471,7 @@ async fn a_departure_jira_could_not_explain_is_asked_about_again() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server, false);
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[seed("KA-15")]).unwrap();
     toast_apply::take("KA-15", &MoveOptions::unattended()).await.unwrap();
     inbox_is_empty(&server).await;
@@ -498,7 +498,7 @@ async fn an_issue_that_comes_back_forgets_why_it_left() {
     let _dir = sandbox();
     let server = MockServer::start().await;
     let inbox = configure(&server, false);
-    let db = JiraInbox::new().unwrap();
+    let db = Inbox::new().unwrap();
     db.upsert_batch(&[seed("KA-16")]).unwrap();
     toast_apply::take("KA-16", &MoveOptions::unattended()).await.unwrap();
     db.mark_gone(&[]).unwrap();

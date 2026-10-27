@@ -10,9 +10,9 @@
 
 use chrono::{Duration, Local};
 use kasl::api::jira::JiraConfig;
-use kasl::db::jira_inbox::{JiraInbox, JiraInboxUpsert};
+use kasl::db::inbox::{Inbox, InboxUpsert};
 use kasl::db::workdays::Workdays;
-use kasl::libs::config::{Config, JiraInboxConfig};
+use kasl::libs::config::{Config, InboxConfig};
 use serde_json::{Value, json};
 use serial_test::serial;
 use std::path::Path;
@@ -71,8 +71,8 @@ fn document(dir: &Path, args: &[&str]) -> Value {
     value
 }
 
-fn upsert(key: &str, priority: &str, rank: i32, score: f64) -> JiraInboxUpsert {
-    JiraInboxUpsert {
+fn upsert(key: &str, priority: &str, rank: i32, score: f64) -> InboxUpsert {
+    InboxUpsert {
         issue_key: key.to_string(),
         issue_id: "1".to_string(),
         summary: format!("Summary for {key}"),
@@ -110,7 +110,7 @@ fn seed(dir: &Path) {
     let start = start.format("%Y-%m-%d %H:%M:%S").to_string();
     db.conn.execute("UPDATE workdays SET start = ?1", rusqlite::params![start]).unwrap();
 
-    JiraInbox::new()
+    Inbox::new()
         .unwrap()
         .upsert_batch(&[
             upsert("KA-1", "High", 2, 8.0),
@@ -120,15 +120,15 @@ fn seed(dir: &Path) {
         ])
         .unwrap();
     let now = Local::now().naive_local();
-    db.conn.execute("UPDATE jira_inbox SET pinned = 1 WHERE issue_key = 'KA-1'", []).unwrap();
+    db.conn.execute("UPDATE inbox SET pinned = 1 WHERE issue_key = 'KA-1'", []).unwrap();
     db.conn
         .execute(
-            "UPDATE jira_inbox SET snoozed_until = ?1 WHERE issue_key = 'KA-2'",
+            "UPDATE inbox SET snoozed_until = ?1 WHERE issue_key = 'KA-2'",
             rusqlite::params![now + Duration::days(2)],
         )
         .unwrap();
     db.conn
-        .execute("UPDATE jira_inbox SET gone_at = ?1 WHERE issue_key = 'KA-3'", rusqlite::params![now])
+        .execute("UPDATE inbox SET gone_at = ?1 WHERE issue_key = 'KA-3'", rusqlite::params![now])
         .unwrap();
 }
 
@@ -398,7 +398,7 @@ fn skip_a_rule() {
             api_url: "https://jira.example.com".to_string(),
             completed_statuses: Vec::new(),
         }),
-        jira_inbox: Some(JiraInboxConfig {
+        inbox: Some(InboxConfig {
             notify: false,
             rules: rules.as_array().cloned().unwrap(),
             ..Default::default()

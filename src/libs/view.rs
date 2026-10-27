@@ -334,7 +334,7 @@ impl View {
     /// SUMMARY is truncated to fit the terminal width (same approach as [`View::tasks`]).
     /// The CHANGE column shows freshness badges: `NEW`, `gone`, or the latest
     /// visible change such as `status→In Progress`.
-    pub fn jira_inbox(items: &[crate::db::jira_inbox::JiraInboxItem]) -> Result<()> {
+    pub fn inbox(items: &[crate::db::inbox::InboxItem]) -> Result<()> {
         let now = chrono::Local::now().naive_local();
         let badges: Vec<String> = items.iter().map(|i| i.badge(now).unwrap_or_default()).collect();
         let pin_width = "★".width().max(1);
@@ -399,7 +399,7 @@ impl View {
     }
 
     /// One issue in full: the fields a table row has no room for.
-    pub fn jira_inbox_issue(item: &crate::db::jira_inbox::JiraInboxItem) -> Result<()> {
+    pub fn inbox_issue(item: &crate::db::inbox::InboxItem) -> Result<()> {
         let now = chrono::Local::now().naive_local();
         let mut table = Table::new();
         let titles = row!["FIELD", "VALUE"];
@@ -441,9 +441,9 @@ impl View {
         if let Some(at) = item.gone_at {
             add("gone", at.format("%Y-%m-%d %H:%M").to_string());
             match (item.left_reason, item.resolution.as_deref()) {
-                (Some(crate::db::jira_inbox::LeftReason::Resolved), Some(resolution)) => add("left", format!("resolved in Jira ({resolution})")),
-                (Some(crate::db::jira_inbox::LeftReason::Resolved), None) => add("left", "resolved in Jira".to_string()),
-                (Some(crate::db::jira_inbox::LeftReason::Moved), _) => add("left", "unresolved - reassigned or out of reach".to_string()),
+                (Some(crate::db::inbox::LeftReason::Resolved), Some(resolution)) => add("left", format!("resolved in Jira ({resolution})")),
+                (Some(crate::db::inbox::LeftReason::Resolved), None) => add("left", "resolved in Jira".to_string()),
+                (Some(crate::db::inbox::LeftReason::Moved), _) => add("left", "unresolved - reassigned or out of reach".to_string()),
                 (None, _) => {}
             }
         }
@@ -485,7 +485,7 @@ impl View {
     }
 
     /// Where an issue's place in the list comes from.
-    pub fn jira_inbox_why(reasons: &[crate::libs::inbox_filter::Reason]) -> Result<()> {
+    pub fn inbox_why(reasons: &[crate::libs::inbox_filter::Reason]) -> Result<()> {
         let what_width = reasons.iter().map(|r| r.what.width()).max().unwrap_or(1).max("WHAT".width());
         let value_width = reasons.iter().map(|r| r.value.width()).max().unwrap_or(1).max("VALUE".width()).min(24);
 
