@@ -46,7 +46,7 @@ Work intervals shorter than the configured `min_work_interval` are left out of t
 
 ## A day that was never closed
 
-A day ends when `kasl end` or `kasl report --send` closes it. Closing today ends it now; closing a past day ends it at its last observed activity, by the rule below, and a past day already closed keeps its end - so sending yesterday this morning does not stretch yesterday into today. Today, an open day runs to now. A past day nobody closed runs to the last moment activity was seen: the end of its last pause, of any length. The end of a two-minute break is as good a sighting as the end of a lunch, so an evening worked between short breaks stays in the day. Productivity is measured to the same moment, and [`sum`](/reference/sum/) counts the day the same way.
+A day ends when `kasl end` or `kasl report --send` closes it. Closing today ends it now; closing a past day ends it at its last observed activity, by the rule below, and a past day already closed keeps its end - so sending yesterday this morning does not stretch yesterday into today. Today, an open day runs to now. A past day nobody closed runs to the last moment activity was seen: the end of its last pause, of any length. The end of a two-minute break is as good a sighting as the end of a lunch, so an evening worked between short breaks stays in the day. A pause that runs into the next date - the night, with the watcher running - was ended by the next morning's activity, so the day ends where that pause began. Productivity is measured to the same moment, and [`sum`](/reference/sum/) counts the day the same way.
 
 ## Sample Output
 

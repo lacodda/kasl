@@ -150,12 +150,25 @@ impl Productivity {
         let end_time = crate::libs::report::workday_end_time(&self.workday, &every_pause);
         let gross_duration = end_time - self.workday.start;
 
+        // Each pause counts for the part of it inside the day: a pause that
+        // runs past the end - the night, on a day ended where the night began -
+        // would otherwise take hours off a day that never had them.
+        // The recorded duration stays the measure of a pause wholly inside:
+        // a merged pause is shorter than the span it covers.
+        let inside = |pause: &Pause| -> Duration {
+            let Some(end) = pause.end else {
+                return pause.duration.unwrap_or_else(Duration::zero);
+            };
+            let overlap = (end.min(end_time) - pause.start.max(self.workday.start)).max(Duration::zero());
+            pause.duration.unwrap_or(overlap).min(overlap)
+        };
+
         // Long pauses: detected absences above the threshold, plus any manual
         // pauses the user recorded (protected records bypass the threshold).
-        let long_pause_duration: Duration = self.long_pauses.iter().filter_map(|p| p.duration).sum();
+        let long_pause_duration: Duration = self.long_pauses.iter().map(inside).sum();
 
         // Short pauses: brief interruptions below the threshold.
-        let short_pause_duration: Duration = self.short_pauses.iter().filter_map(|p| p.duration).sum();
+        let short_pause_duration: Duration = self.short_pauses.iter().map(inside).sum();
 
         // Available work time excludes time the user was away entirely
         let work_time = gross_duration - long_pause_duration;

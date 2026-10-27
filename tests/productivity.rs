@@ -216,4 +216,30 @@ mod tests {
         let productivity = productivity_calc.calculate_productivity();
         assert_eq!(productivity, 0.0);
     }
+
+    /// An unclosed day ends where the night's pause began, and the night does
+    /// not count against it: a pause counts for the part of it inside the day.
+    ///
+    /// Found on the owner's data: once the day ended at 21:51, the 6-hour
+    /// pause from 21:51 to 04:07 the next morning was still subtracted whole,
+    /// and a day of 78.7 % read 0 %.
+    #[test]
+    fn a_pause_past_the_end_counts_only_inside_the_day() {
+        let date = NaiveDate::from_ymd_opt(2026, 10, 26).unwrap();
+        let at = |d: NaiveDate, h: u32, m: u32| NaiveDateTime::new(d, NaiveTime::from_hms_opt(h, m, 0).unwrap());
+        let next = date.succ_opt().unwrap();
+        let workday = Workday {
+            id: 1,
+            date,
+            start: at(date, 9, 0),
+            end: None,
+        };
+        let short = Pause::detected(1, at(date, 12, 0), Some(at(date, 12, 30)), Some(Duration::minutes(30)));
+        let night = Pause::detected(2, at(date, 17, 0), Some(at(next, 4, 0)), Some(Duration::hours(11)));
+
+        let productivity = Productivity::with_test_data(&workday, vec![short], vec![night]).calculate_productivity();
+
+        // 09:00-17:00 is eight hours, half an hour of it short pauses.
+        assert!((productivity - 93.75).abs() < 0.01, "{productivity}");
+    }
 }

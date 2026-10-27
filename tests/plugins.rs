@@ -364,7 +364,11 @@ fn a_plugin_source_fills_the_inbox_and_judges_only_its_own_rows() {
     assert_eq!(row("KA-1")["summary"], json!("A Jira issue"), "a refused key is left as it was");
 
     tracker.answer(json!({"issues": []}));
-    ok(dir.path(), &["inbox", "sync"]);
+    let said = ok(dir.path(), &["inbox", "sync"]);
+    assert!(
+        said.contains("0 fetched, 0 new, 0 changed, 1 gone"),
+        "only its own issue is counted as gone:\n{said}"
+    );
     let rows = inbox(dir.path());
     let row = |key: &str| rows.iter().find(|issue| issue["key"] == json!(key)).unwrap().clone();
     assert!(row("app#1")["gone_at"].is_string(), "its own issue left its poll");

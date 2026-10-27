@@ -108,10 +108,16 @@ pub fn workday_end_time(workday: &Workday, pauses: &[Pause]) -> chrono::NaiveDat
         return now;
     }
 
-    // A past day that was never closed: fall back to the last thing we observed.
+    // A past day that was never closed: fall back to the last thing we
+    // observed. A pause that runs into a later date - the watcher's night,
+    // from the last keystroke of the evening to the first of the morning -
+    // was ended by the next day's activity, not this one's, so the day's last
+    // sign of work is where that pause began. Work time is the same either
+    // way, since a pause is no work; the end is what changes, and the end is
+    // what is written down and handed to plugins.
     pauses
         .iter()
-        .filter_map(|pause| pause.end)
+        .filter_map(|pause| pause.end.map(|end| if end.date() > workday.date { pause.start } else { end }))
         .max()
         .filter(|last| *last > workday.start)
         .unwrap_or(workday.start)
@@ -529,6 +535,28 @@ mod tests {
 
         assert_eq!(end, at(date, 16, 43));
         assert!(end - wd.start < Duration::hours(24));
+    }
+
+    /// The night's pause ends with the next morning's first keystroke; that is
+    /// the next day's activity, and an unclosed day does not end there.
+    ///
+    /// Found on the owner's data: with the watcher running overnight, every
+    /// unclosed day ended at the next morning's start, and `report --send
+    /// --last` would have written that down.
+    #[test]
+    fn a_pause_into_the_next_date_ends_the_day_where_it_began() {
+        let date = NaiveDate::from_ymd_opt(2026, 10, 26).unwrap();
+        let next = date.succ_opt().unwrap();
+        let wd = workday(date, 9, None);
+        let evening = pause(date, (18, 0), (18, 20));
+        let night = Pause::detected(2, at(date, 21, 51), Some(at(next, 4, 7)), Some(at(next, 4, 7) - at(date, 21, 51)));
+
+        assert_eq!(workday_end_time(&wd, &[evening.clone(), night]), at(date, 21, 51));
+        assert_eq!(
+            workday_end_time(&wd, &[evening]),
+            at(date, 18, 20),
+            "a pause within the day still ends where it ended"
+        );
     }
 
     #[test]
