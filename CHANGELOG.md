@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.19.0] - 2026-10-27
+
+### Breaking Changes
+- **The inbox belongs to no one source** - task documents printed by --json name the issue key issue_key instead of jira_key.
+- **Run kasl-plugin-* programs for commands, events and inbox sources** - report --send --show --json gives url as null when SiServer is not configured, and lists the report_ready plugins under plugins. Inbox messages say "Inbox" rather than "Jira inbox".
+
+### Bug Fixes
+- End an unclosed day where the night's pause began
+
+### Features
+- Run kasl-plugin-* programs for commands, events and inbox sources
+
+### Refactoring
+- The inbox belongs to no one source
+
 ## [1.18.0] - 2026-10-21
 
 ### Bug Fixes
