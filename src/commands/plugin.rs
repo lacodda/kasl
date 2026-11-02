@@ -18,6 +18,7 @@ use crate::libs::plugin::{self, Plugin};
 use crate::libs::prompt::ensure_interactive;
 use crate::libs::report::DayReport;
 use crate::libs::secret::Secret;
+use crate::libs::update;
 use crate::{msg_info, msg_print, msg_success};
 use anyhow::{Result, bail};
 use clap::{Args, Subcommand};
@@ -104,7 +105,6 @@ fn list(as_json: bool) -> Result<()> {
     }
     if document.plugins.is_empty() {
         msg_info!(Message::PluginsNone(document.directory));
-        return Ok(());
     }
     for (index, plugin) in plugin::discover()?.iter().enumerate() {
         if index > 0 {
@@ -113,6 +113,13 @@ fn list(as_json: bool) -> Result<()> {
         for line in describe(plugin) {
             msg_print!(line);
         }
+    }
+    // A plugin that ships with kasl and is nowhere to be found was most
+    // likely left behind by an updater older than the box; say how to get it.
+    let found: Vec<&str> = document.plugins.iter().map(|plugin| plugin.name.as_str()).collect();
+    let missing: Vec<&str> = update::BUNDLED_PLUGINS.iter().copied().filter(|name| !found.contains(name)).collect();
+    if !missing.is_empty() {
+        msg_info!(Message::PluginBundledMissing(missing.join(", ")));
     }
     Ok(())
 }

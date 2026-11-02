@@ -217,6 +217,8 @@ pub enum Message {
         version: String,
     },
     NoUpdateRequired,
+    /// `self-update` put the plugins this version ships with beside it.
+    UpdateBoxCompleted(String),
     UpdateDownloadUrlNotSet,
     UpdateLatestTagNotFound(String),
     WatcherStoppingForUpdate,
@@ -553,6 +555,8 @@ pub enum Message {
     PluginNothingToSetUp(String),
     /// `kasl plugin list` with nothing installed; where kasl looks.
     PluginsNone(String),
+    /// Plugins that ship with kasl and are not installed, by name.
+    PluginBundledMissing(String),
     /// `report --send` with neither SiServer nor a plugin to hand the day to.
     ReportHasNowhereToGo,
     /// The plugins `report --send` hands the day to, named in the preview.

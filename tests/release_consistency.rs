@@ -425,5 +425,17 @@ mod tests {
             read("src/libs/update.rs").contains("is_bundled_plugin(file_name)"),
             "self-update no longer replaces the bundled plugins beside the binary"
         );
+        // The list kasl knows its box by is the list the archive is packed with.
+        for name in kasl::libs::update::BUNDLED_PLUGINS {
+            assert!(
+                workflow.contains(&format!("-R lacodda/kasl-plugin-{name} ")),
+                "BUNDLED_PLUGINS names `{name}`, which release.yml does not fetch into the archive"
+            );
+        }
+        assert_eq!(
+            workflow.matches("gh release download").count(),
+            kasl::libs::update::BUNDLED_PLUGINS.len(),
+            "release.yml fetches a plugin BUNDLED_PLUGINS does not name; self-update could not tell it is missing"
+        );
     }
 }

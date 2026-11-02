@@ -13,6 +13,24 @@ same thing, printing a notice that points here; it will be removed in 2.0.
 
 Builds before 1.10 compared version numbers as text, so they rank a 1.10 release below a 1.9 one and report "No update required" - exactly at the release they need. Reinstall once with the installer (`irm https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.ps1 | iex` on Windows, `curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh` elsewhere), `npm i -g kasl-cli` or `cargo install kasl-cli`; from then on `self-update` compares numbers. The installer replaces the `kasl` already on your `PATH`, wherever it lives, and restarts the watcher; older installers put a second copy in their default directory instead, and running a current one cleans that up.
 
+## The plugins that ship with kasl
+
+The release archive carries the plugins that come with kasl - GitLab's - beside
+the binary, and `self-update` puts them beside it too, at the version that
+release was built with.
+
+The update is carried out by the kasl that is running, so an install updated by
+kasl 1.19 or earlier received the new binary without them: the old updater
+took only itself from the archive. `kasl plugin list` says so, and the next
+`kasl self-update` completes the box - with no newer release to install, it
+takes this version's plugins from this version's archive and leaves the binary
+as it is:
+
+```
+ℹ️ No update required. You are using the latest version!
+✅ Installed the plugins that ship with this version: kasl-plugin-gitlab
+```
+
 ## Usage
 
 ```bash
@@ -25,7 +43,7 @@ The command takes no arguments.
 
 1. **Version check**: reads the latest release tag from the `releases/latest` redirect - not the `api.github.com` endpoint, which is rate-limited to 60 anonymous requests per hour per IP and starves any machine behind a shared NAT.
 2. **Platform detection**: picks the release asset matching the current OS/architecture.
-3. **Download and extraction**: retrieves the archive and unpacks the binaries from it. Nothing else in the archive is written next to the executable.
+3. **Download and extraction**: retrieves the archive and unpacks the programs from it - kasl and the plugins that ship with it. Nothing else in the archive is written next to the executable.
 4. **Replacement**: the current executable is renamed to `kasl.bak` and the new one takes its place.
 5. **Alias refresh**: the short `ka` alias is updated too, where it is installed.
 

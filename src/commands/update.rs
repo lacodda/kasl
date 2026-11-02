@@ -10,7 +10,11 @@
 //! ```
 
 use crate::{
-    libs::{daemon, messages::Message, update::Updater},
+    libs::{
+        daemon,
+        messages::Message,
+        update::{self, Updater},
+    },
     msg_info, msg_success,
 };
 use anyhow::Result;
@@ -37,6 +41,15 @@ pub async fn cmd() -> Result<()> {
 
     if !needs_update {
         msg_info!(Message::NoUpdateRequired);
+
+        // Up to date, but perhaps without the plugins this version ships
+        // with: kasl 1.19 and earlier updated only the binary.
+        if !update::missing_bundled_plugins(&update::install_dir()?).is_empty() {
+            let installed = updater.complete_the_box().await?;
+            if !installed.is_empty() {
+                msg_success!(Message::UpdateBoxCompleted(installed.join(", ")));
+            }
+        }
 
         // If watcher was running before update check, restart it
         if watcher_was_running {

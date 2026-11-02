@@ -35,7 +35,9 @@ The second place is where the plugins that ship with kasl are: the release
 archive carries them beside the binary, and the installers, the npm package and
 `kasl self-update` put them there with kasl, at the version that release was
 built with. A copy of your own in the plugins directory takes the place of the
-one in the box.
+one in the box. When a plugin that ships with kasl is nowhere to be found -
+kasl 1.19 and earlier updated only the binary - `kasl plugin list` names it,
+and `kasl self-update` brings it.
 
 | System | kasl's plugins directory |
 | --- | --- |

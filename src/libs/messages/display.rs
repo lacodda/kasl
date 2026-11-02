@@ -264,6 +264,7 @@ impl Display for Message {
                 format!("The {} application has been successfully updated to version {}!", app_name, version)
             }
             Message::NoUpdateRequired => "No update required. You are using the latest version!".to_string(),
+            Message::UpdateBoxCompleted(plugins) => format!("Installed the plugins that ship with this version: {}", plugins),
             Message::UpdateDownloadUrlNotSet => "Download URL not set".to_string(),
             Message::UpdateLatestTagNotFound(url) => format!("Could not resolve the latest release tag from {}", url),
             Message::WatcherStoppingForUpdate => "Stopping watcher for update...".to_string(),
@@ -633,6 +634,10 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
                     .to_string()
             }
             Message::PluginNothingToSetUp(name) => format!("The plugin `{}` needs no settings.", name),
+            Message::PluginBundledMissing(names) => format!(
+                "Ships with kasl but is not beside it: {} - `kasl self-update` brings it.",
+                names
+            ),
             Message::PluginsNone(dir) => format!(
                 "No plugins installed. kasl looks for programs named `kasl-plugin-*` in {}, beside kasl itself, and on your PATH.",
                 dir

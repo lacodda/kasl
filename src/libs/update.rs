@@ -39,6 +39,34 @@ const DAILY_CHECK_INTERVAL: i64 = 1;
 /// Extension the replaced executable is kept under (`kasl.bak`).
 const BACKUP_EXTENSION: &str = "bak";
 
+/// The plugins every release archive carries beside the binary, by name.
+///
+/// `release.yml` fetches each of them into the archive; a consistency test
+/// holds the two lists together. kasl reads this one to tell an install that
+/// has its box from one an older updater left without it.
+pub const BUNDLED_PLUGINS: &[&str] = &["gitlab"];
+
+/// The plugins that ship with kasl and are not in `install_dir`, by name.
+pub fn missing_bundled_plugins(install_dir: &Path) -> Vec<&'static str> {
+    BUNDLED_PLUGINS
+        .iter()
+        .copied()
+        .filter(|name| {
+            !install_dir
+                .join(format!("{}{name}{}", crate::libs::plugin::manifest::PREFIX, env::consts::EXE_SUFFIX))
+                .is_file()
+        })
+        .collect()
+}
+
+/// The directory the running kasl lives in, where its plugins belong.
+pub fn install_dir() -> Result<PathBuf> {
+    let exe = env::current_exe()?;
+    exe.parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| anyhow::anyhow!("kasl's own executable has no directory: {}", exe.display()))
+}
+
 /// The update workflow: check the latest tag, download the platform asset,
 /// swap the binary keeping the old one as `.bak`.
 #[derive(Debug)]
@@ -160,12 +188,7 @@ impl Updater {
     /// ```
     pub async fn perform_update(&self) -> Result<crate::libs::alias::Outcome> {
         let download_url = self.download_url.as_ref().ok_or(msg_error_anyhow!(Message::UpdateDownloadUrlNotSet))?;
-
-        let response = self.client.get(download_url).send().await?;
-        let content = response.bytes().await?;
-
-        let tar_gz_path = env::temp_dir().join(format!("{}.tar.gz", self.name));
-        fs::write(&tar_gz_path, &content)?;
+        let tar_gz_path = self.download(download_url).await?;
 
         let alias = self.extract_and_replace_binary(&tar_gz_path)?;
 
@@ -174,6 +197,46 @@ impl Updater {
         // Returned rather than printed here: a stale second name has to reach
         // the user, and the command layer is what talks to them.
         Ok(alias)
+    }
+
+    /// Puts beside the binary the plugins that ship with this version and
+    /// are missing there, and returns their names.
+    ///
+    /// An install updated by kasl 1.19 or earlier has this version's binary
+    /// without its box: the update is carried out by the binary that was
+    /// running, and the old one took only itself from the archive. This
+    /// downloads the running version's own archive and takes its plugins,
+    /// leaving the binary as it is.
+    pub async fn complete_the_box(&self) -> Result<Vec<String>> {
+        let tag = format!("v{}", self.version);
+        let tar_gz_path = self.download(&self.asset_url(&tag)).await?;
+        let installed = Self::unpack_plugins(&tar_gz_path, &install_dir()?);
+        let _ = fs::remove_file(&tar_gz_path);
+        installed
+    }
+
+    /// The release archive of `tag` for this platform:
+    /// `{name}-{tag}-{platform}.tar.gz`.
+    fn asset_url(&self, tag: &str) -> String {
+        format!(
+            "https://github.com/{}/{}/releases/download/{}/{}-{}-{}.tar.gz",
+            self.owner,
+            self.name,
+            tag,
+            self.name,
+            tag,
+            self.get_platform_identifier()
+        )
+    }
+
+    /// Downloads an archive to the temp directory. A page that is not there
+    /// is an error here, not an HTML body unpacked as a tarball later.
+    async fn download(&self, url: &str) -> Result<PathBuf> {
+        let response = self.client.get(url).header("User-Agent", &self.name).send().await?.error_for_status()?;
+        let content = response.bytes().await?;
+        let tar_gz_path = env::temp_dir().join(format!("{}-{}.tar.gz", self.name, std::process::id()));
+        fs::write(&tar_gz_path, &content)?;
+        Ok(tar_gz_path)
     }
 
     /// Compares the latest published tag against the running version;
@@ -200,16 +263,7 @@ impl Updater {
         let latest_version = tag.trim_start_matches('v').to_string();
 
         if is_newer(&latest_version, &self.version) {
-            // Asset names follow the release convention: {name}-{tag}-{platform}.tar.gz
-            self.download_url = Some(format!(
-                "https://github.com/{}/{}/releases/download/{}/{}-{}-{}.tar.gz",
-                self.owner,
-                self.name,
-                tag,
-                self.name,
-                tag,
-                self.get_platform_identifier()
-            ));
+            self.download_url = Some(self.asset_url(&tag));
             self.latest_version = Some(latest_version);
 
             Ok(true)
@@ -297,7 +351,7 @@ impl Updater {
     ///
     /// Moving the running name aside first is what breaks that: the swap then
     /// starts from a directory where no name holds the outgoing file.
-    fn extract_and_replace_binary(&self, tar_gz_path: &PathBuf) -> Result<crate::libs::alias::Outcome> {
+    fn extract_and_replace_binary(&self, tar_gz_path: &Path) -> Result<crate::libs::alias::Outcome> {
         let current_exe = env::current_exe()?;
         let install_dir = current_exe.parent().unwrap().to_path_buf();
         let running_name = install_dir.join(current_exe.file_name().unwrap_or_default());
@@ -329,16 +383,33 @@ impl Updater {
     /// rules can be tested against a real archive without a real update:
     /// both release bugs found in the field (the alias missing, the leftover
     /// version folders) lived here, untested.
-    pub(crate) fn unpack_binaries(tar_gz_path: &PathBuf, install_dir: &Path, app_name: &str) -> Result<()> {
+    pub(crate) fn unpack_binaries(tar_gz_path: &Path, install_dir: &Path, app_name: &str) -> Result<()> {
+        if Self::unpack(tar_gz_path, install_dir, Some(app_name))?.0 {
+            Ok(())
+        } else {
+            msg_bail_anyhow!(Message::UpdateBinaryNotFoundInArchive);
+        }
+    }
+
+    /// Takes only the plugins from the archive, leaving the binary as it is.
+    pub(crate) fn unpack_plugins(tar_gz_path: &Path, install_dir: &Path) -> Result<Vec<String>> {
+        Ok(Self::unpack(tar_gz_path, install_dir, None)?.1)
+    }
+
+    /// Unpacks the programs of a release archive into `install_dir`: the
+    /// binary named `app_name`, when one is given, and every bundled plugin.
+    /// Says whether the binary was found, and which plugins were put there.
+    fn unpack(tar_gz_path: &Path, install_dir: &Path, app_name: Option<&str>) -> Result<(bool, Vec<String>)> {
         // The app updates under its own name, not under whichever name was
         // typed: `ka self-update` must still replace `kasl`.
         let exe_suffix = env::consts::EXE_SUFFIX;
-        let primary = format!("{}{}", app_name, exe_suffix);
+        let primary = app_name.map(|name| format!("{}{}", name, exe_suffix));
 
         let tar_gz = File::open(tar_gz_path)?;
         let tar = GzDecoder::new(tar_gz);
         let mut archive = Archive::new(tar);
         let mut is_updated = false;
+        let mut plugins = Vec::new();
 
         for entry_result in archive.entries()? {
             let mut entry = entry_result?;
@@ -350,8 +421,8 @@ impl Updater {
             // Flattened on purpose: archive entries carry a
             // `kasl-<tag>-<target>/` prefix that must not reach the
             // installation directory.
-            if file_name == primary {
-                let target = install_dir.join(&primary);
+            if let Some(primary) = primary.as_deref().filter(|primary| file_name == *primary) {
+                let target = install_dir.join(primary);
                 // Keep the replaced binary as the one-and-only backup. A
                 // rename is allowed on a running image where a delete is not,
                 // which is what lets an update replace the file it is
@@ -371,14 +442,11 @@ impl Updater {
                     fs::rename(&target, target.with_extension(BACKUP_EXTENSION))?;
                 }
                 entry.unpack(&target)?;
+                plugins.push(file_name.trim_end_matches(exe_suffix).to_string());
             }
         }
 
-        if is_updated {
-            Ok(())
-        } else {
-            msg_bail_anyhow!(Message::UpdateBinaryNotFoundInArchive);
-        }
+        Ok((is_updated, plugins))
     }
 
     /// Target triple used in release asset names, e.g.
@@ -686,6 +754,25 @@ mod tests {
         assert_eq!(fs::read_to_string(install.join("kasl-plugin-gitlab.bak")).unwrap(), "old plugin");
         assert!(install.join(exe("kasl-plugin-notes")).exists(), "a plugin that joined the box arrives too");
         assert!(!install.join("kasl-plugin-gitlab.md").exists(), "only programs are taken from the archive");
+    }
+
+    /// The box completed for an install an older updater left without it:
+    /// the plugins arrive, the running binary is not touched.
+    #[test]
+    fn the_box_is_completed_without_touching_the_binary() {
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "running").unwrap();
+        assert_eq!(missing_bundled_plugins(&install), BUNDLED_PLUGINS.to_vec());
+
+        let archive = release_archive(temp.path(), &[(&exe("kasl"), "from the archive"), (&exe("kasl-plugin-gitlab"), "plugin")]);
+        let installed = Updater::unpack_plugins(&archive, &install).unwrap();
+
+        assert_eq!(installed, vec!["kasl-plugin-gitlab".to_string()]);
+        assert_eq!(fs::read_to_string(install.join(exe("kasl"))).unwrap(), "running");
+        assert!(!install.join("kasl.bak").exists(), "the binary was not replaced, so nothing was backed up");
+        assert!(missing_bundled_plugins(&install).is_empty());
     }
 
     #[test]
