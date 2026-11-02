@@ -59,7 +59,7 @@ impl Display for Message {
             Message::TasksNotFoundForDate(date) => format!("Tasks not found for {}, report not sent.", date),
             Message::TasksNotFoundSad => "No tasks found.".to_string(),
             Message::TasksHeader => "Tasks:".to_string(),
-            Message::TasksDiscoverySummary { incomplete, jira, gitlab } => {
+            Message::TasksDiscoverySummary { incomplete, jira, plugins } => {
                 let mut parts = Vec::new();
                 if *incomplete > 0 {
                     parts.push(format!("{} incomplete", incomplete));
@@ -67,14 +67,14 @@ impl Display for Message {
                 if *jira > 0 {
                     parts.push(format!("{} jira", jira));
                 }
-                if *gitlab > 0 {
-                    parts.push(format!("{} gitlab", gitlab));
+                for (plugin, count) in plugins.iter().filter(|(_, count)| *count > 0) {
+                    parts.push(format!("{} {}", count, plugin));
                 }
                 format!("Found: {}", parts.join(", "))
             }
             Message::TasksDiscoverySeparator => "──────── other ────────".to_string(),
             Message::TasksDiscoverySearchingIncomplete => "Looking for incomplete tasks...".to_string(),
-            Message::TasksDiscoveryFetchingExternal => "Fetching GitLab commits and Jira issues...".to_string(),
+            Message::TasksDiscoveryFetchingExternal => "Asking Jira and plugins for the day's tasks...".to_string(),
             Message::NoTaskIdsProvided => "No task IDs provided for deletion.".to_string(),
             Message::TasksNotFoundForIds(ids) => format!("No tasks found with IDs: {:?}", ids),
             Message::TasksToBeDeleted => "The following tasks will be deleted:".to_string(),
@@ -119,7 +119,6 @@ impl Display for Message {
             Message::ConfigDeleted => "Configuration deleted successfully".to_string(),
             Message::ConfigParseError => "Failed to parse configuration".to_string(),
             Message::ConfigSaveError => "Failed to save configuration".to_string(),
-            Message::ConfigModuleGitLab => "GitLab settings".to_string(),
             Message::ConfigModuleJira => "Jira settings".to_string(),
             Message::ConfigModuleSiServer => "SiServer settings".to_string(),
             Message::ConfigModuleMonitor => "Monitor settings".to_string(),
@@ -279,8 +278,6 @@ impl Display for Message {
             Message::WrongPassword(count) => format!("You entered the wrong password {} times!", count),
 
             // === API MESSAGES ===
-            Message::GitlabFetchFailed(error) => format!("[kasl] Failed to get GitLab events: {}", error),
-            Message::GitlabUserIdFailed(error) => format!("[kasl] Failed to get GitLab user ID: {}", error),
             Message::JiraFetchFailed(error) => format!("[kasl] Failed to get Jira issues: {}", error),
             Message::SiServerConfigNotFound => "SiServer configuration not found in config file.".to_string(),
             Message::SiServerSessionFailed(error) => format!("[kasl] Failed to get SiServer session for rest dates: {}", error),
@@ -622,6 +619,7 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::ToastActionFailed(key, why) => format!("Could not act on {} from the toast: {}", key, why),
             Message::JiraMoved(sentence) => format!("{}.", sentence),
             Message::PluginSaid { plugin, message } => format!("{}: {}", plugin, message),
+            Message::PluginTasksFailed(error) => format!("No tasks from a plugin: {}", error),
             Message::PluginEventFailed { event, error } => format!("{} was not taken: {}", event, error),
             Message::InboxSyncFailed { source, error } => format!("{} did not sync: {}", source, error),
             Message::InboxRefusedKeys { source, keys } => {
@@ -636,10 +634,10 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             }
             Message::PluginNothingToSetUp(name) => format!("The plugin `{}` needs no settings.", name),
             Message::PluginsNone(dir) => format!(
-                "No plugins installed. kasl looks for programs named `kasl-plugin-*` in {} and on your PATH.",
+                "No plugins installed. kasl looks for programs named `kasl-plugin-*` in {}, beside kasl itself, and on your PATH.",
                 dir
             ),
-            Message::JiraCommented(key) => format!("Commented on {} in Jira.", key),
+            Message::Commented { key, source } => format!("Commented on {} in {}.", key, source),
             Message::JiraWriteFailed(key, why) => format!("Jira was not updated for {}: {}", key, why),
             Message::JiraResolvedTaskOpen(key, resolution) => format!(
                 "{} was resolved in Jira{}; its task is still open - `kasl task find` offers to finish it.",

@@ -7,9 +7,13 @@ runs one of its commands by hand.
 
 A plugin is a program named `kasl-plugin-NAME` - in any language - that kasl
 runs for the length of one call: to hear an event, to list issues for the
-inbox, or to do something a person asks for. There is nothing to enable: a
-plugin is used because it is installed, and once its required settings are
-set. How to write one is in [Writing a plugin](/guides/writing-a-plugin/).
+inbox, to find the day's tasks, or to do something a person asks for. There is
+nothing to enable: a plugin is used because it is installed, and once its
+required settings are set. How to write one is in
+[Writing a plugin](/guides/writing-a-plugin/).
+
+One plugin ships with kasl: `gitlab`, GitLab's issues, merge requests and
+commits - see [Working with the GitLab inbox](/guides/gitlab-inbox/).
 
 ## Usage
 
@@ -23,8 +27,15 @@ kasl plugin run NAME COMMAND [KEY] [--date DATE] [--json]
 
 ## Where kasl looks
 
-First in its own plugins directory, then along your `PATH`. The first copy of a
-name wins, as with any other command.
+First in its own plugins directory, then in the directory kasl itself runs
+from, then along your `PATH`. The first copy of a name wins, as with any other
+command.
+
+The second place is where the plugins that ship with kasl are: the release
+archive carries them beside the binary, and the installers, the npm package and
+`kasl self-update` put them there with kasl, at the version that release was
+built with. A copy of your own in the plugins directory takes the place of the
+one in the box.
 
 | System | kasl's plugins directory |
 | --- | --- |
@@ -44,12 +55,14 @@ kasl plugin list
 Every plugin found, with what it said about itself and where it stands:
 
 ```
-gitlab 1.4 - Assigned issues and merge requests from GitLab
+gitlab X.Y.Z - GitLab issues and merge requests waiting on you, and your commits of the day
   needs `kasl plugin setup gitlab`: url, token
   inbox    a source: list_issues, transition, comment
+  tasks    offers tasks to `kasl task find`
   setting  url - GitLab address (required, not set)
   setting  token - Access token (required, secret, not set)
-  at C:\Users\me\AppData\Local\lacodda\kasl\plugins\kasl-plugin-gitlab.exe
+  setting  start_label - Label that marks work started
+  at C:\Users\me\AppData\Local\Programs\kasl\kasl-plugin-gitlab.exe
 
 outlook 2.1 - Mails the day when it is sent
   ready
@@ -62,7 +75,7 @@ outlook 2.1 - Mails the day when it is sent
 A plugin stands one of three ways:
 
 - **ready** - kasl calls it: for the events it hears, for inbox polls if it is
-  a source, and for `plugin run`.
+  a source, for `kasl task find` if it finds tasks, and for `plugin run`.
 - **needs setup** - a required setting has no value. kasl does not call it
   until `kasl plugin setup NAME` gives it one, and `plugin run` says what is
   missing. A plugin that ships with kasl but is not set up stays quiet this way.
@@ -136,7 +149,7 @@ needs no setup, and `setup` says so.
 ```bash
 kasl plugin run outlook mail
 kasl plugin run outlook mail --date 2026-10-26
-kasl plugin run gitlab copy-link app#14
+kasl plugin run tracker copy-link 'group/app#14'
 ```
 
 Runs one of the commands `plugin list` shows. A command runs on a **day** or on

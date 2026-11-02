@@ -68,6 +68,15 @@ BIN=$(find "$TMP" -type f -name kasl -perm -u+x | head -n 1)
 install -m 755 "$BIN" "$BIN_DIR/kasl"
 echo "Installed kasl $TAG to $BIN_DIR/kasl"
 
+# The plugins that ship with kasl travel in the archive beside it and go
+# beside it here, at the version this release was built with: kasl looks for
+# plugins in its own directory, so they work whether or not it is on PATH.
+# Before the watcher restarts, since the watcher is what runs them.
+find "$TMP" -type f -name 'kasl-plugin-*' -perm -u+x | while read -r PLUGIN; do
+    install -m 755 "$PLUGIN" "$BIN_DIR/$(basename "$PLUGIN")"
+    echo "Plugin $(basename "$PLUGIN")"
+done
+
 # A running watcher keeps executing the binary it started from, replaced file
 # or not, so it is restarted onto the new one: through systemd when that is
 # what runs it, otherwise by `kasl watch`, which stops the old one first.
@@ -94,7 +103,7 @@ fi
 
 # Binaries left behind by updates: the replaced executable is kept as `.bak`
 # and nothing ever came back for it.
-rm -f "$BIN_DIR/kasl.bak" "$BIN_DIR/ka.bak"
+rm -f "$BIN_DIR/kasl.bak" "$BIN_DIR/ka.bak" "$BIN_DIR"/kasl-plugin-*.bak
 
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;

@@ -119,9 +119,9 @@ and table frames, for logs and `grep`. See
 
 ## GitLab and Jira
 
-Both are configured through `kasl setup` and feed `kasl task find`, which imports today's GitLab commits and Jira issues resolved today as completed tasks.
+Both feed `kasl task find`, which imports Jira issues resolved today and, from the GitLab plugin, the commits you pushed today. Jira is configured through `kasl setup`; GitLab is a plugin that ships with kasl and is set up with `kasl plugin setup gitlab`.
 
-- **GitLab**: authenticates with a personal access token (`read_user` + `read_repository` scope); discovers commits from the user's push events.
+- **GitLab**: the `kasl-plugin-gitlab` [plugin](/reference/plugin/). It authenticates with a personal access token kept in the OS keyring, offers your pushed commits to `task find`, and feeds your assigned issues and merge requests to the inbox. See [Working with the GitLab inbox](/guides/gitlab-inbox/).
 - **Jira**: authenticates with a session cookie obtained from login credentials; supports custom fields (`inbox.custom_fields`) so extra Jira fields can be pulled into the inbox view and used for sorting (`sort_by_field`).
 
 `kasl inbox` keeps a separate, persistent list of assigned open Jira issues - synced, ranked, and actionable independently of `task find`:
@@ -174,7 +174,7 @@ See [Troubleshooting](/guides/troubleshooting/) for how to use this when somethi
 ## Credentials and Secrets
 
 - Jira and SiServer passwords live in the OS keyring - Credential Manager on Windows, Keychain on macOS, Secret Service on Linux - under the service name `lacodda.kasl`. Nothing is encrypted with a key compiled into the binary; that scheme was removed in 1.0 (see [ADR 0001](https://github.com/lacodda/kasl/blob/main/docs/adr/0001-os-keyring.md)).
-- GitLab's access token and the reporting server's `auth_token` are stored as plain text in `config.json`, because they are read by the unattended background daemon and have no interactive prompt to fall back to. Keep the data directory private.
+- The GitLab plugin's token lives in the OS keyring as `plugin.gitlab.token`. The reporting server's `auth_token` is stored as plain text in `config.json`, because it is read by the unattended background daemon and has no interactive prompt to fall back to. Keep the data directory private.
 
 ## Cross-Platform Support
 
@@ -190,5 +190,5 @@ Other platforms and architectures build from source via `cargo install kasl-cli`
 
 - [Configuration](/concepts/configuration/) - every setting referenced above
 - [Database](/concepts/database/) - how the SQLite schema is organized
-- [API Integrations](/concepts/api-integrations/) - GitLab, Jira and SiServer in more depth
+- [API Integrations](/concepts/api-integrations/) - Jira, SiServer and the GitLab plugin in more depth
 - [Troubleshooting](/guides/troubleshooting/) - when a feature above does not behave as described

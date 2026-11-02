@@ -40,7 +40,6 @@ mod tests {
         assert!(config.monitor.is_none());
         assert!(config.server.is_none());
         assert!(config.si.is_none());
-        assert!(config.gitlab.is_none());
         assert!(config.jira.is_none());
     }
 
@@ -64,7 +63,6 @@ mod tests {
             }),
             kasl_server: None,
             si: None,
-            gitlab: None,
             jira: None,
             inbox: None,
             plugins: Default::default(),

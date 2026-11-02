@@ -9,6 +9,10 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # The plugins that ship with kasl, each at the release this kasl is built
+  # and checked with. Raised by hand when a plugin releases: the archive then
+  # carries the new one, and self-update brings it beside every kasl.
+  GITLAB_PLUGIN: v0.1.0
 
 jobs:
   build:
@@ -35,9 +39,28 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
+      # The bundled plugins, from their own repositories' releases for this
+      # target, unpacked into bundled/bin to go beside the binary.
+      - name: Fetch the bundled plugins
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p bundled/unpacked bundled/bin
+          pattern="kasl-plugin-gitlab-$GITLAB_PLUGIN-${{ matrix.target }}.*"
+          gh release download "$GITLAB_PLUGIN" -R lacodda/kasl-plugin-gitlab -p "$pattern" -D bundled
+          for archive in bundled/kasl-plugin-*; do
+            case "$archive" in
+              *.zip) 7z x -y -obundled/unpacked "$archive" > /dev/null ;;
+              *.tar.gz) tar xzf "$archive" -C bundled/unpacked ;;
+            esac
+          done
+          find bundled/unpacked -type f -name 'kasl-plugin-*' -exec cp {} bundled/bin/ \;
+          ls -l bundled/bin
+          [ -n "$(ls bundled/bin)" ] || { echo "no bundled plugin was unpacked" >&2; exit 1; }
       # All platforms ship tar.gz: kasl update and the npm wrapper of already
       # released versions expect that extension, so it must never change.
-      # One binary ships.
+      # One kasl binary ships, beside the plugins that come with it.
       # historical versions
       # Until v1.8.1 the archive carried `ka` as a second, byte-identical
       # executable - 15 MB downloaded twice to give one program a second name.
@@ -50,7 +73,7 @@ jobs:
         run: |
           name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir "$name"
-          cp "target/${{ matrix.target }}/release/kasl.exe" LICENSE README.md "$name"
+          cp "target/${{ matrix.target }}/release/kasl.exe" LICENSE README.md bundled/bin/* "$name"
           tar czf "$name.tar.gz" "$name"
       - name: Package (Unix)
         if: runner.os != 'Windows'
@@ -58,8 +81,18 @@ jobs:
         run: |
           name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
           mkdir "$name"
-          cp "target/${{ matrix.target }}/release/kasl" LICENSE README.md "$name"
+          cp "target/${{ matrix.target }}/release/kasl" LICENSE README.md bundled/bin/* "$name"
           tar czf "$name.tar.gz" "$name"
+      # The packed kasl must find its plugins beside it and read their
+      # manifests: a plugin that speaks another protocol, or does not run on
+      # this target, fails the release here rather than on a machine.
+      - name: Check the bundled plugins against this kasl
+        shell: bash
+        run: |
+          name="kasl-${{ github.ref_name }}-${{ matrix.target }}"
+          "$name/kasl${{ runner.os == 'Windows' && '.exe' || '' }}" plugin list --json > plugins.json
+          cat plugins.json
+          jq -e '[.plugins[] | select(.name == "gitlab" and .problem == null)] | length == 1' plugins.json
       - uses: actions/upload-artifact@v7
         with:
           name: package-${{ matrix.target }}

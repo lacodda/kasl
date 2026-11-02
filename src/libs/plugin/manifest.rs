@@ -39,9 +39,10 @@ pub struct Manifest {
     /// The moments kasl tells this plugin about.
     #[serde(default)]
     pub events: Vec<Event>,
-    /// What the plugin answers as an inbox source. One that answers
-    /// `list_issues` is a source; `transition` and `comment` are what it can
-    /// do to an issue it listed.
+    /// What the plugin answers when kasl asks. One that answers
+    /// `list_issues` is an inbox source, and `transition` and `comment` are
+    /// what it can do to an issue it listed; `find_tasks` offers tasks to
+    /// `kasl task find`, source or not.
     #[serde(default)]
     pub requests: Vec<Request>,
     /// What it needs to know: a URL, an account, a token.
@@ -113,7 +114,8 @@ impl Event {
     }
 }
 
-/// What kasl asks of an inbox source.
+/// What kasl asks of a plugin: the three an inbox source answers, and the
+/// one `kasl task find` makes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Request {
@@ -123,6 +125,9 @@ pub enum Request {
     Transition,
     /// Leave a comment on an issue it listed.
     Comment,
+    /// The tasks the plugin finds in a day - the commits pushed, say - for
+    /// `kasl task find` to offer. The subject is the day.
+    FindTasks,
 }
 
 impl Request {
@@ -131,7 +136,14 @@ impl Request {
             Request::ListIssues => "list_issues",
             Request::Transition => "transition",
             Request::Comment => "comment",
+            Request::FindTasks => "find_tasks",
         }
+    }
+
+    /// Whether this is something done to an issue the plugin listed, and so
+    /// needs it to be an inbox source.
+    fn acts_on_a_listed_issue(self) -> bool {
+        matches!(self, Request::Transition | Request::Comment)
     }
 }
 
@@ -162,7 +174,7 @@ impl Manifest {
             return Some(format!("it speaks protocol {} and this kasl speaks {PROTOCOL_VERSION}", self.protocol_version));
         }
         if !self.requests.contains(&Request::ListIssues)
-            && let Some(request) = self.requests.first()
+            && let Some(request) = self.requests.iter().find(|request| request.acts_on_a_listed_issue())
         {
             return Some(format!(
                 "it answers `{}` but not `list_issues`: an inbox source lists its issues first",
@@ -247,7 +259,7 @@ mod tests {
             r#"{"protocol_version":1,"name":"demo","version":"0.1.0",
                 "commands":[{"key":"mail","label":"Mail the day","target":"day","timeout":30}],
                 "events":["report_ready","workday_end","new_inbox_issue"],
-                "requests":["list_issues","transition","comment"],
+                "requests":["list_issues","transition","comment","find_tasks"],
                 "settings":[{"key":"token","label":"Token","secret":true,"required":true}]}"#,
         );
 
@@ -282,6 +294,21 @@ mod tests {
 
         assert!(manifest.problem().unwrap().contains("not `list_issues`"));
         assert!(!manifest.is_source());
+    }
+
+    #[test]
+    fn finding_tasks_needs_no_inbox() {
+        let manifest = read(r#"{"protocol_version":1,"name":"d","version":"1","requests":["find_tasks"]}"#);
+
+        assert_eq!(manifest.problem(), None);
+        assert!(manifest.answers(Request::FindTasks) && !manifest.is_source());
+    }
+
+    #[test]
+    fn a_comment_needs_a_listing_wherever_it_is_declared() {
+        let manifest = read(r#"{"protocol_version":1,"name":"d","version":"1","requests":["find_tasks","comment"]}"#);
+
+        assert!(manifest.problem().unwrap().contains("answers `comment` but not `list_issues`"));
     }
 
     #[test]

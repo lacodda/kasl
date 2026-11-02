@@ -1,4 +1,4 @@
-//! External API clients (GitLab, Jira, SiServer, kasl-server) and the shared
+//! External API clients (Jira, SiServer, kasl-server) and the shared
 //! session-management pattern most of them implement.
 //!
 //! [`kasl_server`] is the exception: it authenticates with a token an
@@ -6,7 +6,7 @@
 //! implement [`Session`].
 //!
 //! ```text
-//! use kasl::api::{GitLabConfig, JiraConfig, SiConfig};
+//! use kasl::api::{JiraConfig, SiConfig};
 //!
 //! let jira_module = JiraConfig::module();
 //! let jira_config = JiraConfig::init(&existing_config)?;
@@ -19,12 +19,10 @@ use anyhow::Result;
 use std::fs;
 use std::io::Write;
 
-pub mod gitlab;
 pub mod jira;
 pub mod kasl_server;
 pub mod si;
 
-pub use gitlab::GitLabConfig;
 pub use jira::JiraConfig;
 pub use si::SiConfig;
 

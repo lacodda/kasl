@@ -54,7 +54,7 @@ pub fn success(msg: Message) -> String {
 /// let message = error(Message::ConfigSaveError);
 /// println!("{}", message); // "❌ Failed to save configuration"
 ///
-/// let detailed = error(Message::GitlabFetchFailed("Network timeout".to_string()));
+/// let detailed = error(Message::JiraFetchFailed("Network timeout".to_string()));
 /// println!("{}", detailed);
 /// ```
 ///

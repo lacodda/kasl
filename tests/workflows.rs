@@ -145,7 +145,6 @@ mod tests {
             }),
             kasl_server: None,
             si: None,
-            gitlab: None,
             jira: None,
             inbox: None,
             plugins: Default::default(),

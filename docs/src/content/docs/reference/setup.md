@@ -24,24 +24,24 @@ kasl setup [OPTIONS]
 The wizard opens with a single checklist - a `MultiSelect`, not a chain of "Enable X? (y/N)" questions - listing every module in this order:
 
 1. **SiServer**
-2. **GitLab**
-3. **Jira**
-4. **Monitor**
-5. **Server**
-6. **Productivity**
-7. **Report**
-8. **Task discovery**
-9. **Jira inbox**
+2. **Jira**
+3. **Monitor**
+4. **Server**
+5. **Productivity**
+6. **Report**
+7. **Task discovery**
+8. **Inbox**
 
 Whatever you tick runs its own prompts right after the checklist closes; nothing you leave unticked is touched. Fields already in your config file are offered back as defaults, so re-running `setup` on a module you configured before is an edit, not a rewrite.
 
-### SiServer, GitLab, Jira
+### SiServer, Jira
 
-Each asks for a login/token and its API URL:
+Each asks for a login and its API URL:
 
 - **SiServer**: login, login URL, API URL.
-- **GitLab**: private token, API URL.
 - **Jira**: login, API URL - just the two fields; there is no separate "Jira Username" prompt.
+
+GitLab is not a wizard module. It is a plugin that ships with kasl, and it is set up with `kasl plugin setup gitlab` - see the [plugin reference](/reference/plugin/).
 
 ### Monitor
 

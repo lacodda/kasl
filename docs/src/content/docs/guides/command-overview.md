@@ -249,4 +249,4 @@ RUST_LOG=kasl=debug kasl task find
 
 - [Getting Started](/getting-started/) - installing kasl and the first run
 - [Configuration](/concepts/configuration/) - every setting in one place
-- [API Integrations](/concepts/api-integrations/) - GitLab, Jira and report submission
+- [API Integrations](/concepts/api-integrations/) - Jira, report submission and the GitLab plugin

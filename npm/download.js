@@ -66,6 +66,17 @@ function install(done) {
       process.exit(1);
     }
     fs.renameSync(path.join(__dirname, name, exe), exePath);
+    // The plugins that ship with kasl go beside the binary, which is where
+    // kasl looks for them - this package's directory is on no PATH.
+    for (const file of fs.readdirSync(path.join(__dirname, name))) {
+      if (file.startsWith("kasl-plugin-")) {
+        const plugin = path.join(__dirname, file);
+        fs.renameSync(path.join(__dirname, name, file), plugin);
+        if (process.platform !== "win32") {
+          fs.chmodSync(plugin, 0o755);
+        }
+      }
+    }
     fs.rmSync(path.join(__dirname, name), { recursive: true, force: true });
     fs.rmSync(archive, { force: true });
     if (process.platform !== "win32") {

@@ -62,7 +62,7 @@ enum Commands {
     /// Comprehensive task management command
     ///
     /// Handles all task-related operations including creation, editing, deletion,
-    /// viewing, and integration with external services like GitLab and Jira.
+    /// viewing, and integration with Jira and the plugins (GitLab's among them).
     #[command(about = "Create task")]
     Task(task::TaskArgs),
 

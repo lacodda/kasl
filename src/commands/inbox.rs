@@ -1063,7 +1063,10 @@ async fn comment_issue(key: &str, text: Option<String>) -> Result<()> {
         bail!("an empty comment is not a comment; nothing was sent");
     }
     inbox_source::comment_issue(key, text, crate::api::jira::SessionMode::Interactive).await?;
-    msg_success!(Message::JiraCommented(key.to_string()));
+    msg_success!(Message::Commented {
+        key: key.to_string(),
+        source: inbox_source::label(&inbox_source::source_of(key)?),
+    });
     Ok(())
 }
 

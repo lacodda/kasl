@@ -16,7 +16,6 @@
 mod wizard;
 
 use super::data_storage::DataStorage;
-use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
 use crate::libs::messages::Message;
@@ -189,10 +188,6 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub si: Option<SiConfig>,
 
-    /// GitLab integration (commit discovery).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub gitlab: Option<GitLabConfig>,
-
     /// Jira integration (issue discovery, inbox).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jira: Option<JiraConfig>,
@@ -233,6 +228,55 @@ pub struct Config {
     /// because it is listed here; this holds only its settings.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub plugins: std::collections::BTreeMap<String, PluginConfig>,
+}
+
+/// The `gitlab` block of a config written before v1.20, when GitLab was
+/// kasl's own integration. [`Config::read`] moves it to the GitLab plugin;
+/// nothing writes it again.
+#[derive(Deserialize, Clone, Debug, Default)]
+struct LegacyGitLab {
+    #[serde(default)]
+    access_token: String,
+    #[serde(default)]
+    api_url: String,
+}
+
+/// Moves GitLab as kasl kept it before v1.20 to the GitLab plugin, which
+/// now does what that integration did: the address becomes the plugin's
+/// `url`, and the token leaves the config file for the OS keyring, as
+/// `plugin.gitlab.token`.
+///
+/// What the plugin was already told wins over the old block. The token is
+/// stored before anything else: a keyring that refuses it fails the move, and
+/// the caller then leaves the file as it was - the old block moves on a later
+/// read rather than the token being lost.
+///
+/// `stored` reads a keyring account and `store` writes one; they are passed
+/// in so the move can be tested without the machine's keyring.
+fn move_gitlab_to_its_plugin(
+    config: &mut Config,
+    legacy: &LegacyGitLab,
+    stored: &dyn Fn(&str) -> Option<String>,
+    store: &dyn Fn(&str, &str) -> Result<()>,
+) -> Result<()> {
+    let token = legacy.access_token.trim();
+    let account = crate::libs::plugin::secret_account("gitlab", "token");
+    if !token.is_empty() && stored(&account).is_none_or(|value| value.trim().is_empty()) {
+        store(&account, token)?;
+    }
+    let url = legacy.api_url.trim();
+    let settings = &mut config.plugins.entry("gitlab".to_string()).or_default().settings;
+    let has_url = settings
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|value| !value.trim().is_empty());
+    if !url.is_empty() && !has_url {
+        settings.insert("url".to_string(), serde_json::Value::String(url.to_string()));
+    }
+    if settings.is_empty() {
+        config.plugins.remove("gitlab");
+    }
+    Ok(())
 }
 
 /// One plugin's settings, as `kasl plugin setup` wrote them.
@@ -433,7 +477,21 @@ impl Config {
         }
 
         let config_str = fs::read_to_string(config_file_path)?;
-        let config: Config = serde_json::from_str(&config_str)?;
+        let mut raw: serde_json::Value = serde_json::from_str(&config_str)?;
+        let legacy = raw.as_object_mut().and_then(|fields| fields.remove("gitlab"));
+        let mut config: Config = serde_json::from_value(raw)?;
+        if let Some(legacy) = legacy {
+            let legacy: LegacyGitLab = serde_json::from_value(legacy)?;
+            let stored = |account: &str| crate::libs::secret::Secret::new(account, "").try_get_cached();
+            let store = |account: &str, value: &str| crate::libs::secret::Secret::new(account, "").store(value);
+            match move_gitlab_to_its_plugin(&mut config, &legacy, &stored, &store) {
+                Ok(()) => {
+                    config.save()?;
+                    tracing::info!("Moved the GitLab settings to the gitlab plugin; its token is in the OS keyring now");
+                }
+                Err(error) => tracing::warn!("GitLab's settings stay in the config file until the keyring takes the token: {error:#}"),
+            }
+        }
         Ok(config)
     }
 
@@ -571,5 +629,73 @@ impl Config {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+
+    /// The block an older kasl wrote, and a config from the same file.
+    fn written_before_1_20(rest: serde_json::Value) -> (Config, LegacyGitLab) {
+        let legacy = LegacyGitLab {
+            access_token: "glpat-old".into(),
+            api_url: "https://gitlab.example.com".into(),
+        };
+        (serde_json::from_value(rest).unwrap(), legacy)
+    }
+
+    #[test]
+    fn the_old_gitlab_block_moves_to_the_plugin_and_its_token_to_the_keyring() {
+        let (mut config, legacy) = written_before_1_20(serde_json::json!({}));
+        let keyring = RefCell::new(HashMap::new());
+
+        move_gitlab_to_its_plugin(&mut config, &legacy, &|account| keyring.borrow().get(account).cloned(), &|account, value| {
+            keyring.borrow_mut().insert(account.to_string(), value.to_string());
+            Ok(())
+        })
+        .unwrap();
+
+        assert_eq!(keyring.borrow().get("plugin.gitlab.token").map(String::as_str), Some("glpat-old"));
+        assert_eq!(config.plugins["gitlab"].settings["url"], "https://gitlab.example.com");
+        let saved = serde_json::to_value(&config).unwrap();
+        assert!(saved.get("gitlab").is_none(), "the old block is never written again");
+        assert!(!saved.to_string().contains("glpat-old"), "the token left the config file: {saved}");
+    }
+
+    #[test]
+    fn what_the_plugin_was_already_told_wins() {
+        let (mut config, legacy) = written_before_1_20(serde_json::json!({
+            "plugins": { "gitlab": { "settings": { "url": "https://new.example.com" } } }
+        }));
+        let keyring = RefCell::new(HashMap::from([("plugin.gitlab.token".to_string(), "glpat-new".to_string())]));
+
+        move_gitlab_to_its_plugin(&mut config, &legacy, &|account| keyring.borrow().get(account).cloned(), &|_, _| {
+            panic!("a token already in the keyring is not overwritten")
+        })
+        .unwrap();
+
+        assert_eq!(config.plugins["gitlab"].settings["url"], "https://new.example.com");
+    }
+
+    #[test]
+    fn a_keyring_that_refuses_the_token_fails_the_move_before_anything_changes() {
+        let (mut config, legacy) = written_before_1_20(serde_json::json!({}));
+
+        let refused = move_gitlab_to_its_plugin(&mut config, &legacy, &|_| None, &|_, _| anyhow::bail!("no keyring here"));
+
+        assert!(refused.is_err(), "the caller must not save: the token would be lost with the old block");
+        assert!(!config.plugins.contains_key("gitlab"));
+    }
+
+    #[test]
+    fn an_empty_old_block_leaves_no_plugin_entry_behind() {
+        let mut config = Config::default();
+
+        move_gitlab_to_its_plugin(&mut config, &LegacyGitLab::default(), &|_| None, &|_, _| panic!("nothing to store")).unwrap();
+
+        assert!(config.plugins.is_empty());
     }
 }

@@ -2,53 +2,60 @@
 title: "API Integrations"
 ---
 
-kasl talks to three kinds of external service: GitLab and Jira supply candidate tasks, Jira also hears when you start and finish an issue, and a corporate reporting API receives the finished day. All three are optional - kasl records the workday without any of them.
+kasl talks to three kinds of external service: GitLab (through a plugin) and Jira supply candidate tasks, Jira also hears when you start and finish an issue, and a corporate reporting API receives the finished day. All three are optional - kasl records the workday without any of them.
 
 ## What each integration does
 
 | Service | Direction | What it is for |
 | --- | --- | --- |
-| GitLab | reads | Today's commits become candidate tasks in `kasl task find` |
+| GitLab (plugin) | reads, writes | Today's commits become candidate tasks in `kasl task find`; assigned issues and merge requests feed `kasl inbox`; `inbox start`, `close` and `comment` move and annotate them |
 | Jira | reads, writes | Resolved issues become candidates; assigned open issues feed `kasl inbox`; `inbox start`, `close` and `comment` move and annotate issues |
 | SiServer | writes | `kasl report --send` and `kasl sum --send` file the day and the month |
 
-Each is configured through the `kasl setup` wizard. Logins and URLs go to
-`config.json`; passwords go to the OS keyring. API tokens are the exception -
-see the note under GitLab.
+Jira and SiServer are configured through the `kasl setup` wizard; GitLab is set
+up with `kasl plugin setup gitlab`. Logins and URLs go to `config.json`;
+passwords and the GitLab token go to the OS keyring.
 
 ## GitLab
 
-Imports the commits you pushed today, so the tasks you log come from what you
-actually did rather than from memory.
+GitLab is not built into kasl. It is a plugin, `kasl-plugin-gitlab`, that ships
+in the box: the release archive, the installers, the npm package and
+`kasl self-update` put it beside the kasl binary. kasl looks for plugins in its
+plugins directory, then beside its own executable, then on `PATH`. A copy
+installed with `cargo install kasl-cli` has no plugin, because crates.io carries
+only the binary - download `kasl-plugin-gitlab` from the
+[plugin's releases](https://github.com/lacodda/kasl-plugin-gitlab) and put it
+in kasl's plugins directory.
+
+The plugin does two things. It is an [inbox](/reference/inbox/) source: your open
+issues, the open merge requests assigned to you and the ones you are asked to
+review, keyed by GitLab's full references (`group/app#14`, `group/app!31`). And
+it answers `find_tasks`, so `kasl task find` offers the commits you pushed today.
 
 ### Setup
 
-1. In GitLab, open **User Settings → Access Tokens** and create a token with the
-   `read_user` and `read_api` scopes.
-2. Run `kasl setup` and follow the GitLab prompts.
+1. In GitLab, open **User Settings → Access Tokens** and create a personal access
+   token. The `api` scope lets kasl start, close and comment; `read_api` only
+   reads.
+2. Run `kasl plugin setup gitlab` and enter the settings: `url` (the instance
+   root, for example `https://gitlab.com`) and `token`. `start_label` is
+   optional - the label that marks work as started.
 
-### Configuration
+The token is a secret: it goes to the OS keyring as `plugin.gitlab.token`, never
+to `config.json`. The address is kept under `plugins.gitlab.settings.url`. The
+full walk-through is in [Working with the GitLab inbox](/guides/gitlab-inbox/);
+the plugin protocol is in the [plugin reference](/reference/plugin/).
 
-```json
-{
-  "gitlab": {
-    "access_token": "glpat-XXXXXXXXXXXXXXXXXXXX",
-    "api_url": "https://gitlab.com"
-  }
-}
-```
-
-:::caution[The GitLab token is stored in the config file]
-Unlike the Jira and SiServer passwords, which go to the OS keyring, the GitLab
-personal access token is written to `config.json` in plain text. Give the token
-the narrowest scopes that work, and keep the file readable only by you.
-:::
+A config written by an older kasl may still have a `gitlab` block. It is moved
+automatically on the first read: the token goes to the keyring, the address
+becomes `plugins.gitlab.settings.url`, and the file is saved without the block.
 
 ### How it finds your commits
 
-kasl reads your user id, asks for your push events of the day, and resolves each
-push to the commits it carried. Merge commits and commits already logged as
-tasks are filtered out, so `kasl task find` offers each piece of work once.
+When you run `kasl task find`, kasl asks the plugin what it found in the day. The
+plugin offers the commits you pushed, with the first line of the commit message
+and the short SHA beside it. Commits already logged as tasks are filtered out,
+so each piece of work is offered once.
 
 ```bash
 kasl task find
@@ -164,8 +171,9 @@ protects nothing. Installations that predate 1.0 still carry the old AES files
 next to the config; they are read once, migrated into the keyring and left alone
 afterwards. See [ADR 0001](https://github.com/lacodda/kasl/blob/main/docs/adr/0001-os-keyring.md).
 
-Two values are not passwords and stay in `config.json` as written: the GitLab
-`access_token` and the reporting server's `auth_token`.
+The GitLab plugin's token is a secret too and goes to the keyring as
+`plugin.gitlab.token`. One value is not a password and stays in `config.json` as
+written: the reporting server's `auth_token`.
 
 ### What is on disk
 
@@ -175,8 +183,8 @@ The data directory holds the database, the config and the cached session ids:
 - **macOS**: `~/Library/Application Support/lacodda/kasl/`
 - **Linux**: `~/.local/share/lacodda/kasl/`
 
-Session ids are `.jira_session_id` and `.si_session_id`. GitLab has none - it
-authenticates with the token on every request.
+Session ids are `.jira_session_id` and `.si_session_id`. The GitLab plugin has none - it
+authenticates with its token on every request.
 
 ### When authentication fails
 
@@ -192,7 +200,8 @@ To force a fresh login, delete the cached session id:
 rm ~/.local/share/lacodda/kasl/.jira_session_id
 ```
 
-To replace a stored password, run `kasl setup` again.
+To replace a stored password, run `kasl setup` again; to replace the GitLab
+token, run `kasl plugin setup gitlab`.
 
 ## Debugging
 
@@ -205,7 +214,9 @@ responses. It does not print credentials.
 
 ## Related pages
 
-- [`task`](/reference/task/) - `task find` is where GitLab and Jira candidates appear
+- [`task`](/reference/task/) - `task find` is where Jira and GitLab plugin candidates appear
+- [Working with the GitLab inbox](/guides/gitlab-inbox/) - setting up the GitLab plugin and using its inbox
+- [`plugin`](/reference/plugin/) - installing, listing and setting up plugins
 - [`inbox`](/reference/inbox/) - the inbox, its sources and its polling
 - [Writing a plugin](/guides/writing-a-plugin/) - an integration of your own, as a plugin
 - [`report`](/reference/report/) - filing the day with `--send`

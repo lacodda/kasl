@@ -5,7 +5,6 @@
 //! ignore names, Jira inbox fields).
 
 use super::{Config, ConfigModule, InboxConfig, JiraCustomField, MonitorConfig, ProductivityConfig, ReportConfig, ServerConfig, TaskDiscoveryConfig};
-use crate::api::gitlab::GitLabConfig;
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
 use crate::libs::messages::Message;
@@ -37,7 +36,6 @@ impl Config {
 
         let node_descriptions = [
             SiConfig::module(),
-            GitLabConfig::module(),
             JiraConfig::module(),
             ConfigModule {
                 key: "monitor".to_string(),
@@ -61,7 +59,7 @@ impl Config {
             },
             ConfigModule {
                 key: "inbox".to_string(),
-                name: "Jira inbox".to_string(),
+                name: "Inbox".to_string(),
             },
         ];
 
@@ -74,7 +72,6 @@ impl Config {
             match node_descriptions[selection].key.as_str() {
                 // External API integrations delegate to their own setup methods
                 "si" => config.si = Some(SiConfig::init(&config.si)?),
-                "gitlab" => config.gitlab = Some(GitLabConfig::init(&config.gitlab)?),
                 "jira" => config.jira = Some(JiraConfig::init(&config.jira)?),
 
                 "monitor" => {

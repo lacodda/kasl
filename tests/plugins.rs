@@ -46,7 +46,12 @@ fn system_path() -> String {
 }
 
 fn kasl(dir: &Path, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_kasl"));
+    kasl_at(Path::new(env!("CARGO_BIN_EXE_kasl")), dir, args)
+}
+
+/// `kasl` run from `exe` - a copy of the binary somewhere of the test's choosing.
+fn kasl_at(exe: &Path, dir: &Path, args: &[&str]) -> Output {
+    let mut command = Command::new(exe);
     command
         .args(args)
         .env("HOME", dir)
@@ -82,11 +87,16 @@ struct Fixture {
 }
 
 impl Fixture {
-    /// Installs `kasl-plugin-NAME` describing itself with `manifest`,
-    /// answering every call with `{}` and exiting with `code`.
+    /// Installs `kasl-plugin-NAME` in kasl's plugins directory, describing
+    /// itself with `manifest`, answering every call with `{}` and exiting
+    /// with `code`.
     fn install(name: &str, manifest: Value, code: i32) -> Fixture {
-        let dir = kasl::libs::plugin::plugins_dir().unwrap();
-        std::fs::create_dir_all(&dir).unwrap();
+        Self::install_in(&kasl::libs::plugin::plugins_dir().unwrap(), name, manifest, code)
+    }
+
+    /// The same, in a directory of the test's choosing.
+    fn install_in(dir: &Path, name: &str, manifest: Value, code: i32) -> Fixture {
+        std::fs::create_dir_all(dir).unwrap();
         let manifest_path = dir.join(format!("{name}.manifest.json"));
         std::fs::write(&manifest_path, manifest.to_string()).unwrap();
         let fixture = Fixture {
@@ -490,4 +500,131 @@ fn nothing_installed_says_where_kasl_looks() {
     assert!(said.contains("No plugins installed") && said.contains("kasl-plugin-*"), "{said}");
     let listed = document(dir.path(), &["plugin", "list", "--json"]);
     assert_eq!(listed["plugins"], json!([]));
+}
+
+/// kasl's own binary, linked (or copied) into `bin`: a kasl whose directory
+/// the test owns, as an installer leaves one.
+fn kasl_in(bin: &Path) -> PathBuf {
+    std::fs::create_dir_all(bin).unwrap();
+    let copy = bin.join(format!("kasl{}", std::env::consts::EXE_SUFFIX));
+    if std::fs::hard_link(env!("CARGO_BIN_EXE_kasl"), &copy).is_err() {
+        std::fs::copy(env!("CARGO_BIN_EXE_kasl"), &copy).unwrap();
+    }
+    copy
+}
+
+#[test]
+#[serial]
+fn a_plugin_beside_kasl_is_found_and_one_in_the_plugins_directory_wins() {
+    // The release archive carries its plugins beside the binary, and the
+    // installers put them there - whether or not that directory is on PATH.
+    let dir = sandbox();
+    let bin = dir.path().join("bin");
+    let exe = kasl_in(&bin);
+    Fixture::install_in(&bin, "boxed", manifest(json!({"version": "1.0.0"})), 0);
+
+    let listed = |dir: &Path| {
+        let out = kasl_at(&exe, dir, &["plugin", "list", "--json"]);
+        assert!(out.status.success(), "{}", text(&out));
+        serde_json::from_slice::<Value>(&out.stdout).unwrap()["plugins"][0].clone()
+    };
+    let boxed = listed(dir.path());
+    assert_eq!(boxed["name"], json!("boxed"));
+    assert!(boxed["path"].as_str().unwrap().starts_with(&*bin.to_string_lossy()), "{boxed}");
+
+    // Someone put a copy of their own in the plugins directory: it is the one used.
+    Fixture::install("boxed", manifest(json!({"version": "2.0.0"})), 0);
+    let mine = listed(dir.path());
+    assert_eq!(mine["manifest"]["version"], json!("2.0.0"), "{mine}");
+    assert!(!mine["path"].as_str().unwrap().starts_with(&*bin.to_string_lossy()));
+}
+
+#[test]
+#[serial]
+fn a_gitlab_reference_is_a_key_like_any_other() {
+    // `#`, `!` and `/` reach the database, the command line and the JSON
+    // documents as they are.
+    let dir = sandbox();
+    let source = Fixture::install("forge", manifest(json!({"requests": ["list_issues"]})), 0);
+    source.answer(json!({"issues": [listed("group/app#14", "Fix the login"), listed("group/app!31", "Review the fix")]}));
+
+    ok(dir.path(), &["inbox", "sync"]);
+
+    let keys: Vec<String> = inbox(dir.path()).iter().map(|issue| issue["key"].as_str().unwrap().to_string()).collect();
+    assert_eq!(keys.len(), 2, "{keys:?}");
+    assert!(keys.contains(&"group/app#14".to_string()) && keys.contains(&"group/app!31".to_string()));
+    let shown = document(dir.path(), &["inbox", "show", "group/app!31", "--json"]);
+    assert_eq!(shown["issue"]["summary"], json!("Review the fix"));
+    assert_eq!(shown["issue"]["source"], json!("forge"));
+}
+
+#[test]
+#[serial]
+fn a_listing_with_a_key_no_command_line_can_carry_is_refused_whole() {
+    let dir = sandbox();
+    let source = Fixture::install("forge", manifest(json!({"requests": ["list_issues"]})), 0);
+    source.answer(json!({"issues": [listed("group/app#14", "Fine"), listed("two words", "Not a key")]}));
+
+    let said = text(&kasl(dir.path(), &["inbox", "sync"]));
+
+    assert!(said.contains("a key kasl cannot keep"), "{said}");
+    assert!(inbox(dir.path()).is_empty(), "half a listing was kept");
+}
+
+#[test]
+#[serial]
+fn find_tasks_hands_the_plugin_the_day_and_reads_what_it_found() {
+    let dir = sandbox();
+    // Discovery here runs in this process and searches its PATH: keep it to
+    // the system's tools, so no plugin the machine really has is asked.
+    let path = std::env::var_os("PATH");
+    // SAFETY: every test here is #[serial].
+    unsafe { std::env::set_var("PATH", system_path()) };
+    a_working_day();
+    let finder = Fixture::install("finder", manifest(json!({"requests": ["find_tasks"]})), 0);
+    finder.answer(json!({"tasks": [{"name": "Fix the login", "ref": "a1b2c3d"}, {"name": "Write it down"}], "message": "1 push could not be read"}));
+
+    let finders = kasl::libs::plugin::tasks::finders().unwrap();
+    let names: Vec<&str> = finders.iter().map(|plugin| plugin.name.as_str()).collect();
+    assert_eq!(names, ["finder"]);
+    let today = Local::now().date_naive();
+    let day = serde_json::to_value(kasl::libs::report::DayReport::read(today).unwrap().to_json()).unwrap();
+    let found = kasl::libs::plugin::tasks::find(&finders[0], day).unwrap();
+    if let Some(path) = path {
+        // SAFETY: as above.
+        unsafe { std::env::set_var("PATH", path) };
+    }
+
+    let found_names: Vec<&str> = found.tasks.iter().map(|task| task.name.as_str()).collect();
+    assert_eq!(found_names, ["Fix the login", "Write it down"]);
+    assert_eq!(found.tasks[0].reference.as_deref(), Some("a1b2c3d"));
+    assert_eq!(found.message.as_deref(), Some("1 push could not be read"));
+    let call = &finder.calls()[0];
+    assert_eq!(call["request"], json!("find_tasks"));
+    assert_eq!(call["subject"]["date"], json!(today.format("%Y-%m-%d").to_string()), "the day is handed whole");
+    assert_eq!(call["subject"]["tasks"][0]["name"], json!("Write the plugin protocol"));
+
+    let said = ok(dir.path(), &["plugin", "list"]);
+    assert!(said.contains("offers tasks to `kasl task find`"), "{said}");
+    assert!(!said.contains("a source"), "finding tasks does not make it an inbox source: {said}");
+}
+
+#[test]
+#[serial]
+fn a_comment_goes_to_the_issues_source_and_says_which_one_it_was() {
+    // Found on the v1.20 live run: the comment reached the plugin, and kasl
+    // then reported it as left "in Jira".
+    let dir = sandbox();
+    let source = Fixture::install("forge", manifest(json!({"requests": ["list_issues", "comment"]})), 0);
+    source.answer(json!({"issues": [listed("group/app!31", "Review the fix")]}));
+    ok(dir.path(), &["inbox", "sync"]);
+    source.answer(json!({}));
+
+    let said = ok(dir.path(), &["inbox", "comment", "group/app!31", "Looks good"]);
+
+    assert!(said.contains("Commented on group/app!31 in forge"), "{said}");
+    assert!(!said.contains("Jira"), "{said}");
+    let call = source.calls().into_iter().find(|call| call["request"] == json!("comment")).unwrap();
+    assert_eq!(call["comment"], json!("Looks good"));
+    assert_eq!(call["subject"]["key"], json!("group/app!31"));
 }

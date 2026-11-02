@@ -389,9 +389,41 @@ mod tests {
                 }
                 assert!(
                     attributes.contains("no_run") || attributes.contains("ignore"),
-                    "{file}: an example calling {call} runs during `cargo test` and would                      change this machine's startup configuration - mark the block ```rust,no_run"
+                    "{file}: an example calling {call} runs during `cargo test` and would change this machine's startup configuration - mark the block ```rust,no_run"
                 );
             }
         }
+    }
+
+    /// The plugins that ship with kasl ride in the release archive beside
+    /// the binary, and every way of installing kasl puts them beside it -
+    /// where kasl looks. A path that skipped them would install a kasl whose
+    /// GitLab inbox silently is not there.
+    #[test]
+    fn the_bundled_plugins_reach_every_installation() {
+        let workflow = read(".github/workflows/release.yml");
+        assert!(
+            workflow.contains("GITLAB_PLUGIN: v") && workflow.contains("-R lacodda/kasl-plugin-gitlab"),
+            "release.yml no longer fetches a pinned kasl-plugin-gitlab release"
+        );
+        assert_eq!(
+            workflow.matches("bundled/bin/* \"$name\"").count(),
+            2,
+            "both package steps, Windows and Unix, must pack the bundled plugins"
+        );
+        assert!(
+            workflow.contains("plugin list --json") && workflow.contains("select(.name == \"gitlab\" and .problem == null)"),
+            "release.yml no longer checks the packed kasl can use its bundled plugin"
+        );
+        for installer in ["tools/install.ps1", "tools/install.sh", "npm/download.js"] {
+            assert!(
+                read(installer).contains("kasl-plugin-"),
+                "{installer} does not install the plugins the archive carries"
+            );
+        }
+        assert!(
+            read("src/libs/update.rs").contains("is_bundled_plugin(file_name)"),
+            "self-update no longer replaces the bundled plugins beside the binary"
+        );
     }
 }

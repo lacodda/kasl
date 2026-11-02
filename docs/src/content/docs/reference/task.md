@@ -2,7 +2,7 @@
 title: "task"
 ---
 
-The `task` command creates, lists, shows, edits and removes tasks, and can pull candidates from Jira and GitLab.
+The `task` command creates, lists, shows, edits and removes tasks, and can pull candidates from Jira and from plugins such as the GitLab plugin.
 
 ## Usage
 
@@ -76,14 +76,14 @@ kasl task remove [OPTIONS] [ID]...
 - `--today`: Remove every task recorded for today.
 - `-y, --yes`: Remove without asking for confirmation.
 
-### `find` - Find incomplete tasks and import from GitLab/Jira
+### `find` - Find incomplete tasks and import from Jira and plugins
 
 ```bash
 kasl task find
 ```
 
-- Shows a spinner while searching incomplete local tasks, today's Jira issues, and GitLab commits.
-- Presents a single consolidated MultiSelect (incomplete tasks first, then a separator, then Jira/GitLab).
+- Shows a spinner while gathering incomplete local tasks, Jira issues resolved on the day, and what plugins find in the day - for the GitLab plugin, the commits you pushed (first line of the commit message, short SHA beside it).
+- Presents a single consolidated MultiSelect (incomplete tasks first, then a separator, then Jira and plugin candidates). A plugin's candidates show as `● name (ref)`, and the summary line names each source, for example `Found: 2 incomplete, 1 jira, 3 gitlab`.
 - Filters out tasks already logged today, near-duplicate names, and names from `task_discovery.ignore_names`.
 - After import selection, optionally add items to the persistent ignore list.
 - Selected incomplete tasks prompt for an updated completeness percentage before insert.
@@ -108,7 +108,7 @@ kasl task list --all
 # Display tasks with specific tag
 kasl task list --tag "urgent"
 
-# Find and import incomplete/Jira/GitLab tasks
+# Find and import incomplete, Jira and plugin tasks
 kasl task find
 
 # Show specific tasks

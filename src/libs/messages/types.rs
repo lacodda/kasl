@@ -40,11 +40,12 @@ pub enum Message {
     TasksNotFoundForDate(String),
     TasksNotFoundSad,
     TasksHeader,
-    /// Summary line before unified discovery MultiSelect
+    /// Summary line before unified discovery MultiSelect; the plugins'
+    /// counts by plugin name, in the order they were found.
     TasksDiscoverySummary {
         incomplete: usize,
         jira: usize,
-        gitlab: usize,
+        plugins: Vec<(String, usize)>,
     },
     /// Non-selectable separator between incomplete and other items
     TasksDiscoverySeparator,
@@ -88,7 +89,6 @@ pub enum Message {
     ConfigDeleted,
     ConfigParseError,
     ConfigSaveError,
-    ConfigModuleGitLab,
     ConfigModuleJira,
     ConfigModuleSiServer,
     ConfigModuleMonitor,
@@ -233,9 +233,7 @@ pub enum Message {
     WrongPassword(i32), // attempt count
 
     // === API MESSAGES ===
-    GitlabFetchFailed(String),  // error message
-    GitlabUserIdFailed(String), // error message
-    JiraFetchFailed(String),    // error message
+    JiraFetchFailed(String), // error message
     SiServerConfigNotFound,
     SiServerSessionFailed(String),          // error message
     SiServerRestDatesFailed(String),        // error message
@@ -531,6 +529,9 @@ pub enum Message {
         plugin: String,
         message: String,
     },
+    /// A plugin asked for the day's tasks could not give them; the error
+    /// names the plugin.
+    PluginTasksFailed(String),
     /// A plugin could not take an event; the error names the plugin.
     PluginEventFailed {
         event: String,
@@ -559,7 +560,11 @@ pub enum Message {
     /// The preview without SiServer: nothing is posted, the plugins get the day.
     ReportNotPostedToSiServer,
     /// A comment landed on the issue.
-    JiraCommented(String),
+    /// A comment was left on an issue at its source: the key, and the source as messages name it.
+    Commented {
+        key: String,
+        source: String,
+    },
     /// The local change stands, but Jira was not updated: key, then why.
     JiraWriteFailed(String, String),
     /// A taken issue was resolved in Jira while its task is open: key, then

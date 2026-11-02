@@ -87,8 +87,10 @@ kasl setup
 
 This will guide you through setting up:
 - Monitor settings (pause thresholds, activity detection)
-- API integrations (GitLab, Jira, SiServer)
+- API integrations (Jira, SiServer)
 - Server configuration for report submission
+
+GitLab is not part of the wizard. It is a plugin that ships with kasl; set it up with `kasl plugin setup gitlab` (see [Working with the GitLab inbox](/guides/gitlab-inbox/)).
 
 ### Manual Configuration
 
@@ -111,10 +113,6 @@ Example configuration:
     "login": "your.email@company.com",
     "auth_url": "https://auth.company.com",
     "api_url": "https://api.company.com"
-  },
-  "gitlab": {
-    "access_token": "your-token",
-    "api_url": "https://gitlab.com"
   },
   "jira": {
     "login": "your.email@company.com",

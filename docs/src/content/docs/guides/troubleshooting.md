@@ -26,7 +26,7 @@ Everything lives under one data directory:
 | macOS | `~/Library/Application Support/lacodda/kasl` |
 | Linux | `~/.local/share/lacodda/kasl` |
 
-Inside it: `kasl.db` (SQLite database), `config.json` (settings and API credentials), and session cookie files (`.jira_session_id`, `.si_session_id`) written after a successful login. GitLab authenticates with a personal access token on every request, so it has no session file.
+Inside it: `kasl.db` (SQLite database), `config.json` (settings and API credentials), and session cookie files (`.jira_session_id`, `.si_session_id`) written after a successful login. The GitLab plugin authenticates with a personal access token on every request, so it has no session file.
 
 ## Activity monitoring
 
@@ -79,7 +79,7 @@ kasl setup --delete   # wipe it and start over
 
 ### Credentials keep getting asked for again
 
-Jira and SiServer passwords are stored in the OS keyring (Credential Manager / Keychain / Secret Service), not in `config.json`. On Linux, a background `kasl watch` daemon needs a running Secret Service provider (e.g. `gnome-keyring` or `kwallet`) to read the stored password without a terminal to prompt at; on a headless box without one, credential lookups fail silently and Jira/SiServer features are skipped. GitLab's access token and the reporting server's `auth_token` are stored directly in `config.json`, not the keyring - keep that file's permissions private.
+Jira and SiServer passwords are stored in the OS keyring (Credential Manager / Keychain / Secret Service), not in `config.json`. On Linux, a background `kasl watch` daemon needs a running Secret Service provider (e.g. `gnome-keyring` or `kwallet`) to read the stored password without a terminal to prompt at; on a headless box without one, credential lookups fail silently and Jira/SiServer features are skipped. The GitLab plugin's token is in the keyring too (`plugin.gitlab.token`), so the same applies to it. Only the reporting server's `auth_token` is stored directly in `config.json` - keep that file's permissions private.
 
 ## API integration issues
 
@@ -96,7 +96,7 @@ If that does not help, re-run `kasl setup` to re-enter credentials - they may ha
 
 ### GitLab requests fail
 
-GitLab uses a personal access token (`gitlab.access_token` in `config.json`), not a session. Confirm the token is valid and has `read_user` + `read_repository` scope, and that `gitlab.api_url` points at the instance root (no `/api/v4` suffix).
+GitLab is handled by the `kasl-plugin-gitlab` plugin, which uses a personal access token, not a session. The token is the plugin's: it is kept in the OS keyring as `plugin.gitlab.token`, not in `config.json`. `kasl plugin list` shows whether the plugin is installed and ready; `kasl plugin setup gitlab` replaces the token and the `url`. The `url` must be the instance root (for example `https://gitlab.com`, no `/api/v4` suffix). A 401 means GitLab refused the token; a 403 means the token lacks a scope - `api` is needed to start, close and comment, `read_api` only reads. See [Working with the GitLab inbox](/guides/gitlab-inbox/).
 
 ### Report submission is refused with a productivity warning
 

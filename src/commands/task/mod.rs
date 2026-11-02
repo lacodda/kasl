@@ -22,7 +22,7 @@
 //! kasl task remove --today
 //!
 //! # Import from external services
-//! kasl task find                      # Find tasks from GitLab/Jira
+//! kasl task find                      # Find tasks from Jira and plugins
 //! kasl task add --template "bug-fix"  # Create from template
 //! ```
 
@@ -94,7 +94,7 @@ enum TaskCommand {
     Remove(RemoveArgs),
 
     /// Find incomplete and external tasks to import
-    #[command(about = "Find incomplete tasks and import from GitLab/Jira")]
+    #[command(about = "Find incomplete tasks and import from Jira and plugins")]
     Find,
 }
 

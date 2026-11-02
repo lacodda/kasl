@@ -104,10 +104,11 @@ Monthly work productivity: 95.4%
   come back, so the productivity figure means something.
 - **Tasks you do not have to remember.** Today's GitLab commits and resolved
   Jira issues arrive as candidates, deduplicated against what you already
-  logged; `kasl inbox triage` walks a slice of the backlog issue by issue, and
+  logged; the issues and merge requests waiting on you in Jira and GitLab
+  share one inbox; `kasl inbox triage` walks a slice of the backlog issue by issue, and
   snoozing puts one down until a date and brings it back by itself. Rules
   settle the rest once: pin what is High, hide Epics, tag work by project.
-- **A toast you can answer.** A notification about a Jira issue carries Take,
+- **A toast you can answer.** A notification about an inbox issue carries Take,
   Snooze and Dismiss, so most of the backlog is triaged without opening a
   terminal. Windows and Linux; on macOS the notification API cannot report a
   click, so the buttons are left out rather than drawn dead.
@@ -136,9 +137,9 @@ Monthly work productivity: 95.4%
   for logs and `grep`: no colour, no emoji, tables as tab-separated lines.
   `NO_COLOR` is honoured.
 - **Plugins in any language.** A program named `kasl-plugin-*` hears the day
-  end and the report go out, runs on a day or an issue by hand, or feeds the
-  inbox beside Jira - `kasl plugin list` shows what is installed and what each
-  needs.
+  end and the report go out, runs on a day or an issue by hand, feeds the
+  inbox beside Jira, or offers the day's tasks - `kasl plugin list` shows what
+  is installed and what each needs. GitLab is one, and it comes in the box.
 - **Readable by your coding assistant, when you let it.** `kasl mcp` serves
   the day, the week, tasks and the inbox to Claude Code or any MCP client:
   read-only, the same documents `--json` prints, connected by you and not by
@@ -204,9 +205,9 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 ## Status
 
 In daily use on Windows, macOS and Linux. Everything above works today: the
-daemon, the Jira and GitLab integrations, the reports, the optional team
-server and the plugin protocol - GitLab's assigned issues become its first
-inbox source next. The current version and what landed in it:
+daemon, Jira, the GitLab plugin that ships with kasl, the reports, the
+optional team server and the plugin protocol. Next: the config edited by
+command rather than by hand. The current version and what landed in it:
 [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation

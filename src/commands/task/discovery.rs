@@ -1,16 +1,19 @@
-//! `kasl task find`: gathers candidates from incomplete local tasks,
-//! today's Jira resolutions and GitLab commits, deduplicates them, and
-//! walks the user through importing (or permanently ignoring) them.
+//! `kasl task find`: gathers candidates from incomplete local tasks, the
+//! day's Jira resolutions and what plugins find in the day (the GitLab
+//! plugin's commits, say), deduplicates them, and walks the user through
+//! importing (or permanently ignoring) them.
 
 use crate::{
-    api::{gitlab::GitLab, jira::Jira},
+    api::jira::Jira,
     db::inbox::{Inbox, LeftReason},
     db::tasks::Tasks,
     libs::{
         config::Config,
         jira_bridge,
         messages::Message,
+        plugin::tasks::{self as plugin_tasks, Finding},
         prompt::ensure_interactive,
+        report::DayReport,
         task::{Task, TaskFilter, is_ignored_name, normalize_task_name},
     },
     msg_error, msg_print, msg_success, msg_warning,
@@ -27,8 +30,8 @@ use std::time::Duration;
 enum TaskSource {
     /// Previously created but incomplete local tasks
     Incomplete,
-    /// Commits from GitLab repositories for the current day
-    Gitlab,
+    /// What a plugin found in the day: the GitLab plugin's commits, say
+    Plugin,
     /// Completed issues from Jira for the current day
     Jira,
 }
@@ -38,8 +41,10 @@ enum TaskSource {
 struct DiscoveryItem {
     source: TaskSource,
     task: Task,
-    /// Short GitLab commit SHA when available (display only)
-    short_sha: Option<String>,
+    /// The plugin's short reference - a commit's SHA - when it gave one (display only)
+    reference: Option<String>,
+    /// The plugin that found it, for [`TaskSource::Plugin`].
+    plugin: Option<String>,
     /// For an unfinished task taken from Jira: the issue was resolved there,
     /// with this resolution (empty when Jira gave none by name).
     resolved_in_jira: Option<String>,
@@ -51,7 +56,7 @@ impl TaskSource {
         match self {
             TaskSource::Incomplete => 0,
             TaskSource::Jira => 1,
-            TaskSource::Gitlab => 2,
+            TaskSource::Plugin => 2,
         }
     }
 }
@@ -67,14 +72,14 @@ fn format_discovery_item(item: &DiscoveryItem) -> String {
             format!("↻ {} — {}%{}", item.task.name, item.task.completeness.unwrap_or(0), resolved)
         }
         TaskSource::Jira => format!("◉ {}", item.task.name),
-        TaskSource::Gitlab => match &item.short_sha {
-            Some(sha) => format!("● {} ({})", item.task.name, sha),
+        TaskSource::Plugin => match &item.reference {
+            Some(reference) => format!("● {} ({})", item.task.name, reference),
             None => format!("● {}", item.task.name),
         },
     }
 }
 
-/// Keeps one item per normalized name, preferring Incomplete > Jira > GitLab.
+/// Keeps one item per normalized name, preferring Incomplete > Jira > a plugin's.
 fn dedup_discovery_items(items: Vec<DiscoveryItem>) -> Vec<DiscoveryItem> {
     let mut best: HashMap<String, DiscoveryItem> = HashMap::new();
 
@@ -95,8 +100,8 @@ fn dedup_discovery_items(items: Vec<DiscoveryItem>) -> Vec<DiscoveryItem> {
 
 /// Handles intelligent task discovery from multiple sources.
 ///
-/// Aggregates incomplete local tasks, today's GitLab commits, and completed Jira
-/// issues into a single filtered MultiSelect. Shows a spinner while fetching,
+/// Aggregates incomplete local tasks, completed Jira issues and what plugins
+/// find in the day into a single filtered MultiSelect. Shows a spinner while fetching,
 /// deduplicates near-identical names, and prioritizes incomplete tasks above
 /// external imports.
 pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Result<()> {
@@ -105,8 +110,14 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
 
     let date_naive = date.date_naive();
     let mut config = Config::read()?;
-    let gitlab_config = config.gitlab.clone();
     let jira_config = config.jira.clone();
+    let finders = plugin_tasks::finders()?;
+    // Read before the spinner starts: the day is what every plugin is handed.
+    let day = if finders.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::to_value(DayReport::read(date_naive)?.to_json())?
+    };
     let ignore_names = config.effective_ignore_names();
 
     // `--plain` asks for no animation; a hidden bar takes the same calls.
@@ -129,33 +140,33 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
 
     spinner.set_message(Message::TasksDiscoveryFetchingExternal.to_string());
 
-    let (commits_result, jira_result) = tokio::join!(
-        async {
-            match gitlab_config {
-                Some(cfg) => GitLab::new(&cfg).get_today_commits().await,
-                None => Ok(Vec::new()),
+    let (findings, jira_result) = tokio::join!(ask_plugins(finders, day), async {
+        match jira_config {
+            Some(cfg) => {
+                let mut jira = Jira::new(&cfg);
+                jira.get_completed_issues(&date_naive).await
             }
-        },
-        async {
-            match jira_config {
-                Some(cfg) => {
-                    let mut jira = Jira::new(&cfg);
-                    jira.get_completed_issues(&date_naive).await
-                }
-                None => Ok(Vec::new()),
-            }
-        },
-    );
+            None => Ok(Vec::new()),
+        }
+    },);
 
     spinner.finish_and_clear();
 
-    let commits = match commits_result {
-        Ok(c) => c,
-        Err(e) => {
-            msg_warning!(Message::GitlabFetchFailed(e.to_string()));
-            Vec::new()
+    let mut found: Vec<(String, Finding)> = Vec::new();
+    for (plugin, finding) in findings {
+        match finding {
+            Ok(finding) => {
+                if let Some(message) = &finding.message {
+                    msg_warning!(Message::PluginSaid {
+                        plugin: plugin.clone(),
+                        message: message.clone(),
+                    });
+                }
+                found.push((plugin, finding));
+            }
+            Err(error) => msg_warning!(Message::PluginTasksFailed(format!("{error:#}"))),
         }
-    };
+    }
     let jira_issues = match jira_result {
         Ok(issues) => issues,
         Err(e) => {
@@ -186,7 +197,8 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
         candidates.push(DiscoveryItem {
             source: TaskSource::Incomplete,
             task,
-            short_sha: None,
+            reference: None,
+            plugin: None,
             resolved_in_jira,
         });
     }
@@ -202,31 +214,28 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
         candidates.push(DiscoveryItem {
             source: TaskSource::Jira,
             task: Task::new(&name, "", Some(100)),
-            short_sha: None,
+            reference: None,
+            plugin: None,
             resolved_in_jira: None,
         });
     }
 
-    for commit in commits {
-        if is_ignored_name(&commit.message, &ignore_names) {
-            continue;
+    for (plugin, finding) in found {
+        for task in finding.tasks {
+            if is_ignored_name(&task.name, &ignore_names) {
+                continue;
+            }
+            if today_names.contains(&normalize_task_name(&task.name)) {
+                continue;
+            }
+            candidates.push(DiscoveryItem {
+                source: TaskSource::Plugin,
+                task: Task::new(&task.name, "", Some(100)),
+                reference: task.reference,
+                plugin: Some(plugin.clone()),
+                resolved_in_jira: None,
+            });
         }
-        if today_names.contains(&normalize_task_name(&commit.message)) {
-            continue;
-        }
-        let short_sha = if commit.sha.len() >= 7 {
-            Some(commit.sha[..7].to_string())
-        } else if commit.sha.is_empty() {
-            None
-        } else {
-            Some(commit.sha.clone())
-        };
-        candidates.push(DiscoveryItem {
-            source: TaskSource::Gitlab,
-            task: Task::new(&commit.message, "", Some(100)),
-            short_sha,
-            resolved_in_jira: None,
-        });
     }
 
     let items = dedup_discovery_items(candidates);
@@ -238,13 +247,19 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
 
     let incomplete_count = items.iter().filter(|i| i.source == TaskSource::Incomplete).count();
     let jira_count = items.iter().filter(|i| i.source == TaskSource::Jira).count();
-    let gitlab_count = items.iter().filter(|i| i.source == TaskSource::Gitlab).count();
+    let mut plugin_counts: Vec<(String, usize)> = Vec::new();
+    for name in items.iter().filter_map(|i| i.plugin.as_deref()) {
+        match plugin_counts.iter_mut().find(|(plugin, _)| plugin == name) {
+            Some((_, count)) => *count += 1,
+            None => plugin_counts.push((name.to_string(), 1)),
+        }
+    }
 
     msg_print!(
         Message::TasksDiscoverySummary {
             incomplete: incomplete_count,
             jira: jira_count,
-            gitlab: gitlab_count,
+            plugins: plugin_counts,
         },
         true
     );
@@ -365,29 +380,53 @@ pub(super) async fn handle_task_discovery(date: chrono::DateTime<Local>) -> Resu
     Ok(())
 }
 
+/// Asks every plugin that finds tasks for the day's, side by side.
+///
+/// Each answer is kept with the plugin's name, failures too: one plugin that
+/// cannot reach its server costs its own suggestions and nothing else.
+async fn ask_plugins(finders: Vec<crate::libs::plugin::Plugin>, day: serde_json::Value) -> Vec<(String, Result<Finding>)> {
+    let calls: Vec<_> = finders
+        .into_iter()
+        .map(|plugin| {
+            let day = day.clone();
+            let name = plugin.name.clone();
+            (name, tokio::task::spawn_blocking(move || plugin_tasks::find(&plugin, day)))
+        })
+        .collect();
+    let mut answers = Vec::with_capacity(calls.len());
+    for (name, call) in calls {
+        let answer = call.await.unwrap_or_else(|error| Err(anyhow::anyhow!("the plugin `{name}` stopped: {error}")));
+        answers.push((name, answer));
+    }
+    answers
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn dedup_prefers_incomplete_over_jira_over_gitlab() {
+    fn dedup_prefers_incomplete_over_jira_over_a_plugins() {
         let items = vec![
             DiscoveryItem {
-                source: TaskSource::Gitlab,
+                source: TaskSource::Plugin,
                 task: Task::new("New commit.", "", Some(100)),
-                short_sha: Some("abc1234".into()),
+                reference: Some("abc1234".into()),
+                plugin: Some("gitlab".into()),
                 resolved_in_jira: None,
             },
             DiscoveryItem {
                 source: TaskSource::Jira,
                 task: Task::new("New commit", "", Some(100)),
-                short_sha: None,
+                reference: None,
+                plugin: None,
                 resolved_in_jira: None,
             },
             DiscoveryItem {
                 source: TaskSource::Incomplete,
                 task: Task::new(" New commit", "", Some(40)),
-                short_sha: None,
+                reference: None,
+                plugin: None,
                 resolved_in_jira: None,
             },
         ];

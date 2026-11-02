@@ -1,11 +1,11 @@
 ---
 title: Writing a plugin
-description: The plugin protocol - --manifest, run with one JSON object on stdin, the three kinds of call (a command, an event, a request to an inbox source), settings, replies and time limits.
+description: The plugin protocol - --manifest, run with one JSON object on stdin, the three kinds of call (a command, an event, a request), inbox sources and the day's tasks, settings, replies and time limits.
 ---
 
 A kasl plugin is an ordinary program, not code kasl loads into itself. It is
-any executable named `kasl-plugin-NAME`, found in kasl's plugins directory or
-on your `PATH`, written in whatever language you like - Rust, Python, a
+any executable named `kasl-plugin-NAME`, found in kasl's plugins directory,
+beside kasl itself or on your `PATH`, written in whatever language you like - Rust, Python, a
 PowerShell script behind a `.cmd`. kasl runs it for one call and waits for it
 to exit; nothing is started as a service, and nothing is kept warm between
 calls.
@@ -31,16 +31,16 @@ should say so on stderr and exit non-zero.
 ```json
 {
   "protocol_version": 1,
-  "name": "gitlab",
+  "name": "tracker",
   "version": "1.4",
-  "description": "Assigned issues and merge requests from GitLab",
+  "description": "Assigned issues from the company tracker",
   "commands": [
     { "key": "copy-link", "label": "Copy the link", "description": "Puts the issue's link on the clipboard", "target": "issue" }
   ],
   "events": ["workday_end"],
-  "requests": ["list_issues", "transition", "comment"],
+  "requests": ["list_issues", "transition", "comment", "find_tasks"],
   "settings": [
-    { "key": "url", "label": "GitLab address", "required": true },
+    { "key": "url", "label": "Tracker address", "required": true },
     { "key": "token", "label": "Access token", "secret": true, "required": true }
   ]
 }
@@ -57,10 +57,10 @@ left out.
   runs on - and an optional `timeout` in seconds.
 - **`events`** - the moments the plugin wants to hear about:
   `report_ready`, `workday_end`, `new_inbox_issue`.
-- **`requests`** - what the plugin answers as an inbox source. One that
-  answers `list_issues` is a source; `transition` and `comment` are what it
-  can do to an issue it listed. `transition` or `comment` without
-  `list_issues` is refused.
+- **`requests`** - what the plugin answers when kasl asks. One that answers
+  `list_issues` is an inbox source; `transition` and `comment` are what it can
+  do to an issue it listed, and are refused without `list_issues`.
+  `find_tasks` offers the day's tasks to `kasl task find`, source or not.
 - **`settings`** - what it needs to be told. Each has a `key`, a `label`, an
   optional `description`, and two flags: `secret` (kept in the OS keyring,
   typed without echo) and `required` (without it the plugin is not called).
@@ -69,8 +69,8 @@ Every list is closed. An event, a request or a target kasl does not know makes
 the manifest unreadable, and the plugin is listed with that reason rather than
 half-used; so are a command or a setting declared twice.
 
-The plugin is known by its executable, not by `name`: `kasl-plugin-gitlab` is
-`gitlab`, whatever its manifest says.
+The plugin is known by its executable, not by `name`: `kasl-plugin-tracker` is
+`tracker`, whatever its manifest says.
 
 ## The invocation
 
@@ -124,7 +124,7 @@ that was not there.
 ### A request to an inbox source
 
 ```json
-{ "protocol_version": 1, "request": "list_issues", "settings": { "url": "https://gitlab.example.com", "token": "…" } }
+{ "protocol_version": 1, "request": "list_issues", "settings": { "url": "https://tracker.example.com", "token": "…" } }
 ```
 
 **`list_issues`** asks for every issue assigned now, whole, on every poll -
@@ -133,12 +133,12 @@ reply:
 
 ```json
 {
-  "list_url": "https://gitlab.example.com/dashboard/issues?assignee_username=me",
+  "list_url": "https://tracker.example.com/issues?assignee=me",
   "issues": [
     {
-      "key": "app#14",
+      "key": "group/app#14",
       "summary": "Login fails on an expired session",
-      "url": "https://gitlab.example.com/group/app/-/issues/14",
+      "url": "https://tracker.example.com/group/app/issues/14",
       "id": "90114",
       "status": "Opened",
       "priority": "High",
@@ -154,7 +154,9 @@ reply:
 
 `key`, `summary` and `url` are required: what the issue is called, what it
 says, and what opening it opens - a toast's click and `kasl inbox open` both
-open `url`. The rest is optional, and a rule or a filter that reads a field
+open `url`. A key travels onto command lines and into a toast's buttons, so it
+is one word of ASCII letters, digits and `- _ . / # ! : @ + ~`, at most 200
+characters - Jira's `PROJ-12` and GitLab's `group/app#14` both are. The rest is optional, and a rule or a filter that reads a field
 the source does not give finds nothing there. `priority_rank` ranks a
 priority (lower is more urgent, as Jira's 1 is Highest); a priority named
 without one takes the rank the inbox already knows for that name. `list_url`
@@ -162,7 +164,8 @@ is what a summary toast opens.
 
 The reply decides which of the source's issues are gone, so it is read whole
 or refused whole: a reply without `issues`, an issue without a key, summary or
-url, or a key listed twice fails the sync and marks nothing gone. Silence is
+url, a key outside the rule above, or a key listed twice fails the sync and
+marks nothing gone. Silence is
 refused too - a source with nothing assigned answers `"issues": []`.
 
 Each source is reconciled on its own. A poll marks gone only its own issues
@@ -175,7 +178,7 @@ that source, with a warning.
 {
   "protocol_version": 1,
   "request": "transition",
-  "subject": { "key": "app#14", "summary": "…", "source": "gitlab", "...": "..." },
+  "subject": { "key": "group/app#14", "summary": "…", "source": "tracker", "...": "..." },
   "to": "start",
   "status": null,
   "resolution": null,
@@ -201,11 +204,42 @@ the status as the issue's own until the next poll says otherwise.
 comment`, and the offer after marking a taken task done:
 
 ```json
-{ "protocol_version": 1, "request": "comment", "subject": { "key": "app#14", "...": "..." }, "comment": "Fixed in !31", "settings": {} }
+{ "protocol_version": 1, "request": "comment", "subject": { "key": "group/app#14", "...": "..." }, "comment": "Fixed in !31", "settings": {} }
 ```
 
 A source that does not list `transition` or `comment` in its manifest is not
 asked: the command says the source cannot do it.
+
+### A request for the day's tasks
+
+**`find_tasks`** asks what the plugin finds in a day - the commits pushed, the
+documents edited, the calls held - for [`kasl task find`](/reference/task/) to
+offer beside unfinished tasks and Jira's resolved issues. The subject is the
+day, as `kasl report --json` prints it; `date` says which:
+
+```json
+{ "protocol_version": 1, "request": "find_tasks", "subject": { "date": "2026-10-27", "tasks": [], "...": "..." }, "settings": {} }
+```
+
+The reply names the tasks, each with an optional short `ref` shown beside it,
+and may carry a `message` that kasl shows as a warning - what the plugin could
+not read, say:
+
+```json
+{
+  "tasks": [
+    { "name": "Refresh the session before it expires", "ref": "c1a2b3c" },
+    { "name": "Start the release notes", "ref": "d1e2f3a" }
+  ],
+  "message": "1 push could not be read, so its commits are not offered"
+}
+```
+
+`tasks` is required - a plugin that found nothing answers `"tasks": []` - and
+a task without a `name` fails the request. Nothing is imported until the
+person picks it; names already logged that day, or on the ignore list, are not
+offered. Plugins are asked side by side, and one that fails costs its own
+suggestions only. `find_tasks` does not make a plugin an inbox source.
 
 ## The reply
 
@@ -280,4 +314,5 @@ ready; the next `kasl report --send` hands it the day.
 
 - [`plugin`](/reference/plugin/) - list, set up and run plugins
 - [`inbox`](/reference/inbox/) - where a source's issues land, and what `start`, `close` and `comment` do with them
+- [Working with the GitLab inbox](/guides/gitlab-inbox/) - the plugin that ships with kasl, a source and a finder of tasks
 - [Configuration](/concepts/configuration/) - the `plugins` block

@@ -358,7 +358,10 @@ pub async fn close_issue(jira: &mut Jira, key: &str, comment: Option<&str>, opti
     let worth_a_comment = matches!(planned, Planned::Go(_) | Planned::Settled(Moved::Already { .. }));
     if worth_a_comment && let Some(body) = comment.map(str::trim).filter(|b| !b.is_empty()) {
         jira.add_comment(key, body, options.session).await?;
-        msg_success!(Message::JiraCommented(key.to_string()));
+        msg_success!(Message::Commented {
+            key: key.to_string(),
+            source: "Jira".to_string(),
+        });
     }
     match planned {
         Planned::Go(plan) => send_move(jira, key, plan, options).await,
@@ -446,7 +449,10 @@ async fn offer_after_done_inner(key: &str) -> Result<()> {
                 .with_prompt(Message::PromptJiraComment.to_string())
                 .interact_text()?;
             inbox_source::comment_issue(key, comment.trim(), SessionMode::Interactive).await?;
-            msg_success!(Message::JiraCommented(key.to_string()));
+            msg_success!(Message::Commented {
+                key: key.to_string(),
+                source: inbox_source::label(&inbox_source::source_of(key)?),
+            });
             Ok(())
         }
     }

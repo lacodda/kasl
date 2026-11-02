@@ -29,8 +29,9 @@ systemd user unit. After that the day starts recording when you do.
 
 ## Morning: what am I working on
 
-Tasks do not have to be typed from memory. If GitLab or Jira is configured,
-kasl offers today's commits and resolved issues as candidates:
+Tasks do not have to be typed from memory. If the GitLab plugin (set up with
+`kasl plugin setup gitlab`) or Jira is configured, kasl offers today's commits
+and resolved issues as candidates:
 
 ```bash
 kasl task find

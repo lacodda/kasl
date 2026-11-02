@@ -28,10 +28,6 @@ Configuration files are stored in platform-specific locations:
     "auth_url": "https://auth.company.com",
     "api_url": "https://api.company.com"
   },
-  "gitlab": {
-    "access_token": "your-token",
-    "api_url": "https://gitlab.com"
-  },
   "jira": {
     "login": "your.email@company.com",
     "api_url": "https://jira.company.com"
@@ -131,22 +127,14 @@ Internal company API integration:
 - **Description**: Main API endpoint URL
 - **Example**: `"https://api.company.com"`
 
-## GitLab Configuration
+## GitLab
 
-GitLab API integration for commit tracking:
-
-### `access_token`
-- **Type**: `String`
-- **Description**: Personal Access Token with required scopes
-- **Required Scopes**: `read_user`, `read_repository`
-- **Generation**: GitLab → User Settings → Access Tokens
-
-### `api_url`
-- **Type**: `String`
-- **Description**: GitLab instance base URL
-- **Examples**:
-  - `"https://gitlab.com"` (GitLab.com)
-  - `"https://gitlab.company.com"` (Self-hosted)
+GitLab is a [plugin](/reference/plugin/), so it has no block of its own. Its
+settings (`url`, `token`, `start_label`) live under `plugins.gitlab` - see
+[Plugins Configuration](#plugins-configuration) below - and are written by
+`kasl plugin setup gitlab`. The token is kept in the OS keyring, not in this file;
+the [GitLab guide](/guides/gitlab-inbox/) has the details. A `gitlab` block
+written by an older kasl is moved automatically on the first read.
 
 ## Jira Configuration
 
@@ -415,10 +403,6 @@ mkdir -p ~/.local/share/lacodda/kasl
     "activity_threshold": 60,
     "min_work_interval": 5
   },
-  "gitlab": {
-    "access_token": "glpat-XXXXXXXXXXXXXXXXXXXX",
-    "api_url": "https://gitlab.com"
-  },
   "jira": {
     "login": "john.doe",
     "api_url": "https://company.atlassian.net"
@@ -458,9 +442,8 @@ Common validation errors:
 
 Passwords are never written to `config.json`; they live in the OS keyring - see
 [API Integrations](/concepts/api-integrations/). So do a plugin's secret settings,
-as `plugin.NAME.KEY`. The file does hold two
-non-password secrets as written: the GitLab `access_token` and the reporting
-server's `auth_token`. On Linux and macOS it is worth keeping the file to
+as `plugin.NAME.KEY` - the GitLab token is `plugin.gitlab.token`. The file does
+hold one non-password secret as written: the reporting server's `auth_token`. On Linux and macOS it is worth keeping the file to
 yourself:
 
 ```bash
@@ -486,5 +469,5 @@ RUST_LOG=kasl=debug kasl watch --foreground
 ## Related pages
 
 - [`setup`](/reference/setup/) - the wizard that writes this file
-- [API Integrations](/concepts/api-integrations/) - GitLab, Jira and SiServer in detail
+- [API Integrations](/concepts/api-integrations/) - Jira, SiServer and the GitLab plugin in detail
 - [`watch`](/reference/watch/) - what the monitor settings govern

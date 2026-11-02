@@ -382,7 +382,7 @@ once, wherever the departure was seen:
 ```
 
 The offer does not repeat on every poll. What lasts is
-[`kasl task find`](/reference/task/#find---find-incomplete-tasks-and-import-from-gitlabjira): an unfinished
+[`kasl task find`](/reference/task/#find---find-incomplete-tasks-and-import-from-jira-and-plugins): an unfinished
 task whose issue Jira resolved is marked `resolved in Jira`, ticked, and
 proposed at 100%.
 
@@ -518,6 +518,16 @@ assigned, and moves or comments on an issue when asked.
   on the same cadence as Jira. `kasl plugin list` shows which plugins are
   sources and what else they answer (`transition`, `comment`). How a source
   answers is in [Writing a plugin](/guides/writing-a-plugin/#a-request-to-an-inbox-source).
+- **GitLab** is the plugin source that ships with kasl: issues and merge
+  requests assigned to you and the merge requests you are asked to review,
+  keyed `group/app#14` and `group/app!31` - see
+  [Working with the GitLab inbox](/guides/gitlab-inbox/).
+
+A key is one word of ASCII letters, digits and `- _ . / # ! : @ + ~`, at most
+200 characters, whatever its source: it goes onto command lines and into the
+toast buttons. A source listing anything else fails its sync whole. In bash
+and zsh, quote a key with `!` - `kasl inbox take 'group/app!31'` - since `!`
+starts history expansion there.
 
 Each source is reconciled on its own: a poll marks gone only its own issues
 that it no longer lists, never another source's. A key belongs to the source

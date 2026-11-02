@@ -13,7 +13,7 @@ use crate::libs::json;
 use crate::libs::messages::Message;
 use crate::libs::output::{self, Format};
 use crate::libs::pick;
-use crate::libs::plugin::manifest::{Manifest, Setting, Target};
+use crate::libs::plugin::manifest::{Manifest, Request, Setting, Target};
 use crate::libs::plugin::{self, Plugin};
 use crate::libs::prompt::ensure_interactive;
 use crate::libs::report::DayReport;
@@ -147,8 +147,16 @@ fn describe(plugin: &Plugin) -> Vec<String> {
         lines.push(format!("  hears    {}", events.join(", ")));
     }
     if manifest.is_source() {
-        let requests: Vec<&str> = manifest.requests.iter().map(|request| request.as_str()).collect();
+        let requests: Vec<&str> = manifest
+            .requests
+            .iter()
+            .filter(|request| **request != Request::FindTasks)
+            .map(|request| request.as_str())
+            .collect();
         lines.push(format!("  inbox    a source: {}", requests.join(", ")));
+    }
+    if manifest.answers(Request::FindTasks) {
+        lines.push("  tasks    offers tasks to `kasl task find`".to_string());
     }
     for setting in &manifest.settings {
         lines.push(format!("  setting  {}", setting_line(setting, plugin)));

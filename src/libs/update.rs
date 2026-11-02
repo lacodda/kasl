@@ -260,12 +260,23 @@ impl Updater {
         if let Some(other) = crate::libs::alias::counterpart(&exe) {
             let _ = fs::remove_file(other.with_extension(BACKUP_EXTENSION));
         }
+        // And the plugins that ship with kasl, which an update replaces beside it.
+        let Some(dir) = exe.parent() else { return };
+        let Ok(entries) = fs::read_dir(dir) else { return };
+        for entry in entries.filter_map(std::result::Result::ok) {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with(crate::libs::plugin::manifest::PREFIX) && name.ends_with(&format!(".{BACKUP_EXTENSION}")) {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
     }
 
     /// Unpacks the release archive over the installed binary.
     ///
-    /// Only the executable is taken, and only the one named after the app:
-    /// LICENSE and README are skipped - copying them used to recreate the
+    /// Only programs are taken: the one named after the app, and the plugins
+    /// that ship with it (`kasl-plugin-*`), which live beside it and update
+    /// with it. LICENSE and README are skipped - copying them used to recreate the
     /// archive's `kasl-<tag>-<target>/` prefix inside the installation
     /// directory, leaving a folder of stale duplicates behind after every
     /// update.
@@ -350,6 +361,16 @@ impl Updater {
                 }
                 entry.unpack(&target)?;
                 is_updated = true;
+            } else if is_bundled_plugin(file_name) {
+                // A plugin that ships with kasl lives beside it and updates
+                // with it - the same version that was tested with this kasl.
+                // The watcher may be running it this very moment, so it is
+                // moved aside like the binary rather than deleted.
+                let target = install_dir.join(file_name);
+                if target.exists() {
+                    fs::rename(&target, target.with_extension(BACKUP_EXTENSION))?;
+                }
+                entry.unpack(&target)?;
             }
         }
 
@@ -399,6 +420,17 @@ impl Updater {
             Err(_) => true,
         }
     }
+}
+
+/// Whether an archive entry is a plugin that ships with kasl: an executable
+/// named `kasl-plugin-NAME` - with `.exe` on Windows, without an extension
+/// elsewhere. The release archive puts them beside the binary.
+fn is_bundled_plugin(file_name: &str) -> bool {
+    let Some(stem) = file_name.strip_suffix(env::consts::EXE_SUFFIX) else {
+        return false;
+    };
+    stem.strip_prefix(crate::libs::plugin::manifest::PREFIX)
+        .is_some_and(|name| !name.is_empty() && !name.contains('.'))
 }
 
 /// Compare `major.minor.patch` numerically. A version carrying a pre-release
@@ -627,6 +659,42 @@ mod tests {
         Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
 
         assert!(!install.join(exe("ka")).exists(), "the update added an alias the user never installed");
+    }
+
+    /// The plugins in the box arrive and update with kasl, beside it - the
+    /// same version the release was built with, never a second copy.
+    #[test]
+    fn an_update_replaces_the_bundled_plugins_beside_the_binary() {
+        let temp = TempDir::new().unwrap();
+        let install = temp.path().join("install");
+        fs::create_dir(&install).unwrap();
+        fs::write(install.join(exe("kasl")), "old").unwrap();
+        fs::write(install.join(exe("kasl-plugin-gitlab")), "old plugin").unwrap();
+
+        let archive = release_archive(
+            temp.path(),
+            &[
+                (&exe("kasl"), "new"),
+                (&exe("kasl-plugin-gitlab"), "new plugin"),
+                (&exe("kasl-plugin-notes"), "a plugin new in this release"),
+                ("kasl-plugin-gitlab.md", "not a program"),
+            ],
+        );
+        Updater::unpack_binaries(&archive, &install, "kasl").unwrap();
+
+        assert_eq!(fs::read_to_string(install.join(exe("kasl-plugin-gitlab"))).unwrap(), "new plugin");
+        assert_eq!(fs::read_to_string(install.join("kasl-plugin-gitlab.bak")).unwrap(), "old plugin");
+        assert!(install.join(exe("kasl-plugin-notes")).exists(), "a plugin that joined the box arrives too");
+        assert!(!install.join("kasl-plugin-gitlab.md").exists(), "only programs are taken from the archive");
+    }
+
+    #[test]
+    fn a_bundled_plugin_is_a_program_with_the_prefix() {
+        assert!(is_bundled_plugin(&exe("kasl-plugin-gitlab")));
+        assert!(!is_bundled_plugin(&exe("kasl-plugin-")));
+        assert!(!is_bundled_plugin(&exe("kasl")));
+        assert!(!is_bundled_plugin("kasl-plugin-gitlab.md"));
+        assert!(!is_bundled_plugin("LICENSE"));
     }
 
     #[test]

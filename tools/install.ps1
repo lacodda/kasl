@@ -75,6 +75,15 @@ try {
     New-Item -ItemType Directory -Force $dir | Out-Null
     Copy-Item $binary.FullName $dir -Force
 
+    # The plugins that ship with kasl travel in the archive beside it and go
+    # beside it here, at the version this release was built with: kasl looks
+    # for plugins in its own directory, so they work whether or not it is on
+    # PATH. The watchers that run them were stopped above.
+    Get-ChildItem -Path $tmp -Filter "kasl-plugin-*.exe" -Recurse | ForEach-Object {
+        Copy-Item $_.FullName (Join-Path $dir $_.Name) -Force
+        Write-Host "Plugin $($_.BaseName)"
+    }
+
     # Short alias `ka` as a hard link, not a copy: a copy doubles the install
     # for no new code and goes stale the moment self-update replaces the
     # binary. A symlink would need elevation on Windows; a hard link does not,
@@ -110,6 +119,7 @@ try {
 # and nothing ever came back for it.
 Remove-Item (Join-Path $dir "kasl.bak") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $dir "ka.bak") -Force -ErrorAction SilentlyContinue
+Remove-Item (Join-Path $dir "kasl-plugin-*.bak") -Force -ErrorAction SilentlyContinue
 
 # Add the directory to the user PATH in the registry, keeping the value's
 # type. PATH is almost always REG_EXPAND_SZ, with entries like %JAVA_HOME%\bin

@@ -15,14 +15,16 @@
 //!   the day or the issue it is run on as its subject;
 //! * an **event** the plugin listens to (`report_ready`, `workday_end`,
 //!   `new_inbox_issue`) - see [`events`];
-//! * a **request** to an inbox source (`list_issues`, `transition`,
-//!   `comment`) - see [`crate::libs::inbox_source`].
+//! * a **request**: to an inbox source (`list_issues`, `transition`,
+//!   `comment`) - see [`crate::libs::inbox_source`] - or for the tasks it
+//!   finds in a day (`find_tasks`) - see [`tasks`].
 //!
 //! Every invocation also carries the plugin's settings, so a plugin never has
 //! to read kasl's config or its keyring on its own.
 
 pub mod events;
 pub mod manifest;
+pub mod tasks;
 
 use crate::db::inbox::JIRA_SOURCE;
 use crate::libs::config::Config;
@@ -100,9 +102,20 @@ pub fn plugins_dir() -> Result<PathBuf> {
     DataStorage::new().get_path("plugins")
 }
 
-/// Where kasl looks for plugins, in order: its own directory, then `PATH`.
+/// Where kasl looks for plugins, in order: its plugins directory, the
+/// directory kasl itself runs from, then `PATH`.
+///
+/// The second is where the plugins that ship with kasl are: the release
+/// archive carries them beside the binary, and the installers, the npm
+/// package and `self-update` put them there together - so they arrive and
+/// update with kasl, however it was installed, and whether or not that
+/// directory is on `PATH`. The plugins directory comes first so that a
+/// plugin someone put there on purpose wins over the one in the box.
 pub fn search_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = plugins_dir().into_iter().collect();
+    if let Some(beside) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)) {
+        paths.push(beside);
+    }
     if let Some(system) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&system));
     }
@@ -152,7 +165,7 @@ pub fn find(name: &str) -> Result<Plugin> {
     let known: Vec<&str> = plugins.iter().map(|plugin| plugin.name.as_str()).collect();
     if known.is_empty() {
         bail!(
-            "no plugin `{wanted}`: none is installed (kasl looks for `{PREFIX}*` in {} and on your PATH)",
+            "no plugin `{wanted}`: none is installed (kasl looks for `{PREFIX}*` in {}, beside kasl itself, and on your PATH)",
             plugins_dir().map(|dir| dir.display().to_string()).unwrap_or_default()
         );
     }
