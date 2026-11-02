@@ -92,6 +92,9 @@ fn read_listing(reply: Value) -> std::result::Result<Listing, String> {
         if issue.key.trim().is_empty() {
             return Err(format!("with an issue that has no key ({})", issue.summary));
         }
+        // A key travels onto command lines and into a toast's shortcut; one
+        // that cannot is refused here, where the source can be named.
+        crate::libs::issue_key::check(&issue.key).map_err(|why| format!("with a key kasl cannot keep: {why}"))?;
         if issue.url.trim().is_empty() {
             return Err(format!("with {} and no url to open it at", issue.key));
         }
@@ -274,6 +277,16 @@ mod tests {
         assert!(listing(without_url).unwrap_err().contains("no url"));
         assert!(listing(without_summary).unwrap_err().contains("cannot read"));
         assert!(listing(without_key).unwrap_err().contains("no key"));
+    }
+
+    #[test]
+    fn a_key_that_cannot_travel_is_refused_whole() {
+        let spaced = json!({"issues": [
+            {"key": "g#1", "summary": "a", "url": "https://x/1"},
+            {"key": "g #2", "summary": "b", "url": "https://x/2"}
+        ]});
+
+        assert!(listing(spaced).unwrap_err().contains("a key kasl cannot keep"));
     }
 
     #[test]

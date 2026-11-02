@@ -169,3 +169,24 @@ fn a_key_that_is_not_a_key_gets_no_shortcut(_ctx: &mut ShortcutContext) {
         assert!(toast_shortcut::ensure(ToastAction::Take, bad).is_err(), "{bad:?} must not become a shortcut");
     }
 }
+
+#[test_context(ShortcutContext)]
+#[test]
+#[serial]
+fn a_gitlab_key_is_written_out_in_the_file_name_and_kept_on_the_command_line(ctx: &mut ShortcutContext) {
+    // `#` in the file name would end the `file:` URI at a fragment, and `/`
+    // would be a directory: the name carries the key written out, while the
+    // command line - which the courier reads - carries it as it is.
+    let uri = toast_shortcut::ensure(ToastAction::Take, "group/app#14").unwrap();
+
+    assert!(uri.ends_with("take-group_2Fapp_2314.lnk"), "{uri}");
+    assert!(!uri.contains('#'), "a `#` would cut the URI the shell launches: {uri}");
+    let bytes = std::fs::read(ctx.dir().join("take-group_2Fapp_2314.lnk")).unwrap();
+    assert!(
+        contains_utf16(&bytes, "toast-action take group/app#14"),
+        "the courier must be handed the key itself"
+    );
+
+    toast_shortcut::forget("group/app#14");
+    assert!(!ctx.dir().join("take-group_2Fapp_2314.lnk").exists(), "forget must find the written-out name");
+}

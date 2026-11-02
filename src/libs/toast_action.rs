@@ -33,7 +33,7 @@
 //! ```
 
 use crate::libs::data_storage::DataStorage;
-use anyhow::{Result, bail};
+use anyhow::Result;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -193,23 +193,6 @@ impl Mailbox {
         let _ = fs::remove_file(&self.path);
         Ok(requests)
     }
-}
-
-/// Validates an issue key before it is baked into a file name or a shortcut.
-///
-/// A key reaches this from Jira, and it ends up inside a file name and a
-/// command line. Anything but the shape Jira actually uses is refused rather
-/// than escaped: refusing a key we have never seen costs one toast without
-/// buttons, while quoting it wrong would put attacker-chosen text on a
-/// command line the shell runs.
-pub fn validate_issue_key(key: &str) -> Result<()> {
-    if key.is_empty() || key.len() > 64 {
-        bail!("issue key has an unusable length: {key:?}");
-    }
-    if !key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
-        bail!("issue key has characters that cannot go in a shortcut: {key:?}");
-    }
-    Ok(())
 }
 
 /// The directory the per-action shortcuts live in.

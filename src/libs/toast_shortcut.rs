@@ -19,7 +19,8 @@
 //! chain only the shell can build. `IShellLinkW` builds it; `winapi` already
 //! ships the interface.
 
-use crate::libs::toast_action::{ToastAction, shortcut_dir, validate_issue_key};
+use crate::libs::issue_key;
+use crate::libs::toast_action::{ToastAction, shortcut_dir};
 use anyhow::{Context, Result, bail};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
@@ -54,14 +55,14 @@ const CLSID_SHELL_LINK: CLSID = CLSID {
 /// by an older build cannot keep pointing at a stale executable path after a
 /// self-update.
 pub fn ensure(action: ToastAction, issue_key: &str) -> Result<String> {
-    validate_issue_key(issue_key)?;
+    issue_key::check(issue_key)?;
 
     let exe = std::env::current_exe().context("cannot find the running kasl executable")?;
-    let dir = shortcut_dir()?;
-    let path = dir.join(format!("{}-{}.lnk", action.as_str(), issue_key));
+    let path = shortcut_path(&shortcut_dir()?, action, issue_key);
 
-    // The key is validated above, so it needs no quoting; the executable path
-    // is quoted because it routinely contains spaces.
+    // The key holds no whitespace or quotes (checked above), so it needs no
+    // quoting; the executable path is quoted because it routinely contains
+    // spaces.
     let arguments = format!("toast-action {} {}", action.as_str(), issue_key);
 
     write_shortcut(&path, &exe, &arguments).with_context(|| format!("cannot write the toast shortcut {}", path.display()))?;
@@ -78,18 +79,24 @@ pub fn ensure(action: ToastAction, issue_key: &str) -> Result<String> {
 pub fn forget(issue_key: &str) {
     let Ok(dir) = shortcut_dir() else { return };
     for action in ToastAction::EVERY {
-        let path = dir.join(format!("{}-{}.lnk", action.as_str(), issue_key));
-        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(shortcut_path(&dir, action, issue_key));
     }
+}
+
+/// The shortcut of one action on one issue. The key is written out by
+/// [`issue_key::file_stem`]: a GitLab key's `#` would end the `file:` URI the
+/// button launches at the fragment, and its `/` would be a directory.
+fn shortcut_path(dir: &Path, action: ToastAction, key: &str) -> std::path::PathBuf {
+    dir.join(format!("{}-{}.lnk", action.as_str(), issue_key::file_stem(key)))
 }
 
 /// A `file:` URI for a local path, in the form the shell accepts.
 ///
 /// Measured, not assumed: `file:///C:/dir/take-KA-1.lnk` launches, while the
-/// same path with a percent-encoded space fails outright. Keys are validated
-/// to the characters Jira uses, so nothing here needs escaping; the data
-/// directory is the only part that could hold a space, and the shell takes it
-/// verbatim.
+/// same path with a percent-encoded space fails outright. The file name holds
+/// letters, digits, `-` and `_` only ([`issue_key::file_stem`]), so nothing
+/// here needs escaping; the data directory is the only part that could hold a
+/// space, and the shell takes it verbatim.
 fn file_uri(path: &Path) -> String {
     format!("file:///{}", path.display().to_string().replace('\\', "/"))
 }

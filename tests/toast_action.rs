@@ -7,8 +7,9 @@
 use chrono::Duration;
 use kasl::db::inbox::{Inbox, InboxUpsert, Include};
 use kasl::db::tasks::Tasks;
+use kasl::libs::issue_key;
 use kasl::libs::task::TaskFilter;
-use kasl::libs::toast_action::{Mailbox, ToastAction, ToastRequest, validate_issue_key};
+use kasl::libs::toast_action::{Mailbox, ToastAction, ToastRequest};
 use kasl::libs::toast_apply::{self, Applied};
 use serial_test::serial;
 use tempfile::TempDir;
@@ -126,24 +127,25 @@ fn every_action_survives_a_round_trip_through_its_wire_name() {
 
 #[test]
 fn a_key_that_could_escape_a_shortcut_is_refused() {
-    // These go into a file name and onto a command line, so the guard is the
-    // thing standing between Jira's data and the shell.
+    // These go onto a command line and into a mailbox line, so the rule is
+    // the thing standing between a tracker's data and the shell.
     for bad in [
         "",
         "KA 1",             // a space would split the command line
         "KA-1\" && calc",   // quote-and-chain
         "KA-1;calc",        // separator
-        "..\\..\\evil",     // path traversal out of the shortcut dir
-        "KA/1",             // path separator
+        "..\\..\\evil",     // a backslash, the other path separator
         "KA-1\ttake",       // a tab would forge a second mailbox field
         "KA-1\ntake\tKA-2", // a newline would forge a whole second line
     ] {
-        assert!(validate_issue_key(bad).is_err(), "{bad:?} must be refused as an issue key");
+        assert!(issue_key::check(bad).is_err(), "{bad:?} must be refused as an issue key");
     }
-    for good in ["KA-1", "PROJ-12345", "ABC_DEF-7", "A1"] {
-        assert!(validate_issue_key(good).is_ok(), "{good:?} is the shape Jira uses and must be accepted");
+    for good in ["KA-1", "PROJ-12345", "ABC_DEF-7", "A1", "group/app#14", "group/app!31"] {
+        assert!(issue_key::check(good).is_ok(), "{good:?} is the shape a tracker uses and must be accepted");
     }
-    assert!(validate_issue_key(&"A".repeat(65)).is_err(), "an absurdly long key must be refused");
+    assert!(issue_key::check(&"A".repeat(201)).is_err(), "an absurdly long key must be refused");
+    // A key with a path separator still lands inside the shortcut directory.
+    assert!(!issue_key::file_stem("../../evil").contains('/'));
 }
 
 #[test_context(ToastContext)]

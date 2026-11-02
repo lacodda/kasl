@@ -31,6 +31,7 @@ pub mod inbox;
 pub mod inbox_filter;
 pub mod inbox_rules;
 pub mod inbox_source;
+pub mod issue_key;
 pub mod jira_bridge;
 pub mod json;
 pub mod locale;
