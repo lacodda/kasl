@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.20.0] - 2026-11-02
+
+### Breaking Changes
+- **Move GitLab to kasl-plugin-gitlab, shipped with kasl** - `kasl setup` has no GitLab step and config.json no `gitlab` block; GitLab is set up with `kasl plugin setup gitlab`.
+
+### Bug Fixes
+- Name the source a comment went to: a plugin's issue was reported as commented in Jira
+
+### Features
+- One rule for an issue key, written out in shortcut names
+- Move GitLab to kasl-plugin-gitlab, shipped with kasl
+
 ## [1.19.0] - 2026-10-27
 
 ### Breaking Changes
