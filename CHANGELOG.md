@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.20.1] - 2026-11-02
+
+### Bug Fixes
+- Complete the box an older updater left without plugins
+
 ## [1.20.0] - 2026-11-02
 
 ### Breaking Changes
