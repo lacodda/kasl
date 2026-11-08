@@ -110,6 +110,32 @@ fn the_same_cuts_reach_list_and_the_pickers() {
 
 #[test]
 #[serial]
+fn a_preset_cuts_what_its_flags_would_and_a_flag_beside_it_wins() {
+    let dir = sandbox();
+    seed_inbox();
+    let (ok, out) = kasl(dir.path(), &["config", "set", "inbox.presets.hot", r#"{"priority": "High+", "min_score": 5}"#]);
+    assert!(ok, "{out}");
+
+    let (ok, out) = kasl(dir.path(), &["inbox", "--preset", "hot"]);
+    assert!(ok, "{out}");
+    assert!(
+        out.contains("1 of 3 issues (preset hot, score ≥ 5, priority High+)"),
+        "the header names the preset and its cuts:\n{out}"
+    );
+    assert!(out.contains("KA-1") && !out.contains("KA-3"), "{out}");
+
+    // The subcommand's own flag narrows the preset, not the other way round.
+    let (ok, out) = kasl(dir.path(), &["inbox", "list", "--preset", "hot", "--min-score", "9"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("No issue matches (preset hot, score ≥ 9, priority High+)"), "{out}");
+
+    let (ok, out) = kasl(dir.path(), &["inbox", "--preset", "cold"]);
+    assert!(!ok, "an unknown preset is an error, not the whole inbox:\n{out}");
+    assert!(out.contains("no inbox preset 'cold'") && out.contains("hot"), "{out}");
+}
+
+#[test]
+#[serial]
 fn nothing_matching_is_not_an_empty_inbox() {
     let dir = sandbox();
     seed_inbox();

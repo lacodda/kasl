@@ -273,6 +273,7 @@ fn tools() -> Vec<Value> {
                 "type": names_arg("Only issues of any of these types: Bug, Story - as Jira names them"),
                 "project": names_arg("Only issues of any of these projects: the prefix of the key"),
                 "sort": { "type": "string", "enum": sorts, "description": "The order; pinned issues lead whatever it is" },
+                "preset": { "type": "string", "description": "A named cut from the config's inbox.presets; the other arguments given win over its fields" },
             }),
             &[],
             Reach::Local,
@@ -401,6 +402,7 @@ async fn run_tool(name: String, args: Map<String, Value>) -> Result<Value> {
                 "type",
                 "project",
                 "sort",
+                "preset",
             ])?;
             let include = Include {
                 gone: args.flag("all")?,
@@ -507,7 +509,9 @@ fn inbox_filter(args: &Arguments) -> Result<inbox::FilterArgs> {
         issue_type: args.names("type")?,
         project: args.names("project")?,
         sort,
-    })
+        preset: args.text("preset")?,
+    }
+    .with_preset()?)
 }
 
 /// A call's arguments, read strictly.

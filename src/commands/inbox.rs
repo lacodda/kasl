@@ -7,7 +7,7 @@
 use crate::db::inbox::{Inbox, InboxItem, Include};
 use crate::libs::config::Config;
 use crate::libs::inbox::{self as inbox_lib, ResolvedIssue, SourceSync};
-use crate::libs::inbox_filter::{self, InboxFilter, InboxSort, parse_window, priority_cut_in};
+use crate::libs::inbox_filter::{self, InboxFilter, InboxPreset, InboxSort, parse_window, priority_cut_in};
 use crate::libs::inbox_rules::{self, RuleBook};
 use crate::libs::inbox_source;
 use crate::libs::jira_bridge::{self, Goal, MoveOptions};
@@ -99,6 +99,10 @@ pub struct FilterArgs {
     /// Order of the list; pinned issues lead whatever the order
     #[arg(long, value_enum, value_name = "KEY")]
     pub(crate) sort: Option<SortKey>,
+
+    /// A named cut from the config's inbox.presets; flags given beside it win
+    #[arg(long, value_name = "NAME")]
+    pub(crate) preset: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -124,6 +128,34 @@ impl From<SortKey> for InboxSort {
     }
 }
 
+impl From<InboxSort> for SortKey {
+    fn from(sort: InboxSort) -> Self {
+        match sort {
+            InboxSort::Score => SortKey::Score,
+            InboxSort::Priority => SortKey::Priority,
+            InboxSort::New => SortKey::New,
+            InboxSort::Changed => SortKey::Changed,
+        }
+    }
+}
+
+impl From<&InboxPreset> for FilterArgs {
+    fn from(preset: &InboxPreset) -> Self {
+        FilterArgs {
+            since: preset.since.clone(),
+            new: preset.new,
+            changed: preset.changed.clone(),
+            min_score: preset.min_score,
+            priority: preset.priority.clone(),
+            status: preset.status.clone(),
+            issue_type: preset.types.clone(),
+            project: preset.projects.clone(),
+            sort: preset.sort.map(SortKey::from),
+            preset: None,
+        }
+    }
+}
+
 impl FilterArgs {
     /// Fields set on the subcommand win; the rest fall back to the top level.
     fn or(self, fallback: FilterArgs) -> FilterArgs {
@@ -137,7 +169,37 @@ impl FilterArgs {
             issue_type: either(self.issue_type, fallback.issue_type),
             project: either(self.project, fallback.project),
             sort: self.sort.or(fallback.sort),
+            preset: self.preset.or(fallback.preset),
         }
+    }
+
+    /// The cuts with the named preset laid under them: a flag given beside
+    /// the preset wins over the preset's field, so `--preset urgent --since
+    /// 1d` narrows the preset rather than being ignored by it.
+    ///
+    /// A preset that does not read fails here, naming the preset - the file
+    /// itself stays readable, and the watcher never reads presets.
+    pub(crate) fn with_preset(self) -> Result<FilterArgs> {
+        let Some(name) = self.preset.clone() else {
+            return Ok(self);
+        };
+        let presets = Config::read()?.inbox.map(|inbox| inbox.presets).unwrap_or_default();
+        let Some(value) = presets.get(&name) else {
+            if presets.is_empty() {
+                bail!("the config has no inbox presets; `kasl config set inbox.presets.{name} '{{\"priority\": \"High+\"}}'` makes one");
+            }
+            let known: Vec<&str> = presets.keys().map(String::as_str).collect();
+            bail!("the config has no inbox preset '{name}'; it has {}", known.join(", "));
+        };
+        let preset = InboxPreset::parse(value).map_err(|why| anyhow::anyhow!("the inbox preset '{name}' cannot be used: {why}"))?;
+        let mut under = FilterArgs::from(&preset);
+        // `--new` is the last day's `--since`: given beside a preset's
+        // window, it replaces the window rather than losing to it.
+        if self.new || self.since.is_some() {
+            under.since = None;
+            under.new = false;
+        }
+        Ok(self.or(under))
     }
 
     /// Resolves the words into a filter, against the priorities the inbox knows.
@@ -161,6 +223,9 @@ impl FilterArgs {
     /// The cuts, in words, for the list header.
     fn describe(&self) -> Vec<String> {
         let mut parts = Vec::new();
+        if let Some(name) = &self.preset {
+            parts.push(format!("preset {name}"));
+        }
         if let Some(window) = &self.since {
             parts.push(format!("since {window}"));
         } else if self.new {
@@ -190,6 +255,11 @@ impl FilterArgs {
 /// A repeated flag on the subcommand wins whole; otherwise the top level's.
 fn either(own: Vec<String>, fallback: Vec<String>) -> Vec<String> {
     if own.is_empty() { fallback } else { own }
+}
+
+/// A subcommand's cuts over the top level's, with the preset either names.
+fn cuts(own: FilterArgs, top: FilterArgs) -> Result<FilterArgs> {
+    own.or(top).with_preset()
 }
 
 /// Available inbox operations.
@@ -468,27 +538,27 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
                 snoozed: snoozed || args.snoozed,
                 dismissed: dismissed || args.dismissed,
             };
-            list_inbox(limit.or(args.limit), include, &filter.or(top), format.json || top_json)
+            list_inbox(limit.or(args.limit), include, &cuts(filter, top)?, format.json || top_json)
         }
-        Some(InboxCommand::Pin { key, filter }) => set_pinned(&resolve_key(key, "Pin which issue?", false, &filter.or(top))?, true),
-        Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &filter.or(top))?, false),
-        Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &filter.or(top))?),
+        Some(InboxCommand::Pin { key, filter }) => set_pinned(&resolve_key(key, "Pin which issue?", false, &cuts(filter, top)?)?, true),
+        Some(InboxCommand::Unpin { key, filter }) => set_pinned(&resolve_key(key, "Unpin which issue?", true, &cuts(filter, top)?)?, false),
+        Some(InboxCommand::Dismiss { key, filter }) => dismiss(&resolve_key(key, "Dismiss which issue?", false, &cuts(filter, top)?)?),
         Some(InboxCommand::Undismiss { key }) => undismiss(key),
         Some(InboxCommand::Rules { apply, format }) => rules(apply, format.json),
-        Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &filter.or(top))?),
-        Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &filter.or(top)).await,
+        Some(InboxCommand::Open { key, filter }) => open_issue(&resolve_key(key, "Open which issue?", false, &cuts(filter, top)?)?),
+        Some(InboxCommand::Triage { snooze_for, filter }) => triage(&snooze_for, &cuts(filter, top)?).await,
         Some(InboxCommand::Show { key, why, filter, format }) => {
-            let key = resolve_key(key, "Show which issue?", false, &filter.or(top))?;
+            let key = resolve_key(key, "Show which issue?", false, &cuts(filter, top)?)?;
             show_issue(&key, why, format.json)
         }
         Some(InboxCommand::Snooze { key, duration, filter }) => {
-            let key = resolve_key(key, "Snooze which issue?", false, &filter.or(top))?;
+            let key = resolve_key(key, "Snooze which issue?", false, &cuts(filter, top)?)?;
             snooze(&key, duration.as_deref())
         }
         Some(InboxCommand::Unsnooze { key }) => unsnooze(key),
-        Some(InboxCommand::Take { key, filter }) => take_issue(&resolve_key(key, "Take which issue?", false, &filter.or(top))?).await,
+        Some(InboxCommand::Take { key, filter }) => take_issue(&resolve_key(key, "Take which issue?", false, &cuts(filter, top)?)?).await,
         Some(InboxCommand::Start { key, to, filter }) => {
-            let key = resolve_key(key, "Start which issue?", false, &filter.or(top))?;
+            let key = resolve_key(key, "Start which issue?", false, &cuts(filter, top)?)?;
             start_issue(&key, to).await
         }
         Some(InboxCommand::Close {
@@ -498,11 +568,11 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
             resolution,
             filter,
         }) => {
-            let key = resolve_key(key, "Close which issue?", false, &filter.or(top))?;
+            let key = resolve_key(key, "Close which issue?", false, &cuts(filter, top)?)?;
             close_issue(&key, comment, to, resolution).await
         }
         Some(InboxCommand::Comment { key, text, filter }) => {
-            let key = resolve_key(key, "Comment on which issue?", false, &filter.or(top))?;
+            let key = resolve_key(key, "Comment on which issue?", false, &cuts(filter, top)?)?;
             comment_issue(&key, text).await
         }
         // Bare `kasl inbox` shows the list, as it always has.
@@ -512,7 +582,7 @@ pub async fn cmd(args: InboxArgs) -> Result<()> {
                 snoozed: args.snoozed,
                 dismissed: args.dismissed,
             };
-            list_inbox(args.limit, include, &top, top_json)
+            list_inbox(args.limit, include, &top.with_preset()?, top_json)
         }
     }
 }

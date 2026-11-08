@@ -39,6 +39,7 @@ An inbox of two hundred open issues is a pile, not a list. These cuts turn it in
 - `--type <NAME>`: Only issues of that type, as your Jira names it (`Bug`, `Story`, `Epic`), regardless of case; repeat it for any of several
 - `--project <KEY>`: Only issues of that project - the prefix of the key; repeat it for any of several
 - `--sort <score|priority|new|changed>`: Order of the list; `score` is the inbox's own order (ranking field, then priority). Pinned issues lead and gone issues trail whatever the order
+- `--preset <NAME>`: The cuts a [preset](#presets) in the config names; a filter given beside it wins over the preset's own
 
 Priority names are read against every priority the inbox has ever seen, not only the ones on the list right now. The same words are what a [rule](#rules)'s `when` is written in, so a rule pins exactly what the same cuts would list.
 
@@ -396,7 +397,7 @@ poll.
 
 Rules are written in the config, under `inbox.rules`. Each has a `when` and a `then`, and may have a `name`:
 
-```json
+```json title="config.json"
 {
   "inbox": {
     "rules": [
@@ -470,6 +471,38 @@ Lists the rules with what each matches in the inbox now and what its pin or dism
 | 3 | —       | project PAY           | tag payments      | 1 match, 1 taken     |
 +---+---------+-----------------------+-------------------+----------------------+
 ```
+
+## Presets
+
+The cuts you type every morning can have a name. A preset is written in the config, under `inbox.presets`, in the words of the [filters](#filters) - `since`, `new`, `changed`, `min_score`, `priority`, `status`, `type`, `project` and `sort`:
+
+```json title="config.json"
+{
+  "inbox": {
+    "presets": {
+      "urgent": { "priority": "High+", "since": "7d" },
+      "fresh-bugs": { "type": "Bug", "new": true, "sort": "priority" }
+    }
+  }
+}
+```
+
+`kasl config set` writes one without opening the file:
+
+```bash
+kasl config set inbox.presets.urgent '{"priority": "High+", "since": "7d"}'
+```
+
+`--preset NAME` works wherever the filters do - the bare list, `list`, `triage` and every picker - and the header names it:
+
+```
+$ kasl inbox --preset urgent
+Inbox: 3 of 41 issues (preset urgent, since 7d, priority High+):
+```
+
+A filter given beside the preset wins over the preset's own field, so `kasl inbox --preset urgent --since 1d` narrows the preset to the last day; `--new` replaces the preset's window too. A list filter (`--status`, `--type`, `--project`) replaces the preset's list whole.
+
+A preset is read when a command names it, so a misspelt one fails that command - naming the preset and what is wrong with it - and never the rest of the config. `kasl config check` finds it before you do. An unknown name lists the presets the config has.
 
 ## Toast buttons
 
@@ -565,9 +598,9 @@ Each poll also runs the [rules](#rules) over what it brought. Pins and dismissal
 
 ## Configuration
 
-Jira's poll is enabled by adding the `inbox` section to the config; the `jira` section must be configured as well. A plugin source needs no section - it is polled once it is set up - and these settings apply to it all the same, their defaults when the section is absent. `enabled: false` stops every source.
+Jira's poll is enabled by adding the `inbox` section to the config; the `jira` section must be configured as well. A plugin source needs no section - it is polled once it is set up - and these settings apply to it all the same, their defaults when the section is absent. `enabled: false` stops every source. [`kasl config set`](/reference/config/) changes one setting - `kasl config set inbox.notify_gone true` - and checks it first.
 
-```json
+```json title="config.json"
 {
   "inbox": {
     "enabled": true,
@@ -597,6 +630,7 @@ Jira's poll is enabled by adding the `inbox` section to the config; the `jira` s
 - `custom_fields`: Extra Jira fields to fetch and display, such as a Scoring field
 - `sort_by_field`: Field id used to rank the list in descending order
 - `rules`: What the inbox does by itself - see [Rules](#rules) (default: none)
+- `presets`: Named cuts of the list - see [Presets](#presets) (default: none)
 
 ## Examples
 
