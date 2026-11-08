@@ -291,6 +291,10 @@ Who can see it:
   you, in your own account
   the manager of your department
   administrators of this installation
+Sent outside this server:
+  a Slack channel (team) - about everyone: alerts about your day; a day you closed
+Read from outside this server:
+  No dashboard tool reads people's hours from here.
 Retention: Kept for as long as the installation keeps it: there is no automatic deletion. A deactivated account keeps its history rather than losing it.
 If the level changes: Changing this setting affects what arrives from now on. Narrowing it does not erase what is already stored, and widening it does not bring back what was dropped.
 This level was last set 2026-09-02 11:30.
@@ -298,6 +302,13 @@ The level is the installation's, set by an administrator on the server. kasl sho
 ```
 
 Every word of that comes from the server. The manifest is generated there from the level the server actually enforces when a day arrives, not written by hand and not kept here - so it describes the installation you report to rather than the one kasl was built against, and it cannot claim a restraint the server does not apply. The last-set time is the exception to "printed as received": the server reports it in UTC and kasl shows it in your own time zone.
+
+Two lists say where your data goes besides the server's own pages:
+
+- **Sent outside this server** - the chats and systems the server sends messages about people to: where, by the name the operator gave it (never the address), about whom, and what each message carries.
+- **Read from outside this server** - the dashboard tools reading people's hours from the server with somebody's read token: what the tool is, whose access it reads with, about whom, and what it can read.
+
+Both are said even when empty - "nothing about you is sent anywhere else" is a promise, and a section that appeared only when something left would make its absence say nothing. A server older than the list (kasl-server 0.23 for what is sent, 0.29 for what is read) says neither, and kasl says that it does not say, rather than reading the silence as nothing.
 
 ### The level is the installation's
 
@@ -505,8 +516,11 @@ Not connected, it is the pulse switched off: `enabled: false`, the rest
 
 `kasl server manifest --json` carries the manifest's fields as the server sent
 them - `level`, `summary`, `stored` (a list of `{what, detail}`),
-`never_collected`, `visible_to`, `retention`, `on_change` - and `updated_at`
-in local time, `null` when the server does not record when the level was set.
+`never_collected`, `visible_to`, `sent_elsewhere` (a list of `{to, about,
+what}`), `read_elsewhere` (a list of `{through, by, about, what}`), `retention`,
+`on_change` - and `updated_at` in local time, `null` when the server does not
+record when the level was set. `sent_elsewhere` and `read_elsewhere` are `null`
+from a server too old to say, and `[]` when it says nothing leaves.
 
 ## Examples
 

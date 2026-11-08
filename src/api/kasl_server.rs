@@ -112,6 +112,20 @@ pub struct PrivacyManifest {
     /// Who can see a given person's data.
     pub visible_to: Vec<String>,
 
+    /// What leaves the server on its own, and where to: a chat channel that
+    /// hears about alerts and closed days (kasl-server 0.23, ADR 0019).
+    ///
+    /// `None` from a server older than that, which does not say - not the
+    /// same as an empty list, which says nothing leaves.
+    #[serde(default)]
+    pub sent_elsewhere: Option<Vec<SentElsewhere>>,
+
+    /// The dashboard tools reading people's hours from the server with
+    /// somebody's read token (kasl-server 0.29, ADR 0025). `None` from an
+    /// older server, as for `sent_elsewhere`.
+    #[serde(default)]
+    pub read_elsewhere: Option<Vec<ReadElsewhere>>,
+
     /// How long it is kept.
     pub retention: String,
 
@@ -128,6 +142,30 @@ pub struct PrivacyManifest {
 pub struct StoredKind {
     pub what: String,
     pub detail: String,
+}
+
+/// One place the server sends things about people, in the employee's terms.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SentElsewhere {
+    /// Where, by kind and by the name the operator gave it - never the address.
+    pub to: String,
+    /// About whom: everyone, or the people of one department.
+    pub about: String,
+    /// What each message carries.
+    pub what: Vec<String>,
+}
+
+/// One dashboard tool reading people's hours, in the employee's terms.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ReadElsewhere {
+    /// What its owner named it: "Grafana", "the finance sheet".
+    pub through: String,
+    /// Whose access it reads with.
+    pub by: String,
+    /// About whom.
+    pub about: String,
+    /// What it can read.
+    pub what: Vec<String>,
 }
 
 /// What this agent claims its person is doing right now.

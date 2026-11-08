@@ -601,6 +601,39 @@ async fn manifest(json: bool) -> Result<()> {
         msg_print!(Message::KaslServerPrivacyBullet(line));
     }
 
+    // Both lists are said even when empty: "nothing leaves" is a promise the
+    // server made, and a section that appeared only when something did would
+    // make its absence say nothing. A server too old to have the list says
+    // neither, and that is said too.
+    msg_print!(Message::KaslServerPrivacySentHeading);
+    match manifest.sent_elsewhere {
+        None => msg_print!(Message::KaslServerPrivacyNotSaid("0.23")),
+        Some(places) if places.is_empty() => msg_print!(Message::KaslServerPrivacySentNowhere),
+        Some(places) => {
+            for place in places {
+                msg_print!(Message::KaslServerPrivacyElsewhere {
+                    place: place.to,
+                    whose: format!("about {}", place.about),
+                    what: place.what.join("; "),
+                });
+            }
+        }
+    }
+    msg_print!(Message::KaslServerPrivacyReadHeading);
+    match manifest.read_elsewhere {
+        None => msg_print!(Message::KaslServerPrivacyNotSaid("0.29")),
+        Some(readers) if readers.is_empty() => msg_print!(Message::KaslServerPrivacyReadNowhere),
+        Some(readers) => {
+            for reader in readers {
+                msg_print!(Message::KaslServerPrivacyElsewhere {
+                    place: reader.through,
+                    whose: format!("with the access of {}, about {}", reader.by, reader.about),
+                    what: reader.what.join("; "),
+                });
+            }
+        }
+    }
+
     msg_print!(Message::KaslServerPrivacyRetention(manifest.retention));
     msg_print!(Message::KaslServerPrivacyOnChange(manifest.on_change));
 

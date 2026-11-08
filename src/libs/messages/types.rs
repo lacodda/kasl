@@ -364,6 +364,18 @@ pub enum Message {
     KaslServerPrivacyNeverHeading,
     KaslServerPrivacyBullet(String), // one line of a list the server sent
     KaslServerPrivacyVisibleHeading,
+    KaslServerPrivacySentHeading,
+    KaslServerPrivacySentNowhere,
+    KaslServerPrivacyReadHeading,
+    KaslServerPrivacyReadNowhere,
+    /// One place a person's data goes or is read from: where, about whom, what.
+    KaslServerPrivacyElsewhere {
+        place: String,
+        whose: String,
+        what: String,
+    },
+    /// The server predates the list: the kasl-server version that added it.
+    KaslServerPrivacyNotSaid(&'static str),
     KaslServerPrivacyRetention(String), // the server's retention sentence
     KaslServerPrivacyOnChange(String),  // what changing the level does
     KaslServerPrivacyUpdatedAt(String), // when the level was last set

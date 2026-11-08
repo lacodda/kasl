@@ -631,10 +631,33 @@ pub struct Manifest {
     pub stored: Vec<Stored>,
     pub never_collected: Vec<String>,
     pub visible_to: Vec<String>,
+    /// Where the server sends things about this person; `null` when the
+    /// server is too old to say, `[]` when it says nothing leaves.
+    pub sent_elsewhere: Option<Vec<SentElsewhere>>,
+    /// Which dashboard tools read people's hours from the server; `null`
+    /// when the server is too old to say, `[]` when none does.
+    pub read_elsewhere: Option<Vec<ReadElsewhere>>,
     pub retention: String,
     pub on_change: String,
     #[serde(serialize_with = "moment::utc_opt")]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+/// One place the server sends things about people.
+#[derive(Debug, Serialize)]
+pub struct SentElsewhere {
+    pub to: String,
+    pub about: String,
+    pub what: Vec<String>,
+}
+
+/// One dashboard tool reading people's hours from the server.
+#[derive(Debug, Serialize)]
+pub struct ReadElsewhere {
+    pub through: String,
+    pub by: String,
+    pub about: String,
+    pub what: Vec<String>,
 }
 
 impl From<crate::api::kasl_server::PrivacyManifest> for Manifest {
@@ -652,6 +675,27 @@ impl From<crate::api::kasl_server::PrivacyManifest> for Manifest {
                 .collect(),
             never_collected: manifest.never_collected,
             visible_to: manifest.visible_to,
+            sent_elsewhere: manifest.sent_elsewhere.map(|places| {
+                places
+                    .into_iter()
+                    .map(|place| SentElsewhere {
+                        to: place.to,
+                        about: place.about,
+                        what: place.what,
+                    })
+                    .collect()
+            }),
+            read_elsewhere: manifest.read_elsewhere.map(|readers| {
+                readers
+                    .into_iter()
+                    .map(|reader| ReadElsewhere {
+                        through: reader.through,
+                        by: reader.by,
+                        about: reader.about,
+                        what: reader.what,
+                    })
+                    .collect()
+            }),
             retention: manifest.retention,
             on_change: manifest.on_change,
             updated_at: manifest.updated_at,

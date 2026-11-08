@@ -631,6 +631,44 @@ async fn the_manifest_is_read_as_the_server_wrote_it() {
 }
 
 #[tokio::test]
+async fn where_the_data_goes_is_read_and_its_absence_is_not_invented() {
+    let server = MockServer::start().await;
+    let mut body = manifest_body("full");
+    let fields = body.as_object_mut().unwrap();
+    fields.insert(
+        "sent_elsewhere".to_string(),
+        serde_json::json!([{ "to": "a Slack channel (team)", "about": "everyone", "what": ["alerts about your day", "a day you closed"] }]),
+    );
+    fields.insert("read_elsewhere".to_string(), serde_json::json!([]));
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount(&server)
+        .await;
+
+    let manifest = client_for(&server).privacy("token").await.unwrap();
+    let sent = manifest.sent_elsewhere.expect("the server said where things go");
+    assert_eq!(sent[0].to, "a Slack channel (team)");
+    assert_eq!(sent[0].what.len(), 2);
+    assert_eq!(
+        manifest.read_elsewhere.map(|readers| readers.len()),
+        Some(0),
+        "an empty list is the promise that nothing reads"
+    );
+
+    // A server older than the lists says nothing either way - kept as
+    // "not said", never as "nothing leaves".
+    let old = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/api/v1/privacy/agent"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(manifest_body("full")))
+        .mount(&old)
+        .await;
+    let manifest = client_for(&old).privacy("token").await.unwrap();
+    assert!(manifest.sent_elsewhere.is_none() && manifest.read_elsewhere.is_none());
+}
+
+#[tokio::test]
 async fn a_manifest_without_a_timestamp_is_still_read() {
     let server = MockServer::start().await;
     // A server that does not record when the level was set. The field being

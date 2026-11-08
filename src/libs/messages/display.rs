@@ -416,6 +416,14 @@ Run `kasl server connect` to connect again with a token your administrator issue
             Message::KaslServerPrivacyNeverHeading => "What it never collects:".to_string(),
             Message::KaslServerPrivacyBullet(line) => format!("  {}", line),
             Message::KaslServerPrivacyVisibleHeading => "Who can see it:".to_string(),
+            Message::KaslServerPrivacySentHeading => "Sent outside this server:".to_string(),
+            Message::KaslServerPrivacySentNowhere => "  Nothing about you is sent anywhere else. What is kept stays on this server.".to_string(),
+            Message::KaslServerPrivacyReadHeading => "Read from outside this server:".to_string(),
+            Message::KaslServerPrivacyReadNowhere => "  No dashboard tool reads people's hours from here.".to_string(),
+            Message::KaslServerPrivacyElsewhere { place, whose, what } => format!("  {place} - {whose}: {what}"),
+            Message::KaslServerPrivacyNotSaid(version) => {
+                format!("  This server does not say; kasl-server {version} and later do.")
+            }
             Message::KaslServerPrivacyRetention(text) => format!("Retention: {}", text),
             Message::KaslServerPrivacyOnChange(text) => format!("If the level changes: {}", text),
             Message::KaslServerPrivacyUpdatedAt(when) => format!("This level was last set {}.", when),
