@@ -542,6 +542,10 @@ impl MigrationManager {
         // to it; a trigger takes a chain's tags away when its last row goes,
         // which is what the cascade from the row used to do.
         self.add_migration(20, "tags_belong_to_the_task", |tx| {
+            // A trigger naming `task_tags` makes SQLite refuse the rename
+            // below while the table is gone, so one left by an earlier run of
+            // this migration (a rollback, `kasl migrations`) goes first.
+            tx.execute("DROP TRIGGER IF EXISTS task_tags_go_with_their_task", [])?;
             tx.execute(
                 "CREATE TABLE task_tags_by_chain (
                     task_id INTEGER NOT NULL,

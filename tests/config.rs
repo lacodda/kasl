@@ -158,8 +158,15 @@ mod tests {
         format!("{}{}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr))
     }
 
+    /// Where the config file of `dir` lives, as kasl itself says: the data
+    /// directory is laid out differently on each platform.
+    fn config_path(dir: &Path) -> std::path::PathBuf {
+        let out = kasl(dir, &["config", "path"]);
+        std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim())
+    }
+
     fn config_file(dir: &Path) -> String {
-        std::fs::read_to_string(dir.join("lacodda").join("kasl").join("config.json")).unwrap()
+        std::fs::read_to_string(config_path(dir)).unwrap()
     }
 
     #[serial]
@@ -222,12 +229,9 @@ mod tests {
     #[test]
     fn check_fails_on_a_problem_and_names_it() {
         let dir = TempDir::new().unwrap();
-        std::fs::create_dir_all(dir.path().join("lacodda").join("kasl")).unwrap();
-        std::fs::write(
-            dir.path().join("lacodda").join("kasl").join("config.json"),
-            r#"{ "monitr": { "pause_threshold": 90 } }"#,
-        )
-        .unwrap();
+        let path = config_path(dir.path());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, r#"{ "monitr": { "pause_threshold": 90 } }"#).unwrap();
 
         let out = kasl(dir.path(), &["config", "check", "--json"]);
         assert!(!out.status.success(), "a problem fails the check");
@@ -235,11 +239,7 @@ mod tests {
         assert_eq!(found["problems"][0]["key"], "monitr");
         assert!(found["problems"][0]["message"].as_str().unwrap().contains("`monitor`"), "{found}");
 
-        std::fs::write(
-            dir.path().join("lacodda").join("kasl").join("config.json"),
-            r#"{ "monitor": { "pause_threshold": 90 } }"#,
-        )
-        .unwrap();
+        std::fs::write(&path, r#"{ "monitor": { "pause_threshold": 90 } }"#).unwrap();
         let out = kasl(dir.path(), &["config", "check"]);
         assert!(out.status.success(), "{}", text(&out));
     }
@@ -249,8 +249,10 @@ mod tests {
     fn setup_delete_removes_the_file_and_nothing_else() {
         let dir = TempDir::new().unwrap();
         assert!(kasl(dir.path(), &["config", "set", "monitor.pause_threshold", "90"]).status.success());
+        let path = config_path(dir.path());
+        assert!(path.exists(), "the set wrote {}", path.display());
         let out = kasl(dir.path(), &["setup", "--delete"]);
         assert!(out.status.success(), "{}", text(&out));
-        assert!(!dir.path().join("lacodda").join("kasl").join("config.json").exists(), "{}", text(&out));
+        assert!(!path.exists(), "{}", text(&out));
     }
 }
