@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.21.0] - 2026-11-08
+
+### Breaking Changes
+- **Drop the --send flag that did nothing** - `kasl sum --send` is a usage error now; use `kasl report --month`.
+
+### Bug Fixes
+- Keep a task's tags on every day it runs
+- Count a summary's hours as sum does
+- Drop the --send flag that did nothing
+- Keep a throwaway data directory off the real keyring
+- Keep the launcher alive until kasl has handled Ctrl+C
+
+### CI
+- Wait for the release before reaching a registry
+
+### Documentation
+- Describe kasl in the manifest's words on every shopfront
+
+### Features
+- Read and change settings one key at a time
+- Name the cuts you type every morning with --preset
+- Say where the server sends your data and who reads it
+
 ## [1.20.1] - 2026-11-02
 
 ### Bug Fixes
