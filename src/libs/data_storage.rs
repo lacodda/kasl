@@ -64,6 +64,11 @@ impl DataStorage {
         Self { base_path }
     }
 
+    /// The data directory itself, whether or not it exists yet.
+    pub fn base(&self) -> &Path {
+        &self.base_path
+    }
+
     /// Returns the full path for `file_name` inside the data directory,
     /// creating the directory tree on first use.
     ///

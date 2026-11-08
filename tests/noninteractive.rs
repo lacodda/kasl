@@ -252,24 +252,44 @@ mod tests {
 
     #[serial]
     #[test]
-    fn server_status_works_unattended() {
+    fn server_status_and_disconnect_work_unattended() {
         let dir = TempDir::new().unwrap();
 
         // It reads no secret from the user, so it belongs in a script: it is
         // the natural health check.
-        //
-        // `disconnect` used to be run here too, and must not be. HOME and
-        // LOCALAPPDATA move the data directory, not the OS keyring, and
-        // disconnect removes the token before anything else - so every run of
-        // this suite deleted the real agent token of whoever ran it, and a
-        // connected machine silently stopped sending days. Nothing in a test
-        // may run a command that writes the keyring.
         let out = kasl_cmd(dir.path()).args(["server", "status"]).output().unwrap();
         assert!(
             out.status.success(),
             "`kasl server status` failed unattended: {}",
             String::from_utf8_lossy(&out.stderr)
         );
+
+        // `disconnect` was dropped from this test once: HOME and LOCALAPPDATA
+        // move the data directory, not the OS keyring, and disconnect removes
+        // the token first - every run of the suite deleted the real agent
+        // token of whoever ran it. A data directory under the temporary
+        // directory now keeps its secrets under a service of its own, so the
+        // token this run removes is the one it put there.
+        //
+        // SAFETY: these tests are #[serial]
+        unsafe {
+            std::env::set_var("HOME", dir.path());
+            std::env::set_var("LOCALAPPDATA", dir.path());
+        }
+        let token = kasl::libs::secret::Secret::new(kasl::api::kasl_server::AGENT_TOKEN_SECRET, "");
+        let keyring = token.store("scratch-token").is_ok() && token.try_get_cached().as_deref() == Some("scratch-token");
+
+        let out = kasl_cmd(dir.path()).args(["server", "disconnect"]).output().unwrap();
+        assert!(
+            out.status.success(),
+            "`kasl server disconnect` failed unattended: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        if keyring {
+            assert_eq!(token.try_get_cached(), None, "disconnect removed the token of its own data directory");
+        } else {
+            eprintln!("SKIPPED the token half of server_status_and_disconnect_work_unattended: no usable keyring on this machine");
+        }
     }
 
     #[serial]

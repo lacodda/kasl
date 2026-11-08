@@ -41,6 +41,38 @@ type Aes256CbcDec = cbc::Decryptor<Aes256>;
 /// must stay stable: changing it orphans every stored credential.
 const KEYRING_SERVICE: &str = "lacodda.kasl";
 
+/// The keyring service this run's credentials live under.
+///
+/// The OS keyring knows nothing of kasl's data directory: moving `HOME` or
+/// `LOCALAPPDATA` gives a run a database and a config of its own, and still
+/// the one keyring of the machine. Every test runs that way, and a test that
+/// ran `kasl server disconnect` deleted the real agent token of whoever ran
+/// the suite - a connected machine silently stopped sending its days. Keeping
+/// tests off the keyring by discipline is a rule the next test forgets.
+///
+/// So a data directory under the system's temporary directory - where every
+/// throwaway one lives, and no real installation does - keeps its secrets
+/// apart: under a service named for that directory. A real installation is
+/// never under it and keeps [`KEYRING_SERVICE`].
+fn keyring_service() -> String {
+    service_for(DataStorage::new().base(), &std::env::temp_dir())
+}
+
+/// [`keyring_service`] for a given data directory and temporary directory.
+fn service_for(data_dir: &std::path::Path, temp_dir: &std::path::Path) -> String {
+    let under_temp =
+        data_dir.starts_with(temp_dir) || matches!((data_dir.canonicalize(), temp_dir.canonicalize()), (Ok(data), Ok(temp)) if data.starts_with(&temp));
+    if !under_temp {
+        return KEYRING_SERVICE.to_string();
+    }
+    // FNV-1a: stable across builds, so a test and the binary it runs agree.
+    let hash = data_dir
+        .to_string_lossy()
+        .bytes()
+        .fold(0xcbf2_9ce4_8422_2325_u64, |hash, byte| (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3));
+    format!("{KEYRING_SERVICE}.scratch-{hash:016x}")
+}
+
 /// Credential manager backed by the OS keyring.
 ///
 /// Each instance addresses one credential, identified by the account name
@@ -89,7 +121,7 @@ impl Secret {
 
     /// Opens the keyring entry for this credential.
     fn entry(&self) -> Result<Entry> {
-        Entry::new(KEYRING_SERVICE, &self.account).with_context(|| format!("cannot open keyring entry for '{}'", self.account))
+        Entry::new(&keyring_service(), &self.account).with_context(|| format!("cannot open keyring entry for '{}'", self.account))
     }
 
     /// Retrieves the password from the keyring, prompting when absent.
@@ -197,5 +229,42 @@ impl Secret {
             .map_err(|e| anyhow::anyhow!("failed to decrypt stored secret: {e}"))?;
 
         Ok(String::from_utf8(plaintext)?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn a_data_directory_under_temp_keeps_its_secrets_apart() {
+        let temp = Path::new("/tmp");
+        let scratch = service_for(Path::new("/tmp/.tmpA1b2/lacodda/kasl"), temp);
+        assert_ne!(scratch, KEYRING_SERVICE, "a throwaway data directory must not reach the real credentials");
+        assert!(scratch.starts_with("lacodda.kasl.scratch-"), "{scratch}");
+        assert_eq!(
+            scratch,
+            service_for(Path::new("/tmp/.tmpA1b2/lacodda/kasl"), temp),
+            "the same directory, the same service"
+        );
+        assert_ne!(
+            scratch,
+            service_for(Path::new("/tmp/.tmpZ9y8/lacodda/kasl"), temp),
+            "two sandboxes do not share secrets"
+        );
+    }
+
+    #[test]
+    fn a_real_installation_keeps_the_service_it_always_had() {
+        assert_eq!(service_for(Path::new("/home/me/.local/share/lacodda/kasl"), Path::new("/tmp")), KEYRING_SERVICE);
+        assert_eq!(
+            service_for(
+                Path::new(r"C:\Users\me\AppData\Local\lacodda\kasl"),
+                Path::new(r"C:\Users\me\AppData\Local\Temp")
+            ),
+            KEYRING_SERVICE,
+            "LOCALAPPDATA holds Temp, not the other way round"
+        );
     }
 }
