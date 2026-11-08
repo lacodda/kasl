@@ -405,11 +405,13 @@ mod tests {
 
     #[test]
     fn the_file_kasl_writes_passes_its_own_schema() {
-        let mut config = Config::default();
-        config.monitor = Some(Default::default());
-        config.productivity = Some(Default::default());
-        config.inbox = Some(Default::default());
-        config.task_discovery = Some(Default::default());
+        let config = Config {
+            monitor: Some(Default::default()),
+            productivity: Some(Default::default()),
+            inbox: Some(Default::default()),
+            task_discovery: Some(Default::default()),
+            ..Config::default()
+        };
         let mut doc = serde_json::to_value(&config).unwrap();
         doc.as_object_mut().unwrap().insert("$schema".to_string(), json!(SCHEMA_URL));
         assert_eq!(check(&doc), Findings::default());

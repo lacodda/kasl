@@ -499,7 +499,7 @@ fn inbox_filter(args: &Arguments) -> Result<inbox::FilterArgs> {
         })?),
         None => None,
     };
-    Ok(inbox::FilterArgs {
+    inbox::FilterArgs {
         since,
         new,
         changed: args.text("changed")?,
@@ -511,7 +511,7 @@ fn inbox_filter(args: &Arguments) -> Result<inbox::FilterArgs> {
         sort,
         preset: args.text("preset")?,
     }
-    .with_preset()?)
+    .with_preset()
 }
 
 /// A call's arguments, read strictly.

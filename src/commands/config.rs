@@ -118,7 +118,7 @@ fn show(json: bool) -> Result<()> {
     let path = Config::path()?;
     let file = keys::read_file(&path)?;
     let settings = keys::settings(file.as_ref());
-    let findings = file.as_ref().map(|doc| schema::check(doc)).unwrap_or_default();
+    let findings = file.as_ref().map(schema::check).unwrap_or_default();
 
     if json {
         return output::print_json(&json::ConfigShow {
