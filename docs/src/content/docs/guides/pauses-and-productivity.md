@@ -76,7 +76,7 @@ neighbour - it stays exactly as recorded.
 
 `report --send` refuses to submit a day whose productivity is below
 `min_productivity_threshold` (75% by default), and says which number it saw
-against which limit. The monthly `sum --send` has no such check.
+against which limit. The monthly `report --month` has no such check.
 
 A softer warning appears in the report itself, and that one waits until
 `min_workday_fraction_before_suggest` of the expected workday has elapsed (half

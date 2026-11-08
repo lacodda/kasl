@@ -10,8 +10,12 @@ The `sum` command shows the current month's working hours: one row per recorded 
 kasl sum [OPTIONS]
 ```
 
-- `--send`: Submit the monthly summary to the configured reporting API, in addition to displaying it.
-- `--json`: Print the month as one JSON document instead of the table - see [JSON output](#json-output). Not accepted with `--send`.
+- `--json`: Print the month as one JSON document instead of the table - see [JSON output](#json-output).
+
+`sum` only shows the month. The month is sent with
+[`kasl report --month`](/reference/report/); until 1.21 `sum` also took a
+`--send` flag that did nothing, and it is gone so that one command sends a
+month.
 
 ## Examples
 
@@ -19,8 +23,11 @@ kasl sum [OPTIONS]
 # Display this month's summary
 kasl sum
 
-# Generate and submit the monthly report
-kasl sum --send
+# The month as JSON, for a script
+kasl sum --json
+
+# Submit the monthly report
+kasl report --month
 ```
 
 ## Sample Output

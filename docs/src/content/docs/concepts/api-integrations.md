@@ -10,7 +10,7 @@ kasl talks to three kinds of external service: GitLab (through a plugin) and Jir
 | --- | --- | --- |
 | GitLab (plugin) | reads, writes | Today's commits become candidate tasks in `kasl task find`; assigned issues and merge requests feed `kasl inbox`; `inbox start`, `close` and `comment` move and annotate them |
 | Jira | reads, writes | Resolved issues become candidates; assigned open issues feed `kasl inbox`; `inbox start`, `close` and `comment` move and annotate issues |
-| SiServer | writes | `kasl report --send` and `kasl sum --send` file the day and the month |
+| SiServer | writes | `kasl report --send` and `kasl report --month` file the day and the month |
 
 Jira and SiServer are configured through the `kasl setup` wizard; GitLab is set
 up with `kasl plugin setup gitlab`. Logins and URLs go to `config.json`;
@@ -101,7 +101,7 @@ hold the watcher.
 
 ### Configuration
 
-```json
+```json title="config.json"
 {
   "jira": {
     "login": "john.doe",
@@ -134,7 +134,7 @@ API URL. The password goes to the keyring.
 
 ### Configuration
 
-```json
+```json title="config.json"
 {
   "si": {
     "login": "john.doe@company.com",
@@ -148,7 +148,7 @@ API URL. The password goes to the keyring.
 
 ```bash
 kasl report --send
-kasl sum --send
+kasl report --month
 ```
 
 Authentication is two-staged: kasl signs in against the LDAP endpoint, exchanges

@@ -12,19 +12,23 @@ A background daemon (`kasl watch`) watches keyboard and mouse input and turns it
 - **Pause detection**: an inactivity gap of `pause_threshold` or more opens a pause; it closes and is kept if it lasted at least `min_pause_duration`.
 - **Background operation**: runs as a daemon; `kasl watch --foreground` runs it in the current terminal with live output instead.
 
-```json
+```json title="config.json"
 {
   "monitor": {
-    "min_pause_duration": 20,    // minutes - shortest break that gets recorded
-    "pause_threshold": 60,       // seconds - inactivity before a pause opens
-    "poll_interval": 500,        // milliseconds - activity check interval
-    "activity_threshold": 30,    // seconds - activity required to start a workday
-    "min_work_interval": 10      // minutes - shortest interval kept in reports
+    "min_pause_duration": 20,
+    "pause_threshold": 60,
+    "poll_interval": 500,
+    "activity_threshold": 30,
+    "min_work_interval": 10
   }
 }
 ```
 
-See [Configuration](/concepts/configuration/) for the full reference.
+Minutes for the shortest break that gets recorded and the shortest interval
+kept in reports; seconds of inactivity before a pause opens and of activity
+before a workday starts; milliseconds between activity checks. `kasl config
+set monitor.pause_threshold 90` changes one of them - see
+[Configuration](/concepts/configuration/) for the full reference.
 
 ## Recording Missed Absences
 
@@ -47,9 +51,9 @@ Net Work Time       = Available Work Time - Short Pauses
 Productivity         = Net Work Time / Available Work Time * 100
 ```
 
-Long pauses - detected absences at or above `min_pause_duration`, plus every manual pause - leave the denominator entirely; short pauses lower the numerator only. `kasl report --send` and `kasl sum --send` refuse to submit when productivity falls below `min_productivity_threshold`, and `kasl report` warns once enough of the expected workday (`min_workday_fraction_before_suggest`) has passed while productivity is still low.
+Long pauses - detected absences at or above `min_pause_duration`, plus every manual pause - leave the denominator entirely; short pauses lower the numerator only. `kasl report --send` refuses to submit a day when productivity falls below `min_productivity_threshold`, and `kasl report` warns once enough of the expected workday (`min_workday_fraction_before_suggest`) has passed while productivity is still low.
 
-```json
+```json title="config.json"
 {
   "productivity": {
     "min_productivity_threshold": 75.0,
@@ -85,7 +89,7 @@ kasl report --last   # yesterday
 kasl report --send   # submit to the configured reporting API
 
 kasl sum             # this month's totals and daily breakdown
-kasl sum --send      # submit the monthly summary
+kasl report --month  # submit the monthly summary
 ```
 
 A report shows work intervals, pauses, tasks, and productivity for one day; `sum` aggregates the current month - daily hours, an average, and rest-day integration from the company calendar. Both filter out intervals shorter than `min_work_interval` before display and before submission, so a few minutes of stray activity around a break does not clutter the numbers - and a day's hours in the month are exactly its report's total.
@@ -134,7 +138,7 @@ kasl inbox take ISSUE-123
 
 ## SiServer / Reporting API
 
-`kasl setup` configures the corporate reporting endpoint used by `kasl report --send` and `kasl sum --send`. Authentication differs by integration: SiServer credentials go through the OS keyring like Jira's; a plain reporting server (`server.auth_token` in `config.json`) is authenticated with a static token sent on every submission.
+`kasl setup` configures the corporate reporting endpoint - the `si` block - used by `kasl report --send` for the day and `kasl report --month` for the month. Its password goes to the OS keyring, like Jira's; the config file holds only the login and the addresses.
 
 What a submission contains is readable before it is made: [`kasl report --send --show`](/reference/report/#what-gets-sent) prints the multipart form field by field and posts nothing. For the other channel, [`kasl server manifest`](/reference/server/#kasl-server-manifest) reads what the team server stores about you from the server itself.
 

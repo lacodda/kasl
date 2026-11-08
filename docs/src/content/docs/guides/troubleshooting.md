@@ -100,7 +100,7 @@ GitLab is handled by the `kasl-plugin-gitlab` plugin, which uses a personal acce
 
 ### Report submission is refused with a productivity warning
 
-`kasl report --send` refuses to submit when the day's productivity is below `min_productivity_threshold` (the monthly `kasl sum --send` has no such check) (see [Configuration](/concepts/configuration/)). This is intentional - it is the safeguard the removed `kasl breaks` command used to defeat. Record any genuine absence the monitor missed with [`kasl pauses add`](/reference/pauses/) before retrying; that is the only supported way to raise the number.
+`kasl report --send` refuses to submit when the day's productivity is below `min_productivity_threshold` (the monthly `kasl report --month` has no such check) (see [Configuration](/concepts/configuration/)). This is intentional - it is the safeguard the removed `kasl breaks` command used to defeat. Record any genuine absence the monitor missed with [`kasl pauses add`](/reference/pauses/) before retrying; that is the only supported way to raise the number.
 
 ## Platform-specific issues
 

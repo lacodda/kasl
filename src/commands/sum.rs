@@ -8,9 +8,13 @@
 //! # Generate current month summary
 //! kasl sum
 //!
-//! # Submit monthly report to external API
-//! kasl sum --send
+//! # The same month as JSON
+//! kasl sum --json
 //! ```
+//!
+//! The month is sent with `kasl report --month`. `sum` had a `--send` flag
+//! until 1.21 that was parsed and never read; it is gone rather than wired
+//! up, so there is one command that sends a month.
 
 use crate::{
     libs::{
@@ -26,19 +30,8 @@ use chrono::Local;
 use clap::Args;
 
 /// Command-line arguments for the monthly summary command.
-///
-/// Currently supports basic summary generation with optional report submission.
-/// Future versions may add date range selection and detailed filtering options.
 #[derive(Debug, Args)]
 pub struct SumArgs {
-    /// Submit the monthly summary report
-    ///
-    /// When specified, the generated summary will be submitted to the configured
-    /// reporting API in addition to being displayed locally. This is useful for
-    /// organizational reporting requirements.
-    #[arg(long, help = "Send report", conflicts_with = "json")]
-    send: bool,
-
     #[command(flatten)]
     format: Format,
 }

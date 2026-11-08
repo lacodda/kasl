@@ -114,7 +114,7 @@ kasl end
 
 ```bash
 kasl sum            # the month so far, day by day
-kasl sum --send     # file the monthly summary
+kasl report --month # file the monthly summary
 ```
 
 For a time sheet that wants hours rather than intervals, export the hourly

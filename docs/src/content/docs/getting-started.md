@@ -100,7 +100,7 @@ Configuration files are stored in:
 - **Linux**: `~/.local/share/lacodda/kasl/config.json`
 
 Example configuration:
-```json
+```json title="config.json"
 {
   "monitor": {
     "min_pause_duration": 20,
@@ -263,7 +263,7 @@ kasl export --output my_report.csv
 kasl sum
 
 # Submit monthly report
-kasl sum --send
+kasl report --month
 ```
 
 ## Troubleshooting
