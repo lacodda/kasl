@@ -128,6 +128,53 @@ mod tests {
         );
     }
 
+    /// Migration 20 moves every tag from the row it was put on to the task.
+    #[test_context(MigrationTestContext)]
+    #[serial]
+    #[test]
+    fn tags_move_from_rows_to_their_task(_ctx: &mut MigrationTestContext) {
+        let mut conn = Db::new_without_migrations().unwrap();
+        let manager = MigrationManager::new();
+        manager.run_migrations(&mut conn).unwrap();
+
+        // Back to version 19: links by row, with the row's foreign key.
+        manager.rollback_to(&mut conn, 19).unwrap();
+        conn.execute("DROP TABLE task_tags", []).unwrap();
+        conn.execute("DROP TRIGGER task_tags_go_with_their_task", []).unwrap();
+        conn.execute(
+            "CREATE TABLE task_tags (task_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (task_id, tag_id),
+             FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE, FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO tasks (id, task_id, name, comment, completeness) VALUES (5, 5, 'refund', '', 40), (8, 5, 'refund', '', 80), (9, 9, 'other', '', 100)",
+            [],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO tags (id, name) VALUES (1, 'payments'), (2, 'ops')", []).unwrap();
+        // The same tag on both days of one task, and one put on its second day only.
+        conn.execute("INSERT INTO task_tags (task_id, tag_id) VALUES (5, 1), (8, 1), (8, 2), (9, 2)", [])
+            .unwrap();
+
+        manager.run_migrations(&mut conn).unwrap();
+        let links: Vec<(i32, i32)> = conn
+            .prepare("SELECT task_id, tag_id FROM task_tags ORDER BY task_id, tag_id")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(links, vec![(5, 1), (5, 2), (9, 2)], "every link names its task's chain, once");
+
+        // The task's tags go with its last row.
+        conn.execute("DELETE FROM tasks WHERE id IN (5, 8)", []).unwrap();
+        let left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM task_tags WHERE task_id = 5", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(left, 0);
+    }
+
     /// Undoes migration 19 by hand, since `rollback_to` only forgets the record.
     fn undo_the_source_rename(conn: &rusqlite::Connection) {
         for statement in [

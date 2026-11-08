@@ -40,7 +40,7 @@ kasl task list [OPTIONS]
 ```
 
 - `-a, --all`: List tasks from every date, not just today.
-- `--tag <TAG>`: Only tasks carrying this tag.
+- `--tag <TAG>`: Only tasks carrying this tag. A tag belongs to the task, not to one day's row: a task carried into a new day - by `task find`, or marked done today - keeps its tags, and `--tag` lists every day of it.
 - `--json`: Print the tasks as one JSON document - see [JSON output](#json-output). An empty list is `{"tasks": []}`, exit code 0.
 
 ### `show` - Show tasks by id

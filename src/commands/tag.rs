@@ -271,7 +271,7 @@ fn handle_delete(tag_identifier: String, assume_yes: bool) -> Result<()> {
     };
 
     // Analyze usage impact
-    let task_count = tags_db.get_tasks_by_tag(tag.id.unwrap())?.len();
+    let task_count = tags_db.count_tasks_with_tag(tag.id.unwrap())?;
 
     if !assume_yes {
         // Never block on a prompt when there is no one to answer it.

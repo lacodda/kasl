@@ -527,6 +527,41 @@ impl MigrationManager {
             tx.execute("CREATE INDEX IF NOT EXISTS idx_tasks_issue_key ON tasks(issue_key)", [])?;
             Ok(())
         });
+
+        // Version 20: a tag belongs to the task, not to one day's row.
+        //
+        // A task is a chain of daily rows sharing `tasks.task_id`, and
+        // `task_tags` linked a tag to one row: a task continued into a new day
+        // - by `task find`, by marking it done today - carried no tags on its
+        // new row, so `task list --tag payments` lost it from its second day
+        // on. The link now names the chain (`task_tags.task_id` is
+        // `tasks.task_id`, the same column name for the same thing), and
+        // every existing link moves to its row's chain.
+        //
+        // A chain is not a row, so there is no foreign key to hold the link
+        // to it; a trigger takes a chain's tags away when its last row goes,
+        // which is what the cascade from the row used to do.
+        self.add_migration(20, "tags_belong_to_the_task", |tx| {
+            tx.execute(
+                "CREATE TABLE task_tags_by_chain (
+                    task_id INTEGER NOT NULL,
+                    tag_id INTEGER NOT NULL,
+                    PRIMARY KEY (task_id, tag_id),
+                    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+                )",
+                [],
+            )?;
+            tx.execute(
+                "INSERT OR IGNORE INTO task_tags_by_chain (task_id, tag_id)
+                 SELECT COALESCE(NULLIF(t.task_id, 0), tt.task_id), tt.tag_id
+                 FROM task_tags tt LEFT JOIN tasks t ON t.id = tt.task_id",
+                [],
+            )?;
+            tx.execute("DROP TABLE task_tags", [])?;
+            tx.execute("ALTER TABLE task_tags_by_chain RENAME TO task_tags", [])?;
+            tx.execute(crate::db::tags::TRIGGER_CHAIN_GONE, [])?;
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

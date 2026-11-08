@@ -53,7 +53,7 @@ kasl tag show <TAG> [--json]
 - `TAG`: tag name or ID. Required.
 - `--json`: Print the tag and its tasks as one JSON document - see [JSON output](#json-output).
 
-Shows the tag and every task currently assigned to it. A tag that does not exist is an error (exit code 1), so a script can tell it from a tag that carries no tasks.
+Shows the tag and every task currently assigned to it - each day's row of a task that ran over several days, since a tag belongs to the task and not to the day it was put on. A tag that does not exist is an error (exit code 1), so a script can tell it from a tag that carries no tasks.
 
 ## `kasl tag edit`
 

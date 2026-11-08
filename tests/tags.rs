@@ -109,4 +109,43 @@ mod tests {
         assert_eq!(mixed_ids.len(), 2);
         assert_eq!(mixed_ids[0], tag_ids1[1]); // "ui" already existed
     }
+
+    #[test_context(TagTestContext)]
+    #[serial]
+    #[test]
+    fn a_tag_stays_with_the_task_into_its_next_day(_ctx: &mut TagTestContext) {
+        // The bug: a task continued into a new day got a fresh row with no
+        // tags, so `task list --tag payments` lost it from its second day on.
+        let mut tasks = Tasks::new().unwrap();
+        let first = tasks.insert(&Task::new("Payments refund", "", Some(40))).unwrap().id.unwrap();
+        let mut tags = Tags::new().unwrap();
+        let payments = tags.get_or_create_tags(&["payments".to_string()]).unwrap()[0];
+        tags.add_tag_to_task(first, payments).unwrap();
+
+        let mut next_day = Task::new("Payments refund", "", Some(80));
+        next_day.task_id = Some(first);
+        let second = tasks.insert(&next_day).unwrap().id.unwrap();
+
+        let names: Vec<String> = tags.get_tags_by_task(second).unwrap().into_iter().map(|tag| tag.name).collect();
+        assert_eq!(names, ["payments"], "the second day's row carries the task's tag");
+        let tagged: Vec<Option<i32>> = tasks
+            .fetch(kasl::libs::task::TaskFilter::ByTag("payments".to_string()))
+            .unwrap()
+            .iter()
+            .map(|task| task.id)
+            .collect();
+        assert_eq!(tagged, [Some(first), Some(second)]);
+        assert_eq!(tags.count_tasks_with_tag(payments).unwrap(), 1, "one task, however many days");
+
+        // A tag taken off any day's row comes off the task.
+        tags.remove_tag_from_task(second, payments).unwrap();
+        assert!(tags.get_tags_by_task(first).unwrap().is_empty());
+
+        // And the task's tags go when its last row does.
+        tags.add_tag_to_task(first, payments).unwrap();
+        tasks.delete(first).unwrap();
+        assert_eq!(tags.count_tasks_with_tag(payments).unwrap(), 1, "a row of the task is still there");
+        tasks.delete(second).unwrap();
+        assert_eq!(tags.count_tasks_with_tag(payments).unwrap(), 0);
+    }
 }

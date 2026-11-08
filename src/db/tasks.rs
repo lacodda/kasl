@@ -48,8 +48,10 @@ const WHERE_INCOMPLETE: &str = "WHERE
   GROUP BY task_id";
 
 const WHERE_ISSUE_KEY: &str = "WHERE issue_key = ?1";
-const WHERE_TAG: &str = "WHERE id IN (SELECT task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name = ?1)";
-const WHERE_TAGS: &str = "WHERE id IN (SELECT task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN";
+// A tag is on the task - the chain of its daily rows - so every row of a
+// tagged chain matches, the second day's as much as the first.
+const WHERE_TAG: &str = "WHERE task_id IN (SELECT tt.task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name = ?1)";
+const WHERE_TAGS: &str = "WHERE task_id IN (SELECT tt.task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN";
 const DELETE_TASK: &str = "DELETE FROM tasks WHERE id = ?";
 const DELETE_TASKS_BY_IDS: &str = "DELETE FROM tasks WHERE id IN";
 const SELECT_COUNT_BY_ID: &str = "SELECT COUNT(*) FROM tasks WHERE id = ?";

@@ -28,15 +28,24 @@ const SCHEMA_TAGS: &str = "CREATE TABLE IF NOT EXISTS tags (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
 
-// Composite primary key plus ON DELETE CASCADE on both sides: removing a
-// task or a tag cleans its links automatically.
+// A tag belongs to the task - the chain of daily rows sharing
+// `tasks.task_id` - so `task_tags.task_id` is that chain id, not a row id
+// (migration 20). Tags go with the tag by cascade, and with the task by
+// `TRIGGER_CHAIN_GONE` once its last row is deleted.
 const SCHEMA_TASK_TAGS: &str = "CREATE TABLE IF NOT EXISTS task_tags (
     task_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (task_id, tag_id),
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 )";
+
+/// Takes a task's tags away when the last row of its chain is deleted.
+pub const TRIGGER_CHAIN_GONE: &str = "CREATE TRIGGER IF NOT EXISTS task_tags_go_with_their_task
+    AFTER DELETE ON tasks
+    WHEN NOT EXISTS (SELECT 1 FROM tasks WHERE task_id = OLD.task_id)
+    BEGIN
+        DELETE FROM task_tags WHERE task_id = OLD.task_id;
+    END";
 
 const INSERT_TAG: &str = "INSERT INTO tags (name, color) VALUES (?1, ?2)";
 const UPDATE_TAG: &str = "UPDATE tags SET name = ?2, color = ?3 WHERE id = ?1";
@@ -44,16 +53,23 @@ const DELETE_TAG: &str = "DELETE FROM tags WHERE id = ?1";
 const SELECT_ALL_TAGS: &str = "SELECT * FROM tags ORDER BY name";
 const SELECT_TAG_BY_NAME: &str = "SELECT * FROM tags WHERE name = ?1";
 const SELECT_TAG_BY_ID: &str = "SELECT * FROM tags WHERE id = ?1";
+// Every statement below takes a row id - what a user types, what a listing
+// shows - and acts on the chain that row belongs to.
 const SELECT_TAGS_BY_TASK: &str = "
     SELECT t.* FROM tags t
     JOIN task_tags tt ON t.id = tt.tag_id
-    WHERE tt.task_id = ?1
+    WHERE tt.task_id = (SELECT task_id FROM tasks WHERE id = ?1)
     ORDER BY t.name
 ";
-const SELECT_TASKS_BY_TAG: &str = "SELECT task_id FROM task_tags WHERE tag_id = ?1";
-const INSERT_TASK_TAG: &str = "INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?1, ?2)";
-const DELETE_TASK_TAG: &str = "DELETE FROM task_tags WHERE task_id = ?1 AND tag_id = ?2";
-const DELETE_ALL_TASK_TAGS: &str = "DELETE FROM task_tags WHERE task_id = ?1";
+const SELECT_TASKS_BY_TAG: &str = "
+    SELECT id FROM tasks
+    WHERE task_id IN (SELECT task_id FROM task_tags WHERE tag_id = ?1)
+    ORDER BY id
+";
+const COUNT_TASKS_BY_TAG: &str = "SELECT COUNT(*) FROM task_tags WHERE tag_id = ?1";
+const INSERT_TASK_TAG: &str = "INSERT OR IGNORE INTO task_tags (task_id, tag_id) SELECT task_id, ?2 FROM tasks WHERE id = ?1";
+const DELETE_TASK_TAG: &str = "DELETE FROM task_tags WHERE task_id = (SELECT task_id FROM tasks WHERE id = ?1) AND tag_id = ?2";
+const DELETE_ALL_TASK_TAGS: &str = "DELETE FROM task_tags WHERE task_id = (SELECT task_id FROM tasks WHERE id = ?1)";
 
 /// A label attachable to tasks, with an optional display color.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -298,15 +314,16 @@ impl Tags {
         Ok(tags)
     }
 
-    /// Returns the ids of tasks carrying the tag.
+    /// Returns the row ids of every task carrying the tag - each day's row
+    /// of it, since the tag belongs to the task and not to one day.
     ///
     /// ```rust,no_run
     /// # use kasl::db::tags::Tags;
     /// # fn main() -> anyhow::Result<()> {
     /// let mut tags = Tags::new()?;
     /// let tag_id = 1;
-    /// let task_ids = tags.get_tasks_by_tag(tag_id)?;
-    /// println!("Tag is used by {} tasks", task_ids.len());
+    /// let rows = tags.get_tasks_by_tag(tag_id)?;
+    /// println!("{} rows carry the tag", rows.len());
     /// # Ok(())
     /// # }
     /// ```
@@ -321,7 +338,13 @@ impl Tags {
         Ok(task_ids)
     }
 
-    /// Links a tag to a task; idempotent thanks to `OR IGNORE`.
+    /// How many tasks carry the tag, each counted once however many days it ran.
+    pub fn count_tasks_with_tag(&mut self, tag_id: i32) -> Result<usize> {
+        let count: i64 = self.conn.query_row(COUNT_TASKS_BY_TAG, params![tag_id], |row| row.get(0))?;
+        Ok(count as usize)
+    }
+
+    /// Links a tag to the task a row belongs to; idempotent thanks to `OR IGNORE`.
     ///
     /// ```rust,no_run
     /// # use kasl::db::tags::Tags;
