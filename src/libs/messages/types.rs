@@ -86,14 +86,56 @@ pub enum Message {
 
     // === CONFIGURATION MESSAGES ===
     ConfigSaved,
-    ConfigDeleted,
+    ConfigDeleted(String),         // the file's path
+    ConfigNothingToDelete(String), // the path where no file is
     ConfigParseError,
     ConfigSaveError,
     ConfigModuleJira,
     ConfigModuleSiServer,
     ConfigModuleMonitor,
-    ConfigModuleServer,
     ConfigModuleProductivity,
+    /// `kasl config show`: the file the list comes from.
+    ConfigFileAt(String),
+    /// `kasl config show` with no file yet.
+    ConfigFileNone(String),
+    /// A setting changed: its key, new value and what it was.
+    ConfigChanged {
+        key: String,
+        value: String,
+        was: String,
+    },
+    /// A setting set to the value it already had.
+    ConfigUnchanged {
+        key: String,
+        value: String,
+    },
+    /// A setting unset, back to its default.
+    ConfigBackToDefault {
+        key: String,
+        value: String,
+    },
+    /// A setting unset that has no default.
+    ConfigRemoved(String),
+    /// `unset` of a key that was not in the file.
+    ConfigWasNotSet(String),
+    /// What an edit did to keys an older kasl wrote.
+    ConfigTidied(String),
+    /// An edit went through over a file that has problems elsewhere: how many.
+    ConfigOtherProblems(usize),
+    /// `kasl config show` over a file with problems: how many.
+    ConfigHasProblems(usize),
+    /// `kasl config get` of a setting that is not set and has no default.
+    ConfigNotSet(String),
+    /// One problem `kasl config check` found.
+    ConfigProblem(String),
+    /// One key an older kasl wrote.
+    ConfigNotice(String),
+    /// `kasl config check` found nothing: the file's path.
+    ConfigValid(String),
+    /// `kasl config check` found this many problems.
+    ConfigProblemCount(usize),
+    /// A first inbox setting, with Jira set up, starts the Jira poll.
+    ConfigInboxStartsJiraPoll,
     ConfigModuleTaskDiscovery,
     ConfigModuleJiraInbox,
     TaskDiscoveryIgnoreListHeader,
@@ -418,8 +460,6 @@ pub enum Message {
     PromptMinProductivityThreshold,
     PromptWorkdayHours,
     PromptMinWorkdayFraction,
-    PromptServerApiUrl,
-    PromptServerAuthToken,
     PromptKaslServerUrl,
     PromptKaslServerToken,
     PromptSelectModules,

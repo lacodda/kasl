@@ -48,7 +48,6 @@ fn configure(server: &MockServer) -> InboxConfig {
         jira: Some(JiraConfig {
             login: "agent".to_string(),
             api_url: server.uri(),
-            completed_statuses: Vec::new(),
         }),
         inbox: Some(inbox.clone()),
         ..Default::default()

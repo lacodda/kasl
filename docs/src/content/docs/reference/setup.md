@@ -9,7 +9,7 @@ This command used to be called `init`. The old name still works and does the
 same thing, printing a notice that points here; it will be removed in 2.0.
 :::
 
-`kasl setup` needs a terminal - every step is a prompt, several of them for secrets. Run it outside one and it refuses with a message naming the problem rather than hanging.
+`kasl setup` needs a terminal - every step is a prompt, several of them for secrets. Run it outside one and it refuses with a message naming the problem rather than hanging, before it touches a running watcher. To change one setting - from a script, or without walking a module - use [`kasl config set`](/reference/config/).
 
 ## Usage
 
@@ -17,7 +17,7 @@ same thing, printing a notice that points here; it will be removed in 2.0.
 kasl setup [OPTIONS]
 ```
 
-- `-d, --delete`: Remove the existing configuration file and global PATH settings instead of creating a new one.
+- `-d, --delete`: Delete the configuration file instead of running the wizard, so every setting is back to its default. The database, the OS keyring and the PATH are left as they are; it needs no terminal.
 
 ## Module checklist
 
@@ -26,11 +26,10 @@ The wizard opens with a single checklist - a `MultiSelect`, not a chain of "Enab
 1. **SiServer**
 2. **Jira**
 3. **Monitor**
-4. **Server**
-5. **Productivity**
-6. **Report**
-7. **Task discovery**
-8. **Inbox**
+4. **Productivity**
+5. **Report**
+6. **Task discovery**
+7. **Inbox**
 
 Whatever you tick runs its own prompts right after the checklist closes; nothing you leave unticked is touched. Fields already in your config file are offered back as defaults, so re-running `setup` on a module you configured before is an edit, not a rewrite.
 
@@ -45,13 +44,9 @@ GitLab is not a wizard module. It is a plugin that ships with kasl, and it is se
 
 ### Monitor
 
-Prompts for `min_pause_duration`, `pause_threshold`, `poll_interval`, `activity_threshold`, and `min_work_interval`. One monitor setting, `pause_merge_gap`, is not part of this prompt set - it only has a default and is changed by editing `config.json` directly. See [Configuration](/concepts/configuration/) for what each field controls.
+Prompts for `min_pause_duration`, `pause_threshold`, `poll_interval`, `activity_threshold`, and `min_work_interval`. One monitor setting, `pause_merge_gap`, is not part of this prompt set - it is changed with `kasl config set monitor.pause_merge_gap 45`. See [Configuration](/concepts/configuration/) for what each field controls.
 
-### Server
-
-Prompts for the reporting API URL and auth token used by `report --send` and `sum --send`.
-
-### Productivity, Report, Task discovery, Jira inbox
+### Productivity, Report, Task discovery, Inbox
 
 The remaining four modules configure the productivity thresholds, report output (directory, filename template, language, template name), the task-discovery ignore list, and Jira inbox polling (interval, notifications, sort field, custom fields) respectively. Field-by-field details live on [Configuration](/concepts/configuration/) - this page only tracks what the wizard asks and in what order.
 
@@ -67,13 +62,17 @@ The remaining four modules configure the productivity thresholds, report output 
 # Run the wizard
 kasl setup
 
-# Remove the configuration and start over
+# Delete the configuration file and start over
 kasl setup --delete
 kasl setup
+
+# Change one setting without the wizard
+kasl config set monitor.pause_threshold 90
 ```
 
 ## Related commands
 
+- [`config`](/reference/config/) - Read and change one setting at a time
 - [`watch`](/reference/watch/) - Start activity monitoring
 - [`task`](/reference/task/) - Manage tasks
 - [`report`](/reference/report/) - Generate reports

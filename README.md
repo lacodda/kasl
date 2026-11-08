@@ -206,8 +206,10 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 In daily use on Windows, macOS and Linux. Everything above works today: the
 daemon, Jira, the GitLab plugin that ships with kasl, the reports, the
-optional team server and the plugin protocol. Next: the config edited by
-command rather than by hand. The current version and what landed in it:
+optional team server, the plugin protocol, and settings changed one at a time
+with `kasl config`, checked against the config's JSON Schema. Next: a one-line
+status for status bars, and a standup summary of the day. The current version
+and what landed in it:
 [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation

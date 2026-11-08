@@ -1,0 +1,509 @@
+{
+  "$defs": {
+    "InboxConfig": {
+      "additionalProperties": false,
+      "description": "Settings for the inbox, whichever source its issues come from.",
+      "properties": {
+        "custom_fields": {
+          "default": [],
+          "description": "Extra Jira fields to fetch (custom fields such as Scoring).",
+          "items": {
+            "$ref": "#/$defs/JiraCustomField"
+          },
+          "type": "array"
+        },
+        "enabled": {
+          "default": true,
+          "description": "Whether the watcher polls the inbox's sources.",
+          "type": "boolean"
+        },
+        "notify": {
+          "default": true,
+          "description": "Whether to show a desktop toast when a new issue appears.",
+          "type": "boolean"
+        },
+        "notify_changes": {
+          "default": true,
+          "description": "Whether to show a toast when an existing issue changes status or\npriority. Score changes and returns only set the badge.",
+          "type": "boolean"
+        },
+        "notify_gone": {
+          "default": false,
+          "description": "Whether to show a toast when an issue leaves the inbox\n(closed or reassigned). Off by default.",
+          "type": "boolean"
+        },
+        "poll_interval_secs": {
+          "default": 300,
+          "description": "Seconds between polls.",
+          "format": "uint64",
+          "minimum": 30,
+          "type": "integer"
+        },
+        "presets": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InboxPreset"
+          },
+          "description": "Named cuts of the list, by name: `kasl inbox --preset urgent` lists\nwhat `{\"priority\": \"High+\", \"since\": \"7d\"}` keeps. Flags given beside\nthe preset win over its fields.",
+          "type": "object"
+        },
+        "rules": {
+          "description": "What the inbox does by itself: when an issue matches a rule's `when`,\nits `then` pins it, toasts it as urgent, dismisses it, or tags the task\ntaken from it.",
+          "items": {
+            "$ref": "#/$defs/InboxRule"
+          },
+          "type": "array"
+        },
+        "sort_by_field": {
+          "description": "Field id used for ranking (DESC), typically Scoring (`customfield_…`).",
+          "type": "string"
+        },
+        "start_on_take": {
+          "default": false,
+          "description": "Whether taking an issue also starts it in Jira.\n\nMoves the issue into the in-progress category of its workflow on every\ntake - from the command line, from triage and from a toast button. Off\nby default: it writes to a tracker the whole team reads, and in some\nteams \"In Progress\" means more than \"on my list\".",
+          "type": "boolean"
+        },
+        "toast_snooze_for": {
+          "default": "1d",
+          "description": "How long a toast's Snooze button sleeps: 3d, 12h, 2w.\n\nShares its spelling with `inbox triage --snooze-for`, because a button\nand the picker putting an issue to sleep for different lengths would be\ntwo behaviours wearing one word.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "InboxPreset": {
+      "additionalProperties": false,
+      "description": "A named cut of the list, as `inbox.presets` writes it: the flags of\n`kasl inbox list`, under their own names.\n\n`kasl inbox --preset urgent` is `--priority High+ --since 7d` when the\nconfig says `\"urgent\": {\"priority\": \"High+\", \"since\": \"7d\"}`; a flag given\nbeside the preset wins over the preset's field. Kept in the config as\nwritten and read here when a command names it, so a misspelt preset fails\nthe command that asks for it rather than the whole file.",
+      "properties": {
+        "changed": {
+          "description": "Only issues that visibly changed within a window: 1d, 7d, 12h, 2w.",
+          "type": "string"
+        },
+        "min_score": {
+          "description": "Only issues whose ranking field is at least this.",
+          "format": "double",
+          "type": "number"
+        },
+        "new": {
+          "default": false,
+          "description": "Only issues discovered in the last day.",
+          "type": "boolean"
+        },
+        "priority": {
+          "description": "A priority name, with `+` for that priority and everything more urgent.",
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Projects, any of them."
+        },
+        "since": {
+          "description": "Only issues first seen within a window: 1d, 7d, 12h, 2w.",
+          "type": "string"
+        },
+        "sort": {
+          "$ref": "#/$defs/InboxSort",
+          "description": "Order of the list; pinned issues lead whatever the order."
+        },
+        "status": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Status names, any of them."
+        },
+        "type": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Issue types, any of them."
+        }
+      },
+      "type": "object"
+    },
+    "InboxRule": {
+      "additionalProperties": false,
+      "description": "One rule as written.",
+      "properties": {
+        "name": {
+          "description": "What the rule is called in messages, toasts and `show --why`; without\none, its conditions in words.",
+          "type": "string"
+        },
+        "then": {
+          "$ref": "#/$defs/RuleThen",
+          "description": "What it does to a matching issue."
+        },
+        "when": {
+          "$ref": "#/$defs/RuleWhen",
+          "description": "When the rule applies; every condition given must hold."
+        }
+      },
+      "required": [
+        "then"
+      ],
+      "type": "object"
+    },
+    "InboxSort": {
+      "description": "What the list is ordered by. Pinned issues lead, and gone then dismissed issues trail, whatever the key.",
+      "enum": [
+        "score",
+        "priority",
+        "new",
+        "changed"
+      ],
+      "enumDescriptions": [
+        "Ranking field descending, then priority - the inbox's own order.",
+        "Most urgent first, then score.",
+        "Most recently discovered first.",
+        "Most recently changed first; issues never changed trail."
+      ],
+      "type": "string"
+    },
+    "JiraConfig": {
+      "additionalProperties": false,
+      "description": "Jira connection settings; passwords are never stored here.\n\nA `completed_statuses` list was kept here until 1.21 for compatibility\nand read by nothing: discovery filters by the `resolved` date, because a\nstatus name the instance does not have (English \"Done\" on a Russian Jira)\nfails the whole JQL. It is ignored like any unknown key, and the next save\ndrops it.",
+      "properties": {
+        "api_url": {
+          "description": "Instance root URL, without the `/rest/api/` path.",
+          "type": "string"
+        },
+        "login": {
+          "description": "Username (email for Atlassian Cloud accounts).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "login",
+        "api_url"
+      ],
+      "type": "object"
+    },
+    "JiraCustomField": {
+      "additionalProperties": false,
+      "description": "A user-configured Jira custom field for inbox sync / display.",
+      "properties": {
+        "id": {
+          "description": "Jira field id, e.g. `customfield_12345`.",
+          "type": "string"
+        },
+        "label": {
+          "description": "Human-readable label, e.g. `Scoring`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "label"
+      ],
+      "type": "object"
+    },
+    "KaslServerConfig": {
+      "additionalProperties": false,
+      "description": "Connection to a kasl-server instance: where to reach it, and how to trust\nit.\n\nThe agent token is deliberately absent - it lives in the OS keyring, like\nevery other kasl credential, so a readable config file never carries one.",
+      "properties": {
+        "ca_certificate": {
+          "description": "PEM file holding the certificate authority that signed the server's\ncertificate.\n\nSelf-hosted deployments are routinely behind a company CA or a\nself-signed certificate, which the system trust store does not know.\nNaming the certificate here keeps verification on: the alternative -\nswitching it off - would also accept anyone else's certificate.",
+          "type": "string"
+        },
+        "pulse": {
+          "default": false,
+          "description": "Whether the watcher tells this server, once a minute, if you are\nworking, on a break, or not in a day.\n\nOff until the employee turns it on with `kasl server pulse enable`:\nconnecting agrees to send finished days, and a live signal of whether\nsomeone is at their keyboard is a different thing to agree to. It\nlives here, beside the address, so the consent belongs to this\nconnection - disconnecting forgets it, and connecting to another\nserver does not inherit it.",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "Base URL of the server, e.g. `https://kasl.example.com`. Stored\nwithout a trailing slash so endpoint paths can be appended as-is.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    },
+    "MonitorConfig": {
+      "additionalProperties": false,
+      "description": "Activity monitor thresholds and intervals.",
+      "properties": {
+        "activity_threshold": {
+          "default": 30,
+          "description": "Seconds of sustained activity required to start a workday - keeps\na stray mouse nudge from opening the day.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_pause_duration": {
+          "default": 20,
+          "description": "Minimum pause length in minutes to keep as a pause record; shorter\ninterruptions are noise, not breaks.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "min_work_interval": {
+          "default": 10,
+          "description": "Minimum work interval in minutes; shorter ones are filtered from\nreport display.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pause_merge_gap": {
+          "default": 30,
+          "description": "Largest gap in seconds between two pauses that still counts as one\npause.\n\nA stray keypress in the middle of a break splits it into two records;\npauses no further apart than this are treated as one, so the halves\nshorter than the threshold are not dropped. Keep it small - a few tens\nof seconds - or genuine short work periods between pauses get\nswallowed into the break.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pause_threshold": {
+          "default": 60,
+          "description": "Seconds without input before a pause is detected.",
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "poll_interval": {
+          "default": 500,
+          "description": "Milliseconds between activity checks.",
+          "format": "uint64",
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "OneOrMany": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      ],
+      "description": "One name, or a list of names meaning any of them."
+    },
+    "PluginConfig": {
+      "additionalProperties": false,
+      "description": "One plugin's settings, as `kasl plugin setup` wrote them.\n\nOnly the ones that are not secret: a setting its manifest marks secret is\nkept in the OS keyring, under `plugin.NAME.KEY`, and never in this file.",
+      "properties": {
+        "settings": {
+          "additionalProperties": true,
+          "description": "The plugin's settings that are not secret, by the keys its manifest\ndeclares.",
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "ProductivityConfig": {
+      "additionalProperties": false,
+      "description": "Productivity thresholds for warnings and report validation.",
+      "properties": {
+        "min_productivity_threshold": {
+          "default": 75.0,
+          "description": "Productivity percentage below which reports warn.",
+          "format": "double",
+          "maximum": 100,
+          "minimum": 0,
+          "type": "number"
+        },
+        "min_workday_fraction_before_suggest": {
+          "default": 0.5,
+          "description": "Fraction of the workday that must pass before warnings appear -\nearly-day ratios swing too wildly to act on.",
+          "format": "double",
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "workday_hours": {
+          "default": 8.0,
+          "description": "Expected workday length in hours.",
+          "format": "double",
+          "maximum": 24,
+          "minimum": 1,
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "ReportConfig": {
+      "additionalProperties": false,
+      "description": "Report export defaults: output directory and file naming.",
+      "properties": {
+        "filename_template": {
+          "default": "daily_report_{date}{seq}",
+          "description": "File name template (without extension) for generated reports.\n\nSupported placeholders: `{date}` - the report date as `YYYY-MM-DD`;\n`{seq}` - empty for the day's first report, then `_2`, `_3` and so on.\nThe extension follows the export format.",
+          "type": "string"
+        },
+        "language": {
+          "default": "en",
+          "description": "Language of the labels inside hourly Excel reports: `en` or `ru`.\n\nRussian was the default before 1.0, when the product spoke Russian; the\nshipped default is English and this opts back in.",
+          "enum": [
+            "en",
+            "ru"
+          ],
+          "type": "string"
+        },
+        "output_dir": {
+          "description": "Default directory for exports without an explicit `--output`\n(created if missing); unset = timestamped file in the current dir.",
+          "type": "string"
+        },
+        "template": {
+          "default": "siserver",
+          "description": "Design template name, read from `<data>/report_templates/<name>.json`;\na missing file falls back to the built-in look.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "RuleThen": {
+      "additionalProperties": false,
+      "description": "What a rule does to a matching issue.",
+      "properties": {
+        "dismiss": {
+          "default": false,
+          "description": "Hide it from the list, as `kasl inbox dismiss` does.",
+          "type": "boolean"
+        },
+        "pin": {
+          "default": false,
+          "description": "Pin it, so it leads the list.",
+          "type": "boolean"
+        },
+        "tag": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Tags for the task taken from it."
+        },
+        "urgent": {
+          "default": false,
+          "description": "Toast it as urgent: a toast that stays on screen until acted on.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "RuleWhen": {
+      "additionalProperties": false,
+      "description": "When a rule applies. Every given condition must hold; a list means any of it.",
+      "properties": {
+        "min_score": {
+          "description": "The ranking field (e.g. Scoring) at least this.",
+          "format": "double",
+          "type": "number"
+        },
+        "priority": {
+          "description": "A priority name, with `+` for that priority and everything more urgent.",
+          "type": "string"
+        },
+        "project": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Projects (in Jira, the prefix of the key)."
+        },
+        "status": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Status names or ids."
+        },
+        "type": {
+          "$ref": "#/$defs/OneOrMany",
+          "default": [],
+          "description": "Issue types."
+        }
+      },
+      "type": "object"
+    },
+    "SiConfig": {
+      "additionalProperties": false,
+      "description": "SiServer connection settings; auth and API live on separate hosts.",
+      "properties": {
+        "api_url": {
+          "description": "Base URL for reports and calendar data.",
+          "type": "string"
+        },
+        "auth_url": {
+          "description": "LDAP authentication endpoint.",
+          "type": "string"
+        },
+        "login": {
+          "description": "Corporate username for LDAP authentication.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "login",
+        "auth_url",
+        "api_url"
+      ],
+      "type": "object"
+    },
+    "TaskDiscoveryConfig": {
+      "additionalProperties": false,
+      "description": "Settings for intelligent task discovery (`kasl task find`).",
+      "properties": {
+        "ignore_names": {
+          "default": [
+            "Merge remote-tracking branch",
+            "Merge branch ",
+            "update webui"
+          ],
+          "description": "Names/prefixes of tasks and commits to exclude from discovery.\n\nMatching is case-insensitive after normalization; a pattern matches\nwhen the candidate name equals it or starts with it.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$id": "https://kasl.lacodda.com/config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "kasl's settings file: config.json in kasl's data directory.",
+  "properties": {
+    "$schema": {
+      "description": "The schema this file follows. kasl writes it, so an editor checks every key.",
+      "type": "string"
+    },
+    "inbox": {
+      "$ref": "#/$defs/InboxConfig",
+      "description": "The inbox: how often its sources are polled, what it toasts, its rules.\n\nWritten `jira_inbox` before v1.19, when Jira was its only source; a\nfile with the old key is read as it is and saved under the new one."
+    },
+    "jira": {
+      "$ref": "#/$defs/JiraConfig",
+      "description": "Jira integration (issue discovery, inbox)."
+    },
+    "kasl_server": {
+      "$ref": "#/$defs/KaslServerConfig",
+      "description": "kasl-server: the team server this agent reports to. Written by `kasl\nserver connect`."
+    },
+    "monitor": {
+      "$ref": "#/$defs/MonitorConfig",
+      "description": "Activity monitor settings."
+    },
+    "plugins": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PluginConfig"
+      },
+      "description": "What each plugin has been told, by its name (`gitlab` for\n`kasl-plugin-gitlab`). A plugin is used because it is installed, not\nbecause it is listed here; this holds only its settings. Written by\n`kasl plugin setup NAME`.",
+      "type": "object"
+    },
+    "productivity": {
+      "$ref": "#/$defs/ProductivityConfig",
+      "description": "Productivity thresholds."
+    },
+    "report": {
+      "$ref": "#/$defs/ReportConfig",
+      "description": "Report export defaults."
+    },
+    "si": {
+      "$ref": "#/$defs/SiConfig",
+      "description": "SiServer, the corporate reporting API: `report --send` and the\ncompany's rest days."
+    },
+    "task_discovery": {
+      "$ref": "#/$defs/TaskDiscoveryConfig",
+      "description": "Task discovery ignore list; built-in defaults apply when absent."
+    }
+  },
+  "title": "kasl config",
+  "type": "object"
+}

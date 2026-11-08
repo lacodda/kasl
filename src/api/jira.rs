@@ -8,7 +8,6 @@
 //! let config = JiraConfig {
 //!     login: "username".to_string(),
 //!     api_url: "https://jira.company.com".to_string(),
-//!     completed_statuses: Vec::new(),
 //! };
 //!
 //! let mut jira = Jira::new(&config);
@@ -28,6 +27,7 @@ use reqwest::{
     Client, StatusCode,
     header::{COOKIE, HeaderMap, HeaderValue},
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -343,7 +343,6 @@ impl Jira {
     /// let config = JiraConfig {
     ///     login: "username".to_string(),
     ///     api_url: "https://jira.company.com".to_string(),
-    ///     completed_statuses: Vec::new(),
     /// };
     /// let jira = Jira::new(&config);
     /// ```
@@ -375,7 +374,6 @@ impl Jira {
     /// let config = JiraConfig {
     ///     login: "username".to_string(),
     ///     api_url: "https://jira.company.com".to_string(),
-    ///     completed_statuses: Vec::new(),
     /// };
     /// let mut jira = Jira::new(&config);
     ///
@@ -923,26 +921,19 @@ mod tests {
 }
 
 /// Jira connection settings; passwords are never stored here.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+///
+/// A `completed_statuses` list was kept here until 1.21 for compatibility
+/// and read by nothing: discovery filters by the `resolved` date, because a
+/// status name the instance does not have (English "Done" on a Russian Jira)
+/// fails the whole JQL. It is ignored like any unknown key, and the next save
+/// drops it.
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct JiraConfig {
     /// Username (email for Atlassian Cloud accounts).
     pub login: String,
 
     /// Instance root URL, without the `/rest/api/` path.
     pub api_url: String,
-
-    /// Deprecated: previously used in `status in (...)` for completed-issue search.
-    ///
-    /// Kept for config compatibility. Discovery now filters by `resolved` date only,
-    /// because non-existent status names (e.g. English "Done" on a Russian Jira)
-    /// make the whole JQL fail.
-    #[serde(default = "default_completed_statuses")]
-    pub completed_statuses: Vec<String>,
-}
-
-/// Empty default — status names are no longer used in completed-issue JQL.
-fn default_completed_statuses() -> Vec<String> {
-    Vec::new()
 }
 
 impl JiraConfig {
@@ -963,7 +954,6 @@ impl JiraConfig {
     /// let existing_config = Some(JiraConfig {
     ///     login: "olduser".to_string(),
     ///     api_url: "https://old-jira.com".to_string(),
-    ///     completed_statuses: Vec::new(),
     /// });
     ///
     /// let new_config = JiraConfig::init(&existing_config)?;
@@ -975,7 +965,6 @@ impl JiraConfig {
         let config = config.clone().unwrap_or(Self {
             login: "".to_string(),
             api_url: "".to_string(),
-            completed_statuses: default_completed_statuses(),
         });
 
         // Display configuration module header
@@ -983,7 +972,6 @@ impl JiraConfig {
 
         // Interactive configuration with existing values as defaults
         Ok(Self {
-            completed_statuses: config.completed_statuses.clone(),
             login: Input::with_theme(&ColorfulTheme::default())
                 .with_prompt("Enter your Jira login")
                 .default(config.login)

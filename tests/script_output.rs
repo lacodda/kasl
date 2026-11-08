@@ -277,7 +277,7 @@ fn json_is_refused_where_it_would_be_dropped() {
         &["server", "pulse", "--json", "enable"][..],
         &["report", "--send", "--json"][..],
         &["report", "--month", "--json"][..],
-        &["sum", "--send", "--json"][..],
+        &["config", "--json", "set", "monitor.pause_threshold", "90"][..],
         &["task", "add", "--name", "x", "--json"][..],
         &["end", "--json"][..],
     ] {
@@ -397,7 +397,6 @@ fn skip_a_rule() {
         jira: Some(JiraConfig {
             login: "agent".to_string(),
             api_url: "https://jira.example.com".to_string(),
-            completed_statuses: Vec::new(),
         }),
         inbox: Some(InboxConfig {
             notify: false,

@@ -184,7 +184,6 @@ async fn a_sync_off_a_terminal_reports_a_resolved_issue_with_an_open_task() {
         jira: Some(JiraConfig {
             login: "agent".to_string(),
             api_url: server.uri(),
-            completed_statuses: Vec::new(),
         }),
         inbox: Some(InboxConfig {
             notify: false,

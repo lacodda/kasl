@@ -116,14 +116,41 @@ impl Display for Message {
 
             // === CONFIGURATION MESSAGES ===
             Message::ConfigSaved => "Configuration saved successfully".to_string(),
-            Message::ConfigDeleted => "Configuration deleted successfully".to_string(),
+            Message::ConfigDeleted(path) => format!("Deleted {path}; every setting is back to its default"),
+            Message::ConfigNothingToDelete(path) => format!("There is no config file at {path}; nothing to delete"),
             Message::ConfigParseError => "Failed to parse configuration".to_string(),
             Message::ConfigSaveError => "Failed to save configuration".to_string(),
             Message::ConfigModuleJira => "Jira settings".to_string(),
             Message::ConfigModuleSiServer => "SiServer settings".to_string(),
             Message::ConfigModuleMonitor => "Monitor settings".to_string(),
-            Message::ConfigModuleServer => "Server settings".to_string(),
             Message::ConfigModuleProductivity => "Productivity settings".to_string(),
+            Message::ConfigFileAt(path) => format!("Settings in {path}"),
+            Message::ConfigFileNone(path) => format!("No config file yet at {path} - every setting is its default"),
+            Message::ConfigChanged { key, value, was } => format!("{key} = {value} (was {was})"),
+            Message::ConfigUnchanged { key, value } => format!("{key} is already {value}"),
+            Message::ConfigBackToDefault { key, value } => format!("{key} is unset; kasl uses its default, {value}"),
+            Message::ConfigRemoved(key) => format!("{key} is unset"),
+            Message::ConfigWasNotSet(key) => format!("{key} was not set in the file; nothing changed"),
+            Message::ConfigTidied(what) => format!("Also {what}"),
+            Message::ConfigOtherProblems(count) => format!(
+                "The file has {count} other problem{} this change left as it was - `kasl config check` names {}",
+                if *count == 1 { "" } else { "s" },
+                if *count == 1 { "it" } else { "them" }
+            ),
+            Message::ConfigHasProblems(count) => format!(
+                "{count} setting{} in the file {} not read as written - `kasl config check` names {}",
+                if *count == 1 { "" } else { "s" },
+                if *count == 1 { "is" } else { "are" },
+                if *count == 1 { "it" } else { "them" }
+            ),
+            Message::ConfigNotSet(key) => format!("{key} is not set, and has no default"),
+            Message::ConfigProblem(line) => line.clone(),
+            Message::ConfigNotice(line) => line.clone(),
+            Message::ConfigValid(path) => format!("{path}: every setting reads as written"),
+            Message::ConfigProblemCount(count) => format!("{count} problem{} in the config file", if *count == 1 { "" } else { "s" }),
+            Message::ConfigInboxStartsJiraPoll => {
+                "With Jira set up, the `inbox` block being in the file is what starts the watcher polling Jira for your issues; `kasl config set inbox.enabled false` turns that off".to_string()
+            }
             Message::ConfigModuleTaskDiscovery => "Task discovery settings".to_string(),
             Message::ConfigModuleJiraInbox => "Jira inbox settings".to_string(),
             Message::TaskDiscoveryIgnoreListHeader => "Current ignore list:".to_string(),
@@ -520,8 +547,6 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::PromptMinProductivityThreshold => "Enter minimum productivity threshold (%)".to_string(),
             Message::PromptWorkdayHours => "Enter expected workday duration (hours)".to_string(),
             Message::PromptMinWorkdayFraction => "Enter minimum workday fraction before suggesting breaks (0.0-1.0)".to_string(),
-            Message::PromptServerApiUrl => "Enter server API URL".to_string(),
-            Message::PromptServerAuthToken => "Enter server auth token".to_string(),
             Message::PromptKaslServerUrl => "kasl-server URL".to_string(),
             Message::PromptKaslServerToken => "Agent token (issued by your administrator)".to_string(),
             Message::PromptSelectModules => "Select nodes to configure".to_string(),

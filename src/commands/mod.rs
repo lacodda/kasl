@@ -13,6 +13,7 @@
 //! ```
 
 pub mod autostart;
+pub mod config;
 pub mod export;
 pub mod inbox;
 pub mod init;
@@ -58,6 +59,14 @@ enum Commands {
     /// completion scripts, so Tab would keep teaching the old spelling.
     #[command(about = "Set up configuration", alias = "init")]
     Setup(init::SetupArgs),
+
+    /// Read and change settings one at a time
+    ///
+    /// Lists every setting with the value kasl uses and whether it is set or
+    /// a default, prints and changes one by its dotted key, and checks the
+    /// file against its JSON Schema - the one an editor uses too.
+    #[command(about = "Read and change settings one at a time")]
+    Config(config::ConfigArgs),
 
     /// Comprehensive task management command
     ///
@@ -282,6 +291,7 @@ impl Cli {
                 warn_if_deprecated_alias();
                 init::cmd(args)
             }
+            Commands::Config(args) => config::cmd(args),
             Commands::Task(args) => task::cmd(args).await,
             Commands::End => {
                 // Manually end the current workday. A day that was never

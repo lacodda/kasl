@@ -25,11 +25,10 @@ use clap::Args;
 /// existing configuration, which can be useful for testing or troubleshooting.
 #[derive(Debug, Args)]
 pub struct SetupArgs {
-    /// Remove existing configuration instead of creating new one
+    /// Delete the config file instead of running the wizard
     ///
-    /// When specified, this flag will delete the current configuration file
-    /// and global PATH settings, effectively resetting the application to
-    /// its initial state.
+    /// Every setting goes back to its default. The database, the OS keyring
+    /// and the PATH are left as they are.
     #[arg(short, long)]
     delete: bool,
 }
@@ -40,6 +39,15 @@ pub struct SetupArgs {
 /// or configuration removal when `--delete` is used.
 ///
 pub fn cmd(setup_args: SetupArgs) -> Result<()> {
+    // Refused before the watcher is touched: the wizard failing on the
+    // missing terminal after the stop below left a script's run with no
+    // watcher at all.
+    if !setup_args.delete {
+        crate::libs::prompt::ensure_interactive(
+            "`kasl setup` is an interactive wizard and needs a terminal; `kasl config set KEY VALUE` changes one setting without one",
+        )?;
+    }
+
     // Check if watcher is currently running before making changes
     let watcher_was_running = daemon::is_running();
     if watcher_was_running {
@@ -47,30 +55,36 @@ pub fn cmd(setup_args: SetupArgs) -> Result<()> {
         daemon::stop()?;
     }
 
-    // Set up global application PATH configuration
-    // This ensures the 'kasl' command is available system-wide
-    match Config::set_app_global() {
-        Ok(()) => {
-            msg_success!(Message::PathConfigured);
-        }
-        Err(e) => {
-            msg_warning!(Message::PathConfigWarning { error: e.to_string() });
-        }
-    }
-
-    // Handle deletion mode - exit early after cleanup
     if setup_args.delete {
-        // Don't restart watcher after deleting configuration
-        msg_info!(Message::ConfigDeleted);
-        return Ok(());
+        // Until 1.21 this said "deleted" and deleted nothing - and put kasl
+        // on the PATH on its way out. It removes the file now, and only the
+        // file: the database and the keyring are not configuration.
+        let path = Config::path()?;
+        if path.exists() {
+            std::fs::remove_file(&path)?;
+            msg_success!(Message::ConfigDeleted(path.display().to_string()));
+        } else {
+            msg_info!(Message::ConfigNothingToDelete(path.display().to_string()));
+        }
+    } else {
+        // Set up global application PATH configuration
+        // This ensures the 'kasl' command is available system-wide
+        match Config::set_app_global() {
+            Ok(()) => {
+                msg_success!(Message::PathConfigured);
+            }
+            Err(e) => {
+                msg_warning!(Message::PathConfigWarning { error: e.to_string() });
+            }
+        }
+
+        // Run interactive configuration wizard
+        // This will prompt the user to select and configure various modules
+        Config::init()?.save()?;
+
+        // Confirm successful configuration
+        msg_success!(Message::ConfigSaved);
     }
-
-    // Run interactive configuration wizard
-    // This will prompt the user to select and configure various modules
-    Config::init()?.save()?;
-
-    // Confirm successful configuration
-    msg_success!(Message::ConfigSaved);
 
     // Restart watcher if it was running before configuration changes
     if watcher_was_running {

@@ -2,197 +2,95 @@
 title: "Configuration"
 ---
 
-kasl uses a JSON configuration file to store all application settings. This guide covers all configuration options and their usage.
+kasl keeps its settings in one JSON file. This page says what every setting
+does; [`kasl config`](/reference/config/) reads and changes them one at a time,
+and [`kasl setup`](/reference/setup/) walks whole modules with prompts.
 
-## Configuration File Location
+## Where the file is
 
-Configuration files are stored in platform-specific locations:
+| System | Path |
+| --- | --- |
+| Windows | `%LOCALAPPDATA%\lacodda\kasl\config.json` |
+| macOS | `~/Library/Application Support/lacodda/kasl/config.json` |
+| Linux | `~/.local/share/lacodda/kasl/config.json` |
 
-- **Windows**: `%LOCALAPPDATA%\lacodda\kasl\config.json`
-- **macOS**: `~/Library/Application Support/lacodda/kasl/config.json`
-- **Linux**: `~/.local/share/lacodda/kasl/config.json`
+`kasl config path` prints it. There is no file until something writes one;
+until then every setting is its default.
 
-## Configuration Structure
+## Changing a setting
 
-```json
+```bash
+kasl config show                              # every setting, set or default
+kasl config set monitor.pause_threshold 90    # checked before it is written
+kasl config unset monitor.pause_threshold     # back to the default
+kasl config check                             # what the file says that kasl does not read
+```
+
+A setting is named by its block and its name: `monitor.pause_threshold`.
+`kasl config set` checks the value against the file's schema - its type, its
+range, its choices - and refuses it otherwise, leaving the file as it was. See
+[`config`](/reference/config/).
+
+Editing the file by hand works as well. Every file kasl writes starts with
+`$schema`, so an editor that knows JSON Schema - VS Code does out of the box -
+completes keys, explains them on hover, and underlines a misspelt key as you
+type. The schema is published at `https://kasl.lacodda.com/config.schema.json`
+and printed by `kasl config schema`.
+
+### Every block may be partial
+
+A block names only the settings you changed; the rest are its defaults. This
+is a whole, valid file:
+
+```json title="config.json"
 {
-  "monitor": {
-    "min_pause_duration": 20,
-    "pause_threshold": 60,
-    "poll_interval": 500,
-    "activity_threshold": 30,
-    "min_work_interval": 10
-  },
-  "si": {
-    "login": "your.email@company.com",
-    "auth_url": "https://auth.company.com",
-    "api_url": "https://api.company.com"
-  },
-  "jira": {
-    "login": "your.email@company.com",
-    "api_url": "https://jira.company.com"
-  },
-  "server": {
-    "api_url": "https://api.company.com/timetracking",
-    "auth_token": "your-api-token"
-  },
-  "productivity": {
-    "min_productivity_threshold": 75.0,
-    "workday_hours": 8.0,
-    "min_workday_fraction_before_suggest": 0.5
-  },
-  "task_discovery": {
-    "ignore_names": [
-      "Merge remote-tracking branch",
-      "Merge branch ",
-      "update webui"
-    ]
-  }
+  "$schema": "https://kasl.lacodda.com/config.schema.json",
+  "monitor": { "pause_threshold": 90 },
+  "report": { "language": "ru" }
 }
 ```
 
-## Task Discovery Configuration
+Defaults are not written into the file, so a setting you never changed keeps
+following kasl if a later version changes its default. Blocks without defaults
+- the connections, `si` and `jira` - need their required fields: a login and
+the addresses.
 
-Controls filtering for `kasl task find`:
+### What kasl does with a mistake
 
-### `ignore_names`
-- **Type**: `string[]`
-- **Default**: `["Merge remote-tracking branch", "Merge branch ", "update webui"]`
-- **Description**: Task/commit names (or prefixes) excluded from discovery
-- **Matching**: Case-insensitive after normalization; exact match or prefix
-- **UI**: Edit via `kasl setup` (Task discovery module) or add items from `kasl task find`
+kasl reads past what it does not understand rather than failing: the watcher
+reads this file too, and a typo must not stop the workday being recorded. An
+unknown key is ignored, a value of the wrong type fails only the command that
+reads it, and an [inbox rule](/reference/inbox/#rules) that cannot be read is
+skipped and named. Which is why a mistake needs saying: `kasl config check`
+names each one, with the key probably meant.
 
-## Monitor Configuration
+## Monitor
 
-Controls activity monitoring behavior:
+How the watcher turns keyboard and mouse activity into a workday and its
+pauses.
 
-### `min_pause_duration`
-- **Type**: `u64`
-- **Default**: `20`
-- **Unit**: Minutes
-- **Description**: Minimum break duration to record in the database
-- **Usage**: Pauses shorter than this threshold are ignored
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `min_pause_duration` | `20` | Minutes. A pause shorter than this is noise, not a break, and is not kept |
+| `pause_threshold` | `60` | Seconds without input before a pause begins |
+| `poll_interval` | `500` | Milliseconds between activity checks; lower is more responsive and costs more CPU |
+| `activity_threshold` | `30` | Seconds of steady activity needed to start a workday, so a stray nudge of the mouse does not open the day |
+| `min_work_interval` | `10` | Minutes. Work intervals shorter than this are left out of reports and of what is sent |
+| `pause_merge_gap` | `30` | Seconds. A stray keypress in the middle of a break splits it in two; pauses no further apart than this count as one, so neither half is dropped for being short. Keep it small, or genuine short work between pauses is swallowed into the break |
 
-### `pause_threshold`
-- **Type**: `u64`
-- **Default**: `60`
-- **Unit**: Seconds
-- **Description**: Inactivity duration before a pause is detected
-- **Usage**: Time without keyboard/mouse activity to trigger pause
+The watcher reads these when it starts. `kasl config set monitor.…` restarts a
+running watcher so they take effect; after editing the file by hand, restart
+it with `kasl watch`, which stops the running watcher and starts a new one.
 
-### `poll_interval`
-- **Type**: `u64`
-- **Default**: `500`
-- **Unit**: Milliseconds
-- **Description**: Frequency of activity status checks
-- **Usage**: Lower values = more responsive, higher CPU usage
+## Productivity
 
-### `activity_threshold`
-- **Type**: `u64`
-- **Default**: `30`
-- **Unit**: Seconds
-- **Description**: Continuous activity required to start a workday
-- **Usage**: Prevents false starts from brief interactions
+| Setting | Default | Range | What it does |
+| --- | --- | --- | --- |
+| `min_productivity_threshold` | `75.0` | 0 - 100 | Productivity, in percent, below which a report is held back. If an absence is missing from the day, record it with `kasl pauses add` |
+| `workday_hours` | `8.0` | 1 - 24 | The expected workday, in hours |
+| `min_workday_fraction_before_suggest` | `0.5` | 0 - 1 | How much of the workday must pass before the low-productivity warning appears: early in the day one pause swings the ratio, and warning then would be noise |
 
-### `min_work_interval`
-- **Type**: `u64`
-- **Default**: `10`
-- **Unit**: Minutes
-- **Description**: Minimum work interval duration for report filtering
-- **Usage**: Intervals shorter than this duration are automatically filtered out from reports (display and API submission)
-
-### `pause_merge_gap`
-- **Type**: `u64`
-- **Default**: `30`
-- **Unit**: Seconds
-- **Description**: Largest gap between two consecutive pauses that still counts as one pause
-- **Usage**: A stray keypress in the middle of a break splits it into two records; pauses no further apart than this are treated as one, so the sub-threshold halves are not dropped. Keep it small - a few tens of seconds - or genuine short work periods get swallowed into the break. Not offered by the wizard; edit `config.json` to change it
-
-## SiServer Configuration
-
-Internal company API integration:
-
-### `login`
-- **Type**: `String`
-- **Description**: Corporate username for LDAP authentication
-- **Example**: `"john.doe@company.com"`
-
-### `auth_url`
-- **Type**: `String`
-- **Description**: Authentication endpoint URL
-- **Example**: `"https://auth.company.com"`
-
-### `api_url`
-- **Type**: `String`
-- **Description**: Main API endpoint URL
-- **Example**: `"https://api.company.com"`
-
-## GitLab
-
-GitLab is a [plugin](/reference/plugin/), so it has no block of its own. Its
-settings (`url`, `token`, `start_label`) live under `plugins.gitlab` - see
-[Plugins Configuration](#plugins-configuration) below - and are written by
-`kasl plugin setup gitlab`. The token is kept in the OS keyring, not in this file;
-the [GitLab guide](/guides/gitlab-inbox/) has the details. A `gitlab` block
-written by an older kasl is moved automatically on the first read.
-
-## Jira Configuration
-
-Jira API integration for issue tracking:
-
-### `login`
-- **Type**: `String`
-- **Description**: Jira username (not email unless configured)
-- **Note**: Check with Jira administrator for username format
-
-### `api_url`
-- **Type**: `String`
-- **Description**: Jira instance base URL
-- **Examples**:
-  - `"https://company.atlassian.net"` (Atlassian Cloud)
-  - `"https://jira.company.com"` (Server/Data Center)
-
-## Server Configuration
-
-External reporting API configuration:
-
-### `api_url`
-- **Type**: `String`
-- **Description**: Base URL for report submission
-- **Example**: `"https://api.company.com/timetracking"`
-
-### `auth_token`
-- **Type**: `String`
-- **Description**: Authentication token for API access
-- **Format**: Depends on API requirements (Bearer, API key, etc.)
-
-## Productivity Configuration
-
-Controls productivity tracking and reporting thresholds:
-
-### `min_productivity_threshold`
-- **Type**: `f64`
-- **Default**: `75.0`
-- **Description**: Minimum productivity percentage required for report submission
-- **Range**: `0.0` to `100.0`
-- **Usage**: Reports below this threshold are blocked. If an absence is missing from the day, record it with `kasl pauses add`
-
-### `workday_hours`
-- **Type**: `f64`
-- **Default**: `8.0`
-- **Description**: Expected daily work hours for productivity calculations
-- **Range**: `1.0` to `24.0`
-- **Usage**: Used to calculate available work time for productivity metrics
-
-### `min_workday_fraction_before_suggest`
-- **Type**: `f64`
-- **Default**: `0.5`
-- **Description**: Fraction of workday that must pass before the low-productivity warning appears
-- **Range**: `0.0` to `1.0`
-- **Usage**: Early in the day the productivity ratio swings on a single pause, so warning then would be noise
-
-**Example Configuration:**
-```json
+```json title="config.json"
 {
   "productivity": {
     "min_productivity_threshold": 75.0,
@@ -202,38 +100,18 @@ Controls productivity tracking and reporting thresholds:
 }
 ```
 
-## Report Configuration
+## Report
 
-Defaults for generated report files. Every field is optional.
+Defaults for generated report files. Every setting is optional.
 
-### `output_dir`
-- **Type**: `String`
-- **Default**: unset
-- **Description**: Directory for exports made without an explicit `--output`; created if missing
-- **Usage**: Unset means a timestamped file in the current directory
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `output_dir` | none | Directory for exports made without `--output`; created if missing. Without it, a timestamped file in the current directory |
+| `filename_template` | `daily_report_{date}{seq}` | File name, without extension. `{date}` is the report date as `YYYY-MM-DD`; `{seq}` is empty for the day's first report, then `_2`, `_3` and so on |
+| `language` | `en` | `en` or `ru`: the language of the labels inside hourly Excel reports. Russian was the default before 1.0; this opts back into it |
+| `template` | `siserver` | Design template name, read from `<data>/report_templates/<name>.json`. A missing file falls back to the built-in look |
 
-### `filename_template`
-- **Type**: `String`
-- **Default**: `"daily_report_{date}{seq}"`
-- **Description**: File name (without extension) for generated reports
-- **Placeholders**: `{date}` - the report date as `YYYY-MM-DD`; `{seq}` - empty for the day's first report, then `_2`, `_3`, and so on
-- **Usage**: The extension follows the export format
-
-### `language`
-- **Type**: `String`
-- **Default**: `"en"`
-- **Values**: `"en"` or `"ru"`; anything else falls back to `"en"`
-- **Description**: Language of the labels inside hourly Excel reports - the title, the weekday, the break label and the column headers
-- **Usage**: Russian was the default before 1.0; this opts back into it
-
-### `template`
-- **Type**: `String`
-- **Default**: unset (the built-in `siserver` look)
-- **Description**: Design template name, read from `<data>/report_templates/<name>.json`
-- **Usage**: A missing file falls back to the built-in look rather than failing
-
-**Example:**
-```json
+```json title="config.json"
 {
   "report": {
     "output_dir": "~/reports",
@@ -243,70 +121,92 @@ Defaults for generated report files. Every field is optional.
 }
 ```
 
-## Inbox Configuration
+## Task discovery
 
-Controls the background poll behind [`kasl inbox`](/reference/inbox/), for every
-[source](/reference/inbox/#sources). Jira's poll requires the `jira` block and
-stays off when this one is absent; a plugin source is polled once it is set up,
-with these settings or their defaults. Written `jira_inbox` before v1.19, when
-Jira was the only source: a file with the old key is read as it is and saved
-under `inbox`.
+What [`kasl task find`](/reference/task/) leaves out.
 
-### `enabled`
-- **Type**: `bool`
-- **Default**: `true`
-- **Description**: Whether the watcher polls Jira for open assigned issues
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `ignore_names` | `["Merge remote-tracking branch", "Merge branch ", "update webui"]` | Task and commit names, or their beginnings, that discovery skips. Matched without regard to case; `kasl task find` can add to it |
 
-### `poll_interval_secs`
-- **Type**: `u64`
-- **Default**: `300`
-- **Unit**: Seconds
-- **Description**: Time between polls
+## SiServer
 
-### `notify`
-- **Type**: `bool`
-- **Default**: `true`
-- **Description**: Desktop toast when a new issue lands on you
+The corporate reporting API: `kasl report --send` and the company's rest days.
+The password is kept in the OS keyring, not here.
 
-### `notify_changes`
-- **Type**: `bool`
-- **Default**: `true`
-- **Description**: Toast when an issue already in the inbox changes status or priority. A score change shows as a badge and never toasts
+| Setting | What it is |
+| --- | --- |
+| `login` | Corporate user name for LDAP |
+| `auth_url` | The login endpoint |
+| `api_url` | The reporting API |
 
-### `notify_gone`
-- **Type**: `bool`
-- **Default**: `false`
-- **Description**: Toast when an issue leaves the inbox, closed or reassigned. Off by default: a departure is rarely something to interrupt you for
+All three are required once the block is there.
 
-### `toast_snooze_for`
-- **Type**: `String`
-- **Default**: `"1d"`
-- **Description**: How long a toast's **Snooze** button sleeps - `3d`, `12h`, `2w`. Shares its spelling with `inbox triage --snooze-for`, so a button and the picker cannot put an issue to sleep for different lengths
+## Jira
 
-### `start_on_take`
-- **Type**: `bool`
-- **Default**: `false`
-- **Description**: Every take - `kasl inbox take`, triage, a toast's **Take** button - also starts the issue in Jira, through the transition into its workflow's in-progress category. Off by default: it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list". See [`inbox start`](/reference/inbox/#start---start-an-issue-in-jira)
+Issue discovery and the [inbox](/reference/inbox/). The password is kept in the
+OS keyring, not here.
 
-### `custom_fields`
-- **Type**: `{ "id": String, "label": String }[]`
-- **Default**: `[]`
-- **Description**: Extra Jira fields to fetch and display, such as a scoring field
-- **Example**: `{ "id": "customfield_12345", "label": "Scoring" }`
+| Setting | What it is |
+| --- | --- |
+| `login` | Jira user name - an email address on Atlassian Cloud; ask your administrator on Server or Data Center |
+| `api_url` | The instance's root URL, without `/rest/api/`: `https://company.atlassian.net`, `https://jira.company.com` |
 
-### `sort_by_field`
-- **Type**: `String`
-- **Default**: unset
-- **Description**: Field id used to rank the inbox, descending - typically the scoring custom field
+```json title="config.json"
+{
+  "jira": {
+    "login": "john.doe",
+    "api_url": "https://company.atlassian.net"
+  }
+}
+```
 
-### `rules`
-- **Type**: `{ "name"?: String, "when": {...}, "then": {...} }[]`
-- **Default**: `[]`
-- **Description**: What the inbox does by itself. `when` takes `priority` (`"High+"`), `min_score`, `status`, `type` and `project` - a name or a list of names; `then` takes `pin`, `urgent`, `dismiss` and `tag`. Pin, urgent and dismiss act when an issue arrives matching or a change makes it match; tags act when the issue is taken. A rule that cannot be read - a misspelt key, no action, dismiss with pin - is skipped and named by `kasl inbox rules`, and never makes the rest of the config unreadable. See [Rules](/reference/inbox/#rules)
-- **Example**: `{ "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } }`
+## GitLab
 
-**Example:**
-```json
+GitLab is a [plugin](/reference/plugin/), so it has no block of its own. Its
+settings (`url`, `token`, `start_label`) live under `plugins.gitlab` - see
+[Plugins](#plugins) below - and are written by `kasl plugin setup gitlab`. The
+token is kept in the OS keyring, not in this file; the
+[GitLab guide](/guides/gitlab-inbox/) has the details. A `gitlab` block written
+by an older kasl is moved automatically on the first read.
+
+## Inbox
+
+The background poll behind [`kasl inbox`](/reference/inbox/), for every
+[source](/reference/inbox/#sources). Jira's poll needs the `jira` block and
+starts once this block is in the file; a plugin source is polled once it is set
+up, with these settings or their defaults. Written `jira_inbox` before 1.19,
+when Jira was the only source: a file with the old key is read as it is and
+saved under `inbox`.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `enabled` | `true` | Whether the watcher polls the inbox's sources |
+| `poll_interval_secs` | `300` | Seconds between polls; at least 30 |
+| `notify` | `true` | A desktop toast when a new issue lands on you |
+| `notify_changes` | `true` | A toast when an issue already in the inbox changes status or priority. A score change shows as a badge and never toasts |
+| `notify_gone` | `false` | A toast when an issue leaves the inbox, closed or reassigned. Off by default: a departure is rarely worth interrupting you for |
+| `toast_snooze_for` | `1d` | How long a toast's **Snooze** button sleeps - `3d`, `12h`, `2w`. Spelt as `inbox triage --snooze-for` is, so a button and the picker cannot put an issue to sleep for different lengths |
+| `start_on_take` | `false` | Every take - `kasl inbox take`, triage, a toast's **Take** button - also starts the issue at its source. Off by default: it writes to a tracker the whole team reads, and in some teams "In Progress" means more than "on my list". See [`inbox start`](/reference/inbox/#start---start-an-issue-at-its-source) |
+| `custom_fields` | `[]` | Extra Jira fields to fetch and show, such as a scoring field: `{ "id": "customfield_12345", "label": "Scoring" }` |
+| `sort_by_field` | none | The field id the inbox is ranked by, highest first - typically the scoring custom field |
+| `rules` | `[]` | What the inbox does by itself - see [Rules](/reference/inbox/#rules) |
+| `presets` | `{}` | Named cuts of the list - see [Presets](/reference/inbox/#presets) |
+
+**Rules.** `when` takes `priority` (`"High+"`), `min_score`, `status`, `type`
+and `project` - a name or a list of names; `then` takes `pin`, `urgent`,
+`dismiss` and `tag`. Pin, urgent and dismiss act when an issue arrives
+matching, or a change makes it match; tags act when the issue is taken. A rule
+that cannot be read - a misspelt key, no action, dismiss with pin - is skipped
+and named by `kasl inbox rules` and `kasl config check`, and never makes the
+rest of the file unreadable.
+
+**Presets.** A preset is a name for the cuts of `kasl inbox list`, in the same
+words: `since`, `new`, `changed`, `min_score`, `priority`, `status`, `type`,
+`project`, `sort`. `kasl inbox --preset urgent` lists what the preset keeps;
+a flag given beside it wins over the preset's field.
+
+```json title="config.json"
 {
   "inbox": {
     "enabled": true,
@@ -322,19 +222,32 @@ under `inbox`.
       { "name": "on fire", "when": { "priority": "High+" }, "then": { "pin": true, "urgent": true } },
       { "when": { "type": "Epic" }, "then": { "dismiss": true } },
       { "when": { "project": "PAY" }, "then": { "tag": "payments" } }
-    ]
+    ],
+    "presets": {
+      "urgent": { "priority": "High+", "since": "7d" },
+      "fresh-bugs": { "type": "Bug", "new": true, "sort": "priority" }
+    }
   }
 }
 ```
 
-## Plugins Configuration
+## kasl-server
+
+The team server this machine reports to: its `url`, a `ca_certificate` when
+the server's certificate is signed by a company CA, and `pulse` - whether the
+watcher tells the server, once a minute, whether you are working. Written by
+[`kasl server connect`](/reference/server/) and `kasl server pulse enable` /
+`disable`, not by hand: connecting checks the server before keeping it, and the
+pulse is a consent. The agent token is kept in the OS keyring.
+
+## Plugins
 
 What each [plugin](/reference/plugin/) has been told, by its name - `gitlab` for
 `kasl-plugin-gitlab`. [`kasl plugin setup NAME`](/reference/plugin/#setup---tell-a-plugin-what-it-needs)
 writes it; a plugin is used because it is installed, not because it is listed
 here.
 
-```json
+```json title="config.json"
 {
   "plugins": {
     "gitlab": {
@@ -344,130 +257,44 @@ here.
 }
 ```
 
-### `settings`
-- **Type**: an object of the plugin's own setting keys
-- **Default**: `{}`
-- **Description**: The plugin's settings that are not secret. Only the keys its manifest declares are passed to it; a secret one - a token, a password - is kept in the OS keyring as `plugin.NAME.KEY`, never here
+`settings` holds the plugin's settings that are not secret, by the keys its
+manifest declares. A secret one - a token, a password - is kept in the OS
+keyring as `plugin.NAME.KEY`, never here, which is why `kasl config set` leaves
+this block to `kasl plugin setup`.
 
-## Interactive Configuration
+## Keys an older kasl wrote
 
-### Initial Setup
+A file written by an older kasl may hold keys this one reads differently.
+None of them stops anything working, `kasl config check` lists them as notices,
+and each leaves the file the next time kasl saves it:
 
-Run the interactive configuration wizard:
+| Key | What became of it |
+| --- | --- |
+| `jira_inbox` | The name of `inbox` before 1.19; read as `inbox` |
+| `gitlab` | GitLab's own block before 1.20; moved to the GitLab plugin on the first read |
+| `server` | An API URL and a token in plain text, offered by `kasl setup` until 1.21 and read by nothing - SiServer reports go through `si`. Ignored |
+| `jira.completed_statuses` | Kept for compatibility until 1.21 and read by nothing. Ignored |
 
-```bash
-kasl setup
-```
-
-This guides you through:
-1. Monitor settings configuration
-2. API integration setup
-3. Server configuration
-4. Credential management
-
-### Configuration Reset
-
-Remove existing configuration:
+## Starting over
 
 ```bash
 kasl setup --delete
 ```
 
-This will:
-- Delete the configuration file
-- Remove global PATH settings
-- Reset to initial state
-
-## Manual Configuration
-
-### Creating Configuration File
-
-Create the configuration directory and file:
-
-```bash
-# Windows
-mkdir "%LOCALAPPDATA%\lacodda\kasl"
-
-# macOS/Linux
-mkdir -p ~/.local/share/lacodda/kasl
-```
-
-### Example Configuration
-
-```json
-{
-  "monitor": {
-    "min_pause_duration": 15,
-    "pause_threshold": 45,
-    "poll_interval": 1000,
-    "activity_threshold": 60,
-    "min_work_interval": 5
-  },
-  "jira": {
-    "login": "john.doe",
-    "api_url": "https://company.atlassian.net"
-  }
-}
-```
-
-## Configuration Validation
-
-### Syntax Check
-
-Validate JSON syntax:
-
-```bash
-# Using jq (if available)
-jq . config.json
-
-# Using Python
-python -m json.tool config.json
-```
-
-### Runtime Validation
-
-kasl validates configuration on startup:
-
-```bash
-kasl watch --foreground
-```
-
-Common validation errors:
-- Invalid JSON syntax
-- Missing required fields
-- Invalid URL formats
-- Unsupported configuration values
+Deletes the file, so every setting is back to its default. The database and
+the OS keyring are left as they are.
 
 ## Credentials are not in this file
 
-Passwords are never written to `config.json`; they live in the OS keyring - see
-[API Integrations](/concepts/api-integrations/). So do a plugin's secret settings,
-as `plugin.NAME.KEY` - the GitLab token is `plugin.gitlab.token`. The file does
-hold one non-password secret as written: the reporting server's `auth_token`. On Linux and macOS it is worth keeping the file to
-yourself:
-
-```bash
-chmod 600 ~/.local/share/lacodda/kasl/config.json
-```
-
-There is no environment-variable override: kasl reads its settings from this
-file only.
-
-## Editing the file
-
-`kasl setup` walks through the modules and rewrites the file. Fields the wizard
-does not offer - `pause_merge_gap` among them - are edited by hand; kasl keeps
-values it did not ask about.
-
-An unreadable or malformed file surfaces on the next command that needs it. To
-see what was loaded:
-
-```bash
-RUST_LOG=kasl=debug kasl watch --foreground
-```
+Passwords and tokens are never written to `config.json`; they live in the OS
+keyring - see [API Integrations](/concepts/api-integrations/). So do a plugin's
+secret settings, as `plugin.NAME.KEY` - the GitLab token is
+`plugin.gitlab.token`. There is no environment-variable override: kasl reads
+its settings from this file only.
 
 ## Related pages
 
-- [`setup`](/reference/setup/) - the wizard that writes this file
+- [`config`](/reference/config/) - read and change one setting at a time
+- [`setup`](/reference/setup/) - the wizard, module by module
 - [API Integrations](/concepts/api-integrations/) - Jira, SiServer and the GitLab plugin in detail
 - [`watch`](/reference/watch/) - what the monitor settings govern

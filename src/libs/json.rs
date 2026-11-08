@@ -659,6 +659,65 @@ impl From<crate::api::kasl_server::PrivacyManifest> for Manifest {
     }
 }
 
+/// Every setting: `kasl config show --json`.
+#[derive(Debug, Serialize)]
+pub struct ConfigShow {
+    /// Where the config file lives.
+    pub file: String,
+    /// Whether there is a file there yet; without one every setting is its default.
+    pub exists: bool,
+    pub settings: Vec<ConfigSetting>,
+    /// What the file says that kasl does not read as written.
+    pub problems: Vec<ConfigProblem>,
+    /// Keys an older kasl wrote, read under a new name or ignored.
+    pub notices: Vec<ConfigProblem>,
+}
+
+/// One setting: `kasl config get --json`, and a row of `kasl config show --json`.
+#[derive(Debug, Serialize)]
+pub struct ConfigSetting {
+    /// The dotted key, as `kasl config get` takes it.
+    pub key: String,
+    /// What kasl uses; `null` when nothing is set and there is no default.
+    pub value: Option<serde_json::Value>,
+    /// `set` (written in the file), `default`, or `not_set`.
+    pub source: crate::libs::config::keys::Source,
+}
+
+impl From<&crate::libs::config::keys::Setting> for ConfigSetting {
+    fn from(setting: &crate::libs::config::keys::Setting) -> Self {
+        ConfigSetting {
+            key: setting.key.clone(),
+            value: setting.value.clone(),
+            source: setting.source,
+        }
+    }
+}
+
+/// What the config file says that kasl does not read as written: `kasl config check --json`.
+#[derive(Debug, Serialize)]
+pub struct ConfigCheck {
+    pub file: String,
+    pub problems: Vec<ConfigProblem>,
+    pub notices: Vec<ConfigProblem>,
+}
+
+/// One problem or notice about one key; `key` is empty for the file as a whole.
+#[derive(Debug, Serialize)]
+pub struct ConfigProblem {
+    pub key: String,
+    pub message: String,
+}
+
+impl From<&crate::libs::config::schema::Problem> for ConfigProblem {
+    fn from(problem: &crate::libs::config::schema::Problem) -> Self {
+        ConfigProblem {
+            key: problem.key.clone(),
+            message: problem.message.clone(),
+        }
+    }
+}
+
 /// Whether kasl starts with the system: `kasl autostart status`.
 #[derive(Debug, Serialize)]
 pub struct Autostart {

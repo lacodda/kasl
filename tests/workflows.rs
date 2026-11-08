@@ -139,10 +139,6 @@ mod tests {
                 min_work_interval: 10,
                 ..Default::default()
             }),
-            server: Some(kasl::libs::config::ServerConfig {
-                api_url: "https://test.example.com".to_string(),
-                auth_token: "test_token_123".to_string(),
-            }),
             kasl_server: None,
             si: None,
             jira: None,
@@ -160,15 +156,10 @@ mod tests {
         let loaded_config = Config::read().unwrap();
 
         assert!(loaded_config.monitor.is_some());
-        assert!(loaded_config.server.is_some());
 
         let monitor_config = loaded_config.monitor.unwrap();
         assert_eq!(monitor_config.min_pause_duration, 30);
         assert_eq!(monitor_config.pause_threshold, 60);
-
-        let server_config = loaded_config.server.unwrap();
-        assert_eq!(server_config.api_url, "https://test.example.com");
-        assert_eq!(server_config.auth_token, "test_token_123");
 
         // 3. Verify configuration integrates with database operations
         let _db = Db::new().unwrap();

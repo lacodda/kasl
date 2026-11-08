@@ -1,6 +1,14 @@
 //! Application configuration: the data model, disk IO, and PATH setup.
 //! The interactive setup wizard lives in [`wizard`] (reached via
-//! [`Config::init`]).
+//! [`Config::init`]); the file's JSON Schema and what `kasl config` checks
+//! against it in [`schema`]; reading and editing it one key at a time in
+//! [`keys`].
+//!
+//! **Every module block may be partial.** A block that names one setting
+//! takes the rest from the module's defaults, so `{"monitor":
+//! {"pause_threshold": 90}}` is a whole config. Before 1.21 a block missing
+//! one field made the whole file unreadable - every command failed, the
+//! watcher included - over a setting nobody meant to change.
 //!
 //! ```rust,no_run
 //! # fn main() -> anyhow::Result<()> {
@@ -13,6 +21,8 @@
 //! # }
 //! ```
 
+pub mod keys;
+pub mod schema;
 mod wizard;
 
 use super::data_storage::DataStorage;
@@ -22,6 +32,7 @@ use crate::libs::messages::Message;
 use crate::libs::task::normalize_task_name;
 use crate::msg_error;
 use anyhow::Result;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -42,16 +53,19 @@ pub struct ConfigModule {
 }
 
 /// Activity monitor thresholds and intervals.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct MonitorConfig {
     /// Minimum pause length in minutes to keep as a pause record; shorter
     /// interruptions are noise, not breaks.
     pub min_pause_duration: u64,
 
     /// Seconds without input before a pause is detected.
+    #[schemars(range(min = 1))]
     pub pause_threshold: u64,
 
     /// Milliseconds between activity checks.
+    #[schemars(range(min = 1))]
     pub poll_interval: u64,
 
     /// Seconds of sustained activity required to start a workday - keeps
@@ -62,15 +76,14 @@ pub struct MonitorConfig {
     /// report display.
     pub min_work_interval: u64,
 
-    /// Maximum gap in seconds between two consecutive pauses to merge them.
+    /// Largest gap in seconds between two pauses that still counts as one
+    /// pause.
     ///
-    /// When the activity monitor briefly registers a stray input between two
-    /// otherwise continuous inactivity periods, it splits a single break into
-    /// several adjacent pause records. Pauses separated by a gap no longer than
-    /// this value are treated as one continuous pause so that sub-threshold
-    /// segments are not dropped from calculations. The value should stay small
-    /// (a few tens of seconds) so that genuine short work periods between pauses
-    /// are preserved rather than swallowed into the break.
+    /// A stray keypress in the middle of a break splits it into two records;
+    /// pauses no further apart than this are treated as one, so the halves
+    /// shorter than the threshold are not dropped. Keep it small - a few tens
+    /// of seconds - or genuine short work periods between pauses get
+    /// swallowed into the break.
     #[serde(default = "default_pause_merge_gap")]
     pub pause_merge_gap: u64,
 }
@@ -84,21 +97,25 @@ fn default_pause_merge_gap() -> u64 {
 }
 
 /// Productivity thresholds for warnings and report validation.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct ProductivityConfig {
     /// Productivity percentage below which reports warn.
+    #[schemars(range(min = 0, max = 100))]
     pub min_productivity_threshold: f64,
 
     /// Expected workday length in hours.
+    #[schemars(range(min = 1, max = 24))]
     pub workday_hours: f64,
 
     /// Fraction of the workday that must pass before warnings appear -
     /// early-day ratios swing too wildly to act on.
+    #[schemars(range(min = 0, max = 1))]
     pub min_workday_fraction_before_suggest: f64,
 }
 
 /// Report export defaults: output directory and file naming.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Default)]
 pub struct ReportConfig {
     /// Default directory for exports without an explicit `--output`
     /// (created if missing); unset = timestamped file in the current dir.
@@ -107,43 +124,26 @@ pub struct ReportConfig {
 
     /// File name template (without extension) for generated reports.
     ///
-    /// Supported placeholders:
-    /// - `{date}` — the report date in `YYYY-MM-DD` format
-    /// - `{seq}`  — a per-day sequence suffix: empty for the first report of the
-    ///   day, then `_2`, `_3`, … for subsequent reports on the same date
-    ///
-    /// The file extension is appended automatically based on the export format.
-    /// Defaults to `daily_report_{date}{seq}` when unset.
+    /// Supported placeholders: `{date}` - the report date as `YYYY-MM-DD`;
+    /// `{seq}` - empty for the day's first report, then `_2`, `_3` and so on.
+    /// The extension follows the export format.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("default" = "daily_report_{date}{seq}"))]
     pub filename_template: Option<String>,
 
-    /// Report label language: `en` (default) or `ru`; unknown values fall
-    /// back to `en`.
+    /// Language of the labels inside hourly Excel reports: `en` or `ru`.
     ///
     /// Russian was the default before 1.0, when the product spoke Russian; the
     /// shipped default is English and this opts back in.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("default" = "en", "enum" = ["en", "ru"]))]
     pub language: Option<String>,
 
-    /// Design template name (`<data>/report_templates/<name>.json`);
-    /// unset or missing falls back to the built-in `siserver` look.
+    /// Design template name, read from `<data>/report_templates/<name>.json`;
+    /// a missing file falls back to the built-in look.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(extend("default" = "siserver"))]
     pub template: Option<String>,
-}
-
-/// SiServer connection used by `report --send`.
-///
-/// Named `server` for historical reasons - this is the third-party corporate
-/// reporting API, not kasl-server. The team server lives in
-/// [`KaslServerConfig`] under its own key so the two channels can be
-/// configured independently, and eventually used side by side.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-pub struct ServerConfig {
-    /// Base URL of the reporting API.
-    pub api_url: String,
-
-    /// Token sent with report submissions.
-    pub auth_token: String,
 }
 
 /// Connection to a kasl-server instance: where to reach it, and how to trust
@@ -151,7 +151,7 @@ pub struct ServerConfig {
 ///
 /// The agent token is deliberately absent - it lives in the OS keyring, like
 /// every other kasl credential, so a readable config file never carries one.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
 pub struct KaslServerConfig {
     /// Base URL of the server, e.g. `https://kasl.example.com`. Stored
     /// without a trailing slash so endpoint paths can be appended as-is.
@@ -182,9 +182,19 @@ pub struct KaslServerConfig {
 
 /// The root configuration. Every module is optional, and unset modules
 /// are omitted from the JSON, so the file only names what is configured.
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+///
+/// Unknown keys are ignored when the file is read - the watcher reads it
+/// too, and a typo must not stop the workday being recorded - and named by
+/// `kasl config check` and by any editor that follows the file's `$schema`.
+///
+/// A `server` block (an API URL and a token in plain text) was offered by
+/// `kasl setup` until 1.21 and read by nothing: SiServer reports go through
+/// `si`. It is ignored like any unknown key, and the next save drops it.
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, Default)]
+#[schemars(title = "kasl config", description = "kasl's settings file: config.json in kasl's data directory.")]
 pub struct Config {
-    /// SiServer integration.
+    /// SiServer, the corporate reporting API: `report --send` and the
+    /// company's rest days.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub si: Option<SiConfig>,
 
@@ -196,11 +206,8 @@ pub struct Config {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub monitor: Option<MonitorConfig>,
 
-    /// SiServer, the third-party corporate reporting API.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub server: Option<ServerConfig>,
-
-    /// kasl-server: the team server this agent reports to.
+    /// kasl-server: the team server this agent reports to. Written by `kasl
+    /// server connect`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub kasl_server: Option<KaslServerConfig>,
 
@@ -225,7 +232,8 @@ pub struct Config {
 
     /// What each plugin has been told, by its name (`gitlab` for
     /// `kasl-plugin-gitlab`). A plugin is used because it is installed, not
-    /// because it is listed here; this holds only its settings.
+    /// because it is listed here; this holds only its settings. Written by
+    /// `kasl plugin setup NAME`.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub plugins: std::collections::BTreeMap<String, PluginConfig>,
 }
@@ -283,21 +291,25 @@ fn move_gitlab_to_its_plugin(
 ///
 /// Only the ones that are not secret: a setting its manifest marks secret is
 /// kept in the OS keyring, under `plugin.NAME.KEY`, and never in this file.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq, Default)]
 pub struct PluginConfig {
+    /// The plugin's settings that are not secret, by the keys its manifest
+    /// declares.
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub settings: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Settings for the inbox, whichever source its issues come from.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct InboxConfig {
-    /// Whether the watcher should poll Jira for open assigned issues.
+    /// Whether the watcher polls the inbox's sources.
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    /// Seconds between Jira inbox polls (default 300 = 5 minutes).
+    /// Seconds between polls.
     #[serde(default = "default_inbox_poll_interval")]
+    #[schemars(range(min = 30))]
     pub poll_interval_secs: u64,
 
     /// Whether to show a desktop toast when a new issue appears.
@@ -341,18 +353,31 @@ pub struct InboxConfig {
 
     /// What the inbox does by itself: when an issue matches a rule's `when`,
     /// its `then` pins it, toasts it as urgent, dismisses it, or tags the task
-    /// taken from it. See [`crate::libs::inbox_rules`].
-    ///
-    /// Kept as written and read one rule at a time: a rule that does not
-    /// parse is skipped and named, rather than making the whole file
-    /// unreadable. The watcher reads this file for activity tracking too, and
-    /// a typo in an inbox rule must not stop the workday being recorded.
+    /// taken from it.
+    //
+    // Kept as written and read one rule at a time: a rule that does not parse
+    // is skipped and named, rather than making the whole file unreadable. The
+    // watcher reads this file for activity tracking too, and a typo in an
+    // inbox rule must not stop the workday being recorded. See
+    // [`crate::libs::inbox_rules`].
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[schemars(with = "Vec<crate::libs::inbox_rules::InboxRule>")]
     pub rules: Vec<serde_json::Value>,
+
+    /// Named cuts of the list, by name: `kasl inbox --preset urgent` lists
+    /// what `{"priority": "High+", "since": "7d"}` keeps. Flags given beside
+    /// the preset win over its fields.
+    //
+    // Kept as written, like the rules, and read when one is asked for by
+    // name: a misspelt preset fails the command that names it, not the file.
+    // See [`crate::libs::inbox_filter::InboxPreset`].
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    #[schemars(with = "std::collections::BTreeMap<String, crate::libs::inbox_filter::InboxPreset>")]
+    pub presets: std::collections::BTreeMap<String, serde_json::Value>,
 }
 
 /// A user-configured Jira custom field for inbox sync / display.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
 pub struct JiraCustomField {
     /// Jira field id, e.g. `customfield_12345`.
     pub id: String,
@@ -385,6 +410,7 @@ impl Default for InboxConfig {
             toast_snooze_for: default_toast_snooze_for(),
             start_on_take: false,
             rules: Vec::new(),
+            presets: std::collections::BTreeMap::new(),
         }
     }
 }
@@ -404,7 +430,8 @@ impl InboxConfig {
 }
 
 /// Settings for intelligent task discovery (`kasl task find`).
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug, PartialEq)]
+#[serde(default)]
 pub struct TaskDiscoveryConfig {
     /// Names/prefixes of tasks and commits to exclude from discovery.
     ///
@@ -508,10 +535,26 @@ impl Config {
     /// # }
     /// ```
     pub fn save(&self) -> Result<()> {
-        let config_file_path = DataStorage::new().get_path(CONFIG_FILE_NAME)?;
-        let json_content = serde_json::to_string_pretty(&self)?;
-        fs::write(config_file_path, json_content)?;
+        /// The file as written: led by the schema it follows, so an editor
+        /// that opens it checks every key without being told where to look.
+        #[derive(Serialize)]
+        struct OnDisk<'a> {
+            #[serde(rename = "$schema")]
+            schema: &'static str,
+            #[serde(flatten)]
+            config: &'a Config,
+        }
+        let json_content = serde_json::to_string_pretty(&OnDisk {
+            schema: schema::SCHEMA_URL,
+            config: self,
+        })?;
+        fs::write(Self::path()?, json_content)?;
         Ok(())
+    }
+
+    /// Where the config file lives, whether or not it exists yet.
+    pub fn path() -> Result<PathBuf> {
+        DataStorage::new().get_path(CONFIG_FILE_NAME)
     }
 
     /// Returns the ignore list for task discovery.

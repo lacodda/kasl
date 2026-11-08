@@ -329,6 +329,41 @@ impl View {
         Ok(())
     }
 
+    /// Lists settings as `kasl config show` does: the key, what kasl uses,
+    /// and whether it is written in the file or a default.
+    ///
+    /// A list of names reads as names; a list of objects - rules, fields -
+    /// as a count, since `kasl config get KEY` prints it whole.
+    pub fn config_settings(settings: &[crate::libs::config::keys::Setting]) -> Result<()> {
+        use crate::libs::config::keys::Source;
+        use serde_json::Value;
+
+        let shown = |value: Option<&Value>| match value {
+            None => "—".to_string(),
+            Some(Value::String(text)) => text.clone(),
+            Some(Value::Array(items)) if items.is_empty() => "none".to_string(),
+            Some(Value::Array(items)) if items.iter().all(Value::is_string) => items.iter().filter_map(Value::as_str).collect::<Vec<_>>().join(", "),
+            Some(Value::Array(items)) => format!("{} items", items.len()),
+            Some(Value::Object(map)) if map.is_empty() => "none".to_string(),
+            Some(value) => value.to_string(),
+        };
+        let key_width = settings.iter().map(|s| s.key.width()).max().unwrap_or(3).max("KEY".width());
+        let value_width = terminal_cols().saturating_sub(key_width + "SOURCE".width() + 12).max(12);
+
+        let mut table = Table::new();
+        let titles = row!["KEY", "VALUE", "SOURCE"];
+        for setting in settings {
+            let source = match setting.source {
+                Source::Set => "set",
+                Source::Default => "default",
+                Source::NotSet => "not set",
+            };
+            table.add_row(row![setting.key, output::fit(&shown(setting.value.as_ref()), value_width), source]);
+        }
+        output::print_table(titles, table);
+        Ok(())
+    }
+
     /// Displays active Jira inbox items (pinned, score, then priority).
     ///
     /// SUMMARY is truncated to fit the terminal width (same approach as [`View::tasks`]).

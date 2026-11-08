@@ -13,6 +13,111 @@
 use crate::db::inbox::InboxItem;
 use anyhow::{Result, bail};
 use chrono::{Duration, NaiveDateTime};
+use schemars::JsonSchema;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+
+/// A named cut of the list, as `inbox.presets` writes it: the flags of
+/// `kasl inbox list`, under their own names.
+///
+/// `kasl inbox --preset urgent` is `--priority High+ --since 7d` when the
+/// config says `"urgent": {"priority": "High+", "since": "7d"}`; a flag given
+/// beside the preset wins over the preset's field. Kept in the config as
+/// written and read here when a command names it, so a misspelt preset fails
+/// the command that asks for it rather than the whole file.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct InboxPreset {
+    /// Only issues first seen within a window: 1d, 7d, 12h, 2w.
+    #[serde(default)]
+    pub since: Option<String>,
+    /// Only issues discovered in the last day.
+    #[serde(default)]
+    pub new: bool,
+    /// Only issues that visibly changed within a window: 1d, 7d, 12h, 2w.
+    #[serde(default)]
+    pub changed: Option<String>,
+    /// Only issues whose ranking field is at least this.
+    #[serde(default)]
+    pub min_score: Option<f64>,
+    /// A priority name, with `+` for that priority and everything more urgent.
+    #[serde(default)]
+    pub priority: Option<String>,
+    /// Status names, any of them.
+    #[serde(default, deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
+    pub status: Vec<String>,
+    /// Issue types, any of them.
+    #[serde(default, rename = "type", deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
+    pub types: Vec<String>,
+    /// Projects, any of them.
+    #[serde(default, rename = "project", deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
+    pub projects: Vec<String>,
+    /// Order of the list; pinned issues lead whatever the order.
+    #[serde(default)]
+    pub sort: Option<InboxSort>,
+}
+
+impl InboxPreset {
+    /// Reads one preset, refusing anything that would cut other than as written.
+    ///
+    /// Unknown keys are refused: `prority` dropped silently would leave the
+    /// preset listing everything while its name promises a slice.
+    pub fn parse(value: &Value) -> std::result::Result<InboxPreset, String> {
+        let preset: InboxPreset = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        preset.check()?;
+        Ok(preset)
+    }
+
+    /// What the schema cannot say about a preset that reads.
+    pub fn check(&self) -> std::result::Result<(), String> {
+        if self.new && self.since.is_some() {
+            return Err("`new` is the last day's `since`; give one of them".to_string());
+        }
+        for window in [&self.since, &self.changed].into_iter().flatten() {
+            parse_window(window).map_err(|e| e.to_string())?;
+        }
+        if self.priority.as_deref().is_some_and(|p| p.trim_end_matches('+').trim().is_empty()) {
+            return Err("`priority` names no priority".to_string());
+        }
+        if self.min_score.is_some_and(|score| !score.is_finite()) {
+            return Err("`min_score` is not a number".to_string());
+        }
+        Ok(())
+    }
+}
+
+/// One name, or a list of names meaning any of them.
+//
+// Only the schema's view of such a field: the fields themselves are
+// `Vec<String>`, read by [`one_or_many`].
+#[derive(JsonSchema)]
+#[serde(untagged)]
+#[allow(dead_code)]
+pub(crate) enum OneOrMany {
+    One(String),
+    Many(Vec<String>),
+}
+
+/// Accepts one name or a list of names, as the config may write either.
+pub(crate) fn one_or_many<'de, D>(deserializer: D) -> std::result::Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Value::deserialize(deserializer)? {
+        Value::String(one) => Ok(vec![one]),
+        Value::Array(many) => many
+            .into_iter()
+            .map(|v| match v {
+                Value::String(s) => Ok(s),
+                other => Err(serde::de::Error::custom(format!("expected a name, found {other}"))),
+            })
+            .collect(),
+        other => Err(serde::de::Error::custom(format!("expected a name or a list of names, found {other}"))),
+    }
+}
 
 /// A time window such as `7d`, `12h`, `2w`, or a bare number of days.
 ///
@@ -165,7 +270,8 @@ fn one_of(value: Option<&str>, wanted: &[String]) -> bool {
 }
 
 /// What the list is ordered by. Pinned issues lead, and gone then dismissed issues trail, whatever the key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
 pub enum InboxSort {
     /// Ranking field descending, then priority - the inbox's own order.
     #[default]

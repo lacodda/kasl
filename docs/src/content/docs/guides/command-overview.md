@@ -10,7 +10,8 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 ### Core Commands
 
-- **[`setup`](/reference/setup/)** - Set up application configuration
+- **[`setup`](/reference/setup/)** - Set up application configuration, module by module
+- **[`config`](/reference/config/)** - Read and change one setting at a time, checked against the config's JSON Schema
 - **[`watch`](/reference/watch/)** - Start activity monitoring
 - **[`task`](/reference/task/)** - Manage tasks and work items
 - **[`report`](/reference/report/)** - Generate and submit reports
@@ -160,6 +161,7 @@ Commands for generating insights and reports:
 ### System Management
 Commands for application configuration and maintenance:
 - `setup` - Initial setup and configuration
+- `config` - One setting at a time: show, get, set, unset, check
 - `server` - Connection to a team server, the queue of days owed to it, the live pulse, and its privacy manifest
 - `autostart` - System integration
 - `self-update` - Application updates
@@ -168,7 +170,8 @@ Commands for application configuration and maintenance:
 
 - **`--json`**, on every command that prints data (`report`, `sum`,
   `pauses list`, `task list`/`show`, `tag`, `template`, `inbox list`/`show`/`rules`,
-  `server status`/`queue`/`pulse`/`manifest`, `autostart status`): one JSON
+  `server status`/`queue`/`pulse`/`manifest`, `autostart status`,
+  `config show`/`get`/`check`): one JSON
   document on stdout, everything else on stderr.
 - **`--plain`**, on every command: the same output without colour, emoji or
   blank padding, and tables as tab-separated lines that are never cut to the

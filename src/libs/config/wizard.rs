@@ -4,7 +4,7 @@
 //! the per-module parameter prompts, and the two list editors (discovery
 //! ignore names, Jira inbox fields).
 
-use super::{Config, ConfigModule, InboxConfig, JiraCustomField, MonitorConfig, ProductivityConfig, ReportConfig, ServerConfig, TaskDiscoveryConfig};
+use super::{Config, ConfigModule, InboxConfig, JiraCustomField, MonitorConfig, ProductivityConfig, ReportConfig, TaskDiscoveryConfig};
 use crate::api::jira::JiraConfig;
 use crate::api::si::SiConfig;
 use crate::libs::messages::Message;
@@ -40,10 +40,6 @@ impl Config {
             ConfigModule {
                 key: "monitor".to_string(),
                 name: "Monitor".to_string(),
-            },
-            ConfigModule {
-                key: "server".to_string(),
-                name: "Server".to_string(),
             },
             ConfigModule {
                 key: "productivity".to_string(),
@@ -105,25 +101,6 @@ impl Config {
 
                         // Preserve the pause-merge gap (edited manually in config.json)
                         pause_merge_gap: default.pause_merge_gap,
-                    });
-                }
-
-                "server" => {
-                    let default = config.server.clone().unwrap_or(ServerConfig {
-                        api_url: "".to_string(),
-                        auth_token: "".to_string(),
-                    });
-                    msg_print!(Message::ConfigModuleServer);
-                    config.server = Some(ServerConfig {
-                        api_url: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt(Message::PromptServerApiUrl.to_string())
-                            .default(default.api_url)
-                            .interact_text()?,
-
-                        auth_token: Input::with_theme(&ColorfulTheme::default())
-                            .with_prompt(Message::PromptServerAuthToken.to_string())
-                            .default(default.auth_token)
-                            .interact_text()?,
                     });
                 }
 
@@ -347,6 +324,7 @@ fn configure_inbox(default: InboxConfig) -> Result<InboxConfig> {
         // Rules are written in the file, never asked about here; walking the
         // wizard must not cost the user the rules they wrote.
         rules: default.rules,
+        presets: default.presets,
         custom_fields,
         sort_by_field,
     })

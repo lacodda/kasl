@@ -115,7 +115,7 @@ drifting apart at the two moments that matter - starting and finishing.
 **Starting.** If taking an issue means starting it in your team, turn on
 `start_on_take` and every take moves the issue into progress in Jira as well:
 
-```json
+```json title="config.json"
 {
   "inbox": {
     "start_on_take": true
@@ -168,7 +168,7 @@ answer every morning: anything High or above goes on top, Epics are someone
 else's, work from the payments project is payments work. Write those answers
 down once as rules, in the `inbox` section of the config:
 
-```json
+```json title="config.json"
 {
   "inbox": {
     "rules": [
@@ -235,7 +235,7 @@ Plain priority is often too coarse - "High" doesn't say which High issue to
 pick up first. If your Jira has a numeric field for that (a Scoring field, a
 custom weight, anything comparable), point the inbox at it:
 
-```json
+```json title="config.json"
 {
   "inbox": {
     "custom_fields": [{ "id": "customfield_12345", "label": "Scoring" }],

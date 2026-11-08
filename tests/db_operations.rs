@@ -94,7 +94,6 @@ mod tests {
         // Test config creation
         let config = Config::default();
         assert!(config.monitor.is_none());
-        assert!(config.server.is_none());
 
         // Test config save/read
         let save_result = config.save();

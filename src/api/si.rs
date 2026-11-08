@@ -32,6 +32,7 @@ use reqwest::{
     header::{self, COOKIE, HeaderMap, HeaderValue},
     multipart,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -449,7 +450,7 @@ pub fn daily_report_fields(date: &str, tasks: &str) -> Vec<(&'static str, String
 }
 
 /// SiServer connection settings; auth and API live on separate hosts.
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, JsonSchema, Clone, Debug)]
 pub struct SiConfig {
     /// Corporate username for LDAP authentication.
     pub login: String,

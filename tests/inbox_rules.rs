@@ -51,7 +51,6 @@ fn configure(api_url: &str, rules: Value) -> InboxConfig {
         jira: Some(JiraConfig {
             login: "agent".to_string(),
             api_url: api_url.to_string(),
-            completed_statuses: Vec::new(),
         }),
         inbox: Some(inbox.clone()),
         ..Default::default()

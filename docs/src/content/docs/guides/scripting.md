@@ -130,7 +130,8 @@ with a message naming itself, e.g. `` `kasl task find` is interactive and
 needs a terminal ``:
 
 - **`kasl setup`** - the configuration wizard walks through several
-  interdependent choices; no single flag replaces it.
+  interdependent choices. One setting at a time, `kasl config set` does
+  without a terminal.
 - **`kasl task find`** - offers commits and issues as candidates and asks you
   to pick; nothing to script against.
 - **`kasl task edit`** without an id - picks a task from a list first.
@@ -171,6 +172,7 @@ The commands that take it:
 | [`inbox list`, `inbox show`, `inbox rules`](/reference/inbox/#json-output) | issues, one issue and why it sits where it does, the rules |
 | [`server status`, `queue`, `pulse`, `manifest`](/reference/server/#json-output) | the connection, the owed days, the pulse, what the server stores |
 | [`autostart status`](/reference/autostart/#json-output) | whether kasl starts at login |
+| [`config show`, `get`, `check`](/reference/config/) | every setting with its source, one setting, what is wrong with the file |
 
 A command with no data to print does not take the flag: `kasl task add --json`
 is a usage error, not a task added with the answer in prose. The same goes
@@ -254,7 +256,10 @@ prompts, the debug log - and decides once, for all of them, per stream:
 
 There is no environment-variable override for configuration values - settings
 live only in `config.json` and the OS keyring (see
-[Configuration](/concepts/configuration/)).
+[Configuration](/concepts/configuration/)). A script changes one with
+[`kasl config set`](/reference/config/), which needs no terminal and refuses a
+value the setting does not take; `kasl config check` exits 1 when the file has a
+setting kasl would not read as written, which makes it a deploy-time check.
 
 ## Exit codes and a cron example
 

@@ -38,7 +38,6 @@ mod tests {
         // Test creating default configuration
         let config = Config::default();
         assert!(config.monitor.is_none());
-        assert!(config.server.is_none());
         assert!(config.si.is_none());
         assert!(config.jira.is_none());
     }
@@ -56,10 +55,6 @@ mod tests {
                 activity_threshold: 30,
                 min_work_interval: 10,
                 ..Default::default()
-            }),
-            server: Some(kasl::libs::config::ServerConfig {
-                api_url: "https://test.example.com".to_string(),
-                auth_token: "test_token_123".to_string(),
             }),
             kasl_server: None,
             si: None,
@@ -81,21 +76,9 @@ mod tests {
 
         let loaded = loaded_config.unwrap();
 
-        // Test may fail if config doesn't persist correctly in temp directory
-        // This is acceptable as it tests the mechanism
-        if loaded.monitor.is_some() && loaded.server.is_some() {
-            // Verify values are correct if config was loaded
-            let monitor = loaded.monitor.unwrap();
-            assert_eq!(monitor.min_pause_duration, 30);
-            assert_eq!(monitor.pause_threshold, 60);
-
-            let server = loaded.server.unwrap();
-            assert_eq!(server.api_url, "https://test.example.com");
-            assert_eq!(server.auth_token, "test_token_123");
-        } else {
-            // Config might not persist in temp environment - that's also valid
-            // The save operation should not have failed
-        }
+        let monitor = loaded.monitor.expect("the monitor block was saved");
+        assert_eq!(monitor.min_pause_duration, 30);
+        assert_eq!(monitor.pause_threshold, 60);
     }
 
     #[test_context(FoundationsTestContext)]

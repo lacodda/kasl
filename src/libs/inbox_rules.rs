@@ -31,16 +31,17 @@ use crate::db::inbox::{Inbox, InboxItem, Include, RuledMark};
 use crate::db::tags::Tags;
 use crate::db::tasks::Tasks;
 use crate::libs::config::{Config, InboxConfig};
-use crate::libs::inbox_filter::{InboxFilter, Reason, priority_cut_in};
+use crate::libs::inbox_filter::{InboxFilter, OneOrMany, Reason, one_or_many, priority_cut_in};
 use crate::libs::task::TaskFilter;
 use anyhow::Result;
 use chrono::Local;
-use serde::{Deserialize, Deserializer};
+use schemars::JsonSchema;
+use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 
 /// When a rule applies. Every given condition must hold; a list means any of it.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RuleWhen {
     /// A priority name, with `+` for that priority and everything more urgent.
@@ -51,12 +52,15 @@ pub struct RuleWhen {
     pub min_score: Option<f64>,
     /// Status names or ids.
     #[serde(default, deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
     pub status: Vec<String>,
     /// Issue types.
     #[serde(default, rename = "type", deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
     pub types: Vec<String>,
     /// Projects (in Jira, the prefix of the key).
     #[serde(default, rename = "project", deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
     pub projects: Vec<String>,
 }
 
@@ -85,7 +89,7 @@ impl RuleWhen {
 }
 
 /// What a rule does to a matching issue.
-#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct RuleThen {
     /// Pin it, so it leads the list.
@@ -99,6 +103,7 @@ pub struct RuleThen {
     pub dismiss: bool,
     /// Tags for the task taken from it.
     #[serde(default, deserialize_with = "one_or_many")]
+    #[schemars(with = "OneOrMany")]
     pub tag: Vec<String>,
 }
 
@@ -123,15 +128,17 @@ impl RuleThen {
 }
 
 /// One rule as written.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct InboxRule {
     /// What the rule is called in messages, toasts and `show --why`; without
     /// one, its conditions in words.
     #[serde(default)]
     pub name: Option<String>,
+    /// When the rule applies; every condition given must hold.
     #[serde(default)]
     pub when: RuleWhen,
+    /// What it does to a matching issue.
     pub then: RuleThen,
 }
 
@@ -143,23 +150,30 @@ impl InboxRule {
     /// with `dismiss` that empties the inbox.
     pub fn parse(value: &Value) -> std::result::Result<InboxRule, String> {
         let rule: InboxRule = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        let then = &rule.then;
+        rule.check()?;
+        Ok(rule)
+    }
+
+    /// What the schema cannot say about a rule that reads: the combinations
+    /// that would act other than as written.
+    pub fn check(&self) -> std::result::Result<(), String> {
+        let then = &self.then;
         if !then.pin && !then.urgent && !then.dismiss && then.tag.is_empty() {
             return Err("it does nothing: `then` needs pin, urgent, dismiss or tag".to_string());
         }
         if then.dismiss && (then.pin || then.urgent) {
             return Err("it both dismisses and pins or announces; a hidden issue is neither - split it into two rules".to_string());
         }
-        if then.dismiss && rule.when.is_empty() {
+        if then.dismiss && self.when.is_empty() {
             return Err("it would dismiss every issue; give `when` at least one condition".to_string());
         }
         if then.tag.iter().any(|tag| tag.trim().is_empty()) {
             return Err("a tag name cannot be empty".to_string());
         }
-        if rule.when.priority.as_deref().is_some_and(|p| p.trim_end_matches('+').trim().is_empty()) {
+        if self.when.priority.as_deref().is_some_and(|p| p.trim_end_matches('+').trim().is_empty()) {
             return Err("`priority` names no priority".to_string());
         }
-        Ok(rule)
+        Ok(())
     }
 
     /// The name, or the conditions in words.
@@ -168,24 +182,6 @@ impl InboxRule {
             Some(name) if !name.is_empty() => name.to_string(),
             _ => self.when.describe(),
         }
-    }
-}
-
-/// Accepts one name or a list of names, as the config may write either.
-fn one_or_many<'de, D>(deserializer: D) -> std::result::Result<Vec<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    match Value::deserialize(deserializer)? {
-        Value::String(one) => Ok(vec![one]),
-        Value::Array(many) => many
-            .into_iter()
-            .map(|v| match v {
-                Value::String(s) => Ok(s),
-                other => Err(serde::de::Error::custom(format!("expected a name, found {other}"))),
-            })
-            .collect(),
-        other => Err(serde::de::Error::custom(format!("expected a name or a list of names, found {other}"))),
     }
 }
 
@@ -458,9 +454,9 @@ pub fn tags_for(item: &InboxItem) -> Vec<String> {
 
 /// Puts tags on the task taken from `key`, and returns the ones it did not have.
 ///
-/// The tags go on the task's first row - the one the take made - which is
-/// where `kasl task add --tags` puts them too. Tags already there are left
-/// alone, so applying the rules twice changes nothing the second time.
+/// The tags go on the task - every day's row of it - through its first row,
+/// the one the take made. Tags already there are left alone, so applying the
+/// rules twice changes nothing the second time.
 pub fn tag_task(key: &str, names: &[String]) -> Result<Vec<String>> {
     let rows = Tasks::new()?.fetch(TaskFilter::ByIssueKey(key.to_string()))?;
     let Some(task_id) = rows
