@@ -21,6 +21,7 @@ use crate::{
         messages::Message,
         report,
         report_template::{FontSpec, ReportTemplate},
+        summary::Summary,
         task::TaskFilter,
     },
     msg_error_anyhow, msg_info, msg_success,
@@ -270,7 +271,7 @@ impl Exporter {
     /// Exports the monthly summary.
     async fn export_summary(&self, date: NaiveDate) -> Result<()> {
         // Gather and aggregate monthly data from workday records
-        let summary_data = self.gather_summary_data(date)?;
+        let summary_data = self.gather_summary_data(date).await?;
 
         // Apply format-specific processing and generate output file
         match self.format {
@@ -306,7 +307,7 @@ impl Exporter {
                     completeness: t.completeness.unwrap_or(100),
                 })
                 .collect::<Vec<_>>();
-            let summary = self.gather_summary_data(date).ok();
+            let summary = self.gather_summary_data(date).await.ok();
 
             // Create comprehensive JSON structure with metadata
             let all_data = serde_json::json!({
@@ -413,46 +414,31 @@ impl Exporter {
         })
     }
 
-    /// Aggregates the month's workdays into totals and per-day rows.
-    fn gather_summary_data(&self, date: NaiveDate) -> Result<ExportSummary> {
-        // Retrieve all workday records for the month containing the specified date
-        let workdays = Workdays::new()?.fetch_month(date)?;
-
-        // Initialize aggregation variables
-        let mut days = Vec::new();
-        let mut total_duration = Duration::zero();
-
-        // Process each workday to calculate duration and accumulate statistics
-        for workday in &workdays {
-            // Determine end time (now while the day is still today, otherwise
-            // the last observed activity - see report::workday_end_time).
-            let day_pauses = Pauses::new()?.get_workday_pauses(workday)?;
-            let end_time = report::workday_end_time(workday, &day_pauses);
-            let duration = end_time - workday.start;
-            total_duration += duration;
-
-            // Add daily summary record
-            days.push(ExportDaySum {
-                date: workday.date.format("%Y-%m-%d").to_string(),
-                hours: format_duration(&duration),
-                is_workday: true, // All records in workdays table are work days
-            });
-        }
-
-        // Calculate average duration with division by zero protection
-        let avg_duration = if !workdays.is_empty() {
-            Duration::seconds(total_duration.num_seconds() / workdays.len() as i64)
-        } else {
-            Duration::zero()
-        };
-
-        // Construct the monthly summary structure
+    /// The month as `kasl sum` reads it, in the export's shape.
+    ///
+    /// Read through [`Summary::month`], so a day's hours are the work the
+    /// daily report counts - intervals between long pauses, short ones
+    /// dropped - and the company's rest days are in it, as `is_workday:
+    /// false`. Until 1.21 the export had arithmetic of its own: the day's
+    /// end minus its start, pauses included, which was a third meaning of
+    /// "hours" next to `report` and `sum`.
+    async fn gather_summary_data(&self, date: NaiveDate) -> Result<ExportSummary> {
+        let month = Summary::month(date).await?;
+        let recorded = month.days.iter().filter(|day| !day.rest_day).count();
         Ok(ExportSummary {
             month: date.format("%B %Y").to_string(), // "January 2025" format
-            days,
-            total_hours: format_duration(&total_duration),
-            average_hours: format_duration(&avg_duration),
-            total_days: workdays.len(),
+            days: month
+                .days
+                .iter()
+                .map(|day| ExportDaySum {
+                    date: day.date.format("%Y-%m-%d").to_string(),
+                    hours: format_duration(&day.duration),
+                    is_workday: !day.rest_day,
+                })
+                .collect(),
+            total_hours: format_duration(&month.total),
+            average_hours: format_duration(&month.average),
+            total_days: recorded,
         })
     }
 

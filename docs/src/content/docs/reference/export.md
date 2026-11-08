@@ -15,7 +15,7 @@ kasl export [DATA] [OPTIONS]
 - `DATA` (default: `report`):
   - `report`: The daily report - intervals, tasks, productivity.
   - `tasks`: The date's tasks.
-  - `summary`: The month's totals and per-day hours.
+  - `summary`: The month's totals and per-day hours, as [`kasl sum`](/reference/sum/) counts them.
   - `all`: Report + tasks + summary - one JSON file, or suffixed files for CSV/Excel.
 
 ## Options
@@ -82,6 +82,10 @@ A JSON tasks export is a plain array, no wrapper object:
 ```
 
 An Excel export writes a single worksheet holding the same rows the CSV export would contain. No charts are generated.
+
+### The month's hours
+
+A `summary` export is the month [`kasl sum`](/reference/sum/) shows, in the export's shape: a day's hours are the work its [`report`](/reference/report/) counts - the intervals between long pauses, with the ones shorter than `min_work_interval` left out - so a day reads the same in the report, in `sum` and in the file. A company rest day the reporting API names is in it too, with `is_workday: false` and the full day it counts as; `total_days` counts the days that were recorded. Until 1.21 the export had arithmetic of its own - the day's end minus its start, lunch and all - which gave the same day a second length.
 
 ## Related commands
 
