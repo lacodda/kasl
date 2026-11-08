@@ -1,7 +1,7 @@
-//! # Kasl - Key Activity Synchronization and Logging
+//! # kasl
 //!
-//! A command-line utility for tracking work activities, managing tasks,
-//! and generating productivity reports.
+//! Work activity tracker CLI: automatic workday and break detection, task
+//! management with Jira/GitLab integration, productivity reports and exports.
 //!
 //! ## Usage
 //!

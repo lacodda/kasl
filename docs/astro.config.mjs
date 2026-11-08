@@ -12,8 +12,10 @@ export default defineConfig({
 			// The 404 page is src/content/docs/404.md; the built-in route would
 			// look for that same entry and clash with it.
 			disable404Route: true,
+			// The manifest's description, word for word: one product, one
+			// sentence on every shopfront (crates.io, npm, GitHub, this site).
 			description:
-				'Key Activity Synchronization and Logging: a CLI that watches your activity, turns it into workdays, pauses and tasks, and files the report for you.',
+				'Work activity tracker CLI: automatic workday and break detection, task management with Jira/GitLab integration, productivity reports and exports',
 			logo: {
 				src: './src/assets/logo.svg',
 				alt: 'kasl',
