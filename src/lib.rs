@@ -38,7 +38,6 @@ pub fn run() -> std::process::ExitCode {
     // process is launched, not part of the public command surface.
     let args: Vec<String> = std::env::args().collect();
     let daemon = args.get(1).is_some_and(|arg| arg == "--daemon-run");
-    let toast_action = args.get(1).is_some_and(|arg| arg == "toast-action");
     let cli = (!daemon).then(|| commands::Cli::from_args(&args));
     let style = libs::output::init(cli.as_ref().is_some_and(|cli| cli.json()), cli.as_ref().is_some_and(|cli| cli.plain()));
 
@@ -61,9 +60,9 @@ pub fn run() -> std::process::ExitCode {
             // The update notice is for a person at a terminal. A script would
             // wait on GitHub before its answer, a pipe would carry the notice
             // as data, and a cron job would spend the day's one check where
-            // nobody reads it. The courier behind a toast button skips it
-            // too: it has no terminal, and must not delay the press.
-            if !toast_action && !style.json && std::io::IsTerminal::is_terminal(&std::io::stdout()) {
+            // nobody reads it. Some commands never stop for it at all - see
+            // `may_check_for_updates`.
+            if cli.may_check_for_updates() && !style.json && std::io::IsTerminal::is_terminal(&std::io::stdout()) {
                 libs::update::Updater::show_update_notification().await;
             }
             cli.dispatch().await

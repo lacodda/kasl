@@ -23,6 +23,7 @@ pub mod pauses;
 pub mod plugin;
 pub mod report;
 pub mod server;
+pub mod status;
 pub mod sum;
 pub mod tag;
 pub mod task;
@@ -88,6 +89,15 @@ enum Commands {
     /// and daily breakdowns for the current month.
     #[command(about = "Get summary")]
     Sum(sum::SumArgs),
+
+    /// One line for a shell prompt or a status bar
+    ///
+    /// Today's work so far, a pause the watcher sees or a watcher that is not
+    /// running, and the inbox: `6h 40m | paused 12m | inbox 9 (3 new)`.
+    /// Nothing to say prints nothing. Reads local files only and never checks
+    /// for updates, because a prompt runs it every time it draws.
+    #[command(about = "One line for a shell prompt or a status bar: today's work, the watcher, the inbox")]
+    Status(status::StatusArgs),
 
     /// Update kasl itself to the latest release
     ///
@@ -270,6 +280,16 @@ impl Cli {
         self.plain
     }
 
+    /// Whether this run may stop to check for a newer release before it answers.
+    ///
+    /// Not the status line: a prompt runs it every time it draws, and one
+    /// check a day spent there would put GitHub's answer time into a prompt.
+    /// Not the courier behind a toast button either: it has no terminal, and
+    /// must not delay the press.
+    pub fn may_check_for_updates(&self) -> bool {
+        !matches!(self.command, Commands::Status(_) | Commands::ToastAction(_))
+    }
+
     /// Executes the parsed command.
     ///
     /// # Examples
@@ -307,6 +327,7 @@ impl Cli {
                 Ok(())
             }
             Commands::Sum(args) => sum::cmd(args).await,
+            Commands::Status(args) => status::cmd(args),
             Commands::Report(args) => report::cmd(args).await,
             Commands::Export(args) => export::cmd(args).await,
             Commands::Template(args) => template::cmd(args),

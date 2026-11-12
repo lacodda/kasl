@@ -165,6 +165,7 @@ The commands that take it:
 | [`report`](/reference/report/#json-output) | the day: workday, intervals, productivity, tasks, inbox counts |
 | [`report --send --show`](/reference/report/#what-gets-sent) | the payload `--send` would post |
 | [`sum`](/reference/sum/#json-output) | the month, day by day |
+| [`status`](/reference/status/#json-output) | today right now: work so far, the watcher and its pause, the inbox counts, the prompt line |
 | [`pauses list`](/reference/pauses/#json-output) | a day's pauses |
 | [`task list`, `task show`](/reference/task/#json-output) | tasks |
 | [`tag list`, `tag show`](/reference/tag/#json-output) | tags, and the tasks carrying one |

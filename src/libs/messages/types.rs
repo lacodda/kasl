@@ -157,6 +157,10 @@ pub enum Message {
         date: String,
     },
 
+    // === STATUS AND STANDUP MESSAGES ===
+    /// `kasl status` at a terminal with nothing to put on the line.
+    StatusNothingToSay,
+
     // === EXPORT MESSAGES ===
     ExportingData(String, String), // data type, format
     ExportCompleted(String),       // file path

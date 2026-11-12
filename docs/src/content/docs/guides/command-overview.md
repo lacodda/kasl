@@ -16,6 +16,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 - **[`task`](/reference/task/)** - Manage tasks and work items
 - **[`report`](/reference/report/)** - Generate and submit reports
 - **[`sum`](/reference/sum/)** - View monthly summaries
+- **[`status`](/reference/status/)** - One line for a shell prompt or a status bar: today's work, the watcher, the inbox
 - **[`end`](/reference/end/)** - Close today's workday by hand
 
 ### Data Management
@@ -156,6 +157,7 @@ Commands for organizing and tracking work items:
 Commands for generating insights and reports:
 - `report` - Daily work reports
 - `sum` - Monthly summaries and statistics
+- `status` - Where today stands, in one line for a prompt
 - `export` - Data export for external analysis
 
 ### System Management
@@ -168,7 +170,7 @@ Commands for application configuration and maintenance:
 
 ## Output for scripts and logs
 
-- **`--json`**, on every command that prints data (`report`, `sum`,
+- **`--json`**, on every command that prints data (`report`, `sum`, `status`,
   `pauses list`, `task list`/`show`, `tag`, `template`, `inbox list`/`show`/`rules`,
   `server status`/`queue`/`pulse`/`manifest`, `autostart status`,
   `config show`/`get`/`check`): one JSON
@@ -234,8 +236,8 @@ kasl task edit
 
 - `--help` on any command or subcommand prints its own help; `kasl --version`
   prints the version.
-- `--date <YYYY-MM-DD|today>` selects the day for `report`, `export` and
-  `pauses`.
+- `--date <YYYY-MM-DD|today>` selects the day for `export` and
+  `pauses`; `report` takes `--last` for yesterday.
 - `-y`/`--yes` skips the confirmation on destructive commands, which is what
   makes them usable from a script.
 - Commands that would otherwise prompt refuse with an explanatory error when

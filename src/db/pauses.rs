@@ -24,7 +24,7 @@ use crate::libs::pause::Pause;
 use anyhow::{Context, Result};
 use chrono::{Local, NaiveDate, NaiveDateTime, TimeDelta};
 use parking_lot::Mutex;
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use std::sync::Arc;
 
 // An open pause has end IS NULL; duration is stored in seconds on close.
@@ -44,6 +44,9 @@ const INSERT_PAUSE_WITH_TIME: &str = "INSERT INTO pauses (start) VALUES (?1)";
 const UPDATE_PAUSE: &str = "UPDATE pauses SET end = (datetime(CURRENT_TIMESTAMP, 'localtime')), duration = ?1 WHERE id = ?2";
 
 const SELECT_LAST_PAUSE: &str = "SELECT id, start FROM pauses WHERE end IS NULL ORDER BY id DESC LIMIT 1";
+
+/// The newest open pause that began at or after a moment.
+const SELECT_OPEN_PAUSE_SINCE: &str = "SELECT start FROM pauses WHERE end IS NULL AND start >= ?1 ORDER BY id DESC LIMIT 1";
 
 /// Select all completed pauses for a specific date.
 ///
@@ -347,6 +350,23 @@ impl Pauses {
         };
 
         Ok(pauses)
+    }
+
+    /// When the pause the running watcher has open began; `None` when it has none.
+    ///
+    /// `since` is when that watcher started ([`crate::libs::daemon::running_since`]).
+    /// A pause opened before it was left open by a watcher that is gone - a
+    /// row that stays open for good - and says nothing about now. Stamps are
+    /// whole seconds while `since` is not, so the comparison allows the second
+    /// the watcher started in.
+    pub fn open_since(&self, since: NaiveDateTime) -> Result<Option<NaiveDateTime>> {
+        let floor = (since - TimeDelta::seconds(1)).format("%Y-%m-%d %H:%M:%S").to_string();
+        let conn_guard = self.conn.lock();
+        let start = conn_guard
+            .query_row(SELECT_OPEN_PAUSE_SINCE, [&floor], |row| row.get::<_, NaiveDateTime>(0))
+            .optional()
+            .context("cannot read the open pause")?;
+        Ok(start)
     }
 
     /// Fetches daily pauses and keeps only the portions inside the workday bounds.

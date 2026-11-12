@@ -152,6 +152,27 @@ pub struct Day {
     pub inbox: InboxCounts,
 }
 
+/// Where today stands right now: `kasl status`.
+#[derive(Debug, Serialize)]
+pub struct Status {
+    pub date: NaiveDate,
+    /// `null` until the watcher has opened today's workday.
+    pub workday: Option<Workday>,
+    /// Today's work so far, as `kasl report` counts it.
+    pub work_seconds: i64,
+    /// Whether a watcher is running; without one nothing is being recorded.
+    pub watcher: bool,
+    /// What the watcher sees: `working`, `paused` or `idle`, in the words the
+    /// server pulse uses; `null` when no watcher runs.
+    pub state: Option<&'static str>,
+    /// When the pause began, while `state` is `paused`; `null` otherwise.
+    #[serde(serialize_with = "moment::local_opt")]
+    pub paused_since: Option<NaiveDateTime>,
+    pub inbox: InboxCounts,
+    /// The line `kasl status` prints; `""` when there is nothing to say.
+    pub line: String,
+}
+
 /// One day of a summary, a month's or a week's.
 #[derive(Debug, Serialize)]
 pub struct SummaryDay {

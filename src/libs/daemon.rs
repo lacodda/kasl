@@ -371,6 +371,23 @@ pub fn is_running() -> bool {
     is_kasl_process(pid)
 }
 
+/// When the running watcher started, local time; `None` when no watcher runs.
+///
+/// Read off the PID file, which the watcher writes as it takes the lock and
+/// before its monitor sees a single event, so everything this watcher has
+/// recorded is stamped at or after this moment. That is what tells a pause
+/// it has open from one an earlier watcher left open when it was killed
+/// mid-pause: such a row keeps `end IS NULL` for good, and only the running
+/// watcher can close the pause it opened.
+pub fn running_since() -> Option<chrono::NaiveDateTime> {
+    if !is_running() {
+        return None;
+    }
+    let path = DataStorage::new().get_path(PID_FILE).ok()?;
+    let written = std::fs::metadata(path).ok()?.modified().ok()?;
+    Some(chrono::DateTime::<chrono::Local>::from(written).naive_local())
+}
+
 /// Keeps this process's standard handles out of the daemon it spawns.
 ///
 /// `Stdio::null()` decides what the child calls its stdout, not which

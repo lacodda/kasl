@@ -161,6 +161,11 @@ impl Display for Message {
                 format!("Added {} name(s) to the discovery ignore list.", count)
             }
 
+            // === STATUS AND STANDUP MESSAGES ===
+            Message::StatusNothingToSay => {
+                "Nothing to show yet: the watcher runs, today's workday has not started, and the inbox is empty. In a prompt this prints nothing at all.".to_string()
+            }
+
             // === REPORT MESSAGES ===
             Message::DailyReportSent(date) => {
                 format!(

@@ -143,6 +143,7 @@ fn every_reading_command_prints_one_json_document() {
         &["report", "--json"],
         &["report", "--last", "--json"],
         &["sum", "--json"],
+        &["status", "--json"],
         &["pauses", "--json"],
         &["pauses", "list", "--json"],
         &["task", "list", "--json"],
@@ -172,6 +173,52 @@ fn every_reading_command_prints_one_json_document() {
     let tagged = document(dir.path(), &["tag", "show", "cli", "--json"]);
     assert_eq!(tagged["tag"]["name"], json!("cli"));
     assert_eq!(tagged["tasks"][0]["name"], json!("Ship scripting output"), "{tagged:#}");
+}
+
+#[test]
+#[serial]
+fn the_status_line_says_what_the_report_and_the_inbox_say() {
+    let dir = sandbox();
+    seed(dir.path());
+
+    let status = document(dir.path(), &["status", "--json"]);
+    let day = document(dir.path(), &["report", "--json"]);
+    // The two runs are moments apart and an open day runs to now.
+    let drift = (status["work_seconds"].as_i64().unwrap() - day["work_seconds"].as_i64().unwrap()).abs();
+    assert!(drift <= 5, "status and report disagree about today: {status:#} vs {day:#}");
+    assert_eq!(status["inbox"], day["inbox"], "{status:#}");
+    assert_eq!(status["date"], day["date"]);
+
+    // No watcher runs in the sandbox: nothing is being recorded, and the
+    // line says so rather than claiming a state nobody is watching.
+    assert_eq!(status["watcher"], json!(false), "{status:#}");
+    assert_eq!(status["state"], Value::Null, "{status:#}");
+    assert_eq!(status["paused_since"], Value::Null, "{status:#}");
+
+    let out = run(dir.path(), &["status"], &[]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    let line = stdout(&out);
+    assert_eq!(line.lines().count(), 1, "one line, for a prompt: {line:?}");
+    // The day's figure can tick over between the two runs; the rest cannot.
+    let json_line = status["line"].as_str().unwrap();
+    let rest = json_line.split_once(" | ").map(|(_, rest)| rest).unwrap_or_default();
+    assert!(rest.starts_with("watch off | inbox "), "{json_line}");
+    assert!(line.trim_end().ends_with(rest), "{line:?} vs {json_line:?}");
+}
+
+#[test]
+#[serial]
+fn a_status_line_with_no_watcher_says_so_and_nothing_else() {
+    // An empty data directory: no day, no inbox. The line is not empty,
+    // because no watcher runs - the one thing worth saying - and it is the
+    // bare segment, with none of the explanation a person at a terminal gets.
+    // This is also the first run on a new database, which upgrades it as it
+    // opens it: the upgrade's progress goes to stderr, or the first prompt
+    // after every kasl update would carry forty lines of it.
+    let dir = sandbox();
+    let out = run(dir.path(), &["status"], &[]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(stdout(&out), "watch off\n");
 }
 
 #[test]

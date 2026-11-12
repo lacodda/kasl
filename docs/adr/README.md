@@ -15,3 +15,4 @@ Technical decisions that shape kasl, in the order they were made. Format: Contex
 | [0009](0009-plugins-are-programs.md) | Plugins are programs kasl runs for one call, and the inbox has sources | accepted |
 | [0010](0010-gitlab-leaves-the-core.md) | GitLab leaves the core for a plugin that ships with kasl | accepted |
 | [0011](0011-the-config-has-a-schema.md) | The config has a schema, generated from its types, and is edited one key at a time | accepted |
+| [0012](0012-the-status-line-reads-the-running-watcher.md) | The status line reads the running watcher's pause, and the report's day | accepted |

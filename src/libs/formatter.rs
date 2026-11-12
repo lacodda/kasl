@@ -100,6 +100,30 @@ pub fn format_duration(duration: &Duration) -> String {
     format!("{:02}:{:02}", hours.max(0), mins.max(0))
 }
 
+/// Formats a duration in words a status bar or a sentence can carry: `6h 40m`, `8h`, `45m`.
+///
+/// Tables keep [`format_duration`]'s `HH:MM`, which lines up in a column;
+/// a line of prose or a prompt segment reads a span, and `06:40` there reads
+/// as a time of day. Negative durations read as `0m`.
+///
+/// ```rust
+/// use kasl::libs::formatter::format_span;
+/// use chrono::Duration;
+///
+/// assert_eq!(format_span(&(Duration::hours(6) + Duration::minutes(40))), "6h 40m");
+/// assert_eq!(format_span(&Duration::hours(8)), "8h");
+/// assert_eq!(format_span(&Duration::minutes(45)), "45m");
+/// assert_eq!(format_span(&Duration::seconds(30)), "0m");
+/// ```
+pub fn format_span(duration: &Duration) -> String {
+    let minutes = duration.num_minutes().max(0);
+    match (minutes / 60, minutes % 60) {
+        (0, minutes) => format!("{minutes}m"),
+        (hours, 0) => format!("{hours}h"),
+        (hours, minutes) => format!("{hours}h {minutes}m"),
+    }
+}
+
 /// Returns the current terminal width in columns, or `100` when unknown.
 pub fn terminal_cols() -> usize {
     terminal_size::terminal_size()
