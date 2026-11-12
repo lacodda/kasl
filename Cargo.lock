@@ -1802,7 +1802,7 @@ dependencies = [
 
 [[package]]
 name = "kasl-cli"
-version = "1.21.0"
+version = "1.22.0"
 dependencies = [
  "aes",
  "anyhow",

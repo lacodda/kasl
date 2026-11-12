@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.22.0] - 2026-11-12
+
+### Bug Fixes
+- Say a database upgrade on stderr, beside the output
+
+### Features
+- Put today's work, the watcher and the inbox in one line for a prompt
+- Sum up the day or the week as markdown, into a daily note if asked
+
 ## [1.21.0] - 2026-11-08
 
 ### Breaking Changes
