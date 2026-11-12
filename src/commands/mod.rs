@@ -23,6 +23,7 @@ pub mod pauses;
 pub mod plugin;
 pub mod report;
 pub mod server;
+pub mod standup;
 pub mod status;
 pub mod sum;
 pub mod tag;
@@ -98,6 +99,14 @@ enum Commands {
     /// for updates, because a prompt runs it every time it draws.
     #[command(about = "One line for a shell prompt or a status bar: today's work, the watcher, the inbox")]
     Status(status::StatusArgs),
+
+    /// What was done, as markdown, for a standup or a daily note
+    ///
+    /// Sums up the day or the week from its hours and its tasks; `--append`
+    /// writes the summary into a markdown file instead, replacing what an
+    /// earlier run put there.
+    #[command(about = "What was done today or this week, as markdown for a standup or a daily note")]
+    Standup(standup::StandupArgs),
 
     /// Update kasl itself to the latest release
     ///
@@ -328,6 +337,7 @@ impl Cli {
             }
             Commands::Sum(args) => sum::cmd(args).await,
             Commands::Status(args) => status::cmd(args),
+            Commands::Standup(args) => standup::cmd(args),
             Commands::Report(args) => report::cmd(args).await,
             Commands::Export(args) => export::cmd(args).await,
             Commands::Template(args) => template::cmd(args),

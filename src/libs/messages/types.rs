@@ -160,6 +160,16 @@ pub enum Message {
     // === STATUS AND STANDUP MESSAGES ===
     /// `kasl status` at a terminal with nothing to put on the line.
     StatusNothingToSay,
+    /// `kasl standup` over a period with nothing recorded: the period in words.
+    StandupNothingRecorded(String),
+    /// `kasl standup --append` wrote the summary into a note.
+    StandupPlaced {
+        period: String,
+        path: String,
+        replaced: bool,
+    },
+    /// `kasl standup --append` names a file in a folder that does not exist.
+    StandupNoFolder(String),
 
     // === EXPORT MESSAGES ===
     ExportingData(String, String), // data type, format

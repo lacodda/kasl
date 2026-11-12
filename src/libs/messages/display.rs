@@ -165,6 +165,15 @@ impl Display for Message {
             Message::StatusNothingToSay => {
                 "Nothing to show yet: the watcher runs, today's workday has not started, and the inbox is empty. In a prompt this prints nothing at all.".to_string()
             }
+            Message::StandupNothingRecorded(period) => format!("Nothing was recorded for {}, so there is nothing to sum up.", period),
+            Message::StandupPlaced { period, path, replaced } => {
+                if *replaced {
+                    format!("Replaced the standup for {} in {}.", period, path)
+                } else {
+                    format!("Added the standup for {} to {}.", period, path)
+                }
+            }
+            Message::StandupNoFolder(folder) => format!("There is no folder {}; kasl creates the note, not the folders it lives in.", folder),
 
             // === REPORT MESSAGES ===
             Message::DailyReportSent(date) => {

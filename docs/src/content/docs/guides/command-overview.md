@@ -17,6 +17,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 - **[`report`](/reference/report/)** - Generate and submit reports
 - **[`sum`](/reference/sum/)** - View monthly summaries
 - **[`status`](/reference/status/)** - One line for a shell prompt or a status bar: today's work, the watcher, the inbox
+- **[`standup`](/reference/standup/)** - The day or the week as markdown, for a standup or a daily note
 - **[`end`](/reference/end/)** - Close today's workday by hand
 
 ### Data Management
@@ -158,6 +159,7 @@ Commands for generating insights and reports:
 - `report` - Daily work reports
 - `sum` - Monthly summaries and statistics
 - `status` - Where today stands, in one line for a prompt
+- `standup` - What was done, as markdown
 - `export` - Data export for external analysis
 
 ### System Management
@@ -236,8 +238,8 @@ kasl task edit
 
 - `--help` on any command or subcommand prints its own help; `kasl --version`
   prints the version.
-- `--date <YYYY-MM-DD|today>` selects the day for `export` and
-  `pauses`; `report` takes `--last` for yesterday.
+- `--date <YYYY-MM-DD|today>` selects the day for `export`, `pauses` and
+  `standup`; `report` takes `--last` for yesterday.
 - `-y`/`--yes` skips the confirmation on destructive commands, which is what
   makes them usable from a script.
 - Commands that would otherwise prompt refuse with an explanatory error when

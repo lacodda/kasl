@@ -61,6 +61,13 @@ kasl inbox          # what is waiting
 kasl inbox take PROJ-412   # turn one into a task
 ```
 
+Yesterday's work, for the morning standup, is one command away - the hours
+and the tasks as markdown, ready to paste:
+
+```bash
+kasl standup --last
+```
+
 ## During the day: the parts the monitor cannot see
 
 The monitor watches the keyboard and the mouse. An hour in a meeting room, a
@@ -75,6 +82,14 @@ kasl pauses add --start 13:00 --minutes 45 --reason lunch
 
 Add `--keep` when the absence is deliberately short and must survive the
 minimum-duration filter.
+
+To keep the day in sight without asking, put it in your shell prompt or status
+bar - today's work so far, a pause in progress, `watch off` when nothing is
+recording, the inbox. See [The day in your prompt](/guides/prompt-line/).
+
+```bash
+kasl status         # 6h 40m | inbox 9 (3 new)
+```
 
 Update progress as work moves:
 
@@ -103,6 +118,13 @@ kasl report --send
 ```
 
 Forgot yesterday? `kasl report --last --send` files the previous day instead.
+
+Keep the day where the rest of your notes live: `--append` writes the summary
+into a daily note, and running it again replaces what it wrote before.
+
+```bash
+kasl standup --append ~/vault/Daily/{date}.md
+```
 
 Closing the day by hand is only needed when the daemon did not do it for you:
 
@@ -136,5 +158,7 @@ were working.
 - [`watch`](/reference/watch/) - the daemon and its settings
 - [`report`](/reference/report/) - the daily report and submission
 - [`pauses`](/reference/pauses/) - recording absences the monitor missed
+- [`standup`](/reference/standup/) - the day or the week as markdown
+- [`status`](/reference/status/) - the day in one line, for a prompt
 - [`inbox`](/reference/inbox/) - the inbox in detail
 - [Configuration](/concepts/configuration/) - thresholds behind all of this

@@ -78,6 +78,24 @@ Your report dated August 8, 2026 has been successfully submitted
 Wait for a message to your email address
 ```
 
+The next morning the standup is already written - the hours and the tasks as markdown, ready to paste, or to land in your daily note with `--append`:
+
+```console
+$ kasl standup --last
+## Saturday, August 8, 2026
+
+Worked 7h 37m, 09:12-18:04.
+
+**Done**
+
+- PROJ-412 Fix session timeout on the settings page - stale cookie jar
+- Review PR #318: pause merging
+
+**In progress**
+
+- PROJ-419 Draft migration for protected pauses (60%) - backfill pending
+```
+
 And watch the month accumulate:
 
 ```console
@@ -116,6 +134,10 @@ Monthly work productivity: 95.4%
   task offers to close or comment on it, and an issue Jira resolves offers to
   finish the task. Moves go by Jira's status category, not by name, so a
   translated or custom workflow needs no setup.
+- **The day in your prompt.** `kasl status` prints one line for a shell
+  prompt or a status bar - `6h 40m | paused 12m | inbox 9 (3 new)`, or
+  `watch off` when nothing is recording. `kasl standup` sums up the day or
+  the week as markdown, for the standup or written into your daily note.
 - **Honest numbers.** kasl records absences rather than inventing them, and
   says so when a day falls below your reporting threshold.
 - **Reports where they need to go.** One command files the day or the month to
@@ -206,10 +228,10 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 In daily use on Windows, macOS and Linux. Everything above works today: the
 daemon, Jira, the GitLab plugin that ships with kasl, the reports, the
-optional team server, the plugin protocol, and settings changed one at a time
-with `kasl config`, checked against the config's JSON Schema. Next: a one-line
-status for status bars, and a standup summary of the day. The current version
-and what landed in it:
+optional team server, the plugin protocol, settings changed one at a time
+with `kasl config`, the status line for your prompt and the standup summary.
+Next: `kasl undo`, one command that brings back a task or a pause deleted by
+mistake. The current version and what landed in it:
 [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation

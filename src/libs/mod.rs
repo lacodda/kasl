@@ -47,6 +47,7 @@ pub mod pulse;
 pub mod report;
 pub mod report_template;
 pub mod secret;
+pub mod standup;
 pub mod status;
 pub mod stdin_drain;
 pub mod summary;
