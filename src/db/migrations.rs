@@ -18,10 +18,21 @@
 //! ```
 
 use crate::libs::messages::Message;
+use crate::libs::output::{self, Kind};
 use crate::{msg_debug, msg_error, msg_info, msg_success};
 use anyhow::Result;
 use rusqlite::{Connection, Transaction, params};
 
+/// Says how an upgrade is going, beside the output - see [`output::emit_aside`].
+///
+/// The debug log, when it is on, carries it as it carries every message.
+fn progress(kind: Kind, message: Message) {
+    if crate::libs::messages::macros::is_debug_mode() {
+        tracing::info!("{}{}", output::style().prefix(kind), message);
+    } else {
+        output::emit_aside(kind, &message);
+    }
+}
 /// SQL schema for the migrations tracking table.
 ///
 /// This table maintains a complete record of all applied migrations,
@@ -612,14 +623,15 @@ impl MigrationManager {
             return Ok(());
         }
 
-        // Notify user about pending migrations
-        msg_info!(Message::MigrationsFound(pending.len()));
+        // Said beside the output: the first run after an upgrade may be a
+        // prompt reading kasl status, or a pipe reading rows.
+        progress(Kind::Info, Message::MigrationsFound(pending.len()));
 
         // Execute all pending migrations within a single transaction
         let tx = conn.transaction()?;
 
         for migration in pending {
-            msg_info!(Message::RunningMigration(migration.version, migration.name.to_string()));
+            progress(Kind::Info, Message::RunningMigration(migration.version, migration.name.to_string()));
 
             match (migration.up)(&tx) {
                 Ok(()) => {
@@ -628,7 +640,7 @@ impl MigrationManager {
                         "INSERT INTO migrations (version, name) VALUES (?1, ?2)",
                         params![migration.version, migration.name],
                     )?;
-                    msg_success!(Message::MigrationCompleted(migration.version));
+                    progress(Kind::Success, Message::MigrationCompleted(migration.version));
                 }
                 Err(e) => {
                     // Log migration failure and propagate error
@@ -640,7 +652,7 @@ impl MigrationManager {
 
         // Commit all successful migrations
         tx.commit()?;
-        msg_success!(Message::AllMigrationsCompleted);
+        progress(Kind::Success, Message::AllMigrationsCompleted);
 
         Ok(())
     }

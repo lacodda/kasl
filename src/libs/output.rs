@@ -174,6 +174,16 @@ pub fn emit(kind: Kind, message: &dyn Display, padded: bool) {
     }
 }
 
+/// Prints a message beside the output: its mark, always on stderr.
+///
+/// For what a run says about itself rather than about what was asked - the
+/// database upgrading on the first run of a new version. Said on stdout, it
+/// would land in whatever reads the command's output: a prompt segment built
+/// on `kasl status`, a pipe reading `--plain` rows.
+pub fn emit_aside(kind: Kind, message: &dyn Display) {
+    eprintln!("{}{}", style().prefix(kind), message);
+}
+
 /// Prints the error a command failed with, the last thing a failed run says.
 ///
 /// The whole chain on one line (`outer: cause: cause`), so it greps as one record.
