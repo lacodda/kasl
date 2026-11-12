@@ -50,7 +50,7 @@ owner = "lacodda"
 [dependencies]
 # Error handling
 anyhow = "1.0.104"    # Flexible error handling
-thiserror = "2.0.19" # Custom error types
+thiserror = "2.0.21" # Custom error types
 
 # Logging and tracing
 tracing = "0.1.44"                                                            # Structured logging
@@ -58,43 +58,43 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
 
 # Encoding and cryptography
 base64 = "0.23.1"                              # Base64 encoding/decoding
-aes = "0.9.2"                                  # AES encryption
+aes = "0.9.4"                                  # AES encryption
 cbc = { version = "0.2.1", features = ["alloc"] } # CBC block mode with padding
 
 # Date and time handling
 chrono = { version = "0.4.45", features = ["serde"] } # Date and time library; serde for the kasl-server payload
 
 # Command-line interface
-clap = { version = "4.6.6", features = ["derive"] } # CLI argument parsing
+clap = { version = "4.6.7", features = ["derive"] } # CLI argument parsing
 dialoguer = "0.12.0"                                 # Interactive prompts
 
 # Data presentation
 prettytable-rs = "0.10.0" # Terminal tables
 
 # HTTP client and async runtime
-reqwest = { version = "0.13.4", features = ["json", "multipart", "cookies", "query"] }
-tokio = { version = "1.53.1", features = ["full"] }
+reqwest = { version = "0.13.5", features = ["json", "multipart", "cookies", "query"] }
+tokio = { version = "1.54.1", features = ["full"] }
 
 # Database
-rusqlite = { version = "0.41.1", features = ["bundled", "chrono"] }
+rusqlite = { version = "0.42.0", features = ["bundled", "chrono"] }
 
 # Serialization
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = "1.0.154"
 # The config file's JSON Schema is generated from the config types, so the
 # schema an editor checks against and the struct kasl reads cannot disagree;
 # `kasl config` validates against that same schema.
 schemars = "1.2.3"
-jsonschema = { version = "0.61.0", default-features = false }
+jsonschema = { version = "0.61.2", default-features = false }
 
 # System and file operations
 dotenv = "0.15.0"      # Environment variables from .env files
 tar = "0.4.46"         # TAR archive handling
-flate2 = "1.1.9"       # Compression
+flate2 = "1.1.11"       # Compression
 rdev = "0.5.3"         # Input device monitoring
 parking_lot = "0.13.0" # Faster synchronization primitives
-sysinfo = "0.40.1"     # System information
-encoding_rs = "0.8.35" # Text encoding conversion
+sysinfo = "0.40.3"     # System information
+encoding_rs = "0.8.44" # Text encoding conversion
 
 # Data export formats
 csv = "1.4.0"              # CSV reading/writing
@@ -102,16 +102,16 @@ rust_xlsxwriter = "0.102.0" # Excel file generation
 indicatif = "0.18.6"
 console = "0.16.6"       # Colour switch for indicatif and dialoguer, decided once by libs::output
 terminal_size = "0.4.4"
-unicode-width = "0.2.2"
-clap_complete = "4.6.9"
-keyring = { version = "4.1.6", features = ["apple-native-keyring-store", "windows-native-keyring-store", "zbus-secret-service-keyring-store"] }
+unicode-width = "0.2.3"
+clap_complete = "4.6.11"
+keyring = { version = "4.2.0", features = ["apple-native-keyring-store", "windows-native-keyring-store", "zbus-secret-service-keyring-store"] }
 # Plugins run as a process group (a job object on Windows), so stopping one at
 # its time limit stops whatever it started too - the same crate kilna uses.
 process-wrap = { version = "10.0.1", default-features = false, features = ["std", "job-object", "creation-flags", "process-group"] }
 
 # Build-time dependencies
 [build-dependencies]
-toml = "1.1.4"    # TOML parsing for build script
+toml = "1.2.1"    # TOML parsing for build script
 winres = "0.1.12" # Windows resource embedding
 dotenv = "0.15.0" # Environment variables during build
 
@@ -121,7 +121,7 @@ nix = { version = "0.31.3", features = ["process", "poll"] }
 
 # Desktop toasts on Linux/macOS (XDG / NSUserNotification)
 [target.'cfg(not(windows))'.dependencies]
-notify-rust = "4.18.0"
+notify-rust = "4.19.0"
 
 # Platform-specific dependencies for Windows
 [target.'cfg(windows)'.dependencies]
