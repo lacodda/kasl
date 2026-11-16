@@ -354,7 +354,7 @@ fn select_by(conn: &Connection, table: &str, column: &str, values: &[i64]) -> Re
         "SELECT * FROM {table} WHERE {column} IN ({}) ORDER BY rowid",
         placeholders(values.len())
     ))?;
-    let names: Vec<String> = statement.column_names().into_iter().map(str::to_string).collect();
+    let names: Vec<String> = statement.column_names().map(str::to_string).collect();
 
     let rows = statement.query_map(params_from_iter(values), |row| {
         let mut object = Map::new();
