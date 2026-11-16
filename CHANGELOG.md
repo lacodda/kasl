@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.23.0] - 2026-11-16
+
+### Features
+- Put back what the last remove command took away
+
 ## [1.22.0] - 2026-11-12
 
 ### Bug Fixes
