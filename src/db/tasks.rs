@@ -13,6 +13,7 @@
 //! ```
 
 use super::db::Db;
+use super::trash::{self, Kind};
 use crate::libs::messages::Message;
 use crate::libs::task::{Task, TaskFilter};
 use crate::msg_error_anyhow;
@@ -52,8 +53,6 @@ const WHERE_ISSUE_KEY: &str = "WHERE issue_key = ?1";
 // tagged chain matches, the second day's as much as the first.
 const WHERE_TAG: &str = "WHERE task_id IN (SELECT tt.task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name = ?1)";
 const WHERE_TAGS: &str = "WHERE task_id IN (SELECT tt.task_id FROM task_tags tt JOIN tags t ON tt.tag_id = t.id WHERE t.name IN";
-const DELETE_TASK: &str = "DELETE FROM tasks WHERE id = ?";
-const DELETE_TASKS_BY_IDS: &str = "DELETE FROM tasks WHERE id IN";
 const SELECT_COUNT_BY_ID: &str = "SELECT COUNT(*) FROM tasks WHERE id = ?";
 const UPDATE_TASK: &str = "UPDATE tasks SET name = ?, comment = ?, completeness = ? WHERE id = ?";
 
@@ -186,8 +185,8 @@ impl Tasks {
                 comment: row.get(4)?,
                 completeness: row.get(5)?,
                 excluded_from_search: row.get(6)?,
-                // By name, not position: `SELECT *` puts this after
-                // `deleted_at`, and the next migration would shift it again.
+                // By name, not position: a migration that adds or drops a
+                // column would shift it.
                 issue_key: row.get("issue_key")?,
                 tags: vec![], // Tags will be populated in the next step
             })
@@ -214,7 +213,8 @@ impl Tasks {
         format!("{} {} ({})", SELECT_TASKS, WHERE_ID_IN, vec!["?"; ids.len()].join(", "))
     }
 
-    /// Deletes one task; returns the number of rows removed.
+    /// Deletes one task; returns the number of rows removed. The row goes
+    /// to the trash, where `kasl undo` finds it.
     ///
     /// ```rust,no_run
     /// # use kasl::db::tasks::Tasks;
@@ -229,12 +229,12 @@ impl Tasks {
     /// # }
     /// ```
     pub fn delete(&mut self, id: i32) -> Result<usize> {
-        let affected = self.conn.execute(DELETE_TASK, params![id])?;
-        Ok(affected)
+        self.delete_many(&[id])
     }
 
-    /// Deletes several tasks in one statement; unknown ids are simply not
-    /// counted, and an empty slice is a no-op.
+    /// Deletes several tasks as one operation of the trash, so `kasl undo`
+    /// puts them back together; unknown ids are simply not counted, and an
+    /// empty slice is a no-op.
     ///
     /// ```rust,no_run
     /// # use kasl::db::tasks::Tasks;
@@ -247,18 +247,8 @@ impl Tasks {
     /// # }
     /// ```
     pub fn delete_many(&mut self, ids: &[i32]) -> Result<usize> {
-        if ids.is_empty() {
-            return Ok(0);
-        }
-
-        let placeholders = vec!["?"; ids.len()].join(", ");
-        let query = format!("{} ({})", DELETE_TASKS_BY_IDS, placeholders);
-
-        let params: Vec<Box<dyn ToSql>> = ids.iter().map(|id| Box::new(*id) as Box<dyn ToSql>).collect();
-        let params_refs: Vec<&dyn ToSql> = params.iter().map(|p| &**p).collect();
-
-        let affected = self.conn.execute(&query, &params_refs[..])?;
-        Ok(affected)
+        let ids: Vec<i64> = ids.iter().map(|id| i64::from(*id)).collect();
+        trash::remove(&self.conn, Kind::Task, &ids)
     }
 
     /// True when a task with this id exists.

@@ -108,6 +108,10 @@ tasks without --yes outside an interactive terminal`) - deliberately: a
 destructive command doesn't get to assume "yes" just because nobody could say
 "no". Interactively, `--yes` skips the same confirmation prompt.
 
+`--yes` is not the last word: what a remove command deleted is kept for 30
+days, and [`kasl undo`](/reference/undo/) puts the latest removal back -
+`kasl undo --json` says what it returned.
+
 ### `pauses add` and `inbox` subcommands
 
 ```bash

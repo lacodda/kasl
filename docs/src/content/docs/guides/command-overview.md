@@ -24,6 +24,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 - **[`export`](/reference/export/)** - Export data to various formats
 - **[`pauses`](/reference/pauses/)** - View pauses and record ones the monitor missed
+- **[`undo`](/reference/undo/)** - Put back what the last remove command took away: a task, a pause, a tag or a template
 
 ### Incoming work
 
@@ -153,6 +154,7 @@ Commands for organizing and tracking work items:
 - `task` - Complete task lifecycle management
 - `tag` - Task categorization and organization
 - `template` - Reusable task templates
+- `undo` - A removed task, pause, tag or template, put back
 
 ### Reporting & Analytics
 Commands for generating insights and reports:
@@ -175,7 +177,7 @@ Commands for application configuration and maintenance:
 - **`--json`**, on every command that prints data (`report`, `sum`, `status`,
   `pauses list`, `task list`/`show`, `tag`, `template`, `inbox list`/`show`/`rules`,
   `server status`/`queue`/`pulse`/`manifest`, `autostart status`,
-  `config show`/`get`/`check`): one JSON
+  `config show`/`get`/`check`, `undo`): one JSON
   document on stdout, everything else on stderr.
 - **`--plain`**, on every command: the same output without colour, emoji or
   blank padding, and tables as tab-separated lines that are never cut to the

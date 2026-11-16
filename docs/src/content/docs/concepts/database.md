@@ -63,14 +63,13 @@ CREATE TABLE tasks (
     comment TEXT,
     completeness INTEGER NOT NULL ON CONFLICT REPLACE DEFAULT 100,
     excluded_from_search BOOLEAN NOT NULL ON CONFLICT REPLACE DEFAULT FALSE,
-    deleted_at TIMESTAMP,
     issue_key TEXT
 );
 ```
 
 - `task_id` groups a task with its own history across days - it points at the id of the first task in the chain, so `task find` can offer yesterday's unfinished work and see today's progress as the same item. A task that continues nothing is its own chain (`task_id = id`); the column default of 0 is never left on a row. It is not an external reference.
 - `issue_key` is the inbox issue the task was taken from, set by `kasl inbox take`; the issue's row in `inbox` says which source it came from. The `UPDATE` behind `kasl task edit` does not list this column, so renaming a task cannot detach it from its issue.
-- `deleted_at` was added for soft delete, but nothing in the current codebase sets or reads it - `kasl task remove` deletes rows outright. Treat the column as reserved.
+- A removed task leaves this table: `kasl task remove` moves the row to [`trash`](#trash), where `kasl undo` finds it. There is no "deleted" mark to filter on.
 
 #### `tags`
 Stores task categorization tags:
@@ -84,13 +83,12 @@ CREATE TABLE tags (
 ```
 
 #### `task_tags`
-Links tasks to tags (many-to-many relationship):
+Links tasks to tags (many-to-many relationship). `task_id` is the task's chain - `tasks.task_id`, not one day's row - so a tag stays on a task continued into another day; a trigger takes a chain's links away when its last row is removed:
 ```sql
 CREATE TABLE task_tags (
     task_id INTEGER NOT NULL,
     tag_id INTEGER NOT NULL,
     PRIMARY KEY (task_id, tag_id),
-    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
     FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 ```
@@ -185,6 +183,26 @@ CREATE TABLE server_outbox (
 );
 ```
 
+#### `trash`
+What the remove commands took away, kept for 30 days so [`kasl undo`](/reference/undo/) can put it back:
+```sql
+CREATE TABLE trash (
+    id INTEGER PRIMARY KEY,
+    operation INTEGER NOT NULL,
+    removed_at TIMESTAMP NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('task', 'pause', 'tag', 'template')),
+    source TEXT NOT NULL,
+    row TEXT NOT NULL
+);
+```
+
+- `operation` groups the rows one command removed; `kasl undo` puts back the highest one, whole.
+- `kind` is what the command removed; `source` is the table a row came from - the kind's own, or `task_tags` for the tag links that went with it.
+- `row` is the removed row as a JSON object keyed by column name. It is restored into the columns the table has at that moment, so a removal survives a migration.
+- `removed_at` is UTC. Rows older than 30 days are deleted when the next removal is written.
+
+See [ADR 0013](https://github.com/lacodda/kasl/blob/main/docs/adr/0013-removed-rows-go-to-a-trash.md) for why a removed row moves here instead of being marked in place.
+
 #### `server_pulse`
 The watcher's last [pulse](/reference/server/#kasl-server-pulse) and how it went, so `kasl server status` - a different process - can report on it:
 ```sql
@@ -246,7 +264,7 @@ Schema history, in order:
 1. `create_tables_and_indices` - base `tasks`, `pauses`, `workdays` tables and their indices
 2. `add_task_templates` - `task_templates`
 3. `add_tags_system` - `tags`, `task_tags`
-4. `add_soft_delete` - `deleted_at` column and index on `tasks`
+4. `add_soft_delete` - `deleted_at` column and index on `tasks` (never used; dropped by migration 21)
 5. `add_workday_notes` - `notes` column on `workdays`
 6. `add_breaks_table` - manual breaks table (later folded away, see migration 11)
 7. `add_jira_inbox_table` - `jira_inbox`
@@ -262,6 +280,8 @@ Schema history, in order:
 17. `close_the_loop_with_jira` - adds `left_reason` and `resolution` to `jira_inbox`, and gives every task left on `task_id = 0` a chain of its own
 18. `inbox_rules` - adds `issue_type`, `project` (filled from the key's prefix) and `ruled_by` to `jira_inbox`, and `jira_priorities`, started from the priorities the rows carry
 19. `the_inbox_belongs_to_no_one_source` - renames `jira_inbox`, `jira_statuses` and `jira_priorities` to `inbox`, `inbox_statuses` and `inbox_priorities`, adds `source` (every existing row is Jira's), renames `tasks.jira_key` to `issue_key`, and makes the indexes again under names without `jira`
+20. `tags_belong_to_the_task` - rebuilds `task_tags` so a link names the task's chain (`tasks.task_id`) instead of one day's row, and adds the trigger that takes a chain's tags away with its last row
+21. `the_trash` - `trash` and its index, and drops `tasks.deleted_at` with its index
 
 Each migration runs inside a transaction; a failure rolls back that migration.
 
@@ -313,6 +333,9 @@ kasl task remove 1 2 3
 # Remove all today's tasks
 kasl task remove --today
 
+# Put the last removal back (kept for 30 days)
+kasl undo
+
 # Delete old pauses (manual SQL)
 sqlite3 kasl.db "DELETE FROM pauses WHERE start < date('now', '-30 days');"
 ```
@@ -326,11 +349,13 @@ CREATE INDEX idx_workdays_date ON workdays(date);
 -- Tasks table
 CREATE INDEX idx_tasks_timestamp ON tasks(timestamp);
 CREATE INDEX idx_tasks_task_id ON tasks(task_id);
-CREATE INDEX idx_tasks_deleted_at ON tasks(deleted_at);
 CREATE INDEX idx_tasks_issue_key ON tasks(issue_key);
 
 -- Pauses table
 CREATE INDEX idx_pauses_start ON pauses(start);
+
+-- Trash table
+CREATE INDEX idx_trash_operation ON trash(operation);
 
 -- Inbox table
 CREATE INDEX idx_inbox_active ON inbox(dismissed, pinned DESC, priority_rank ASC, last_seen DESC);

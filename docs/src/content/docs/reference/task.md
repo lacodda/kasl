@@ -76,6 +76,8 @@ kasl task remove [OPTIONS] [ID]...
 - `--today`: Remove every task recorded for today.
 - `-y, --yes`: Remove without asking for confirmation.
 
+A removed task is kept for 30 days: [`kasl undo`](/reference/undo/) puts back what the last remove command took away, tags included.
+
 ### `find` - Find incomplete tasks and import from Jira and plugins
 
 ```bash

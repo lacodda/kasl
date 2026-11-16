@@ -74,7 +74,7 @@ kasl tag remove [TAG] [OPTIONS]
 - `TAG`: tag name or ID to remove. Omit it on a terminal to pick from the list.
 - `-y, --yes`: remove without asking for confirmation.
 
-Removing a tag unassigns it from every task that carries it; the tasks themselves are untouched.
+Removing a tag unassigns it from every task that carries it; the tasks themselves are untouched. [`kasl undo`](/reference/undo/) puts the tag back, on every task that carried it, for 30 days.
 
 ## Assigning tags to tasks
 
@@ -132,7 +132,7 @@ Tags:
 +----+--------+-------+
 
 $ kasl tag remove urgent -y
-✅ Tag 'urgent' deleted successfully.
+✅ Tag 'urgent' deleted successfully. `kasl undo` puts it back.
 ```
 
 `tag edit` prints `✅ Tag '{new-name}' updated successfully.` after its prompts; it has no other output to show statically since the prompts themselves depend on the terminal.

@@ -162,6 +162,8 @@ fn every_reading_command_prints_one_json_document() {
         &["server", "status", "--json"],
         &["server", "queue", "--json"],
         &["server", "pulse", "--json"],
+        &["undo", "--list", "--json"],
+        &["undo", "--json"],
     ];
     for args in commands {
         document(dir.path(), args);

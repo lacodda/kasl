@@ -55,7 +55,7 @@ impl Display for Message {
             Message::TaskUpdated => "Task updated successfully".to_string(),
             Message::TaskNotFound => "Task not found".to_string(),
             Message::TaskUpdateFailed => "Failed to update task".to_string(),
-            Message::TasksDeletedCount(count) => format!("Deleted {} task(s) successfully.", count),
+            Message::TasksDeletedCount(count) => format!("Deleted {} task(s) successfully. `kasl undo` puts them back.", count),
             Message::TasksNotFoundForDate(date) => format!("Tasks not found for {}, report not sent.", date),
             Message::TasksNotFoundSad => "No tasks found.".to_string(),
             Message::TasksHeader => "Tasks:".to_string(),
@@ -205,7 +205,7 @@ impl Display for Message {
             // === TEMPLATE MESSAGES ===
             Message::TemplateCreated(name) => format!("Template '{}' created successfully.", name),
             Message::TemplateUpdated(name) => format!("Template '{}' updated successfully.", name),
-            Message::TemplateDeleted(name) => format!("Template '{}' deleted successfully.", name),
+            Message::TemplateDeleted(name) => format!("Template '{}' deleted successfully. `kasl undo` puts it back.", name),
             Message::TemplateNotFound(name) => format!("Template '{}' not found.", name),
             Message::TemplateAlreadyExists(name) => format!("Template '{}' already exists.", name),
             Message::TemplateCreateFailed => "Failed to create template.".to_string(),
@@ -229,7 +229,7 @@ impl Display for Message {
             // === TAG MESSAGES ===
             Message::TagCreated(name) => format!("Tag '{}' created successfully.", name),
             Message::TagUpdated(name) => format!("Tag '{}' updated successfully.", name),
-            Message::TagDeleted(name) => format!("Tag '{}' deleted successfully.", name),
+            Message::TagDeleted(name) => format!("Tag '{}' deleted successfully. `kasl undo` puts it back.", name),
             Message::TagNotFound(name) => format!("Tag '{}' not found.", name),
             Message::TagAlreadyExists(name) => format!("Tag '{}' already exists.", name),
             Message::NoTagsFound => "No tags found.".to_string(),
@@ -552,8 +552,29 @@ The day is unchanged here and stays queued - `kasl server flush` sends it when t
             Message::ManualPauseOverlaps { start_time, end_time } => {
                 format!("Overlaps an existing pause ({} - {})", start_time, end_time)
             }
-            Message::ManualPauseRemoved(id) => format!("Pause {} removed", id),
+            Message::ManualPauseRemoved(id) => format!("Pause {} removed. `kasl undo` puts it back.", id),
             Message::ManualPauseNotFound(id) => format!("no pause with id '{}' - see `kasl pauses list`", id),
+
+            // === UNDO MESSAGES ===
+            Message::UndoNothing(days) => format!("Nothing to undo: no task, pause, tag or template was removed in the last {} days.", days),
+            Message::UndoRestored { what, command, ago } => format!("Put back {} that `kasl {}` removed {} ago.", what, command, ago),
+            Message::UndoListEntry { what, command, ago } => format!("{} ago, `kasl {}` removed {}:", ago, command, what),
+            Message::UndoItem {
+                id,
+                label,
+                date,
+                renumbered_from,
+            } => {
+                let mut line = format!("  {}  {}", id, label);
+                if let Some(date) = date {
+                    line.push_str(&format!("  ({})", date));
+                }
+                // The id a script or a note may still hold no longer names this row.
+                if let Some(was) = renumbered_from {
+                    line.push_str(&format!("  - was {}, an id taken since", was));
+                }
+                line
+            }
 
             // === ENCRYPTION/SECRET MESSAGES ===
 

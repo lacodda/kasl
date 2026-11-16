@@ -17,6 +17,7 @@
 //! ```
 
 use crate::db::db::Db;
+use crate::db::trash::{self, Kind};
 use crate::libs::messages::Message;
 use crate::msg_error_anyhow;
 use anyhow::Result;
@@ -34,7 +35,7 @@ const SCHEMA_TEMPLATES: &str = "CREATE TABLE IF NOT EXISTS task_templates (
 
 const INSERT_TEMPLATE: &str = "INSERT INTO task_templates (name, task_name, comment, completeness) VALUES (?1, ?2, ?3, ?4)";
 const UPDATE_TEMPLATE: &str = "UPDATE task_templates SET task_name = ?2, comment = ?3, completeness = ?4 WHERE name = ?1";
-const DELETE_TEMPLATE: &str = "DELETE FROM task_templates WHERE name = ?1";
+const SELECT_TEMPLATE_ID: &str = "SELECT id FROM task_templates WHERE name = ?1";
 const SELECT_ALL_TEMPLATES: &str = "SELECT * FROM task_templates ORDER BY name";
 const SELECT_TEMPLATE_BY_NAME: &str = "SELECT * FROM task_templates WHERE name = ?1";
 const SEARCH_TEMPLATES: &str = "SELECT * FROM task_templates WHERE name LIKE ?1 OR task_name LIKE ?1 ORDER BY name";
@@ -166,7 +167,13 @@ impl Templates {
     /// # }
     /// ```
     pub fn delete(&mut self, name: &str) -> Result<()> {
-        let affected = self.conn.execute(DELETE_TEMPLATE, params![name])?;
+        // To the trash, where `kasl undo` finds it.
+        let ids: Vec<i64> = self
+            .conn
+            .prepare(SELECT_TEMPLATE_ID)?
+            .query_map(params![name], |row| row.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        let affected = trash::remove(&self.conn, Kind::Template, &ids)?;
 
         if affected == 0 {
             return Err(msg_error_anyhow!(Message::TemplateNotFound(name.to_string())));

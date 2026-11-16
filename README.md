@@ -138,6 +138,8 @@ Monthly work productivity: 95.4%
   prompt or a status bar - `6h 40m | paused 12m | inbox 9 (3 new)`, or
   `watch off` when nothing is recording. `kasl standup` sums up the day or
   the week as markdown, for the standup or written into your daily note.
+- **A way back.** `kasl undo` puts back the task, pause, tag or template the
+  last remove command deleted - tags and all - for thirty days.
 - **Honest numbers.** kasl records absences rather than inventing them, and
   says so when a day falls below your reporting threshold.
 - **Reports where they need to go.** One command files the day or the month to
@@ -229,9 +231,9 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 In daily use on Windows, macOS and Linux. Everything above works today: the
 daemon, Jira, the GitLab plugin that ships with kasl, the reports, the
 optional team server, the plugin protocol, settings changed one at a time
-with `kasl config`, the status line for your prompt and the standup summary.
-Next: `kasl undo`, one command that brings back a task or a pause deleted by
-mistake. The current version and what landed in it:
+with `kasl config`, the status line for your prompt, the standup summary and
+`kasl undo` for a record deleted by mistake.
+Next: installing through winget, scoop and Homebrew. The current version and what landed in it:
 [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation

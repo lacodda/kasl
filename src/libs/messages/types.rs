@@ -472,6 +472,25 @@ pub enum Message {
     ManualPauseRemoved(i32),
     ManualPauseNotFound(i32),
 
+    // === UNDO MESSAGES ===
+    UndoNothing(i64), // how many days a removal is kept
+    UndoRestored {
+        what: String,    // "2 tasks"
+        command: String, // "task remove"
+        ago: String,
+    },
+    UndoListEntry {
+        what: String,
+        command: String,
+        ago: String,
+    },
+    UndoItem {
+        id: i64,
+        label: String,
+        date: Option<String>,
+        renumbered_from: Option<i64>,
+    },
+
     // === ENCRYPTION/SECRET MESSAGES ===
 
     // === PROMPTS ===

@@ -30,6 +30,7 @@ pub mod tag;
 pub mod task;
 pub mod template;
 pub mod toast_action;
+pub mod undo;
 pub mod update;
 pub mod watch;
 
@@ -159,6 +160,14 @@ enum Commands {
     /// activity monitor did not catch or remove one recorded by mistake.
     #[command(about = "View pauses and record ones the monitor missed")]
     Pauses(pauses::PausesArgs),
+
+    /// Put back what the last remove command took away
+    ///
+    /// A removed task, pause, tag or template is kept for thirty days; this
+    /// returns the latest removal whole, and run again goes one further.
+    /// `--list` shows what can be put back.
+    #[command(about = "Put back what the last remove command took away")]
+    Undo(undo::UndoArgs),
 
     /// Connection to the team's kasl-server
     ///
@@ -348,6 +357,7 @@ impl Cli {
             }
             Commands::Watch(args) => watch::cmd(args).await,
             Commands::Pauses(args) => pauses::cmd(args).await,
+            Commands::Undo(args) => undo::cmd(args),
             Commands::Completions { shell } => {
                 use clap::CommandFactory;
                 use std::io::Write;

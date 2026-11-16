@@ -18,6 +18,7 @@
 //! ```
 
 use crate::db::db::Db;
+use crate::db::trash::{self, Kind};
 use crate::db::workdays::Workday;
 use crate::libs::config::Config;
 use crate::libs::pause::Pause;
@@ -62,8 +63,6 @@ const SELECT_DAILY_PAUSES: &str =
 /// instead of the monitor detecting it. `protected` decides whether the
 /// record is exempt from threshold filtering and merging.
 const INSERT_MANUAL_PAUSE: &str = "INSERT INTO pauses (start, end, duration, protected, reason) VALUES (?1, ?2, ?3, ?4, ?5)";
-
-const DELETE_PAUSE: &str = "DELETE FROM pauses WHERE id = ?";
 
 /// Pause table access. The connection sits behind a mutex because the
 /// monitor thread and user commands write concurrently.
@@ -378,7 +377,8 @@ impl Pauses {
         Ok(filter_pauses_to_workday(pauses, workday))
     }
 
-    /// Deletes one pause by id.
+    /// Deletes one pause by id. The row goes to the trash, where
+    /// `kasl undo` finds it.
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -389,13 +389,13 @@ impl Pauses {
     /// # }
     /// ```
     pub fn delete(&self, id: i32) -> Result<()> {
-        let conn_guard = self.conn.lock();
-        conn_guard.execute(DELETE_PAUSE, params![id])?;
+        self.delete_many(&[id])?;
         Ok(())
     }
 
-    /// Deletes several pauses under one lock; unknown ids are not counted,
-    /// an empty slice is a no-op.
+    /// Deletes several pauses as one operation of the trash, so `kasl undo`
+    /// puts them back together; unknown ids are not counted, an empty slice
+    /// is a no-op.
     ///
     /// ```rust,no_run
     /// # use kasl::db::pauses::Pauses;
@@ -408,21 +408,9 @@ impl Pauses {
     /// # }
     /// ```
     pub fn delete_many(&self, ids: &[i32]) -> Result<usize> {
-        // Handle empty input early to avoid unnecessary database operations
-        if ids.is_empty() {
-            return Ok(0);
-        }
-
+        let ids: Vec<i64> = ids.iter().map(|id| i64::from(*id)).collect();
         let conn_guard = self.conn.lock();
-        let mut deleted = 0;
-
-        // Delete each record individually within the locked connection
-        // This could be optimized with a single IN clause query for large batches
-        for id in ids {
-            deleted += conn_guard.execute(DELETE_PAUSE, params![id])?;
-        }
-
-        Ok(deleted)
+        trash::remove(&conn_guard, Kind::Pause, &ids)
     }
 }
 

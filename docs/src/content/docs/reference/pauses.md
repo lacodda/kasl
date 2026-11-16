@@ -72,6 +72,8 @@ kasl pauses remove [ID] [OPTIONS]
 
 Without `-y` the command asks before deleting. Outside an interactive terminal it refuses instead of prompting, so scripts fail loudly rather than hang.
 
+A removed pause is kept for 30 days: [`kasl undo`](/reference/undo/) puts it back as it was recorded.
+
 ## Examples
 
 ```bash

@@ -63,5 +63,8 @@ pub mod server_pulse;
 /// Reusable task templates.
 pub mod templates;
 
+/// Removed rows, kept so `kasl undo` can put them back.
+pub mod trash;
+
 /// Workday start/end records.
 pub mod workdays;

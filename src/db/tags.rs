@@ -14,6 +14,7 @@
 //! ```
 
 use crate::db::db::Db;
+use crate::db::trash::{self, Kind};
 use crate::libs::messages::Message;
 use crate::msg_error_anyhow;
 use anyhow::Result;
@@ -49,7 +50,6 @@ pub const TRIGGER_CHAIN_GONE: &str = "CREATE TRIGGER IF NOT EXISTS task_tags_go_
 
 const INSERT_TAG: &str = "INSERT INTO tags (name, color) VALUES (?1, ?2)";
 const UPDATE_TAG: &str = "UPDATE tags SET name = ?2, color = ?3 WHERE id = ?1";
-const DELETE_TAG: &str = "DELETE FROM tags WHERE id = ?1";
 const SELECT_ALL_TAGS: &str = "SELECT * FROM tags ORDER BY name";
 const SELECT_TAG_BY_NAME: &str = "SELECT * FROM tags WHERE name = ?1";
 const SELECT_TAG_BY_ID: &str = "SELECT * FROM tags WHERE id = ?1";
@@ -188,7 +188,9 @@ impl Tags {
     /// # }
     /// ```
     pub fn delete(&mut self, id: i32) -> Result<()> {
-        let affected = self.conn.execute(DELETE_TAG, params![id])?;
+        // To the trash with its links, so `kasl undo` puts the tag back on
+        // every task that carried it.
+        let affected = trash::remove(&self.conn, Kind::Tag, &[i64::from(id)])?;
         if affected == 0 {
             return Err(msg_error_anyhow!(Message::TagNotFound(id.to_string())));
         }

@@ -577,6 +577,34 @@ impl MigrationManager {
             tx.execute(crate::db::tags::TRIGGER_CHAIN_GONE, [])?;
             Ok(())
         });
+
+        // Version 21: the trash, and the end of a column that promised one.
+        //
+        // `kasl undo` puts back what a remove command took away. A removed
+        // row leaves its table and its content is kept in `trash` as JSON,
+        // one operation per command, with the tag links that went with it -
+        // so the live tables hold only live rows and no query has to
+        // remember to skip a deleted one (ADR 0013).
+        //
+        // `tasks.deleted_at` was added by version 4 for a soft delete that
+        // was never written: nothing ever set or read it. It goes, so the
+        // schema does not name two ways of deleting a task.
+        self.add_migration(21, "the_trash", |tx| {
+            tx.execute(crate::db::trash::SCHEMA_TRASH, [])?;
+            tx.execute("CREATE INDEX IF NOT EXISTS idx_trash_operation ON trash(operation)", [])?;
+            tx.execute("DROP INDEX IF EXISTS idx_tasks_deleted_at", [])?;
+            // Asked first, so a second run of this migration (a rollback,
+            // `kasl migrations`) finds the column gone and goes on.
+            let has_column: bool = tx.query_row(
+                "SELECT EXISTS (SELECT 1 FROM pragma_table_info('tasks') WHERE name = 'deleted_at')",
+                [],
+                |row| row.get(0),
+            )?;
+            if has_column {
+                tx.execute("ALTER TABLE tasks DROP COLUMN deleted_at", [])?;
+            }
+            Ok(())
+        });
     }
 
     /// Registers a single migration in the migration system.

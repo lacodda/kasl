@@ -248,6 +248,68 @@ pub struct Pauses {
     pub total_seconds: i64,
 }
 
+/// One removed row: a task, a pause, a tag or a template.
+#[derive(Debug, Serialize)]
+pub struct RemovedItem {
+    /// The row's id; after `kasl undo`, the id it came back under.
+    pub id: i64,
+    /// The id it had when removed, when it came back under another.
+    pub renumbered_from: Option<i64>,
+    /// A task's, tag's or template's name; a pause's hours, `13:00-13:45`.
+    pub label: String,
+    /// The day a task or a pause belongs to.
+    pub date: Option<NaiveDate>,
+}
+
+/// What one remove command took away.
+#[derive(Debug, Serialize)]
+pub struct Removal {
+    /// `task`, `pause`, `tag` or `template`.
+    pub kind: &'static str,
+    /// The command that removed them, without the program name.
+    pub command: &'static str,
+    #[serde(serialize_with = "moment::local")]
+    pub removed_at: NaiveDateTime,
+    pub items: Vec<RemovedItem>,
+}
+
+impl From<&crate::db::trash::Removal> for Removal {
+    fn from(removal: &crate::db::trash::Removal) -> Self {
+        Removal {
+            kind: removal.kind.name(),
+            command: removal.kind.command(),
+            removed_at: removal.removed_at.with_timezone(&Local).naive_local(),
+            items: removal
+                .items
+                .iter()
+                .map(|item| RemovedItem {
+                    id: item.id,
+                    renumbered_from: item.renumbered_from,
+                    label: item.label.clone(),
+                    date: item.date,
+                })
+                .collect(),
+        }
+    }
+}
+
+/// What `kasl undo` put back.
+#[derive(Debug, Serialize)]
+pub struct Undo {
+    /// The removal that was undone; `null` when there was none.
+    pub restored: Option<Removal>,
+    /// The days queued for the team's kasl-server because of it.
+    pub queued: Vec<NaiveDate>,
+}
+
+/// What can still be put back: `kasl undo --list`, the latest removal first.
+#[derive(Debug, Serialize)]
+pub struct Trash {
+    /// How many days a removal is kept.
+    pub kept_days: i64,
+    pub removals: Vec<Removal>,
+}
+
 /// One tag.
 #[derive(Debug, Serialize)]
 pub struct Tag {

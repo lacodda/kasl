@@ -78,7 +78,7 @@ kasl template remove [OPTIONS] [NAME]
 - `NAME`: Template to remove. Omit it in a terminal to pick from a list.
 - `-y, --yes`: Remove without asking for confirmation.
 
-Removing a template does not affect tasks already created from it.
+Removing a template does not affect tasks already created from it. [`kasl undo`](/reference/undo/) puts a removed template back, for 30 days.
 
 ## `kasl template search`
 
