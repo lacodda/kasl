@@ -62,10 +62,13 @@ If the watcher is running, it is stopped before the swap and restarted afterward
 
 ## Supported platforms
 
+The release builds three targets, and `self-update` takes the archive of the one it runs on:
+
 - `x86_64-pc-windows-msvc` - Windows 64-bit
-- `x86_64-apple-darwin` - macOS Intel
 - `aarch64-apple-darwin` - macOS Apple Silicon
 - `x86_64-unknown-linux-gnu` - Linux 64-bit
+
+A kasl on any other target - an Intel Mac, Linux on arm64 - finds no archive of its own on the release page; it got there by `cargo install kasl-cli`, and that is what updates it.
 
 ## The `.bak` backup
 
