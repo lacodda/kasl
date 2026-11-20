@@ -2,12 +2,10 @@
 //!
 //! This build script handles:
 //! - Windows resource embedding (icon)
-//! - Loading environment variables from .env file
 //! - Extracting metadata from Cargo.toml
 //! - Generating encryption keys for secure storage
 //! - Creating compile-time constants for application metadata
 
-use dotenv::dotenv;
 use std::env;
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -77,10 +75,6 @@ fn main() -> io::Result<()> {
         res.set_icon("assets/icon.ico");
         res.compile().unwrap();
     }
-
-    // Load environment variables from .env file if it exists
-    // This allows developers to set encryption keys locally
-    let _ = dotenv();
 
     // Parse Cargo.toml to extract package metadata
     let cargo_toml = fs::read_to_string("Cargo.toml").expect("Failed to read Cargo.toml");
