@@ -1,0 +1,56 @@
+# How kasl is released, read by furca's release engine: `furca release plan`
+# says what the next release is and what stands in its way, `furca release
+# run` carries it out, `furca release verify` checks what went out. `lyrn
+# check` reads it too.
+# Reference: https://lacodda.github.io/furca/reference/release/
+
+[project]
+name = "kasl"
+changelog = "CHANGELOG.md"
+# The crate, and the npm wrapper that downloads its binary from the release.
+manifests = ["Cargo.toml", "npm/package.json"]
+# Left as written: ADRs record what happened, and each names the versions a
+# decision was made in.
+as_written = ["docs/adr/"]
+
+[gate]
+# Formatting only: it takes seconds and compiles nothing. The rest of the gate
+# is CI, which the release waits for before the tag.
+commands = [
+    "cargo fmt --check",
+]
+
+[ci]
+provider = "github"
+workflow = "ci.yml"
+publish = "publish.yml"
+
+# Published as `kasl-cli` in both registries: `kasl` on crates.io belongs to
+# an unrelated project.
+[[package]]
+registry = "crates"
+name = "kasl-cli"
+manifest = "Cargo.toml"
+
+[[package]]
+registry = "npm"
+name = "kasl-cli"
+manifest = "npm/package.json"
+wraps = "kasl-cli"
+
+# The files the tag's release page has to carry: checked after the publish,
+# and against the targets the installers ask for on every commit. The tar.gz
+# archives are what the installers, self-update and the npm wrapper take; the
+# Windows zip is winget's and Scoop's.
+[page]
+assets = [
+    "kasl-{tag}-x86_64-pc-windows-msvc.tar.gz",
+    "kasl-{tag}-x86_64-pc-windows-msvc.zip",
+    "kasl-{tag}-x86_64-unknown-linux-gnu.tar.gz",
+    "kasl-{tag}-aarch64-apple-darwin.tar.gz",
+]
+
+# kasl is installed from the release by tools/install.ps1 and tools/install.sh,
+# and proven to be the release's own build - the alias too.
+[post.install]
+aliases = ["ka"]

@@ -181,6 +181,21 @@ Monthly work productivity: 95.4%
 
 ## Install
 
+**With Scoop** (Windows):
+
+```powershell
+scoop bucket add lacodda https://github.com/lacodda/scoop-bucket
+scoop install kasl
+```
+
+**With Homebrew** (macOS, Linux):
+
+```bash
+brew install lacodda/tap/kasl
+```
+
+Both put `ka` and the GitLab plugin beside `kasl`, and update it themselves: `scoop update kasl`, `brew upgrade kasl`.
+
 **With npm:**
 
 ```bash
@@ -228,13 +243,7 @@ Full command reference and concepts: **[kasl.lacodda.com](https://kasl.lacodda.c
 
 ## Status
 
-In daily use on Windows, macOS and Linux. Everything above works today: the
-daemon, Jira, the GitLab plugin that ships with kasl, the reports, the
-optional team server, the plugin protocol, settings changed one at a time
-with `kasl config`, the status line for your prompt, the standup summary and
-`kasl undo` for a record deleted by mistake.
-Next: installing through winget, scoop and Homebrew. The current version and what landed in it:
-[CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
+In daily use on Windows, macOS and Linux, and everything above works today; renamed commands keep answering to their old names until 2.0. Versions and what landed in each: [CHANGELOG](https://github.com/lacodda/kasl/blob/main/CHANGELOG.md).
 
 ## Documentation
 

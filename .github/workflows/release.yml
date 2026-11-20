@@ -12,7 +12,10 @@ env:
   # The plugins that ship with kasl, each at the release this kasl is built
   # and checked with. Raised by hand when a plugin releases: the archive then
   # carries the new one, and self-update brings it beside every kasl.
+  # The tag below is the plugin repository's own: kasl's release bump leaves it.
+  # historical versions
   GITLAB_PLUGIN: v0.1.0
+  # /historical versions
 
 jobs:
   build:
@@ -60,6 +63,8 @@ jobs:
           [ -n "$(ls bundled/bin)" ] || { echo "no bundled plugin was unpacked" >&2; exit 1; }
       # All platforms ship tar.gz: kasl update and the npm wrapper of already
       # released versions expect that extension, so it must never change.
+      # Windows ships the same directory as a zip as well: winget installs
+      # from no other archive, and Scoop's bucket takes the one winget does.
       # One kasl binary ships, beside the plugins that come with it.
       # historical versions
       # Until v1.8.1 the archive carried `ka` as a second, byte-identical
@@ -75,6 +80,7 @@ jobs:
           mkdir "$name"
           cp "target/${{ matrix.target }}/release/kasl.exe" LICENSE README.md bundled/bin/* "$name"
           tar czf "$name.tar.gz" "$name"
+          7z a -tzip "$name.zip" "$name" > /dev/null
       - name: Package (Unix)
         if: runner.os != 'Windows'
         shell: bash
@@ -96,7 +102,9 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: package-${{ matrix.target }}
-          path: kasl-*.tar.gz
+          path: |
+            kasl-*.tar.gz
+            kasl-*.zip
           if-no-files-found: error
 
   release:
@@ -112,6 +120,14 @@ jobs:
         with:
           config: cliff.toml
           args: --latest --strip header
+      # The changelog's section for the tag, then .github/release-notes.md:
+      # the checklist ticked once the release has been through it.
+      - name: Write the release notes
+        env:
+          CHANGES: ${{ steps.cliff.outputs.content }}
+        run: |
+          printf '%s\n\n' "$CHANGES" > release-notes.md
+          cat .github/release-notes.md >> release-notes.md
       - uses: actions/download-artifact@v8
         with:
           path: packages
@@ -119,5 +135,5 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          body: ${{ steps.cliff.outputs.content }}
+          body_path: release-notes.md
           files: packages/*

@@ -68,10 +68,26 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
       - uses: dtolnay/rust-toolchain@stable
+      # A version can only be published once, and a re-run - a tag published
+      # again by hand - would otherwise fail on the duplicate and leave a red
+      # run in the release's history.
+      - name: Check whether this version is already on crates.io
+        id: check
+        shell: bash
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+          if curl -sf "https://crates.io/api/v1/crates/kasl-cli/$version" -H 'user-agent: kasl-ci' > /dev/null; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "kasl-cli $version is already on crates.io; nothing to do."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Get a crates.io token (OIDC trusted publishing)
+        if: steps.check.outputs.published == 'false'
         uses: rust-lang/crates-io-auth-action@v1
         id: auth
-      - run: cargo publish
+      - if: steps.check.outputs.published == 'false'
+        run: cargo publish
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
 
@@ -94,8 +110,50 @@ jobs:
           node-version: 24
           check-latest: true
           registry-url: https://registry.npmjs.org
+      - name: Check whether this version is already on npm
+        id: check
+        working-directory: npm
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if npm view "kasl-cli@$version" version > /dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "kasl-cli $version is already on npm; nothing to do."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
       # One README for all three pages: the package's own `prepack` script
       # copies the root file in. Keeping that in the package rather than here
       # means a manual `npm publish` produces the same tarball as CI does.
-      - run: npm publish
+      - if: steps.check.outputs.published == 'false'
+        run: npm publish
         working-directory: npm
+
+  # winget takes each version as a pull request to microsoft/winget-pkgs,
+  # opened from the owner's account: WINGET_TOKEN is a classic token of that
+  # account with the public_repo scope. Without it the job says so and passes,
+  # and the version goes to winget by hand. Homebrew and Scoop need nothing
+  # here: lacodda/homebrew-tap and lacodda/scoop-bucket follow the releases
+  # by themselves.
+  winget:
+    needs: release
+    runs-on: windows-latest
+    permissions: {}
+    steps:
+      - name: Look for WINGET_TOKEN
+        id: token
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::WINGET_TOKEN is not set - this version goes to winget by hand"
+          fi
+      - if: steps.token.outputs.present == 'true'
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: lacodda.kasl
+          installers-regex: 'x86_64-pc-windows-msvc\.zip$'
+          release-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          token: ${{ secrets.WINGET_TOKEN }}

@@ -19,8 +19,8 @@ passwords and the GitLab token go to the OS keyring.
 ## GitLab
 
 GitLab is not built into kasl. It is a plugin, `kasl-plugin-gitlab`, that ships
-in the box: the release archive, the installers, the npm package and
-`kasl self-update` put it beside the kasl binary. kasl looks for plugins in its
+in the box: the release archive, the installers, the npm package, Scoop,
+Homebrew and `kasl self-update` put it beside the kasl binary. kasl looks for plugins in its
 plugins directory, then beside its own executable, then on `PATH`. A copy
 installed with `cargo install kasl-cli` has no plugin, because crates.io carries
 only the binary - download `kasl-plugin-gitlab` from the

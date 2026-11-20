@@ -6,6 +6,19 @@ This guide will help you get up and running with kasl quickly.
 
 ## Installation
 
+On Windows, with [Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add lacodda https://github.com/lacodda/scoop-bucket
+scoop install kasl
+```
+
+On macOS and Linux, with [Homebrew](https://brew.sh):
+
+```bash
+brew install lacodda/tap/kasl
+```
+
 One line on Windows (PowerShell):
 
 ```powershell
@@ -51,9 +64,13 @@ Both scripts read four environment variables:
 
 Run the installer again to upgrade: it replaces the `kasl` already on your `PATH` in place rather than installing a second copy beside it, stops a running watcher for the swap and starts it again from the new binary. On Windows a `kasl.exe` that something else is running at that moment - `kasl mcp` under a coding assistant, a prompt calling `kasl status` - is moved aside rather than in the way, and the leftover goes with the next kasl command. On Windows it also points the autostart entry at the upgraded binary, and removes a second copy that an earlier installer left in `%LOCALAPPDATA%\Programs\kasl`. A copy it did not put there (cargo, npm, by hand) is only named, for you to remove.
 
+### Installed with Scoop or Homebrew
+
+Scoop and Homebrew keep their own record of the version they installed, so they are what updates kasl: `scoop update kasl`, `brew upgrade kasl`. `kasl self-update` in such an installation says so and changes nothing, and the notice of a newer release names the manager's command. Both put the GitLab plugin that ships with kasl beside it, and `ka` too.
+
 ### The `ka` alias
 
-The installers and the npm package also set up `ka` as a short second name, so `ka report` is the same as `kasl report`. It is a **link** to the same binary - a hard link on Windows, a symlink elsewhere - so both names always answer with the same code and neither can fall behind. It is skipped when something else in your `PATH` already answers to `ka`, and `self-update` re-points it after replacing the binary.
+The installers, the npm package, Scoop and Homebrew also set up `ka` as a short second name, so `ka report` is the same as `kasl report`. It is a **link** to the same binary - a hard link on Windows, a symlink elsewhere - so both names always answer with the same code and neither can fall behind. It is skipped when something else in your `PATH` already answers to `ka`, and `self-update` re-points it after replacing the binary.
 
 Installing through `cargo install` gives you `kasl` only: cargo installs binaries, and `ka` is a link the installers create. Make it yourself if you want it, beside the binary cargo installed.
 

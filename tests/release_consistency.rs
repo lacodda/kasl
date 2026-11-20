@@ -263,6 +263,30 @@ mod tests {
         );
     }
 
+    /// winget installs from a zip and from no other archive, and the Scoop
+    /// bucket takes the file winget does; every other route takes the tar.gz.
+    /// A Windows release without the zip is one neither of them can install.
+    #[test]
+    fn the_windows_release_carries_the_zip_winget_and_scoop_install() {
+        let workflow = read(".github/workflows/release.yml");
+        let windows = &workflow[workflow.find("- name: Package (Windows)").expect("release.yml has no Windows package step")..];
+        let windows = &windows[..windows.find("- name: Package (Unix)").unwrap_or(windows.len())];
+        assert!(
+            windows.contains("tar czf \"$name.tar.gz\" \"$name\""),
+            "the Windows package step no longer packs the tar.gz the installers, self-update and npm take"
+        );
+        assert!(
+            windows.contains("7z a -tzip \"$name.zip\" \"$name\""),
+            "the Windows package step no longer packs the zip winget and Scoop install - with the `kasl-<tag>-<target>/` directory both expect inside"
+        );
+        assert!(workflow.contains("kasl-*.zip"), "release.yml packs the zip but does not upload it");
+        let release = read("release.toml");
+        assert!(
+            release.contains("\"kasl-{tag}-x86_64-pc-windows-msvc.zip\""),
+            "release.toml does not hold the release page to the Windows zip"
+        );
+    }
+
     /// `KASL_NO_PATH=1` is an install into a directory of its own - the one
     /// `furca release verify --install` proves a release in. It must not stop
     /// the watcher of the kasl on `PATH`, point autostart at a directory about

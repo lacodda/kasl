@@ -15,8 +15,8 @@ actually did.
 
 The plugin is [kasl-plugin-gitlab](https://github.com/lacodda/kasl-plugin-gitlab),
 and it ships in the box: the release archive carries it beside the kasl binary,
-and the installers, the npm package and `kasl self-update` put it there and
-keep it at the version the release was built with. kasl finds it beside itself
+and the installers, the npm package, Scoop, Homebrew and `kasl self-update` put
+it there and keep it at the version the release was built with. kasl finds it beside itself
 whether or not that directory is on your `PATH`:
 
 ```bash
