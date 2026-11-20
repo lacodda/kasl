@@ -2,6 +2,21 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.24.0] - 2026-11-20
+
+### Bug Fixes
+- Keep scratch installs off the machine, move kasl aside
+
+### Build
+- Adopt the line's standard
+
+### Documentation
+- Name only the targets a release builds
+
+### Features
+- Leave an installation to the package manager that owns it
+- Install through Scoop and Homebrew, ship a zip for winget
+
 ## [1.23.0] - 2026-11-16
 
 ### Features
