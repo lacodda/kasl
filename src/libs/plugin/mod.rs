@@ -107,15 +107,16 @@ pub fn plugins_dir() -> Result<PathBuf> {
 ///
 /// The second is where the plugins that ship with kasl are: the release
 /// archive carries them beside the binary, and the installers, the npm
-/// package and `self-update` put them there together - so they arrive and
-/// update with kasl, however it was installed, and whether or not that
-/// directory is on `PATH`. The plugins directory comes first so that a
-/// plugin someone put there on purpose wins over the one in the box.
+/// package, the package managers and `self-update` put them there together -
+/// so they arrive and update with kasl, however it was installed, and whether
+/// or not that directory is on `PATH`. When kasl is started through a link -
+/// winget's `Links`, Homebrew's `bin` - the directory of the file the link
+/// leads to is searched too, since that is where its box was unpacked. The
+/// plugins directory comes first so that a plugin someone put there on
+/// purpose wins over the one in the box.
 pub fn search_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = plugins_dir().into_iter().collect();
-    if let Some(beside) = std::env::current_exe().ok().and_then(|exe| exe.parent().map(Path::to_path_buf)) {
-        paths.push(beside);
-    }
+    paths.extend(crate::libs::install::own_dirs());
     if let Some(system) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&system));
     }

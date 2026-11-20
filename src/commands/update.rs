@@ -11,7 +11,7 @@
 
 use crate::{
     libs::{
-        daemon,
+        daemon, install,
         messages::Message,
         update::{self, Updater},
     },
@@ -25,6 +25,17 @@ use anyhow::Result;
 /// download, extraction, and safe replacement of the current executable.
 ///
 pub async fn cmd() -> Result<()> {
+    // Scoop, Homebrew and winget keep a record of the version they installed;
+    // replacing their file here would leave it wrong. Before the watcher is
+    // touched: nothing is going to be swapped.
+    if let Some(manager) = install::Manager::running() {
+        msg_info!(Message::UpdateManagedBy {
+            manager: manager.name().to_string(),
+            command: manager.update_command(),
+        });
+        return Ok(());
+    }
+
     // Check if watcher is currently running before update
     let watcher_was_running = daemon::is_running();
 

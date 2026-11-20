@@ -161,7 +161,8 @@ impl Updater {
             msg_info!(
                 Message::UpdateAvailable {
                     app_name: updater.name,
-                    latest: latest_version.to_string()
+                    latest: latest_version.to_string(),
+                    command: crate::libs::install::update_command(),
                 },
                 true // Show with extra spacing for visibility
             )

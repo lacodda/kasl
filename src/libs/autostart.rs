@@ -211,9 +211,11 @@ mod unix {
     #[cfg(not(target_os = "macos"))]
     const SYSTEMD_UNIT: &str = "kasl.service";
 
-    /// Absolute path of the running binary, for embedding in the unit file.
+    /// Absolute path of the running binary, for embedding in the unit file -
+    /// through Homebrew's `opt` link when kasl runs from its Cellar, whose
+    /// versioned directory the next upgrade deletes.
     fn exe_path() -> Result<String> {
-        Ok(std::env::current_exe()?.to_string_lossy().to_string())
+        Ok(crate::libs::install::stable_exe(&std::env::current_exe()?).to_string_lossy().to_string())
     }
 
     /// Path of the macOS LaunchAgent plist for the current user.

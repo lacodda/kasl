@@ -9,6 +9,17 @@ This command used to be called `update`. The old name still works and does the
 same thing, printing a notice that points here; it will be removed in 2.0.
 :::
 
+## Installed by a package manager
+
+Scoop, Homebrew and winget keep a record of the version they installed. Replacing their file behind their back would leave that record saying the old version is still there, so in an installation one of them owns `self-update` names the command that updates it and changes nothing:
+
+```
+ℹ️ kasl was installed with Scoop, which keeps its own record of what is installed - replacing the file behind its back would leave that record wrong.
+Update it with: scoop update kasl
+```
+
+The manager is read from where the running kasl lives - Scoop's `apps\kasl`, Homebrew's `Cellar/kasl`, winget's `WinGet\Packages` and `WinGet\Links` - so an installation of the installers, npm or cargo is updated as before.
+
 ## Upgrading from a 1.9 build
 
 Builds before 1.10 compared version numbers as text, so they rank a 1.10 release below a 1.9 one and report "No update required" - exactly at the release they need. Reinstall once with the installer (`irm https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.ps1 | iex` on Windows, `curl -fsSL https://raw.githubusercontent.com/lacodda/kasl/main/tools/install.sh | sh` elsewhere), `npm i -g kasl-cli` or `cargo install kasl-cli`; from then on `self-update` compares numbers. The installer replaces the `kasl` already on your `PATH`, wherever it lives, and restarts the watcher; older installers put a second copy in their default directory instead, and running a current one cleans that up.
@@ -95,6 +106,8 @@ Other commands print a similar notice when they notice a newer release is availa
 A new version of kasl is available: vX.Y.Z
 Upgrade now by running: kasl self-update
 ```
+
+In an installation a package manager owns, the second line names its command instead - `scoop update kasl`, `brew upgrade kasl`.
 
 ## Related commands
 

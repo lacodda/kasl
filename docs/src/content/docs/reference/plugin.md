@@ -32,9 +32,11 @@ from, then along your `PATH`. The first copy of a name wins, as with any other
 command.
 
 The second place is where the plugins that ship with kasl are: the release
-archive carries them beside the binary, and the installers, the npm package and
-`kasl self-update` put them there with kasl, at the version that release was
-built with. A copy of your own in the plugins directory takes the place of the
+archive carries them beside the binary, and the installers, the npm package,
+Scoop, Homebrew and `kasl self-update` put them there with kasl, at the version
+that release was built with. Where kasl is started through a link - winget's
+`WinGet\Links`, Homebrew's `bin` - the directory of the file the link leads to
+counts as beside it too. A copy of your own in the plugins directory takes the place of the
 one in the box. When a plugin that ships with kasl is nowhere to be found -
 kasl 1.19 and earlier updated only the binary - `kasl plugin list` names it,
 and `kasl self-update` brings it.

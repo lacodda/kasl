@@ -267,6 +267,14 @@ pub enum Message {
     UpdateAvailable {
         app_name: String,
         latest: String,
+        /// The command that updates this installation: `kasl self-update`,
+        /// or its package manager's.
+        command: String,
+    },
+    /// `self-update` in an installation a package manager owns.
+    UpdateManagedBy {
+        manager: String,
+        command: String,
     },
     UpdateCompleted {
         app_name: String,

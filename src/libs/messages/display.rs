@@ -295,12 +295,13 @@ impl Display for Message {
             Message::FailedToCreateSigintHandler => "Failed to create SIGINT handler".to_string(),
 
             // === UPDATE MESSAGES ===
-            Message::UpdateAvailable { app_name, latest } => {
-                format!(
-                    "A new version of {} is available: v{}\nUpgrade now by running: {} self-update",
-                    app_name, latest, app_name
-                )
+            Message::UpdateAvailable { app_name, latest, command } => {
+                format!("A new version of {} is available: v{}\nUpgrade now by running: {}", app_name, latest, command)
             }
+            Message::UpdateManagedBy { manager, command } => format!(
+                "kasl was installed with {}, which keeps its own record of what is installed - replacing the file behind its back would leave that record wrong.\nUpdate it with: {}",
+                manager, command
+            ),
             Message::UpdateCompleted { app_name, version } => {
                 format!("The {} application has been successfully updated to version {}!", app_name, version)
             }
