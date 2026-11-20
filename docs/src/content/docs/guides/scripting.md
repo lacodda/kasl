@@ -255,7 +255,7 @@ prompts, the debug log - and decides once, for all of them, per stream:
   stderr. kasl keeps no log file; see
   [Troubleshooting](/guides/troubleshooting/) for detail and
   `RUST_LOG=kasl=trace` for more of it.
-- **`KASL_VERSION`**, **`KASL_INSTALL_DIR`**, **`KASL_NO_ALIAS`** - read by the
+- **`KASL_VERSION`**, **`KASL_INSTALL_DIR`**, **`KASL_NO_ALIAS`**, **`KASL_NO_PATH`** - read by the
   install scripts, not by kasl itself. See
   [Getting Started](/getting-started/#installer-options).
 

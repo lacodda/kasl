@@ -38,17 +38,18 @@ Or download the archive for your platform from [Releases](https://github.com/lac
 
 ### Installer options
 
-Both scripts read three environment variables:
+Both scripts read four environment variables:
 
 | Variable | Effect |
 | --- | --- |
 | `KASL_VERSION` | Install this tag (`vX.Y.Z`) instead of the newest release |
 | `KASL_INSTALL_DIR` | Where the binaries land; defaults to the directory of the `kasl` already on your `PATH`, and without one to `%LOCALAPPDATA%\Programs\kasl` on Windows and `~/.local/bin` elsewhere |
 | `KASL_NO_ALIAS` | Set to `1` to skip the short `ka` alias |
+| `KASL_NO_PATH` | Set to `1` for an install into a directory of its own, such as a scratch one a release is tried out in: the `PATH` is left alone, and so is everything that belongs to the `kasl` on it - its running watcher, its autostart entry, the copies beside it |
 
 ### Upgrading with the installer
 
-Run the installer again to upgrade: it replaces the `kasl` already on your `PATH` in place rather than installing a second copy beside it, stops a running watcher for the swap and starts it again from the new binary. On Windows it also points the autostart entry at the upgraded binary, and removes a second copy that an earlier installer left in `%LOCALAPPDATA%\Programs\kasl`. A copy it did not put there (cargo, npm, by hand) is only named, for you to remove.
+Run the installer again to upgrade: it replaces the `kasl` already on your `PATH` in place rather than installing a second copy beside it, stops a running watcher for the swap and starts it again from the new binary. On Windows a `kasl.exe` that something else is running at that moment - `kasl mcp` under a coding assistant, a prompt calling `kasl status` - is moved aside rather than in the way, and the leftover goes with the next kasl command. On Windows it also points the autostart entry at the upgraded binary, and removes a second copy that an earlier installer left in `%LOCALAPPDATA%\Programs\kasl`. A copy it did not put there (cargo, npm, by hand) is only named, for you to remove.
 
 ### The `ka` alias
 

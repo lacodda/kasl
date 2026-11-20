@@ -41,6 +41,13 @@ case "$TAG" in
         ;;
 esac
 
+# KASL_NO_PATH=1 is an install into a directory of its own, such as the
+# scratch one `furca release verify --install` proves a release in: the PATH is
+# left alone, and so is everything that belongs to the kasl on it - its running
+# watcher above all, which a proof run must not restart from a directory about
+# to be deleted.
+SCRATCH="${KASL_NO_PATH:-}"
+
 NAME="kasl-$TAG-$TARGET"
 URL="https://github.com/$REPO/releases/download/$TAG/$NAME.tar.gz"
 TMP=$(mktemp -d)
@@ -80,20 +87,23 @@ done
 # A running watcher keeps executing the binary it started from, replaced file
 # or not, so it is restarted onto the new one: through systemd when that is
 # what runs it, otherwise by `kasl watch`, which stops the old one first.
-if command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet kasl.service 2>/dev/null; then
+if [ -n "$SCRATCH" ]; then
+    :
+elif command -v systemctl >/dev/null 2>&1 && systemctl --user is-active --quiet kasl.service 2>/dev/null; then
     systemctl --user restart kasl.service && echo "Restarted the kasl service"
 elif pgrep -f 'kasl --daemon-run' >/dev/null 2>&1; then
     "$BIN_DIR/kasl" watch
 fi
 
 # Short alias `ka`, unless something else in PATH already answers to that name
-# (ours from a previous run does not count). KASL_NO_ALIAS=1 skips it.
+# (ours from a previous run does not count) - an install that stays off the
+# PATH shadows nothing and always gets it. KASL_NO_ALIAS=1 skips it.
 # A symlink, never a second binary: one set of bytes answers to both names, so
 # `ka` can never fall behind the version `kasl` was updated to. The archive
 # carries one binary and no `ka` of its own.
 if [ -z "${KASL_NO_ALIAS:-}" ]; then
     EXISTING=$(command -v ka 2>/dev/null || true)
-    if [ -z "$EXISTING" ] || [ "$EXISTING" = "$BIN_DIR/ka" ]; then
+    if [ -n "$SCRATCH" ] || [ -z "$EXISTING" ] || [ "$EXISTING" = "$BIN_DIR/ka" ]; then
         ln -sf kasl "$BIN_DIR/ka"
         echo "Alias ka -> kasl"
     else
@@ -104,6 +114,10 @@ fi
 # Binaries left behind by updates: the replaced executable is kept as `.bak`
 # and nothing ever came back for it.
 rm -f "$BIN_DIR/kasl.bak" "$BIN_DIR/ka.bak" "$BIN_DIR"/kasl-plugin-*.bak
+
+if [ -n "$SCRATCH" ]; then
+    exit 0
+fi
 
 case ":$PATH:" in
     *":$BIN_DIR:"*) ;;

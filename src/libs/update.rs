@@ -315,13 +315,16 @@ impl Updater {
         if let Some(other) = crate::libs::alias::counterpart(&exe) {
             let _ = fs::remove_file(other.with_extension(BACKUP_EXTENSION));
         }
-        // And the plugins that ship with kasl, which an update replaces beside it.
+        // And the plugins that ship with kasl, which an update replaces beside
+        // it, and what the Windows installer moved aside to replace a program
+        // that was running at the time.
         let Some(dir) = exe.parent() else { return };
         let Ok(entries) = fs::read_dir(dir) else { return };
         for entry in entries.filter_map(std::result::Result::ok) {
             let name = entry.file_name();
             let name = name.to_string_lossy();
-            if name.starts_with(crate::libs::plugin::manifest::PREFIX) && name.ends_with(&format!(".{BACKUP_EXTENSION}")) {
+            let plugin_backup = name.starts_with(crate::libs::plugin::manifest::PREFIX) && name.ends_with(&format!(".{BACKUP_EXTENSION}"));
+            if plugin_backup || is_moved_aside(&name) {
                 let _ = fs::remove_file(entry.path());
             }
         }
@@ -500,6 +503,18 @@ fn is_bundled_plugin(file_name: &str) -> bool {
     };
     stem.strip_prefix(crate::libs::plugin::manifest::PREFIX)
         .is_some_and(|name| !name.is_empty() && !name.contains('.'))
+}
+
+/// Whether a file is a program the Windows installer moved aside so it could
+/// copy the new one in while the old one ran: `kasl.exe.old-<id>`, the same
+/// for `ka.exe` and for the plugins that ship with kasl. Nothing else in the
+/// directory is touched.
+fn is_moved_aside(file_name: &str) -> bool {
+    let Some((program, _)) = file_name.split_once(".old-") else {
+        return false;
+    };
+    let suffix = env::consts::EXE_SUFFIX;
+    program == format!("kasl{suffix}") || program == format!("ka{suffix}") || is_bundled_plugin(program)
 }
 
 /// Compare `major.minor.patch` numerically. A version carrying a pre-release
@@ -774,6 +789,16 @@ mod tests {
         assert_eq!(fs::read_to_string(install.join(exe("kasl"))).unwrap(), "running");
         assert!(!install.join("kasl.bak").exists(), "the binary was not replaced, so nothing was backed up");
         assert!(missing_bundled_plugins(&install).is_empty());
+    }
+
+    #[test]
+    fn only_programs_the_installer_moved_aside_are_swept() {
+        assert!(is_moved_aside(&format!("{}.old-1bde1a4e", exe("kasl"))));
+        assert!(is_moved_aside(&format!("{}.old-1bde1a4e", exe("ka"))));
+        assert!(is_moved_aside(&format!("{}.old-1bde1a4e", exe("kasl-plugin-gitlab"))));
+        assert!(!is_moved_aside(&exe("kasl")), "the program itself");
+        assert!(!is_moved_aside("notes.old-1bde1a4e"), "someone else's file");
+        assert!(!is_moved_aside(&format!("{}.old-1bde1a4e", exe("kasl-server"))), "another program of the line");
     }
 
     #[test]

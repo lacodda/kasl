@@ -262,4 +262,84 @@ mod tests {
             "release.yml fetches a plugin BUNDLED_PLUGINS does not name; self-update could not tell it is missing"
         );
     }
+
+    /// `KASL_NO_PATH=1` is an install into a directory of its own - the one
+    /// `furca release verify --install` proves a release in. It must not stop
+    /// the watcher of the kasl on `PATH`, point autostart at a directory about
+    /// to be deleted, or edit the `PATH`: the variable is read before any of
+    /// that.
+    #[test]
+    fn the_installers_leave_the_machine_alone_when_asked() {
+        let ps1 = read("tools/install.ps1");
+        let scratch = ps1.find("$env:KASL_NO_PATH").expect("install.ps1 does not read KASL_NO_PATH");
+        let leaves = ps1.find("if ($scratch) {").expect("install.ps1 never stops short for a scratch install");
+        for (what, needle) in [
+            ("stops the watchers", "Stop-Process"),
+            ("edits the PATH", "Set-ItemProperty -Path \"HKCU:\\Environment\""),
+            ("rewrites autostart", "Set-ItemProperty -Path $runKey"),
+            ("starts a watcher", "& $target watch"),
+        ] {
+            let at = ps1
+                .find(needle)
+                .unwrap_or_else(|| panic!("install.ps1 no longer {what} at all - is this check stale?"));
+            assert!(scratch < at, "install.ps1 {what} before it reads KASL_NO_PATH");
+        }
+        assert!(
+            ps1.contains("if (-not $scratch) {"),
+            "install.ps1 stops the watchers of a scratch install's machine"
+        );
+        for needle in [
+            "Set-ItemProperty -Path \"HKCU:\\Environment\"",
+            "Set-ItemProperty -Path $runKey",
+            "& $target watch",
+        ] {
+            assert!(
+                ps1.find(needle).unwrap() > leaves,
+                "install.ps1 reaches `{needle}` before it stops short for a scratch install"
+            );
+        }
+
+        let sh = read("tools/install.sh");
+        let scratch = sh.find("KASL_NO_PATH").expect("install.sh does not read KASL_NO_PATH");
+        for needle in ["systemctl --user restart", "\"$BIN_DIR/kasl\" watch", "Note: add $BIN_DIR to your PATH."] {
+            let at = sh.find(needle).unwrap_or_else(|| panic!("install.sh has no `{needle}` - is this check stale?"));
+            assert!(scratch < at, "install.sh reaches `{needle}` before it reads KASL_NO_PATH");
+        }
+    }
+
+    /// Windows refuses to overwrite a running executable, and a watcher is not
+    /// the only thing that runs kasl: `kasl mcp`, a prompt's `kasl status`, a
+    /// toast's button. The installer moves the file in the way aside first -
+    /// a rename is allowed on a running image - for the binary, the alias and
+    /// the plugins alike, and sweeps what earlier runs moved aside.
+    #[test]
+    fn the_windows_installer_moves_a_running_program_aside() {
+        let ps1 = read("tools/install.ps1");
+        assert!(
+            ps1.contains(".old-$([guid]::NewGuid())"),
+            "install.ps1 no longer moves a file aside under a name of its own"
+        );
+        for (what, aside, copy) in [
+            ("kasl.exe", "Move-Aside $target", "Copy-Item $binary.FullName $target"),
+            (
+                "a plugin",
+                "Move-Aside (Join-Path $dir $_.Name)",
+                "Copy-Item $_.FullName (Join-Path $dir $_.Name)",
+            ),
+            ("ka.exe", "Move-Aside $alias", "New-Item -ItemType HardLink -Path $alias"),
+        ] {
+            let aside = ps1
+                .find(aside)
+                .unwrap_or_else(|| panic!("install.ps1 copies {what} without moving the old one aside"));
+            let copy = ps1
+                .find(copy)
+                .unwrap_or_else(|| panic!("install.ps1 no longer installs {what} - is this check stale?"));
+            assert!(aside < copy, "install.ps1 moves {what} aside only after copying over it");
+        }
+        assert!(ps1.contains("\"*.exe.old-*\""), "install.ps1 never sweeps what it moved aside");
+        assert!(
+            read("src/libs/update.rs").contains("is_moved_aside(&name)"),
+            "kasl no longer sweeps what the installer moved aside, which then waits for the next install"
+        );
+    }
 }

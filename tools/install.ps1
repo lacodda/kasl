@@ -44,11 +44,23 @@ $dir = if ($env:KASL_INSTALL_DIR) {
 }
 $target = Join-Path $dir "kasl.exe"
 
-# A running watcher holds its binary open, so it is stopped before the copy -
-# every watcher, from any copy: after this install exactly one is started
-# again, from the binary just installed.
-$watchers = @(Get-CimInstance Win32_Process -Filter "Name='kasl.exe' OR Name='ka.exe'" -ErrorAction SilentlyContinue |
-    Where-Object { $_.CommandLine -match '--daemon-run|\swatch(\s|$)' -and $_.CommandLine -notmatch '--stop' })
+# $env:KASL_NO_PATH=1 is an install into a directory of its own, such as the
+# scratch one `furca release verify --install` proves a release in: the PATH is
+# left alone, and so is everything that belongs to the kasl on it - its running
+# watcher, its autostart entry, the copies beside it. Without this a proof run
+# would stop the owner's watcher and point autostart at a directory about to
+# be deleted.
+$scratch = [bool]$env:KASL_NO_PATH
+
+# A running watcher is stopped for the upgrade - every watcher, from any copy:
+# after this install exactly one is started again, from the binary just
+# installed. Not to free the file, which the copy below no longer needs, but
+# because a watcher left running goes on with the old code.
+$watchers = @()
+if (-not $scratch) {
+    $watchers = @(Get-CimInstance Win32_Process -Filter "Name='kasl.exe' OR Name='ka.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -match '--daemon-run|\swatch(\s|$)' -and $_.CommandLine -notmatch '--stop' })
+}
 foreach ($watcher in $watchers) {
     Stop-Process -Id $watcher.ProcessId -Force -ErrorAction SilentlyContinue
 }
@@ -56,6 +68,18 @@ if ($watchers.Count -gt 0) {
     Write-Host "Stopped $($watchers.Count) running watcher(s) for the upgrade"
     # The OS lets go of the binary a moment after the process ends.
     Start-Sleep -Milliseconds 500
+}
+
+# Windows will not overwrite or delete an executable while any process runs
+# it - and a watcher is not the only one: `kasl mcp` under a coding assistant,
+# a prompt calling `kasl status`, a toast's button. It does allow a rename. So
+# the file in the way is moved aside under a name of its own and the new one
+# copied in; the leftover goes with the next install, or with the next kasl
+# command once nothing runs it.
+function Move-Aside([string]$path) {
+    if (Test-Path -LiteralPath $path) {
+        Move-Item -LiteralPath $path "$path.old-$([guid]::NewGuid())" -Force
+    }
 }
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "kasl-install-$([guid]::NewGuid())"
 New-Item -ItemType Directory -Force $tmp | Out-Null
@@ -73,13 +97,15 @@ try {
     $binary = Get-ChildItem -Path $tmp -Filter "kasl.exe" -Recurse | Select-Object -First 1
     if (-not $binary) { throw "The archive did not contain kasl.exe" }
     New-Item -ItemType Directory -Force $dir | Out-Null
-    Copy-Item $binary.FullName $dir -Force
+    Move-Aside $target
+    Copy-Item $binary.FullName $target -Force
 
     # The plugins that ship with kasl travel in the archive beside it and go
     # beside it here, at the version this release was built with: kasl looks
     # for plugins in its own directory, so they work whether or not it is on
     # PATH. The watchers that run them were stopped above.
     Get-ChildItem -Path $tmp -Filter "kasl-plugin-*.exe" -Recurse | ForEach-Object {
+        Move-Aside (Join-Path $dir $_.Name)
         Copy-Item $_.FullName (Join-Path $dir $_.Name) -Force
         Write-Host "Plugin $($_.BaseName)"
     }
@@ -89,14 +115,16 @@ try {
     # binary. A symlink would need elevation on Windows; a hard link does not,
     # as long as both names are on one volume - and they are, since the alias
     # lands beside the binary. Skipped when another `ka` already answers in
-    # PATH; $env:KASL_NO_ALIAS=1 opts out.
+    # PATH - unless this install stays off the PATH, where nothing it makes
+    # can shadow anything; $env:KASL_NO_ALIAS=1 opts out.
     if (-not $env:KASL_NO_ALIAS) {
         $alias = Join-Path $dir "ka.exe"
         $existing = Get-Command ka -ErrorAction SilentlyContinue
-        if (-not $existing -or $existing.Source -eq $alias) {
+        if ($scratch -or -not $existing -or $existing.Source -eq $alias) {
             # A link cannot be created over an existing name, and earlier
-            # installs left a full second binary sitting there.
-            Remove-Item $alias -Force -ErrorAction SilentlyContinue
+            # installs left a full second binary sitting there. `ka` running is
+            # `kasl` running, so the name is moved aside rather than deleted.
+            Move-Aside $alias
             try {
                 New-Item -ItemType HardLink -Path $alias -Target (Join-Path $dir "kasl.exe") -ErrorAction Stop | Out-Null
                 Write-Host "Alias ka -> kasl"
@@ -116,10 +144,19 @@ try {
 }
 
 # Binaries left behind by updates: the replaced executable is kept as `.bak`
-# and nothing ever came back for it.
+# and nothing ever came back for it. And what this install, or an earlier one,
+# moved aside: a file still running stays, and goes the next time.
 Remove-Item (Join-Path $dir "kasl.bak") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $dir "ka.bak") -Force -ErrorAction SilentlyContinue
 Remove-Item (Join-Path $dir "kasl-plugin-*.bak") -Force -ErrorAction SilentlyContinue
+Get-ChildItem -Path $dir -Filter "*.exe.old-*" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match '^(kasl|ka|kasl-plugin-[^.]+)\.exe\.old-' } |
+    Remove-Item -Force -ErrorAction SilentlyContinue
+
+if ($scratch) {
+    Write-Host "Installed kasl $tag to $target"
+    return
+}
 
 # Add the directory to the user PATH in the registry, keeping the value's
 # type. PATH is almost always REG_EXPAND_SZ, with entries like %JAVA_HOME%\bin
