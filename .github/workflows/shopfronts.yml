@@ -1,0 +1,33 @@
+name: Shopfronts
+
+# The README, the manifests, the changelog and the documentation site say one
+# version, one description and the commands the program has: `lyrn check`
+# holds them to each other. On every push, documentation alone included - the
+# shopfronts are mostly documentation.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: lyrn check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The commands are read from the program's own `--help`, so the check
+      # builds the program - and on Linux rdev's X11 input monitoring needs
+      # its headers for that.
+      - name: Install Linux build deps (rdev X11 input monitoring)
+        run: sudo apt-get update && sudo apt-get install -y libx11-dev libxtst-dev libxi-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The lyrn that wrote this workflow, from its release: a newer one comes
+      # with the next version of the line's standard, by `lyrn upgrade`, not on
+      # its own one morning with rules nobody here has read yet.
+      - name: Install lyrn
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/lacodda/lyrn/v2.21.0/tools/install.sh | LYRN_VERSION=v2.21.0 sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Check the shopfronts
+        run: lyrn check

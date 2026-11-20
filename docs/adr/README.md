@@ -17,3 +17,4 @@ Technical decisions that shape kasl, in the order they were made. Format: Contex
 | [0011](0011-the-config-has-a-schema.md) | The config has a schema, generated from its types, and is edited one key at a time | accepted |
 | [0012](0012-the-status-line-reads-the-running-watcher.md) | The status line reads the running watcher's pause, and the report's day | accepted |
 | [0013](0013-removed-rows-go-to-a-trash.md) | Removed rows go to a trash, and `kasl undo` puts them back | accepted |
+| [0014](0014-dependabot-is-off.md) | Dependabot is off on purpose | accepted |

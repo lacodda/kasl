@@ -1,0 +1,20 @@
+name: Idea
+description: Something it does not do yet, and should
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you are trying to get done, and where this gets in the way. The problem matters more than any one solution to it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How you picture it working, if you have a picture.
+  - type: textarea
+    id: today
+    attributes:
+      label: What you do today instead

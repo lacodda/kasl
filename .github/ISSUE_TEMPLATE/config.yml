@@ -1,0 +1,8 @@
+# Every issue starts from a form: a blank one tends to arrive without the
+# version, the platform or a way to reproduce, and the first reply asks for
+# all three.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a vulnerability
+    url: https://github.com/lacodda/kasl/security/advisories/new
+    about: Privately, so it is not public before a fix is released.

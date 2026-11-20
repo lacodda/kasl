@@ -1,0 +1,46 @@
+name: Audit docs
+
+# The documentation site's packages against the published advisories. A
+# workflow of its own because the site was added to this repository after the
+# fact: the repository's audit stays as it was. Every package counts, not only
+# the production ones - the site is all build tooling, and what the build
+# writes is what ships. Advisories accepted on purpose are listed, with the
+# reason, in docs/pnpm-workspace.yaml. Monday mornings catch what was
+# published while nothing was pushed.
+on:
+  push:
+    branches: [main]
+    paths: ['docs/package.json', 'docs/pnpm-lock.yaml', 'docs/pnpm-workspace.yaml', '.github/workflows/docs-audit.yml']
+  pull_request:
+    paths: ['docs/package.json', 'docs/pnpm-lock.yaml', 'docs/pnpm-workspace.yaml', '.github/workflows/docs-audit.yml']
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    name: Documentation site
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs
+    steps:
+      - uses: actions/checkout@v7
+      # The version docs/package.json pins, not one written here: beside a root
+      # package.json that names its own packageManager, a second version stops
+      # the action with "Multiple versions of pnpm specified".
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: docs/package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: docs/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Advisories
+        run: pnpm audit

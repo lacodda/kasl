@@ -1,0 +1,61 @@
+# What `cargo deny check` holds the dependency graph to, in the audit workflow:
+# no crate with a published advisory, no license outside the list below,
+# nothing fetched from outside crates.io.
+#
+# Dependabot is off on purpose (docs/adr/0014-dependabot-is-off.md); this file
+# is the half of it that stays.
+
+[advisories]
+# An unmaintained crate is reported when this project depends on it directly.
+# Deep in the tree it is the direct dependency's to replace, and a red build
+# nobody here can fix teaches people to ignore red builds.
+unmaintained = "workspace"
+yanked = "deny"
+# An advisory accepted on purpose goes here, with the reason next to it:
+# { id = "RUSTSEC-0000-0000", reason = "no fixed release yet; the affected function is never called" },
+ignore = [
+    # chrono is reported unmaintained - no flaw in it, a maintenance status.
+    # kasl's whole model of time stands on it: the database through rusqlite's
+    # chrono feature, the kasl-server payload through serde, every report.
+    # Moving to jiff is a stage of the plan of its own, not a line in an audit.
+    { id = "RUSTSEC-2026-0543", reason = "kasl's time model is built on chrono; the move to jiff is a planned stage of its own" },
+]
+
+[licenses]
+# Permissive licenses, and MPL-2.0, whose copyleft stops at the file it is in.
+# A crate under anything else is a decision rather than a dependency to add
+# quietly: allow its license here and say why, or choose another crate.
+# `tools/check-licenses.mjs` holds npm packages to the same list, where there
+# are any.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "BlueOak-1.0.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unlicense",
+    "Zlib",
+]
+# The list is a policy, not an inventory of today's tree.
+unused-allowed-license = "allow"
+confidence-threshold = 0.93
+
+[bans]
+# Two versions of one crate are the normal state of a tree this size, not a
+# defect; `deny` below is where a crate refused outright would go.
+multiple-versions = "allow"
+wildcards = "deny"
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

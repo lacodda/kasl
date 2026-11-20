@@ -1,0 +1,29 @@
+name: Audit
+
+# What Dependabot would otherwise be for, and the half of it this project
+# keeps (docs/adr/0014-dependabot-is-off.md): published advisories against the
+# dependencies, and licenses outside the accepted list. On every push and pull
+# request, and on Monday mornings for what was published while nothing was
+# pushed - a red run with no commit behind it means the world moved, not the
+# code.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # RustSec advisories, licenses, banned crates and unknown sources - all four
+  # read from deny.toml.
+  crates:
+    name: Crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: EmbarkStudios/cargo-deny-action@v2

@@ -1,0 +1,46 @@
+name: Bug report
+description: Something does not work the way the docs say it does
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A vulnerability is not a bug report: report it privately, as SECURITY.md describes.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did and what you saw. Paste output as text rather than a screenshot.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce it
+      description: The shortest sequence of steps that shows it.
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release, or the commit you built from.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: Windows 11, macOS 15, Ubuntu 24.04
+    validations:
+      required: true

@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: true
+  sharp: true
+
+# Before a script runs, pnpm holds node_modules to the lockfile and installs
+# what has fallen behind it: a gate run against older packages than the lock
+# names passes for something other than what ships.
+verifyDepsBeforeRun: install

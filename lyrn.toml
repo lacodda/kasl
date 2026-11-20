@@ -1,0 +1,22 @@
+# What lyrn knows this repository as, generated or adopted, and which revision
+# of the line's standard it carries. `lyrn doctor` and `lyrn upgrade` read it.
+[project]
+name = "kasl"
+form = "cli"
+accent = "#A9C23F"
+# `placeholder` while the project still wears the line's umbrella mark
+# (lambda on graphite); `chosen` once it has one of its own. `lyrn doctor`
+# warns on the former rather than guessing from the icon's bytes.
+mark = "chosen"
+
+[template]
+version = "2.21.0"
+# Where the files came from - `lyrn` for a built-in form, `owner/repo@tag` for
+# a template from GitHub - and at which revision: lyrn's version, or the commit
+# whose CI passed.
+source = "lyrn"
+revision = "2.21.0"
+standard = "2026.11.5"
+# The add-ons it was generated with: the standard's files carry sections of
+# them, and `lyrn upgrade` renders the standard with the same ones.
+with = []

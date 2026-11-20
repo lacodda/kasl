@@ -74,3 +74,16 @@ npm/kasl.exe
 npm/kasl
 npm/archive.*
 npm/README.md
+
+# Instructions for coding assistants stay on the machine that wrote them: what
+# anyone needs to know about the project is in the README and the docs
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.claude/
+.cursor/
+.cursorrules
+.windsurfrules
+.github/copilot-instructions.md
+openspec/
