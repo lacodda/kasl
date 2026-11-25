@@ -330,8 +330,11 @@ const TEMPLATES: &[Template] = &[
     },
 ];
 
-/// What waits in the inbox beside the work in hand: number, summary, type, priority, score.
-const WAITING: &[(u32, &str, &str, (&str, i32), f64)] = &[
+/// An issue nobody has taken: number, summary, type, priority with its rank, score.
+type Waiting = (u32, &'static str, &'static str, (&'static str, i32), f64);
+
+/// What waits in the inbox beside the work in hand.
+const WAITING: &[Waiting] = &[
     (476, "Pass times are an hour off after the clock change", "Bug", ("Highest", 1), 9.0),
     (479, "Uplink window shown for a station under maintenance", "Bug", ("High", 2), 8.0),
     (482, "Compare two predictions side by side", "Story", ("Medium", 3), 6.5),
@@ -511,8 +514,8 @@ impl Demo {
                 params![chains.get(&row.chain), moment(&row.at), row.name, row.comment, row.completeness, row.issue_key],
             )?;
             let id = tx.last_insert_rowid();
-            if !chains.contains_key(&row.chain) {
-                chains.insert(row.chain, id);
+            if let std::collections::hash_map::Entry::Vacant(first) = chains.entry(row.chain) {
+                first.insert(id);
                 tx.execute("UPDATE tasks SET task_id = ?1 WHERE id = ?1", params![id])?;
                 for tag in row.tags {
                     tx.execute(
