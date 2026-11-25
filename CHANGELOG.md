@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.25.0] - 2026-11-25
+
+### Build
+- Update url and cookie past RUSTSEC-2026-0592 and 0594
+
+### Features
+- Try kasl on eight invented weeks, kept apart from your own
+- Print stand-ins for task names and issue keys with --anon
+
+### style
+- Name the waiting issue's type, insert a chain through its entry
+
 ## [1.24.0] - 2026-11-20
 
 ### Bug Fixes
