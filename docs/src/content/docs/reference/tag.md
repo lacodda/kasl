@@ -43,6 +43,7 @@ kasl tag list [--json]
 Displays a table of all tags with their ID, name, and color.
 
 - `--json`: Print them as one JSON document - see [JSON output](#json-output).
+- `--anon`: Print stand-ins for the words that are yours - the tag names - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript).
 
 ## `kasl tag show`
 

@@ -27,6 +27,7 @@
 use crate::db::inbox::Inbox;
 use crate::db::tasks::Tasks;
 use crate::db::workdays::{Workday, Workdays};
+use crate::libs::anon;
 use crate::libs::config::Config;
 use crate::libs::formatter::format_span;
 use crate::libs::report::DayWork;
@@ -164,6 +165,30 @@ impl Standup {
 
     /// The summary as markdown, without a trailing newline.
     pub fn markdown(&self) -> String {
+        if let Some(mask) = anon::current() {
+            return self.behind(mask).written();
+        }
+        self.written()
+    }
+
+    /// The same standup with every task and every link behind `mask`.
+    fn behind(&self, mask: &anon::Mask) -> Standup {
+        Standup {
+            period: self.period,
+            days: self
+                .days
+                .iter()
+                .map(|day| Day {
+                    tasks: day.tasks.iter().map(|task| mask.task(task)).collect(),
+                    ..day.clone()
+                })
+                .collect(),
+            today: self.today,
+            links: self.links.iter().map(|(key, url)| (mask.key(key), mask.url(url, key))).collect(),
+        }
+    }
+
+    fn written(&self) -> String {
         match self.period {
             Period::Day(date) => self.day_markdown(date),
             Period::Week(_) => self.week_markdown(),

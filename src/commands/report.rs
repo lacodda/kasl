@@ -85,6 +85,13 @@ pub struct ReportArgs {
     format: Format,
 }
 
+impl ReportArgs {
+    /// Whether this run only prints the day - nothing is sent, nothing is closed.
+    pub(crate) fn only_shows(&self) -> bool {
+        !self.send && !self.month
+    }
+}
+
 /// Main entry point for the report command.
 ///
 /// Acts as a dispatcher based on the provided arguments, determining the target

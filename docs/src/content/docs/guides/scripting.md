@@ -247,6 +247,50 @@ prompts, the debug log - and decides once, for all of them, per stream:
 4. `CLICOLOR=0`: no colour.
 5. Otherwise: colour only when the stream is a terminal.
 
+## Stand-ins for a transcript
+
+A transcript for a bug report or a question is taken from your own records,
+and those name real work. `--anon` prints the same output with every word that
+is yours replaced: task names and comments, tag and template names, issue
+keys, summaries, projects and addresses, the names of inbox rules. Hours,
+percentages, ids, dates and statuses are as they were.
+
+```console
+$ kasl task list --anon
++---+----+---------+----------------------+-------------+------+--------------+
+| # | ID | TASK ID | NAME                 | COMMENT     | DONE | TAGS         |
++---+----+---------+----------------------+-------------+------+--------------+
+| 1 | 93 | 93      | Task c503a4          | Note 3c2c15 | 50%  | tag-5fc9d9,… |
+| 2 | 94 | 94      | NNA-6469 Task d85270 |             | 25%  | tag-5fc9d9,… |
++---+----+---------+----------------------+-------------+------+--------------+
+```
+
+A stand-in holds still: one task is `Task c503a4` in `task list`, in `report`
+and in `standup`, today and next month, so transcripts agree with each other.
+It is derived from the text and a salt kept in your data directory
+(`anon.salt`), so nobody else can work back from a stand-in to a name. An
+issue key keeps its shape - letters, a hyphen, a number - and every address
+becomes one under `tracker.example`.
+
+It works with `--plain` and `--json`, and on the commands that show records
+and change nothing:
+
+- `report` (not with `--send` or `--month`), `standup` (not with `--append`)
+- `task list`, `task show <id>`
+- `inbox`, `inbox list`, `inbox show <key>` (not with `--why`)
+- `tag list`, `template list`
+
+Anywhere else it is refused, with this list - a flag that hides names must not
+be accepted and then do nothing. Filters still take the real words, since they
+are yours to type: `kasl task list --tag payments --anon`.
+
+`--anon` covers what kasl records about your work. `kasl config` and `kasl
+server status` print settings - an address, a login - and are not covered.
+
+To show kasl without any records of your own, there is
+[`kasl demo`](/reference/demo/): eight invented weeks that every command runs
+on.
+
 ## Environment variables
 
 - **`NO_COLOR`**, **`CLICOLOR`**, **`CLICOLOR_FORCE`** - colour, in the order

@@ -49,6 +49,7 @@ kasl template list [--json]
 Prints a table of every template: name, task name, comment, and completeness.
 
 - `--json`: Print them as one JSON document - see [JSON output](#json-output).
+- `--anon`: Print stand-ins for the words that are yours - template names, task names, comments - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript).
 
 ## `kasl template show`
 

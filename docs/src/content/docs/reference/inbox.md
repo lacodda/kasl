@@ -75,6 +75,7 @@ kasl inbox list [OPTIONS]
 - `--dismissed`: Include dismissed issues
 - The [filters](#filters) above: `--since`, `--new`, `--changed`, `--min-score`, `--priority`, `--status`, `--type`, `--project`, `--sort`
 - `--json`: Print the same slice, in the same order, as one JSON document - see [JSON output](#json-output)
+- `--anon`: Print stand-ins for the words that are yours - keys, summaries, projects, addresses, rule names - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript).
 
 The `CHANGE` column carries freshness badges for about a day: `NEW` for freshly discovered issues, a change summary such as `status→In Progress`, `↑prio High`, or `score 5→8` for existing ones, and `gone` for issues no longer returned by Jira (visible only with `--all`). `taken` marks an issue you have already started; unlike the others it does not fade, and it outranks `NEW` and change summaries. `zzz Mar 4` is a sleeping issue and the date it is due back, shown only under `--snoozed`; `back` marks one whose snooze has just run out. `gone` outranks everything - and for an issue you took, it reads `resolved` once Jira has said that is why it left. Under `--dismissed`, a dismissed issue reads `dismissed`, or `ruled out: NAME` when a [rule](#rules) hid it.
 
@@ -119,6 +120,7 @@ kasl inbox show [KEY] [--why] [--json] [FILTERS]
 **Options:**
 - `--why`: Explain where the ranking comes from and what each mark means
 - `--json`: Print the issue - and with `--why` the explanation - as one JSON document; see [JSON output](#json-output)
+- `--anon`: Print stand-ins for the words that are yours - key, summary, project, address - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript). Needs the key, and is not accepted with `--why`, which quotes your rules.
 
 One issue in full: the whole summary, its type and project, the URL, and the dates a six-column table row has no room for. A key the inbox does not hold is an error (exit code 1).
 

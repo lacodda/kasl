@@ -121,6 +121,11 @@ durations in seconds. `--plain` keeps the human output but drops colour, emoji
 and table frames, for logs and `grep`. See
 [kasl in scripts and CI](/guides/scripting/#json-for-programs).
 
+`--anon` prints the same output with task names, issue keys and every other
+word of yours replaced by stand-ins that stay the same from command to
+command - for a transcript to paste into a bug report. See
+[Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript).
+
 ## A Demo to Try It On
 
 [`kasl demo`](/reference/demo/) builds eight invented weeks - workdays,

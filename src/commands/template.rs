@@ -41,6 +41,13 @@ pub struct TemplateArgs {
     command: Option<TemplateCommand>,
 }
 
+impl TemplateArgs {
+    /// Whether this run only prints the templates.
+    pub(crate) fn only_shows(&self) -> bool {
+        matches!(self.command, Some(TemplateCommand::List { .. }))
+    }
+}
+
 /// Available template management operations.
 #[derive(Debug, Subcommand)]
 enum TemplateCommand {

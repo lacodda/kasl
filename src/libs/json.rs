@@ -17,6 +17,7 @@
 //! contract changes only on purpose - with its page in the docs.
 
 use crate::db::inbox::{InboxItem, LeftReason};
+use crate::libs::anon;
 use crate::libs::output::moment;
 use chrono::{Duration, Local, NaiveDate, NaiveDateTime};
 use serde::Serialize;
@@ -51,6 +52,7 @@ pub struct Task {
 
 impl From<&crate::libs::task::Task> for Task {
     fn from(task: &crate::libs::task::Task) -> Self {
+        let task = anon::task(task);
         Task {
             id: task.id,
             chain_id: task.task_id,
@@ -320,6 +322,7 @@ pub struct Tag {
 
 impl From<&crate::db::tags::Tag> for Tag {
     fn from(tag: &crate::db::tags::Tag) -> Self {
+        let tag = anon::tag(tag);
         Tag {
             id: tag.id,
             name: tag.name.clone(),
@@ -352,6 +355,7 @@ pub struct Template {
 
 impl From<&crate::db::templates::TaskTemplate> for Template {
     fn from(template: &crate::db::templates::TaskTemplate) -> Self {
+        let template = anon::template(template);
         Template {
             name: template.name.clone(),
             task_name: template.task_name.clone(),
@@ -429,6 +433,7 @@ pub struct Issue {
 impl Issue {
     /// The issue as it reads at `now` (the badge depends on it).
     pub fn at(item: &InboxItem, now: NaiveDateTime) -> Self {
+        let item = anon::issue(item);
         Issue {
             key: item.issue_key.clone(),
             summary: item.summary.clone(),

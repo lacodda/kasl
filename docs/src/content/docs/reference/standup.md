@@ -19,6 +19,7 @@ kasl standup [OPTIONS]
 | `--last` | `-l` | The one before: yesterday, or with `--week` last week |
 | `--date <DATE>` | `-d` | The day (`YYYY-MM-DD` or `today`), or with `--week` a day in the week |
 | `--append <FILE>` | | Write the summary into a markdown file instead of printing it - see [Into a daily note](#into-a-daily-note) |
+| `--anon` | | Print stand-ins for task names, comments and issue keys, for a summary to share - see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript). Not accepted with `--append` |
 
 `--last` means yesterday, as it does for [`report`](/reference/report/) and
 [`server push`](/reference/server/); on a Monday the morning standup is about

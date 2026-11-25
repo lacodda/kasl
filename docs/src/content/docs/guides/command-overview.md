@@ -183,6 +183,10 @@ Commands for application configuration and maintenance:
 - **`--plain`**, on every command: the same output without colour, emoji or
   blank padding, and tables as tab-separated lines that are never cut to the
   terminal's width - for logs and `grep`.
+- **`--anon`**, on the commands that show records and change nothing (`report`,
+  `standup`, `task list`/`show`, `inbox list`/`show`, `tag list`,
+  `template list`): the same output with task names, issue keys and every
+  other word of yours replaced by stand-ins, for a transcript to share.
 - **`NO_COLOR`** is honoured everywhere kasl paints.
 
 The conventions and the full list are in

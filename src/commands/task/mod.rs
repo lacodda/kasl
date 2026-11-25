@@ -59,6 +59,20 @@ pub struct TaskArgs {
     command: Option<TaskCommand>,
 }
 
+impl TaskArgs {
+    /// Whether this run only prints tasks: a list, or tasks named by id.
+    ///
+    /// `task show` without an id opens a picker, and a picker has to offer
+    /// the names as they are.
+    pub(crate) fn only_shows(&self) -> bool {
+        match &self.command {
+            Some(TaskCommand::List(_)) => true,
+            Some(TaskCommand::Show { id, .. }) => !id.is_empty(),
+            _ => false,
+        }
+    }
+}
+
 /// Available task operations.
 #[derive(Debug, Subcommand)]
 enum TaskCommand {

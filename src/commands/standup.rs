@@ -51,6 +51,13 @@ pub struct StandupArgs {
     append: Option<String>,
 }
 
+impl StandupArgs {
+    /// Whether this run only prints the summary - no note is written.
+    pub(crate) fn only_shows(&self) -> bool {
+        self.append.is_none()
+    }
+}
+
 /// Prints the period's summary, or places it in a note with `--append`.
 pub fn cmd(args: StandupArgs) -> Result<()> {
     let period = period(&args)?;

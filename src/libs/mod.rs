@@ -18,6 +18,7 @@
 //! ```
 
 pub mod alias;
+pub mod anon;
 pub mod autostart;
 pub mod config;
 pub mod daemon;

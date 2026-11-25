@@ -55,6 +55,21 @@ pub struct InboxArgs {
     format: Format,
 }
 
+impl InboxArgs {
+    /// Whether this run only prints the inbox: the list, or one issue named by key.
+    ///
+    /// `show` without a key opens a picker, which offers the summaries as
+    /// they are; `--why` quotes the rules, which are the person's own words
+    /// from the config.
+    pub(crate) fn only_shows(&self) -> bool {
+        match &self.command {
+            None | Some(InboxCommand::List { .. }) => true,
+            Some(InboxCommand::Show { key, why, .. }) => key.is_some() && !why,
+            _ => false,
+        }
+    }
+}
+
 /// The cuts an inbox of two hundred issues needs before it is a list.
 ///
 /// Shared by `list` and by every picker: a `take` that offers all two

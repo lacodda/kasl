@@ -41,6 +41,13 @@ pub struct TagArgs {
     command: Option<TagCommand>,
 }
 
+impl TagArgs {
+    /// Whether this run only prints the tags.
+    pub(crate) fn only_shows(&self) -> bool {
+        matches!(self.command, Some(TagCommand::List { .. }))
+    }
+}
+
 /// Available tag management operations.
 #[derive(Debug, Subcommand)]
 enum TagCommand {

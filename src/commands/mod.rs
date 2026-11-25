@@ -36,7 +36,7 @@ pub mod update;
 pub mod watch;
 
 use crate::{
-    libs::{day_end, demo as demo_lib, messages::types::Message, output},
+    libs::{anon, day_end, demo as demo_lib, messages::types::Message, output},
     msg_error_anyhow, msg_info, msg_warning,
 };
 use anyhow::{Result, bail};
@@ -275,6 +275,10 @@ pub struct Cli {
     #[arg(long, global = true)]
     plain: bool,
 
+    /// Replace task names, issue keys and other words of yours with stand-ins, for a transcript to share
+    #[arg(long, global = true)]
+    anon: bool,
+
     /// Whether the command asked for `--json`, read off the parsed arguments.
     #[arg(skip)]
     json: bool,
@@ -308,7 +312,7 @@ impl Cli {
         self.plain
     }
 
-    /// Readies the run for its command: the demo built if this is a demo run.
+    /// Readies the run for its command: the demo built if this is a demo run, the mask if `--anon`.
     ///
     /// Before the update check and before the command: both resolve paths,
     /// and a demo that is rebuilt replaces its directory whole.
@@ -322,7 +326,13 @@ impl Cli {
                 output::emit_aside(output::Kind::Info, &"The demo was built on another day; it has been made anew, to end today.");
             }
         }
-        Ok(())
+        if self.anon && !self.command.only_shows_records() {
+            bail!(
+                "--anon is for the commands that show records and change nothing: report, standup, task list, \
+                 task show ID, inbox list, inbox show KEY, tag list, template list"
+            );
+        }
+        anon::init(self.anon)
     }
 
     /// Whether this run may stop to check for a newer release before it answers.
@@ -428,6 +438,24 @@ impl Commands {
             Commands::SelfUpdate => Some("there is nothing of the demo's to update: run `kasl self-update` without `demo`"),
             Commands::ToastAction(_) => Some("the demo shows no toasts"),
             _ => None,
+        }
+    }
+
+    /// Whether the command only prints records - what `--anon` can be trusted on.
+    ///
+    /// The stand-ins are made where records are printed, so a command that
+    /// writes would not be harmed by the flag; it is refused there because a
+    /// stand-in is no name to act on, and a flag that silently does nothing
+    /// is worse than one that says where it works.
+    fn only_shows_records(&self) -> bool {
+        match self {
+            Commands::Report(args) => args.only_shows(),
+            Commands::Standup(args) => args.only_shows(),
+            Commands::Task(args) => args.only_shows(),
+            Commands::Inbox(args) => args.only_shows(),
+            Commands::Tag(args) => args.only_shows(),
+            Commands::Template(args) => args.only_shows(),
+            _ => false,
         }
     }
 }

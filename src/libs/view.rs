@@ -36,6 +36,7 @@
 use super::task::Task;
 use crate::db::templates::TaskTemplate;
 use crate::db::workdays::Workday;
+use crate::libs::anon;
 use crate::libs::formatter::{format_duration, terminal_cols};
 use crate::libs::messages::Message;
 use crate::libs::output;
@@ -60,6 +61,8 @@ impl View {
     /// Renders a detailed table showing task information including identification numbers,
     /// names, completion status, comments, and associated tags.
     pub fn tasks(tasks: &[Task]) -> Result<()> {
+        let tasks = anon::tasks(tasks);
+        let tasks = &*tasks;
         let show_task_id = tasks.iter().any(|t| t.task_id.is_some_and(|id| id != 0));
         let show_comment = tasks.iter().any(|t| !t.comment.trim().is_empty());
         let show_tags = tasks.iter().any(|t| !t.tags.is_empty());
@@ -277,12 +280,13 @@ impl View {
     /// # }
     /// ```
     pub fn templates(templates: &[TaskTemplate]) -> Result<()> {
+        let templates = anon::templates(templates);
         // Initialize table with clean formatting for template data
         let mut table = Table::new();
         let titles = row!["TEMPLATE NAME", "TASK NAME", "COMMENT", "COMPLETENESS"];
 
         // Populate table with template information
-        for template in templates {
+        for template in templates.iter() {
             table.add_row(row![
                 template.name,                         // Unique template identifier
                 template.task_name,                    // Default task title
@@ -311,12 +315,13 @@ impl View {
     /// # }
     /// ```
     pub fn tags(tags: &[crate::db::tags::Tag]) -> Result<()> {
+        let tags = anon::tags(tags);
         // Initialize table with appropriate formatting for tag data
         let mut table = Table::new();
         let titles = row!["ID", "NAME", "COLOR"];
 
         // Populate table with tag information
-        for tag in tags {
+        for tag in tags.iter() {
             table.add_row(row![
                 tag.id.unwrap_or(0),                 // Database ID, showing 0 for new tags
                 tag.name,                            // Human-readable tag name
@@ -370,6 +375,8 @@ impl View {
     /// The CHANGE column shows freshness badges: `NEW`, `gone`, or the latest
     /// visible change such as `status→In Progress`.
     pub fn inbox(items: &[crate::db::inbox::InboxItem]) -> Result<()> {
+        let items = anon::issues(items);
+        let items = &*items;
         let now = chrono::Local::now().naive_local();
         let badges: Vec<String> = items.iter().map(|i| i.badge(now).unwrap_or_default()).collect();
         let pin_width = "★".width().max(1);
@@ -435,6 +442,7 @@ impl View {
 
     /// One issue in full: the fields a table row has no room for.
     pub fn inbox_issue(item: &crate::db::inbox::InboxItem) -> Result<()> {
+        let item = anon::issue(item);
         let now = chrono::Local::now().naive_local();
         let mut table = Table::new();
         let titles = row!["FIELD", "VALUE"];

@@ -42,6 +42,7 @@ kasl task list [OPTIONS]
 - `-a, --all`: List tasks from every date, not just today.
 - `--tag <TAG>`: Only tasks carrying this tag. A tag belongs to the task, not to one day's row: a task carried into a new day - by `task find`, or marked done today - keeps its tags, and `--tag` lists every day of it.
 - `--json`: Print the tasks as one JSON document - see [JSON output](#json-output). An empty list is `{"tasks": []}`, exit code 0.
+- `--anon`: Print stand-ins for the words that are yours - names, comments, tags, issue keys - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript).
 
 ### `show` - Show tasks by id
 
@@ -51,6 +52,7 @@ kasl task show [ID]... [--json]
 
 - `ID...`: One or more task ids to show. Omit them on a terminal to pick from today's tasks.
 - `--json`: Print them as one JSON document - see [JSON output](#json-output).
+- `--anon`: Print stand-ins for the words that are yours - names, comments, tags, issue keys - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript). Needs the ids: the picker shows names as they are.
 
 Of several ids, the ones that exist are shown. When none of them does, the command fails with exit code 1, so a script can tell a missing task from one it got.
 

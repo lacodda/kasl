@@ -17,6 +17,7 @@ kasl report [OPTIONS]
 - `--month`: Submit a monthly summary report to the configured API instead of a daily one.
 - `--show`: Print the payload `--send` would post, and post nothing. Requires `--send`; not accepted with `--month`.
 - `--json`: Print the day as one JSON document instead of the table - see [JSON output](#json-output). With `--send --show`, the payload as JSON. Not accepted with `--month`, nor with `--send` alone: sending prints what happened to the request, not data.
+- `--anon`: Print stand-ins for the words that are yours - task names, comments, tags, issue keys - for a transcript to share; see [Stand-ins for a transcript](/guides/scripting/#stand-ins-for-a-transcript). Not accepted with `--send` or `--month`.
 
 ## Examples
 
