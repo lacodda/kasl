@@ -228,6 +228,8 @@ Both installers take the newest release by default; set `KASL_VERSION` to a tag 
 
 ## Quick start
 
+Nothing recorded yet? `kasl demo report`, `kasl demo sum`, `kasl demo inbox` - any command after `kasl demo` runs on eight invented weeks, kept apart from your own records.
+
 ```bash
 kasl setup                # first-run wizard: monitor settings, integrations, credentials
 kasl watch                # start monitoring in the background

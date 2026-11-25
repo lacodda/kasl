@@ -121,6 +121,15 @@ durations in seconds. `--plain` keeps the human output but drops colour, emoji
 and table frames, for logs and `grep`. See
 [kasl in scripts and CI](/guides/scripting/#json-for-programs).
 
+## A Demo to Try It On
+
+[`kasl demo`](/reference/demo/) builds eight invented weeks - workdays,
+pauses, tasks, an inbox - in a directory of its own, and `kasl demo <command>`
+runs any command on them: `kasl demo report`, `kasl demo sum`,
+`kasl demo inbox`. Your own records are neither read nor changed, and the
+commands that act on the machine or a server (`watch`, `autostart`, `server`)
+are refused there.
+
 ## GitLab and Jira
 
 Both feed `kasl task find`, which imports Jira issues resolved today and, from the GitLab plugin, the commits you pushed today. Jira is configured through `kasl setup`; GitLab is a plugin that ships with kasl and is set up with `kasl plugin setup gitlab`.

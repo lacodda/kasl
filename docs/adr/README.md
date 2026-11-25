@@ -19,3 +19,4 @@ Technical decisions that shape kasl, in the order they were made. Format: Contex
 | [0013](0013-removed-rows-go-to-a-trash.md) | Removed rows go to a trash, and `kasl undo` puts them back | accepted |
 | [0014](0014-dependabot-is-off.md) | Dependabot is off on purpose | accepted |
 | [0015](0015-package-managers-own-their-installations.md) | Package managers own their installations, and Windows ships a zip as well | accepted |
+| [0016](0016-the-demo-is-a-data-directory.md) | The demo is a data directory of its own, entered by a word | accepted |

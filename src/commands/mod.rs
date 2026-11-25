@@ -14,6 +14,7 @@
 
 pub mod autostart;
 pub mod config;
+pub mod demo;
 pub mod export;
 pub mod inbox;
 pub mod init;
@@ -35,10 +36,10 @@ pub mod update;
 pub mod watch;
 
 use crate::{
-    libs::{day_end, messages::types::Message, output},
+    libs::{day_end, demo as demo_lib, messages::types::Message, output},
     msg_error_anyhow, msg_info, msg_warning,
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 
@@ -169,6 +170,15 @@ enum Commands {
     #[command(about = "Put back what the last remove command took away")]
     Undo(undo::UndoArgs),
 
+    /// Try kasl on eight invented weeks
+    ///
+    /// Builds a demo - weekdays of work, pauses, tasks and an inbox, ending
+    /// today - in a directory of its own, and runs any command against it:
+    /// `kasl demo report`, `kasl demo sum`, `kasl demo inbox`. Your own
+    /// records are neither read nor changed.
+    #[command(about = "Try kasl on eight invented weeks: `kasl demo report`, `kasl demo sum`")]
+    Demo(demo::DemoArgs),
+
     /// Connection to the team's kasl-server
     ///
     /// Connects this machine to a kasl-server with an agent token issued by
@@ -298,6 +308,23 @@ impl Cli {
         self.plain
     }
 
+    /// Readies the run for its command: the demo built if this is a demo run.
+    ///
+    /// Before the update check and before the command: both resolve paths,
+    /// and a demo that is rebuilt replaces its directory whole.
+    pub fn prepare(&self) -> Result<()> {
+        if demo_lib::active() {
+            if let Some(reason) = self.command.refused_in_a_demo() {
+                bail!("{reason}");
+            }
+            // `kasl demo` itself builds, and says what it built.
+            if !matches!(self.command, Commands::Demo(_)) && demo_lib::ensure(Local::now().naive_local())? == demo_lib::Ensured::Rebuilt {
+                output::emit_aside(output::Kind::Info, &"The demo was built on another day; it has been made anew, to end today.");
+            }
+        }
+        Ok(())
+    }
+
     /// Whether this run may stop to check for a newer release before it answers.
     ///
     /// Not the status line: a prompt runs it every time it draws, and one
@@ -372,6 +399,7 @@ impl Cli {
                     written => Ok(written?),
                 }
             }
+            Commands::Demo(args) => demo::cmd(args),
             Commands::Server(args) => server::cmd(args).await,
             Commands::Mcp => mcp::cmd().await,
             Commands::Inbox(args) => inbox::cmd(*args).await,
@@ -381,6 +409,25 @@ impl Cli {
             // Database migrations only available in debug builds
             #[cfg(debug_assertions)]
             Commands::Migrations(args) => migrations::cmd(args),
+        }
+    }
+}
+
+impl Commands {
+    /// Why this command cannot run on the demo, when it cannot.
+    ///
+    /// The demo is a data directory; these act on the machine or on a server
+    /// beyond it. A watcher on the demo would record real activity into
+    /// invented days, and a server connection would send invented days to a
+    /// real team.
+    fn refused_in_a_demo(&self) -> Option<&'static str> {
+        match self {
+            Commands::Watch(_) => Some("the watcher records real activity, and the demo's days are invented: run `kasl watch` without `demo`"),
+            Commands::Autostart(_) => Some("autostart belongs to the machine, not to the demo: run `kasl autostart` without `demo`"),
+            Commands::Server(_) => Some("the demo's days are invented and go to no team server: run `kasl server` without `demo`"),
+            Commands::SelfUpdate => Some("there is nothing of the demo's to update: run `kasl self-update` without `demo`"),
+            Commands::ToastAction(_) => Some("the demo shows no toasts"),
+            _ => None,
         }
     }
 }

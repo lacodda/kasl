@@ -10,6 +10,7 @@ kasl provides a comprehensive set of commands for work activity tracking, task m
 
 ### Core Commands
 
+- **[`demo`](/reference/demo/)** - Try kasl on eight invented weeks, kept apart from your own records: `kasl demo report`
 - **[`setup`](/reference/setup/)** - Set up application configuration, module by module
 - **[`config`](/reference/config/)** - Read and change one setting at a time, checked against the config's JSON Schema
 - **[`watch`](/reference/watch/)** - Start activity monitoring

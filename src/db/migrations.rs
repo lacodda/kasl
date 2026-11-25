@@ -636,6 +636,16 @@ impl MigrationManager {
     /// # }
     /// ```
     pub fn run_migrations(&self, conn: &mut Connection) -> Result<()> {
+        // A database with nothing in it is being made, not upgraded: the
+        // first run of an installation - or of the demo - has no upgrade to
+        // report, and twenty lines about one buried what the command said.
+        let made_now = conn.query_row("SELECT COUNT(*) FROM sqlite_master", [], |row| row.get::<_, i64>(0))? == 0;
+        let progress = |kind: Kind, message: Message| {
+            if !made_now {
+                progress(kind, message);
+            }
+        };
+
         // Initialize the migrations tracking table
         conn.execute(MIGRATIONS_TABLE, [])?;
 

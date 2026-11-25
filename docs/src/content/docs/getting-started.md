@@ -94,6 +94,20 @@ Check that kasl is installed correctly:
 kasl --version
 ```
 
+### Try it on a demo first
+
+kasl has nothing to show until it has watched you work for a while.
+[`kasl demo`](/reference/demo/) builds eight invented weeks - workdays, pauses,
+tasks, an inbox - and runs any command on them, without touching your own
+records:
+
+```bash
+kasl demo                # build it, and see what to try
+kasl demo report         # today, as the daily report shows it
+kasl demo sum            # the month, day by day
+kasl demo inbox          # the issues waiting
+```
+
 ## Initial Configuration
 
 ### Interactive Setup

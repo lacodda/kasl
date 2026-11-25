@@ -22,7 +22,8 @@ pub mod libs;
 /// prints - for a person, `--plain`, `--json` - decides what every later line
 /// looks like and where it goes, the debug log included. Then handles the
 /// internal `--daemon-run` mode used when the watcher spawns itself, and
-/// otherwise dispatches the parsed command.
+/// otherwise dispatches the parsed command - on the demo's records when the
+/// command line opens with `demo` (see [`libs::demo`]).
 ///
 /// The error a command fails with is printed here, marked for the run's style
 /// (`❌` for a person, `error:` for `--plain` and `--json`), and turns into
@@ -36,7 +37,14 @@ pub fn run() -> std::process::ExitCode {
 
     // Intercepted before clap: this flag is how the background monitoring
     // process is launched, not part of the public command surface.
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+    // `kasl demo <command>` is `kasl <command>` on the demo's records: the
+    // word is taken out and the run entered into the demo before anything
+    // resolves a path.
+    if let Some(at) = libs::demo::prefix(&args) {
+        args.remove(at);
+        libs::demo::enter();
+    }
     let daemon = args.get(1).is_some_and(|arg| arg == "--daemon-run");
     let cli = (!daemon).then(|| commands::Cli::from_args(&args));
     let style = libs::output::init(cli.as_ref().is_some_and(|cli| cli.json()), cli.as_ref().is_some_and(|cli| cli.plain()));
@@ -57,6 +65,7 @@ pub fn run() -> std::process::ExitCode {
             let Some(cli) = cli else {
                 return commands::watch::run_as_daemon().await;
             };
+            cli.prepare()?;
             // The update notice is for a person at a terminal. A script would
             // wait on GitHub before its answer, a pipe would carry the notice
             // as data, and a cron job would spend the day's one check where

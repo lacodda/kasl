@@ -40,7 +40,8 @@ impl DataStorage {
     ///
     /// `LOCALAPPDATA` on Windows, `~/Library/Application Support` on macOS,
     /// `~/.local/share` elsewhere; falls back to `.` when the environment
-    /// variable is missing, so restricted environments still run.
+    /// variable is missing, so restricted environments still run. In a demo
+    /// run (`kasl demo <command>`) it is the `demo` directory inside that one.
     ///
     /// ```rust,no_run
     /// # fn main() -> anyhow::Result<()> {
@@ -60,6 +61,14 @@ impl DataStorage {
         };
 
         let base_path = Path::new(&base_path).join(APP_METADATA_OWNER).join(APP_METADATA_NAME);
+        // A demo run has a data directory of its own inside the real one, so
+        // every file kasl resolves - the database, the config, the watcher's
+        // lock - is the demo's, and none of the person's own is in reach.
+        let base_path = if crate::libs::demo::active() {
+            base_path.join(crate::libs::demo::DIR)
+        } else {
+            base_path
+        };
 
         Self { base_path }
     }

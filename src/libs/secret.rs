@@ -55,7 +55,14 @@ const KEYRING_SERVICE: &str = "lacodda.kasl";
 /// apart: under a service named for that directory. A real installation is
 /// never under it and keeps [`KEYRING_SERVICE`].
 fn keyring_service() -> String {
-    service_for(DataStorage::new().base(), &std::env::temp_dir())
+    let service = service_for(DataStorage::new().base(), &std::env::temp_dir());
+    // The demo is a data directory inside the real one, and for the same
+    // reason keeps its secrets apart: a token stored while trying kasl out
+    // must not replace the one the real installation works with.
+    if crate::libs::demo::active() && service == KEYRING_SERVICE {
+        return format!("{KEYRING_SERVICE}.demo");
+    }
+    service
 }
 
 /// [`keyring_service`] for a given data directory and temporary directory.

@@ -116,6 +116,12 @@ pub fn plugins_dir() -> Result<PathBuf> {
 /// purpose wins over the one in the box.
 pub fn search_paths() -> Vec<PathBuf> {
     let mut paths: Vec<PathBuf> = plugins_dir().into_iter().collect();
+    // The demo's records are invented: the plugins of the machine are not
+    // told about them, nor asked to fill its inbox. Only a plugin put into
+    // the demo's own directory on purpose is found.
+    if crate::libs::demo::active() {
+        return paths;
+    }
     paths.extend(crate::libs::install::own_dirs());
     if let Some(system) = std::env::var_os("PATH") {
         paths.extend(std::env::split_paths(&system));

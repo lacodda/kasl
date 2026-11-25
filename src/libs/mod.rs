@@ -25,6 +25,7 @@ pub mod data_storage;
 pub mod day_delivery;
 pub mod day_end;
 pub mod day_upload;
+pub mod demo;
 pub mod export;
 pub mod formatter;
 pub mod inbox;
